@@ -1,0 +1,2130 @@
+/* Estilos da barra superior, layout, sidebar, modal e caixas flutuantes */
+@keyframes zoomIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.top-bar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  background-color: #2196f3;
+  padding: 10px;
+  color: white;
+  font-size: 18px;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  z-index: 1000;
+}
+
+.top-bar button {
+  margin-right: 10px;
+  padding: 10px 20px;
+  background-color: white;
+  color: #2196f3;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.top-bar button:hover {
+  background-color: #f1f1f1;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 350px 5px 1fr;
+  height: calc(100vh - 50px);
+  margin-top: 50px;
+}
+
+.sidebar {
+  background-color: #f9f9f9;
+  padding: 20px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+.resizer {
+  background-color: #e0e0e0;
+  cursor: col-resize;
+  transition: background-color 0.2s;
+}
+.resizer:hover {
+  background-color: #2196f3; /* Destaque azul ao passar o mouse */
+}
+
+.folder-title {
+    display: flex;
+    align-items: center;
+    /* Padding simples e consistente */
+    padding: 4px 8px; /* Exemplo: 4px vertical, 8px horizontal */
+    margin: 1px 0; /* Margem vertical mínima */
+    font-size: 14px;
+    color: #333;
+    background-color: #e3f2fd; /* Fundo padrão para títulos */
+    border-radius: 3px;
+    cursor: pointer;
+    user-select: none;
+    position: relative; /* Mantido para o menu dropdown */
+    min-height: 24px;
+
+    /* ESSENCIAL: Ocupa a largura do seu container (seja .folder ou li.folder-wrapper) */
+    width: 100%;
+    /* ESSENCIAL: Garante que o padding não aumente a largura calculada */
+    box-sizing: border-box;
+
+    /* REMOVA qualquer margin-left negativo ou padding-left calculado daqui */
+}
+
+/* Ícone de pasta padrão */
+.folder-icon-sidebar {
+    margin-right: 4px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    color: #555; /* Cor do ícone de pasta */
+}
+
+.folder-icon-sidebar,
+.toggle-icon,
+.folder-buttons {
+    flex-shrink: 0; /* Impede que diminuam de tamanho */
+}
+
+.folder-title.active {
+  background-color: #bbdefb;
+  font-weight: bold;
+}
+
+.folder-title:hover {
+  background-color: #cfe8fc;
+}
+
+.toggle-icon {
+    width: 16px;
+    height: 16px; /* Altura consistente */
+    margin-right: 4px;
+    flex-shrink: 0;
+    color: #666; /* Cor do ícone de toggle */
+    font-size: 10px; /* Tamanho do caractere de seta */
+    display: inline-flex; /* Para alinhar o caractere */
+    align-items: center;
+    justify-content: center;
+    /* Remover estilos de imagem */
+    background-image: none !important;
+    content: "";
+}
+
+/* Nome da Pasta/Item */
+.folder-name-text,
+.subfolders li > .item-name { /* Aplica a ambos */
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px; /* Pequeno espaço interno */
+}
+
+
+.subfolders {
+  list-style: none;
+  padding-left: 20px;
+  margin: 6px 0 10px;
+  overflow: hidden;
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+
+.subfolders.collapsed {
+  max-height: 0;
+  padding-left: 20px;
+}
+
+.subfolders > li:not(.folder-wrapper){
+    background-color: #ffffff;
+    color: #444;
+    padding: 4px 10px;
+    margin: 2px 0;
+    font-size: 13px;
+    border-left: 3px solid #2196f3;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: background-color 0.2s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.subfolders li .visibility-toggle-btn {
+    margin-left: 0; /* Não precisa de margem extra se o adjust-kml-btn o empurrar */
+    flex-shrink: 0;
+}
+
+.subfolders li .adjust-kml-btn {
+    margin-left: auto; /* Empurra para a direita */
+    margin-right: 4px; /* Espaço antes do botão de visibilidade */
+    flex-shrink: 0;
+}
+
+.subfolders li .item-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 6px; /* Espaço entre ícone e nome */
+    border: 1px solid rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+.subfolders.hidden {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.folder-buttons button, .item-actions-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px; /* Reduzido */
+    margin-left: 2px;
+    opacity: 0.7;
+    display: flex; /* Para alinhar imagem/ícone interno */
+    align-items: center;
+    justify-content: center;
+}
+.folder-buttons button:hover, .item-actions-toggle-btn:hover {
+    opacity: 1;
+    background-color: #eee;
+    border-radius: 3px;
+}
+.visibility-toggle-btn img { /* Ajusta o tamanho da imagem do olho */
+    width: 14px;
+    height: 14px;
+}
+
+.subfolders > li:not(.folder-wrapper).active {
+  background-color: #cfe8fc;
+  font-weight: bold;
+}
+
+.subfolders li.draggable {
+  user-select: none;
+}
+
+.subfolders li.dragover {
+  background-color: #b0bec5 !important;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.map {
+  height: 100%;
+  background-color: #ccc;
+}
+
+/* ===== ESTILIZAÇÃO MELHORADA DOS MODAIS ===== */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1001;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(30, 40, 60, 0.6);
+  backdrop-filter: blur(4px);
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: auto;
+  padding: 0;
+  border: none;
+  width: 90%;
+  max-width: 550px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  position: relative;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: zoomIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.modal-content h2 {
+  padding: 18px 25px;
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 600;
+  color: #333;
+  background-color: #f7f9fc;
+  border-bottom: 1px solid #e0e6ed;
+  text-align: left;
+}
+
+.modal-body-content {
+  padding: 25px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.close {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  color: #888;
+  font-size: 32px;
+  font-weight: normal;
+  line-height: 1;
+  transition: color 0.2s, transform 0.2s;
+  cursor: pointer;
+}
+
+.close:hover,
+.close:focus {
+  color: #dc3545;
+  transform: scale(1.1);
+  text-decoration: none;
+}
+
+.fusion-modal-content {
+  max-width: 90vw;
+  height: 90vh;
+}
+
+.modal-content div[id$="Group"],
+.modal-content > div:not(.marker-grid):not(.material-buttons):not(.compact-inputs-container):not(.info-display):not(.modal-body-content) {
+  margin-bottom: 18px;
+  padding: 0 25px;
+}
+.modal-content > div:last-of-type {
+    margin-bottom: 0;
+}
+.modal-content h2 + div, .modal-content .info-display + div {
+    margin-top: 20px;
+}
+
+
+.modal-content label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #555;
+  font-size: 14px;
+}
+
+.modal-content input[type="text"],
+.modal-content input[type="number"],
+.modal-content input[type="color"],
+.modal-content textarea,
+.modal-content select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-content input[type="text"]:focus,
+.modal-content input[type="number"]:focus,
+.modal-content input[type="color"]:focus,
+.modal-content textarea:focus,
+.modal-content select:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+}
+
+.modal-content input[type="color"] {
+  padding: 0;
+  height: 40px;
+  border: none;
+  background: none;
+  width: 100%;
+}
+.modal-content textarea {
+    min-height: 80px;
+}
+
+#modalButtonContainer,
+.material-buttons,
+div[style*="text-align: right"] {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 25px 0 0 0;
+  padding: 20px 25px 25px 25px;
+  border-top: 1px solid #e0e6ed;
+}
+
+.modal-content button {
+  margin-top: 0;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background-color: #2196f3;
+  color: white;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.modal-content button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+.modal-content button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+#confirmMarker,
+#confirmProjectButton,
+#confirmFolderButton,
+#confirmAddMaterial,
+button[style*="#4CAF50"] {
+  background-color: #4CAF50;
+}
+#confirmMarker:hover,
+#confirmProjectButton:hover,
+#confirmFolderButton:hover,
+#confirmAddMaterial:hover,
+button[style*="#4CAF50"]:hover {
+  background-color: #45a049;
+}
+
+#deleteMarkerButton,
+#cancelProjectButton,
+#cancelFolderButton,
+#cancelAddMaterial,
+button[style*="#f44336"] {
+  background-color: #f44336;
+}
+#deleteMarkerButton:hover,
+#cancelProjectButton:hover,
+#cancelFolderButton:hover,
+#cancelAddMaterial:hover,
+button[style*="#f44336"]:hover {
+  background-color: #d32f2f;
+}
+
+#editPositionButton,
+button[style*="#ffc107"] {
+  background-color: #ffc107;
+  color: #333;
+}
+#editPositionButton:hover,
+button[style*="#ffc107"]:hover {
+  background-color: #ffb300;
+}
+
+.marker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 20px;
+  padding: 25px;
+  justify-items: center;
+}
+
+.marker-option,
+.cto-status-option,
+.ceo-status-option,
+.ceo-accessory-option,
+.cordoalha-status-option,
+.reserva-status-option,
+.cable-status-option,
+.datacenter-option,
+.splitter-status-option {
+  cursor: pointer;
+  padding: 15px;
+  border-radius: 8px;
+  background-color: #fff;
+  width: 100%;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border: 1px solid #ddd;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.marker-option:hover,
+.cto-status-option:hover,
+.ceo-status-option:hover,
+.ceo-accessory-option:hover,
+.cordoalha-status-option:hover,
+.reserva-status-option:hover,
+.cable-status-option:hover,
+.datacenter-option:hover,
+.splitter-status-option:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+  border-color: #2196f3;
+}
+
+.marker-option.selected {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  color: #0d47a1;
+}
+
+.marker-option img {
+  margin-bottom: 8px;
+}
+
+/* ===== NOVOS ESTILOS PARA O MODAL DA CEO ===== */
+
+.info-display {
+  display: flex;
+  gap: 10px;
+  padding: 0 25px 15px 25px;
+  border-bottom: 1px solid #e0e6ed;
+  margin: 0 0 20px 0;
+}
+
+.info-display > div {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#ceoStatusInfo {
+  background-color: #e3f2fd;
+  color: #0d47a1;
+}
+
+#ceoAccessoryInfo, #reservaAccessoryInfo {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+#ctoStatusInfo {
+  background-color: #e8f5e9; /* Verde claro */
+  color: #1b5e20; /* Verde escuro */
+}
+
+#cordoalhaStatusInfo,
+#reservaStatusInfo {
+  background-color: #fff3e0; /* Laranja claro */
+  color: #e65100; /* Laranja escuro */
+}
+
+.compact-inputs-container {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+  padding: 0 25px;
+  margin-bottom: 18px;
+}
+
+.compact-inputs-container > div {
+  flex-grow: 1;
+  margin-bottom: 0;
+  padding: 0;
+}
+
+.compact-inputs-container #sizeGroup {
+  flex-grow: 0;
+  width: 100px;
+}
+
+/* ===== Tabela de Materiais ===== */
+.material-section h3 {
+  margin-top: 0;
+  color: #1565c0;
+  border-bottom: 2px solid #1565c0;
+  padding-bottom: 8px;
+}
+.material-section table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+.material-section th,
+.material-section td {
+  padding: 12px 15px;
+  border: 1px solid #e0e6ed;
+  text-align: center;
+}
+.material-section thead tr {
+  background-color: #2196f3;
+  color: white;
+  font-size: 15px;
+}
+.material-section tbody tr:nth-of-type(even) {
+  background-color: #f7f9fc;
+}
+.material-section tbody tr:hover {
+  background-color: #e3f2fd;
+}
+.material-section tfoot {
+  font-weight: bold;
+  background-color: #f1f8e9;
+  color: #33691e;
+}
+.material-section .edit-qty-btn,
+.material-section .remove-item-btn {
+  transition: transform 0.2s;
+  background: none;
+}
+.material-section .edit-qty-btn:hover {
+  transform: scale(1.2);
+}
+.material-section .remove-item-btn:hover {
+  transform: scale(1.2) rotate(10deg);
+}
+
+.grand-total-container {
+  text-align: right;
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #e3f2fd;
+  border-radius: 8px;
+}
+
+.grand-total-container span {
+  color: #0d47a1;
+  margin-left: 10px;
+}
+
+.section-buttons {
+    text-align: right;
+    margin: -10px 0 20px 0;
+}
+.section-buttons button {
+    background-color: #2196f3;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.section-buttons button:hover {
+    background-color: #1976d2;
+}
+
+
+/* ===== ESTILOS DO MODAL DE RELATÓRIO ===== */
+#report-projects-ul {
+  list-style: none;
+  padding: 25px;
+  margin: 0;
+}
+
+#report-projects-ul li {
+  background-color: #ffffff;
+  padding: 20px;
+  border: 1px solid #e0e6ed;
+  border-left: 5px solid #2196f3;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#report-projects-ul li:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+}
+
+.report-project-name {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #0d47a1;
+}
+
+.report-project-details {
+  font-size: 0.9em;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+.report-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 15px 25px;
+    padding: 25px;
+}
+
+.report-detail-item {
+    background-color: #f7f9fc;
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    padding: 12px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+}
+
+.report-detail-item strong {
+    color: #495057;
+}
+
+.report-detail-item span {
+    font-weight: bold;
+    color: #0d47a1;
+    text-align: right;
+}
+
+#report-final-cost {
+    font-size: 1.1em;
+    color: #28a745;
+}
+
+#labor-summary-table .details-list {
+    margin: 0;
+    padding-left: 20px;
+    list-style-position: inside;
+    text-align: left;
+    font-size: 13px;
+    color: #555;
+}
+
+.cable-info-box {
+  position: fixed;
+  background-color: rgba(30, 30, 30, 0.85);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  z-index: 1002;
+  font-size: 14px;
+  pointer-events: none; /* Importante para permitir cliques no mapa abaixo */
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: opacity 0.1s ease-in-out;
+}
+
+
+.floating-box {
+  position: absolute;
+  top: 50%; /* Centraliza verticalmente */
+  left: 50%; /* Centraliza horizontalmente */
+  transform: translate(-50%, -50%); /* Ajusta para a verdadeira centralização */
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 2000; /* Garante que fique acima de outros elementos */
+  text-align: center; /* Centraliza o texto e o botão */
+  min-width: 250px; /* Largura mínima para o conteúdo */
+  max-width: 350px; /* Largura máxima para não ficar muito grande */
+}
+
+/* Adicione este código para posicionar a caixa da régua no canto */
+#rulerBox {
+  top: 80px;  /* Distância do topo (abaixo da barra de ferramentas) */
+  right: 20px; /* Distância da direita */
+  left: auto;  /* Remove a centralização horizontal */
+  transform: none; /* Remove a centralização vertical */
+}
+
+/* Esconde a caixa por padrão */
+.floating-box.hidden {
+  display: none;
+}
+
+/* Estilos para o título dentro das caixas flutuantes */
+.floating-box h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 1.4em;
+  margin-bottom: 15px;
+}
+
+/* Estilos para parágrafos dentro das caixas flutuantes (como a distância) */
+.floating-box p {
+  font-size: 1.1em;
+  color: #555;
+  margin-bottom: 20px;
+  font-weight: bold;
+}
+
+.floating-box input {
+  width: 100%;
+  padding: 5px;
+  margin: 5px 0 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* Estilos para o botão "Finalizar" dentro das caixas flutuantes */
+.floating-box button {
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  padding: 10px 25px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.1em;
+  transition: background-color 0.2s ease;
+}
+
+.floating-box button:hover {
+  background-color: #1976d2;
+}
+
+.subfolders:empty::before {
+  content: "Arraste itens aqui";
+  display: block;
+  font-style: italic;
+  color: #888;
+  padding: 6px 10px;
+  background-color: #f9f9f9;
+  border: 2px dashed #bbb;
+  border-radius: 4px;
+  margin: 4px 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.cursor-draw {
+  cursor: crosshair !important;
+}
+
+.icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 50%;
+  color: white;
+}
+
+.folder .folder-title {
+  color: #1565c0;
+  font-weight: bold;
+}
+
+.drop-placeholder {
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  border: 2px dashed #bbb; /* Borda para visibilidade */
+  background-color: #f9f9f9;
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  pointer-events: none; /* <-- ADICIONE ESTA LINHA */
+}
+
+#fusion-actions {
+  padding: 15px;
+  margin: 10px 0 20px 0;
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  background-color: #f9f9f9;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+#fusion-actions button {
+  background-color: #4caf50;
+  margin-top: 0;
+}
+
+.fusion-canvas {
+  background-color: #f0f2f5;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 15px;
+  margin: 0 25px 25px 25px;
+  position: relative;
+  overflow: auto;
+  flex-grow: 1;
+}
+
+.canvas-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #aaa;
+  font-style: italic;
+  pointer-events: none;
+}
+
+
+.splitter-element,
+.cable-element {
+  position: absolute;
+  z-index: 1;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  cursor: default; /* Altere esta linha */
+}
+
+.splitter-element {
+  position: absolute;
+  z-index: 1;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 15px 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+}
+
+.splitter-input,
+.splitter-outputs {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center; /* Centraliza as portas */
+}
+
+.splitter-body {
+  color: white;
+  padding: 15px 10px;
+  margin: 10px 0; 
+  border-radius: 4px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.splitter-fusao .splitter-body {
+  background-color: #ffffff;
+  color: #333; 
+  border: 1px solid #2196f3; 
+}
+
+.splitter-atendimento .splitter-body {
+  background-color: #4caf50;
+}
+
+.splitter-atendimento.splitter-upc .splitter-body {
+  background-color: #2196f3;
+}
+
+.splitter-port {
+  border: 1px dashed #666;
+  padding: 8px;
+  background-color: #f0f8ff;
+  text-align: center;
+  min-width: 80px;
+  border-radius: 4px;
+}
+
+.splitter-port-row,
+.fiber-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  margin: 4px 0;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 13px;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3); 
+}
+
+.splitter-port-row:hover, .fiber-row:hover {
+  background-color: #d0f0ff;
+  border-color: #2196f3;
+}
+
+.splitter-port-number {
+  font-family: monospace;
+  font-weight: bold;
+  color: #333;
+  font-size: 13px;
+}
+
+.splitter-input .splitter-port:hover,
+.splitter-outputs .splitter-port:hover {
+  background-color: #d0f0ff;
+  border-color: #2196f3;
+}
+#createProjectButton {
+  padding: 10px 20px;
+}
+
+.radio-group {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.splitter-category {
+  margin-bottom: 25px;
+}
+.splitter-category:last-child {
+  margin-bottom: 10px;
+}
+.splitter-category h3 {
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+  color: #333;
+}
+.splitter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 0 25px 25px 25px;
+}
+.splitter-option {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background-color: #f8f8f8;
+  cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+  transition: background-color 0.2s, transform 0.2s;
+}
+.splitter-option:hover {
+  background-color: #e9f5ff;
+  border-color: #2196f3;
+  transform: translateY(-2px);
+  color: #0d47a1;
+}
+
+#connected-cables-list {
+  margin-top: 20px;
+  padding: 0 25px 25px 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cable-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.cable-option:hover {
+  background-color: #e9f5ff;
+  border-color: #2196f3;
+}
+
+.cable-option .cable-name {
+  font-weight: bold;
+  color: #333;
+}
+
+.cable-option .cable-fibers {
+  font-weight: 500;
+  color: #fff;
+  background-color: #5cb85c;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.no-cables-message {
+  color: #999;
+  font-style: italic;
+  padding: 20px;
+  text-align: center;
+}
+
+.cable-element {
+  width: 220px;
+}
+
+.cable-header {
+  font-weight: bold;
+  font-size: 1.1em;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.cable-fibers-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fiber-number {
+  font-family: monospace;
+  width: auto;
+  text-align: center;
+  font-size: 0.8em;
+  line-height: 1;
+  color: #333;
+  flex-shrink: 0;
+}
+
+
+.group-header {
+  font-weight: bold;
+  padding: 5px 8px;
+  margin-top: 15px;
+  border-radius: 4px;
+  color: #fff;
+  text-align: left;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+}
+
+.group-header:first-of-type {
+  margin-top: 0;
+}
+
+.dragging {
+    z-index: 10;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    opacity: 0.9;
+}
+
+.delete-component-btn {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 22px;
+    background-color: #dc3545;
+    color: white;
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px; /* Aumentado para melhor visualização */
+    font-weight: bold;
+    z-index: 11;
+    padding: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+
+    /* Novas propriedades para centralizar perfeitamente a letra "X" */
+    display: flex;
+    align-items: center;      /* Alinha verticalmente */
+    justify-content: center;  /* Alinha horizontalmente */
+    line-height: 1;           /* Remove espaçamento extra da linha */
+}
+
+.fusion-svg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.connecting-line {
+  stroke: #ff4500;
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+  animation: dash 1s linear infinite;
+  fill: none;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.fusion-line {
+  stroke: #424242;
+  stroke-width: 1.5;
+  stroke-dasharray: 4, 2;
+  cursor: pointer;
+  transition: stroke 0.2s;
+  fill: none;
+  pointer-events: auto; /* <-- ADICIONE ESTA LINHA */
+}
+
+.line-handle {
+  fill: #ffc107; /* Amarelo */
+  stroke: #333;
+  stroke-width: 1.5;
+  cursor: move;
+  transition: opacity 0.2s;
+  opacity: 0; /* Começa invisível */
+  pointer-events: auto; /* <-- ADICIONE ESTA LINHA */
+}
+
+.line-handle:hover {
+  opacity: 1; /* O ponto fica visível se o mouse estiver sobre ele */
+}
+
+.fusion-line:hover {
+  stroke: #dc3545;      /* Mantém a mudança de cor para vermelho */
+  stroke-width: 4;      /* (NOVO) Aumenta a espessura da linha para destacá-la */
+  stroke-dasharray: none; /* (NOVO) Torna a linha sólida ao invés de tracejada */
+}
+
+.connectable {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.connectable:hover {
+  background-color: #d0f0ff;
+  box-shadow: 0 0 5px rgba(33, 150, 243, 0.7);
+}
+
+.connectable.selected-for-connection {
+  background-color: #ffc107 !important;
+  font-weight: bold;
+}
+
+.folder-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.folder-name-text {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+}
+
+.visibility-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 5px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.visibility-toggle-btn:hover {
+  opacity: 0.7;
+}
+
+#markerCoordinatesText {
+  background-color: #f0f0f0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  font-family: monospace;
+  color: #333;
+  user-select: all;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.marker-label-with-outline {
+    /* A cor do texto será definida pelo JavaScript, aqui definimos apenas a borda */
+    text-shadow:
+        -1px -1px 0 #000,  
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000;
+}
+
+.item-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 5px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+/* (código CSS existente) */
+
+.item-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 5px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+/* Estilos para o novo botão de Ferramentas e Dropdown */
+
+/* Container para o botão e o menu */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+/* Botão principal na barra superior */
+.dropdown .top-bar-button {
+  margin-right: 10px;
+  padding: 10px 20px;
+  background-color: white;
+  color: #2196f3;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+}
+
+.dropdown .top-bar-button:hover {
+  background-color: #f1f1f1;
+}
+
+/* O menu dropdown (escondido por padrão) */
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  min-width: 220px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1001;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+/* Links dentro do dropdown */
+.dropdown-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.dropdown-content a img {
+  flex-shrink: 0;
+}
+
+/* Muda a cor dos links no hover */
+.dropdown-content a:hover {
+  background-color: #e3f2fd;
+}
+
+/* Classe para mostrar o dropdown com JavaScript */
+.show {
+  display: block;
+}
+
+/* Estilos para a nova janela de desenho de polígono */
+#polygonDrawingBox {
+  top: 80px;      /* Posição abaixo da barra de ferramentas */
+  right: 20px;
+  left: auto;
+  transform: none;
+  text-align: left; /* Alinha o conteúdo à esquerda */
+}
+
+#polygonDrawingBox input[type="color"] {
+  height: 35px;
+  padding: 2px;
+}
+
+#polygonButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+#polygonButtons button {
+  font-size: 1em;
+  padding: 8px 16px;
+}
+
+/* Estilos para o item de polígono na barra lateral */
+.sidebar li .item-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 8px;
+  border: 1px solid rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+
+.sidebar li > span.item-name {
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Garante que o conteúdo da LI fique alinhado */
+.sidebar ul li {
+  display: flex;
+  align-items: center;
+}
+
+/* Estilo para os botões de seta dos splitters */
+.splitter-body button {
+  background-color: #6c757d; /* Cor de fundo cinza */
+  color: white;             /* Cor do ícone da seta */
+  border-radius: 50%;       /* Deixa o botão perfeitamente circular */
+  width: 24px;              /* Largura fixa */
+  height: 24px;             /* Altura fixa */
+  padding: 0;               /* Remove o padding para melhor centralização */
+  line-height: 24px;        /* Alinha a seta verticalmente */
+  font-size: 12px;
+  margin: 0 3px;            /* Espaçamento entre os botões */
+  border: none;             /* Remove qualquer borda existente */
+  transition: background-color 0.2s; /* Adiciona uma transição suave */
+}
+
+/* Efeito ao passar o mouse sobre os botões */
+.splitter-body button:hover {
+  background-color: #5a6268; /* Cinza um pouco mais escuro */
+}
+
+
+.folder-wrapper > .subfolders {
+    margin-top: 2px; /* Reduzir o espaço entre o título da subpasta e seu conteúdo */
+    margin-bottom: 5px; /* Reduzir o espaço após o conteúdo da subpasta */
+}
+
+/* Define a posição e aparência geral da caixa */
+#cableDrawingBox {
+  top: 70px;
+  right: 15px;
+  left: auto;
+  transform: none;
+  width: 320px;
+  background-color: #ffffff; /* Fundo branco para maior contraste */
+  border: 1px solid #dee2e6;
+  /* Sombra mais suave e moderna */
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  border-radius: 8px; /* Cantos um pouco mais arredondados */
+  text-align: left;
+  padding: 20px;
+  z-index: 1001;
+}
+
+/* Melhor hierarquia visual para o título */
+#cableDrawingBox h3 {
+  font-size: 20px;
+  font-weight: 600; /* Título mais forte */
+  color: #212529; /* Cor de texto escura, mas não preto puro */
+  margin-top: 0;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+/* Tipografia mais limpa para as etiquetas */
+#cableDrawingBox label {
+  display: block;
+  margin-bottom: 6px;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Estilo e interatividade para os campos de input e select */
+#cableDrawingBox input[type="text"],
+#cableDrawingBox input[type="number"],
+#cableDrawingBox select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  font-size: 15px;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  background-color: #fff;
+  /* Transições suaves para uma experiência mais fluida */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* NOVO: Efeito de foco para indicar campo ativo */
+#cableDrawingBox input[type="text"]:focus,
+#cableDrawingBox input[type="number"]:focus,
+#cableDrawingBox select:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+
+/* Campos de status e distância */
+#cableDrawingBox #cableStatusDisplay,
+#cableDrawingBox #cableDrawnDistance,
+#cableDrawingBox #cableReserveDistance,
+#cableDrawingBox #cableTotalDistance {
+  background-color: #f1f3f5;
+  color: #495057;
+  padding: 10px 12px;
+  margin: 0 0 12px 0;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+/* Destaque para o campo "Total" */
+#cableTotalDistance {
+  background-color: #007bff;
+  color: white;
+  border-color: #0069d9;
+  font-weight: bold;
+  /* Pequena sombra no texto para melhor legibilidade */
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.cable-box-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap; 
+  gap: 10px;
+  margin-top: 20px;
+  border-top: 1px solid #f1f3f5;
+  padding-top: 20px;
+}
+
+#cableDrawingBox button {
+  width: auto;
+  max-width: 150px;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: none;
+  border: 1px solid transparent;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+/* Efeito de "levantar" ao passar o mouse */
+#cableDrawingBox button:hover {
+  transform: translateY(-2px);
+}
+/* Efeito de "pressionar" ao clicar */
+#cableDrawingBox button:active {
+  transform: translateY(0);
+}
+
+/* Botão Salvar (azul) */
+#cableDrawingBox #saveCableButton {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+#cableDrawingBox #saveCableButton:hover {
+  background-color: #0069d9;
+}
+
+/* Botões Cancelar e Excluir (cinza) */
+#cableDrawingBox #cancelCableButton,
+#cableDrawingBox #deleteCableButton {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: white;
+}
+#cableDrawingBox #cancelCableButton:hover,
+#cableDrawingBox #deleteCableButton:hover {
+  background-color: #5a6268;
+}
+
+/* Botão Excluir (vermelho) */
+#cableDrawingBox #deleteCableButton {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+#cableDrawingBox #deleteCableButton:hover {
+    background-color: #c82333;
+}
+
+/* Estilos para o novo botão Sair */
+#logoutButton {
+  margin-left: auto; /* ESSA É A PROPRIEDADE PRINCIPAL: ela empurra o botão para a extrema direita */
+  background-color: #f44336; /* Cor de fundo vermelha para indicar uma ação final/saída */
+  color: white; /* Cor do texto branca para bom contraste */
+}
+
+/* Efeito ao passar o mouse por cima do botão Sair */
+#logoutButton:hover {
+  background-color: #d32f2f; /* Um tom de vermelho um pouco mais escuro */
+}
+
+/* Adicione ao final de style.css */
+
+.line-handle-temp {
+  fill: #ffc107;
+  stroke: #333;
+  stroke-width: 1;
+  pointer-events: none; /* Impede que os pontos temporários interfiram nos cliques */
+}
+
+/* Adicione esta regra ao final do seu arquivo style.css */
+
+.modal-body-content {
+  padding: 25px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+/* Estilos para o botão de ajuste nos itens da sidebar */
+.adjust-kml-btn {
+    background-color: #ffc107;
+    color: #333;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.adjust-kml-btn:hover {
+    background-color: #ffb300;
+}
+
+/* ========================================================= */
+/* ==   NOVO: ESTILOS DE ÁRVORE DA SIDEBAR (COM LINHAS)   == */
+/* ========================================================= */
+
+/* --- Configuração da Variável de Indentação --- */
+:root {
+  --indent-size: 20px; /* Controle o recuo aqui */
+  --line-color: #c0c0c0; /* Cor das linhas da árvore */
+}
+
+/* --- Reset Básico para Listas da Sidebar --- */
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative; /* Essencial para as linhas */
+}
+
+.sidebar .subfolders {
+  padding-left: var(--indent-size);
+  /* Garante que o UL não colapse quando vazio (para o "Arraste aqui") */
+  min-height: 1px; 
+  
+  /* == CORREÇÃO ADICIONADA == */
+  /* Força o UL a ser um container de bloco, empilhando LIs verticalmente */
+  display: block; 
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 1. A Linha Vertical ( | ) 
+   Desenha uma linha vertical para todos os itens, exceto o último. */
+.subfolders > li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 100%;
+  background-color: var(--line-color);
+}
+
+/* 2. A Linha Horizontal ( L )
+   Desenha o "galho" horizontal para todos os itens. */
+.subfolders > li::after {
+  content: "";
+  position: absolute;
+  top: 13px; /* Alinha verticalmente com o ícone/texto (ajuste se necessário) */
+  left: 0;
+  width: calc(var(--indent-size) * 0.6); /* Comprimento do galho (ex: 12px) */
+  height: 1px;
+  background-color: var(--line-color);
+}
+
+/* 3. Correção para o ÚLTIMO item da lista
+   Faz a linha vertical parar no "galho", criando o L final. */
+.subfolders > li:last-child::before {
+  height: 13px; /* Deve ser igual ao 'top' do ::after */
+}
+
+/* --- Alinhamento dos Itens e Pastas --- */
+
+/* Remove estilos de item de lista conflitantes */
+.subfolders > li:not(.folder-wrapper) {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  margin: 0;
+  padding: 0; /* O padding será no span interno */
+  display: flex; /* Garante que o LI se comporte como flex */
+  align-items: center;
+}
+
+/* O contêiner de uma sub-pasta (VERSÃO CORRIGIDA) */
+li.folder-wrapper {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  float: none;
+  clear: both;
+}
+
+/* --- Estilização do Título da Pasta (.folder-title) --- */
+.folder-title {
+  display: flex;
+  align-items: center;
+  padding: 4px 0; /* Padding vertical, sem padding horizontal */
+  margin: 1px 0;
+  font-size: 14px;
+  color: #333;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  min-height: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Traz o conteúdo para a frente das linhas da árvore */
+.folder-title,
+.subfolders > li:not(.folder-wrapper) > * {
+  position: relative;
+  z-index: 1;
+  /* O fundo do item precisa ser opaco para cobrir a linha vertical */
+  background-color: #f9f9f9; 
+}
+
+/* Hover e Active (agora aplicados de forma consistente) */
+.folder-title:hover,
+.subfolders > li:not(.folder-wrapper):hover {
+    background-color: #f0f0f0;
+}
+
+.folder-title.active,
+.subfolders > li:not(.folder-wrapper).active {
+    background-color: #ddeaff;
+}
+
+/* --- Alinhamento dos Ícones (Toggle e Pasta) --- */
+
+/* O ícone de expandir/recolher (►/▼) */
+.toggle-icon {
+  width: 16px; /* Largura fixa */
+  height: 16px;
+  margin-right: 2px; /* Espaço antes do ícone da pasta */
+  flex-shrink: 0;
+  color: #666;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Alinha o ícone com o "galho" da árvore */
+  transform: translateY(1px); 
+}
+
+/* O ícone da pasta (pastinha) */
+.folder-icon-sidebar {
+  margin-right: 4px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  color: #555;
+}
+
+/* --- Alinhamento dos Itens (NÃO-PASTA) --- */
+
+/* Ícone do item (quadrado colorido, etc.) */
+.subfolders li .item-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  border: 1px solid rgba(0,0,0,0.1);
+  flex-shrink: 0;
+  /* Adiciona margem à esquerda para alinhar com o ícone da pasta */
+  margin-left: 18px; /* (Largura do toggle-icon + margin) */
+}
+
+/* Nome do Item (para pastas e itens) */
+.folder-name-text,
+.subfolders li > .item-name {
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px; /* Pequeno espaço interno */
+}
+/* O nome do item (não-pasta) precisa de um padding para cobrir a linha */
+.subfolders li > .item-name {
+    padding-left: 6px;
+}
+
+/* Botões de Ação (Olho, Ajustar, 3-pontos) */
+.folder-buttons,
+.subfolders li .adjust-kml-btn,
+.subfolders li .visibility-toggle-btn,
+.subfolders li .item-actions-dropdown {
+  margin-left: auto; /* Empurra para a direita */
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  /* Garante que os botões cubram a linha */
+  padding-right: 4px; 
+}
+/* Corrige o espaçamento entre botões de item */
+.subfolders li .adjust-kml-btn {
+  margin-left: 8px;
+}
+.subfolders li .visibility-toggle-btn {
+  margin-left: 4px;
+}
+
+/* --- Correção de Nível Máximo (Opcional, mas bom manter) --- */
+/* Impede que itens recuem indefinidamente */
+.sidebar ul ul ul ul ul > li,
+.sidebar ul ul ul ul ul > .folder-wrapper {
+  margin-left: calc(-1 * var(--indent-size));
+  padding-left: var(--indent-size);
+}
+
+
+.item-actions-dropdown {
+  position: relative;
+}
+
+.folder-title:hover,
+.subfolders > li:not(.folder-wrapper):hover {
+    background-color: #f0f0f0; /* Hover cinza claro */
+}
+
+.folder-title.active,
+.subfolders > li:not(.folder-wrapper).active {
+    background-color: #ddeaff; /* Active azul claro */
+    /* font-weight: bold; */ /* Opcional: negrito para ativo */
+}
+
+.item-actions-toggle-btn {
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 8px;
+  color: #555;
+}
+
+.item-actions-toggle-btn:hover {
+  background-color: #d8e2eb;
+}
+
+.item-actions-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background-color: white;
+  min-width: 120px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 10;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+}
+
+.item-actions-menu.show {
+  display: block; /* Mostra o menu quando tem a classe 'show' */
+}
+
+.item-actions-menu a {
+  color: black;
+  padding: 10px 15px;
+  text-decoration: none;
+  display: block;
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.item-actions-menu a:hover {
+  background-color: #f1f1f1;
+}
+
+/* ========================================================= */
+/* ==   CORREÇÃO PARA MENU DE 3 PONTINHOS ESCONDIDO       == */
+/* ========================================================= */
+
+/*
+  Quando o menu (.item-actions-menu) recebe a classe .show,
+  esta regra encontra o seu ancestral .folder-title e faz duas coisas:
+  1. Define 'overflow: visible' para que o menu possa "escapar" e ser exibido.
+  2. Aumenta o 'z-index' para garantir que o menu apareça sobre
+     qualquer item que esteja abaixo dele na lista.
+*/
+/* Regra 1 (que você já tem): Corrige o corte pelo título da pasta */
+.folder-title:has(.item-actions-menu.show),
+.subfolders li:has(.item-actions-menu.show) { /* Adicionado para itens LI também */
+  overflow: visible;
+  z-index: 15;
+}
+
+.subfolders:has(.item-actions-menu.show) {
+  overflow: visible;
+}
+
+/* Adicione no final de style.css */
+
+.derivation-kit-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px; /* Espaçamento se quebrar a linha */
+    width: 100%; /* Ocupa a largura para alinhar abaixo do título */
+    padding: 4px 0;
+}
+
+.derivation-kit-container input[type="checkbox"] {
+    width: auto;
+    cursor: pointer;
+}
+
+.derivation-kit-container label {
+    font-size: 13px;
+    font-weight: normal;
+    color: #333;
+    cursor: pointer;
+    margin-bottom: 0;
+}
+
+/* Adicione no final de style.css */
+
+#trayKitContainer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 25px;
+    border-bottom: 1px solid #eee;
+    background-color: #f8f9fa;
+}
+
+#trayKitContainer label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0;
+}
+
+#trayKitContainer input[type="number"] {
+    width: 80px; /* Deixa o campo menor, ideal para quantidade */
+    margin-bottom: 0;
+}
+
+#lineConnectionInfo {
+  background-color: #e3f2fd; /* Azul bem claro */
+  border-left: 4px solid #2196f3; /* Borda azul para destaque */
+  padding: 12px 15px;
+  margin: 0 0 20px 0; /* Espaçamento abaixo */
+  text-align: center;
+  font-size: 15px;
+  color: #333;
+  font-weight: 500;
+  line-height: 1.5; /* Melhora a legibilidade com quebras de linha */
+}
+
+#lineConnectionInfo strong {
+  color: #0d47a1; /* Azul escuro para os títulos "De:" e "Para:" */
+}
+
+/* Muda o cursor para "agarrar" quando o mouse está sobre um item arrastável */
+.draggable {
+  cursor: grab;
+}
+
+/* Muda o cursor para "agarrando" enquanto o item está sendo arrastado */
+.draggable:active {
+  cursor: grabbing;
+}
+
+/* Destaca a pasta inteira quando algo é arrastado sobre ela */
+.subfolders.dragover {
+  background-color: #e3f2fd; 
+}
+
+
+
+.subfolders:not(.hidden) {
+  max-height: none !important; /* Remove qualquer max-height (como 1000px) */
+  height: auto; /* Permite que a altura se ajuste ao conteúdo */
+}
+
+.subfolders:empty {
+  height: auto;
+}
+
+.is-dragging-globally .subfolders > li:not(.drop-placeholder):not(.is-being-dragged):not(.folder-wrapper) {
+    pointer-events: none;
+}
+
+#openStickersModalButton,
+#openObservationsButton {
+  background-color: #673ab7; /* Roxo */
+}
+
+#openStickersModalButton:hover,
+#openObservationsButton:hover {
+  background-color: #512da8; /* Roxo mais escuro */
+}
+
+.sticker-grid-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  padding: 10px;
+}
+
+.sticker-chip {
+  background-color: #f1f3f5;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  width: 80px;
+  padding: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  text-align: center;
+}
+
+.sticker-char {
+  display: block;
+  font-size: 28px;
+  font-weight: bold;
+  color: #212529;
+  font-family: monospace; /* Boa fonte para caracteres únicos */
+}
+
+.sticker-count {
+  display: block;
+  font-size: 16px;
+  font-weight: 500;
+  color: #4CAF50; /* Verde para destacar a contagem */
+}
+
+/* ========================================================= */
+/* ==   NOVO: ESTILO DE DESTAQUE PARA DROP EM PASTAS      == */
+/* ========================================================= */
+
+/* Estilo de feedback para o TÍTULO da pasta quando é um alvo de drop */
+.folder-title.dragover-target {
+  background-color: #007bff !important; /* Azul forte */
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.5);
+}
+
+/* O ícone de pasta e texto ficam brancos para contraste */
+.folder-title.dragover-target .folder-icon-sidebar,
+.folder-title.dragover-target .toggle-icon,
+.folder-title.dragover-target .folder-name-text {
+  color: white;
+}
+
+/* ========================================================= */
+/* ==   NOVO: ESTILO DO TOOLTIP DE HOVER (NOME COMPLETO)  == */
+/* ========================================================= */
+
+#hover-tooltip {
+  /* Escondido por padrão */
+  display: none;
+  opacity: 0;
+  
+  /* Posição e aparência */
+  position: fixed; /* Fica fixo na tela */
+  z-index: 9999;   /* Garante que fique acima de tudo */
+  background-color: #222;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  max-width: 400px;
+  text-align: left;
+  white-space: nowrap; /* Garante que o nome completo não quebre a linha */
+  
+  /* Impede que o mouse interaja com o próprio tooltip */
+  pointer-events: none; 
+  
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  
+  /* Animação suave de entrada */
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Estilos para o Modal de Observações */
+#observationsTextarea {
+  width: 100%;
+  height: 250px;
+  margin-top: 15px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  padding: 10px;
+  box-sizing: border-box; /* Garante que o padding não quebre o layout */
+}
+
+#observationsTextarea:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+}

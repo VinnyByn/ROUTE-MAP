@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema de Projetos e Mapas</title>
+    <link rel="icon" type="image/png" href="img/Aba.png">
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  </head>
+  <body>
+<div class="top-bar">
+      <div class="dropdown">
+      <button id="projectButton" class="top-bar-button">
+        <img src="img/gestor-de-projeto.png" width="16" height="16" alt="Projeto" style="vertical-align: middle; margin-right: 6px" />
+        Projeto
+      </button>
+       <div id="projectDropdown" class="dropdown-content">
+        <a href="#" id="createProjectButton"><img src="img/gestor-de-projeto.png" width="16" height="16" alt="Novo Projeto"/> Novo Projeto</a>
+        <a href="#" id="loadProjectButton"><img src="img/Nova-Pasta.png" width="16" height="16" alt="Carregar Projeto"/> Carregar Projeto</a>
+        <a href="#" id="saveProjectButton"><img src="img/Salvar.png" width="16" height="16" alt="Salvar Projeto"/> Salvar Projeto</a>
+        
+        <a href="#" id="exportKmlButton"><img src="img/Salvar.png" width="16" height="16" alt="Exportar KML"/> Exportar para KML</a>
+        <a href="#" id="importKmlButton"><img src="img/Nova-Pasta.png" width="16" height="16" alt="Importar KML"/> Importar de KML</a>
+      </div>
+    </div>
+      <button id="createFolderButton">
+        <img src="img/Nova-Pasta.png" width="16" height="16" alt="Adicionar Pasta" style="vertical-align: middle; margin-right: 6px" />
+        Nova pasta
+      </button>
+      <button id="drawCableButton" class="drawLineButton">
+        <img src="img/Cabos.png" width="16" height="16" alt="Desenhar Cabo" style="vertical-align: middle; margin-right: 6px" />
+        Desenhar Cabo
+      </button>
+      <button id="addMarkerButton" class="drawLineButton">
+        <img src="img/Marcador.png" width="16" height="16" alt="Adicionar Marcador" style="vertical-align: middle; margin-right: 6px" />
+        Adicionar Marcador
+      </button>
+      <div class="dropdown">
+        <button id="toolsButton" class="top-bar-button">
+          <img src="img/Ferramentas.png" width="16" height="16" alt="Ferramentas" style="vertical-align: middle; margin-right: 6px" />
+          Ferramentas
+      </button>
+        <div id="toolsDropdown" class="dropdown-content">
+          <a href="#" id="drawPolygonButton"><img src="img/Poligono.png" width="16" height="16" alt="Polígono"/> Desenhar Polígono</a>
+          <a href="#" id="rulerButton"><img src="img/Rota.png" width="16" height="16" alt="Régua"/> Régua de Medição</a>
+        </div>
+      </div>
+      <button id="materialListButton">
+        <img src="img/Lista-Material.png" width="16" height="16" alt="Lista de Materiais" style="vertical-align: middle; margin-right: 6px" />
+        Lista de Materiais
+      </button>
+      <button id="laborButton">
+        <img src="img/Mão-de-Obra.png" width="16" height="16" alt="Mão de Obra" style="vertical-align: middle; margin-right: 6px;" />
+        Mão de Obra
+      </button>
+      <button id="projectReportButton">
+        <img src="img/Relatorio.png" width="16" height="16" alt="Relatório" style="vertical-align: middle; margin-right: 6px" />
+        Relatório do Projeto
+      </button>
+      <button id="openSearchModalButton">
+        <img src="img/Editar.png" width="16" height="16" alt="Pesquisar" style="vertical-align: middle; margin-right: 6px" />
+        Localização
+      </button>
+      <button id="logoutButton">
+        <img src="img/Sair.png" width="16" height="16" alt="Sair" style="vertical-align: middle; margin-right: 6px;" />
+        Sair
+      </button>
+    </div>
+
+    <div class="container">
+      <div class="sidebar" id="sidebar"></div>
+      <div class="resizer" id="dragHandle"></div>
+      <div id="map" class="map"></div>
+    </div>
+
+    <div id="materialModal" class="modal">
+      <div class="modal-content" style="max-width: 900px;">
+        <span class="close" id="closeMaterialModal">&times;</span>
+        <h2 id="materialModalTitle">Lista de Materiais</h2>
+        <div class="modal-body-content">
+          
+          <div class="material-section">
+            <h3>Ferragens</h3>
+            <table id="ferragem-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Quantidade/Metragem</th>
+                  <th>Ações</th>
+                  <th>Preço Unitário (R$)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="ferragem-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" style="text-align: right; font-weight: bold;">Subtotal Ferragens:</td>
+                  <td id="ferragem-total-price" style="font-weight: bold;">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="material-section">
+            <h3>Cabos</h3>
+            <table id="cabos-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Metragem</th>
+                  <th>Ações</th>
+                  <th>Preço Unitário (R$/m)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="cabos-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" style="text-align: right; font-weight: bold;">Subtotal Cabos:</td>
+                  <td id="cabos-total-price" style="font-weight: bold;">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="material-section">
+            <h3>Materiais de Fusão</h3>
+            <table id="fusao-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Quantidade</th>
+                  <th>Ações</th>
+                  <th>Preço Unitário (R$)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="fusao-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" style="text-align: right; font-weight: bold;">Subtotal Fusão:</td>
+                  <td id="fusao-total-price" style="font-weight: bold;">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="material-section">
+            <h3>Data Center</h3>
+            <table id="datacenter-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Quantidade</th>
+                  <th>Ações</th>
+                  <th>Preço Unitário (R$)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="datacenter-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" style="text-align: right; font-weight: bold;">Subtotal Data Center:</td>
+                  <td id="datacenter-total-price" style="font-weight: bold;">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div class="section-buttons">
+                <button id="addDatacenterEquipmentButton">+ Adicionar Equipamento</button>
+            </div>
+          </div>
+          
+          <div class="grand-total-container">
+            <strong>Total Geral de Materiais:</strong>
+            <span id="grand-total-price">R$ 0,00</span>
+          </div>
+
+        </div>
+        <div class="material-buttons">
+          <button id="saveMaterialChangesButton" style="background-color: #2196f3;">
+            <img src="img/Salvar.png" width="16" height="16" alt="Salvar" style="vertical-align: middle; margin-right: 6px;" />
+            Salvar Alterações
+          </button>
+          <button id="recalculateBomButton" style="background-color: #ffc107; color: #333;">
+            <img src="img/Rota.png" width="16" height="16" alt="Recalcular" style="vertical-align: middle; margin-right: 6px;" />
+            Recalcular do Mapa
+          </button>
+          <button id="addMaterialButton" style="background-color: #4CAF50;">
+            <img src="img/Mais.png" width="16" height="16" alt="Adicionar" style="vertical-align: middle; margin-right: 6px;" />
+            Adicionar Outro Material
+          </button>
+          <button id="exportMaterialButton">
+            <img src="img/Lista.png" width="16" height="16" alt="Exportar" style="vertical-align: middle; margin-right: 6px;" />
+            Exportar
+          </button>
+          <button id="openStickersModalButton" style="background-color: #673ab7;">
+            <img src="img/Adesivo.png" width="16" height="16" alt="Adesivos" style="vertical-align: middle; margin-right: 6px;" />
+            Adesivos
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="addMaterialModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeAddMaterialModal">&times;</span>
+        <h2 id="addMaterialModalTitle">Adicionar Novo Material</h2>
+        <div><label for="materialNameInput">Nome do Item:</label><input type="text" id="materialNameInput" placeholder="Ex: Fita Isolante" /></div>
+        <div><label for="materialQtyInput">Quantidade:</label><input type="number" id="materialQtyInput" value="1" min="0" /></div>
+        <div>
+          <label for="materialCategoryInput">Tipo (Categoria):</label>
+          <select id="materialCategoryInput">
+            <option value="Ferragem">Ferragem</option>
+            <option value="Lançamento">Lançamento</option>
+            <option value="Fusão">Fusão</option>
+            <option value="Data Center">Data Center</option>
+            <option value="Mão de Obra">Mão de Obra</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <div><label for="materialPriceInput">Preço Unitário (R$):</label><input type="number" id="materialPriceInput" value="0" min="0" step="0.01" /></div>
+        <div style="text-align: right;">
+          <button id="cancelAddMaterial" style="background-color: #f44336;">Cancelar</button>
+          <button id="confirmAddMaterial" style="background-color: #4CAF50;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="laborModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" id="closeLaborModal">&times;</span>
+            <h2>Planilha de Mão de Obra</h2>
+            <div class="modal-body-content">
+                <div class="material-section" style="margin: 0;">
+                    <table id="labor-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Detalhes</th>
+                                <th>Custo Total (R$)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="labor-items-body">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="grand-total-container" style="margin-top: 20px;">
+                    <strong>Custo Total da Mão de Obra:</strong>
+                    <span id="labor-grand-total-price">R$ 0,00</span>
+                </div>
+            </div>
+            <div class="material-buttons">
+                <button id="addNewRegionalLaborButton" style="background-color: #2196f3;">+ Adicionar Regional</button>
+                <button id="addNewOutsourcedLaborButton" style="background-color: #ffc107; color: #333;">+ Adicionar Terceirizada</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="regionalLaborModal" class="modal">
+    <div class="modal-content">
+        <span class="close" id="closeRegionalLaborModal">&times;</span>
+        <h2>Adicionar Mão de Obra Regional</h2>
+        
+        <div class="modal-body-content">
+            
+            <div class="info-display" style="justify-content: center; margin-bottom: 20px;">
+                <div style="background-color: #e3f2fd; color: #0d47a1;">
+                    Dias Calculados (Estimativa): <strong id="regionalDaysDisplay">0</strong>
+                </div>
+            </div>
+
+            <div class="compact-inputs-container">
+                <div>
+                    <label for="regionalTechs">Quantidade de Técnicos</label>
+                    <input type="number" id="regionalTechs" value="1" min="1">
+                </div>
+                <div>
+                    <label for="regionalDaysInput">Dias Informados (para Custo)</label>
+                    <input type="number" id="regionalDaysInput" value="0" min="0">
+                </div>
+            </div>
+
+            <fieldset style="border: 1px solid #ccc; border-radius: 6px; padding: 15px; margin-top: 20px;">
+                <legend><strong>Despesas Adicionais</strong></legend>
+
+                <label>Combustível:</label>
+                <div class="compact-inputs-container" style="margin-bottom: 15px;">
+                    <div>
+                        <label for="regionalFuelQty" style="font-weight: normal; font-size: 13px;">Quantidade (L ou R$)</label>
+                        <input type="number" id="regionalFuelQty" value="0" min="0" step="any">
+                    </div>
+                    <div>
+                        <label for="regionalFuelPrice" style="font-weight: normal; font-size: 13px;">Valor Unit. (R$)</label>
+                        <input type="number" id="regionalFuelPrice" value="0" min="0" step="any">
+                    </div>
+                </div>
+
+                <label>Alimentação:</label>
+                <div class="compact-inputs-container" style="margin-bottom: 15px;">
+                    <div>
+                        <label for="regionalFoodQty" style="font-weight: normal; font-size: 13px;">Quantidade (Dias/Refeições)</label>
+                        <input type="number" id="regionalFoodQty" value="0" min="0">
+                    </div>
+                    <div>
+                        <label for="regionalFoodPrice" style="font-weight: normal; font-size: 13px;">Valor Unit. (R$)</label>
+                        <input type="number" id="regionalFoodPrice" value="0" min="0" step="any">
+                    </div>
+                </div>
+                
+                <label>Hospedagem:</label>
+                <div class="compact-inputs-container" style="margin-bottom: 15px;">
+                    <div>
+                        <label for="regionalLodgingQty" style="font-weight: normal; font-size: 13px;">Quantidade (Diárias)</label>
+                        <input type="number" id="regionalLodgingQty" value="0" min="0">
+                    </div>
+                    <div>
+                        <label for="regionalLodgingPrice" style="font-weight: normal; font-size: 13px;">Valor Unit. (R$)</label>
+                        <input type="number" id="regionalLodgingPrice" value="0" min="0" step="any">
+                    </div>
+                </div>
+
+                <label>Pedágio:</label>
+                <div class="compact-inputs-container" style="margin-bottom: 10px;">
+                    <div>
+                        <label for="regionalTollQty" style="font-weight: normal; font-size: 13px;">Quantidade</label>
+                        <input type="number" id="regionalTollQty" value="0" min="0">
+                    </div>
+                    <div>
+                        <label for="regionalTollPrice" style="font-weight: normal; font-size: 13px;">Valor Unit. (R$)</label>
+                        <input type="number" id="regionalTollPrice" value="0" min="0" step="any">
+                    </div>
+                </div>
+
+            </fieldset>
+            <div class="info-display" style="margin-top: 25px; border-top: 1px solid #e0e6ed; padding-top: 20px; justify-content: space-around;">
+                <div id="regionalBaseCostDisplay" style="background-color: #fff3e0; color: #e65100; font-size: 14px;">
+                    Custo Base: R$ 0,00
+                </div>
+                <div id="regionalTotalCostDisplay" style="background-color: #e8f5e9; color: #1b5e20; font-size: 16px; font-weight: bold;">
+                    Custo Total: R$ 0,00
+                </div>
+            </div>
+
+        </div> <div class="material-buttons">
+            <button id="cancelRegionalLabor" style="background-color: #f44336;">Cancelar</button>
+            <button id="confirmRegionalLabor" style="background-color: #4CAF50;">Confirmar</button>
+        </div>
+
+    </div> </div>
+
+    <div id="outsourcedLaborModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" id="closeOutsourcedLaborModal">&times;</span>
+            <h2>Adicionar Mão de Obra Terceirizada</h2>
+            <div class="modal-body-content">
+                <div>
+                    <label for="outsourcedCompanyName">Nome da Empresa:</label>
+                    <input type="text" id="outsourcedCompanyName" placeholder="Digite o nome da empresa" />
+                </div>
+                <div class="material-section">
+                    <table id="outsourced-services-table">
+                        <thead>
+                            <tr>
+                                <th>Serviço</th>
+                                <th>Preço Unit.</th>
+                                <th>Quantidade</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outsourcedServicesBody">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="grand-total-container" style="margin-top: 15px;">
+                    Custo Total Terceirizado: <span id="outsourcedTotalCostDisplay">R$ 0,00</span>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <button id="cancelOutsourcedLabor" style="background-color: #f44336;">Cancelar</button>
+                <button id="confirmOutsourcedLabor" style="background-color: #4CAF50;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="outsourcedDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" id="closeOutsourcedDetailsModal">&times;</span>
+            <h2 id="outsourcedDetailsTitle">Detalhes da Mão de Obra Terceirizada</h2>
+            <div class="modal-body-content">
+                <div class="material-section">
+                    <table id="outsourced-details-table">
+                        <thead>
+                            <tr>
+                                <th>Nome do Serviço</th>
+                                <th>Quantidade</th>
+                                <th>Unidade</th>
+                                <th>Valor Unitário</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outsourcedDetailsBody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="markerTypeModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeTypeModal">&times;</span>
+        <h2>Selecione o tipo de marcador</h2>
+        <div class="marker-grid">
+          <div class="marker-option" data-type="CEO"><img src="img/CEO.png" width="24" />CEO</div>
+          <div class="marker-option" data-type="CTO"><img src="img/CTO.png" width="24" />CTO</div>
+          <div class="marker-option" data-type="CORDOALHA"><img src="img/Cordoalha.png" width="24" />Cordoalha</div>
+          <div class="marker-option" data-type="RESERVA"><img src="img/Reserva.png" width="24" />Reserva</div>
+          <div class="marker-option" data-type="CASA"><img src="img/Casa.png" width="24" />Casas</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cableStatusSelectionModal" class="modal">
+      <div class="modal-content" style="text-align: center;">
+        <span class="close" id="closeCableStatusModal">&times;</span>
+        <h2>Selecione o estado do Cabo</h2>
+        <div class="marker-grid">
+          <div class="cable-status-option" data-status="Novo">Novo</div>
+          <div class="cable-status-option" data-status="Existente">Existente</div>
+        </div>
+      </div>
+    </div>
+
+<div id="ctoStatusSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeCtoStatusModal">&times;</span> <h2>Selecione o estado da CTO</h2>
+        <div class="marker-grid">
+          <div class="cto-status-option" data-status="Nova">Nova</div>
+          <div class="cto-status-option" data-status="Existente">Existente</div>
+          <div class="cto-status-option" data-status="Troca">Troca</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ceoStatusSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeCeoStatusModal">&times;</span>
+        <h2>Selecione o estado da CEO</h2>
+        <div class="marker-grid">
+          <div class="ceo-status-option" data-status="Nova">Nova</div>
+          <div class="ceo-status-option" data-status="Existente">Existente</div>
+          <div class="ceo-status-option" data-status="Troca">Troca</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ceoAccessorySelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeCeoAccessoryModal">&times;</span>
+        <h2>Selecione o tipo de instalação</h2>
+        <div class="marker-grid">
+          <div class="ceo-accessory-option" data-accessory="Raquete">Utilizando Raquete</div>
+          <div class="ceo-accessory-option" data-accessory="Suporte">Utilizando Suporte de CEO</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cordoalhaStatusSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeCordoalhaStatusModal">&times;</span>
+        <h2>Selecione o estado da Cordoalha</h2>
+        <div class="marker-grid">
+          <div class="cordoalha-status-option" data-status="Nova">Nova</div>
+          <div class="cordoalha-status-option" data-status="Existente">Existente</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="reservaStatusSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeReservaStatusModal">&times;</span>
+        <h2>Selecione o estado da Reserva</h2>
+        <div class="marker-grid">
+          <div class="reserva-status-option" data-status="Nova">Nova</div>
+          <div class="reserva-status-option" data-status="Existente">Existente</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="datacenterChoiceModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeDatacenterChoiceModal">&times;</span>
+        <h2>Adicionar Equipamento de Data Center</h2>
+        <div class="marker-grid">
+          <div class="datacenter-option" data-item="PLACA">PLACA</div>
+          <div class="datacenter-option" data-item="OLT">OLT</div>
+          <div class="datacenter-option" data-item="POP">POP</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="placaKitModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closePlacaKitModal">&times;</span>
+        <h2>Adicionar Kit PLACA</h2>
+        <div class="modal-body-content">
+          <div>
+            <label for="placaCordaoQty">Quantidade de Cordão Óptico:</label>
+            <input type="number" id="placaCordaoQty" value="1" min="0" />
+          </div>
+          <div>
+            <label for="placaOltQty">Quantidade de Placa OLT:</label>
+            <input type="number" id="placaOltQty" value="1" min="0" />
+          </div>
+          <div>
+            <label for="placaSfpQty">Quantidade de Módulo SFP:</label>
+            <input type="number" id="placaSfpQty" value="1" min="0" />
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <button id="cancelPlacaKit" style="background-color: #f44336;">Cancelar</button>
+          <button id="confirmPlacaKit" style="background-color: #4CAF50;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="oltKitModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeOltKitModal">&times;</span>
+        <h2>Adicionar Kit OLT</h2>
+        <div class="modal-body-content" style="padding-top: 15px; padding-bottom: 15px;">
+          <h4>Itens com quantidade variável:</h4>
+          <div style="margin-bottom: 15px;">
+            <label for="oltCordaoQty">Cordão Óptico (SC/UPC > SC\APC):</label>
+            <input type="number" id="oltCordaoQty" value="1" min="0" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="oltPlacaOltQty">Placa OLT Line Anypon (16 Portas):</label>
+            <input type="number" id="oltPlacaOltQty" value="1" min="0" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="oltSfpQty">Módulo SFP C+:</label>
+            <input type="number" id="oltSfpQty" value="1" min="0" />
+          </div>
+          <hr style="margin: 20px 0;">
+          <h4>Itens com quantidade fixa (adicionados automaticamente):</h4>
+          <ul style="list-style: none; padding-left: 10px; font-size: 14px; color: #555;">
+            <li style="margin-bottom: 5px;"><b>1x</b> CHASSI OLT C650 ZTE</li>
+            <li style="margin-bottom: 5px;"><b>1x</b> LICENÇA OLT</li>
+            <li style="margin-bottom: 5px;"><b>2x</b> MÓDULO DE ENERGIA DC C650-C600</li>
+            <li style="margin-bottom: 5px;"><b>1x</b> PLACA CONTROLADORA E SWITCHING</li>
+            <li style="margin-bottom: 5px;"><b>1x</b> SWITCH MPLS 24 PORTAS</li>
+            <li style="margin-bottom: 5px;"><b>2x</b> SFP 850NM 10G 0,3KM MULTIMODO</li>
+            <li><b>1x</b> SFP GBIC ELÉTRICO</li>
+          </ul>
+        </div>
+        <div style="text-align: right;">
+          <button id="cancelOltKit" style="background-color: #f44336;">Cancelar</button>
+          <button id="confirmOltKit" style="background-color: #4CAF50;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="popKitModal" class="modal">
+      <div class="modal-content" style="max-width: 800px;">
+        <span class="close" id="closePopKitModal">&times;</span>
+        <h2>Adicionar Kit POP</h2>
+        <div class="modal-body-content" style="padding-top: 15px; padding-bottom: 15px;">
+          <h4>Itens com quantidade variável:</h4>
+          <div style="margin-bottom: 15px;">
+            <label for="popPlacaOltQty">Placa OLT Line Anypon 16 Ports Card (HFTH):</label>
+            <input type="number" id="popPlacaOltQty" value="1" min="0" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="popSfpQty">Módulo SFP C+ Para Placa OLT Line Anypon ZTE:</label>
+            <input type="number" id="popSfpQty" value="1" min="0" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="popCordaoScApcQty">Cordão Óptico Simplex Monomodo SC/UPC > SC/APC 2M:</label>
+            <input type="number" id="popCordaoScApcQty" value="1" min="0" />
+          </div>
+          <hr style="margin: 20px 0;">
+          <h4>Itens com quantidade fixa (adicionados automaticamente):</h4>
+          <ul id="popFixedItemsList" style="list-style: none; padding-left: 10px; font-size: 14px; color: #555; column-count: 2;">
+             </ul>
+        </div>
+        <div style="text-align: right;">
+          <button id="cancelPopKit" style="background-color: #f44336;">Cancelar</button>
+          <button id="confirmPopKit" style="background-color: #4CAF50;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="markerModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeModal">&times;</span>
+        <h2 id="markerModalTitle">Adicionar Marcador</h2>
+
+        <div id="ceoInfoDisplay" class="info-display hidden">
+          <div id="ceoStatusInfo"></div>
+          <div id="ceoAccessoryInfo"></div>
+        </div>
+
+        <div id="ctoInfoDisplay" class="info-display hidden">
+          <div id="ctoStatusInfo"></div>
+        </div>
+        
+        <div id="cordoalhaInfoDisplay" class="info-display hidden">
+          <div id="cordoalhaStatusInfo"></div>
+        </div>
+        
+        <div id="reservaInfoDisplay" class="info-display hidden">
+          <div id="reservaStatusInfo"></div>
+          <div id="reservaAccessoryInfo"></div>
+        </div>
+
+        <div id="nameGroup"><label>Nome:</label><input type="text" id="markerName" placeholder="Nome do marcador" /></div>
+        
+        <div class="compact-inputs-container">
+            <div id="colorGroup"><label>Cor do Ícone:</label><input type="color" id="markerColor" value="#ff0000" /></div>
+            <div id="labelColorGroup" class="hidden"><label>Cor do Nome:</label><input type="color" id="markerLabelColor" value="#000000" /></div>
+            <div id="sizeGroup"><label>Espessura:</label><input type="number" id="markerSize" value="4" min="1" max="20" /></div>
+        </div>
+        
+        <div id="markerCoordinatesGroup" class="hidden">
+          <label>Coordenadas (Lat, Lng):</label>
+          <p id="markerCoordinatesText"></p>
+        </div>
+
+        <div id="descGroup"><label>Descrição (opcional):</label><textarea id="markerDescription" rows="3" placeholder="Detalhes do marcador..."></textarea></div>
+
+        <div id="ctoPredialGroup" class="hidden" style="display: flex; align-items: center; justify-content: flex-start; margin-top: 15px; padding: 0 25px;">
+          <input type="checkbox" id="ctoPredialCheckbox" style="width: auto; margin-right: 10px; cursor: pointer;">
+          <label for="ctoPredialCheckbox" style="margin-bottom: 0; font-weight: normal; cursor: pointer;">Esta CTO é Predial?</label>
+        </div>
+        
+        <div id="ctoStickerGroup" class="hidden" style="display: flex; align-items: center; justify-content: flex-start; margin-top: 15px; padding: 0 25px;">
+          <input type="checkbox" id="ctoStickerCheckbox" style="width: auto; margin-right: 10px; cursor: pointer;">
+          <label for="ctoStickerCheckbox" style="margin-bottom: 0; font-weight: normal; cursor: pointer;">Incluir adesivos para a caixa?</label>
+        </div>
+
+        <div id="ceo144Group" class="hidden" style="display: flex; align-items: center; justify-content: flex-start; margin-top: 15px; padding: 0 25px;">
+          <input type="checkbox" id="ceo144Checkbox" style="width: auto; margin-right: 10px; cursor: pointer;">
+          <label for="ceo144Checkbox" style="margin-bottom: 0; font-weight: normal; cursor: pointer;">É uma Caixa de 144 Fusões (Jumbo)?</label>
+        </div>
+
+        <div id="houseNumberGroup" class="hidden"><label>Quantidade de casas:</label><input type="number" id="markerNumber" placeholder="Ex: 10" /></div>
+        <div id="derivationTGroup" class="hidden"><label>Quantidade de Derivação em T:</label><input type="number" id="markerDerivationT" value="0" placeholder="Ex: 2" /></div>
+
+        
+        
+        <div id="modalButtonContainer">
+          <button id="editPositionButton" class="hidden" style="background-color: #ffc107;">Editar Posição</button>
+          <button id="confirmMarker">Confirmar</button>
+          <button id="deleteMarkerButton" class="hidden" style="background-color: #f44336;">Excluir</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="cableDrawingBox" class="floating-box hidden">
+  <h3>Desenhando Cabo</h3>
+  <p id="cableStatusDisplay" style="font-weight: bold; margin: 5px 0; color: #555; display: none;"></p>
+  <label for="cableName">Nome:</label><input type="text" id="cableName" placeholder="Ex: Cabo 1" />
+  
+  <label for="cableASType">Tipo de Vão:</label>
+  <select id="cableASType">
+    <option value="AS 80">AS 80</option>
+    <option value="AS 200">AS 200</option>
+  </select>
+  <label for="cableType">Tipo de Fibra (define a cor):</label>
+  <select id="cableType">
+    <option value="FO-06">FO-06 (Preto)</option>
+    <option value="FO-12">FO-12 (Verde)</option>
+    <option value="FO-24">FO-24 (Rosa)</option>
+    <option value="FO-36">FO-36 (Azul)</option>
+    <option value="FO-48">FO-48 (Vermelho)</option>
+    <option value="FO-72">FO-72 (Roxo)</option>
+    <option value="FO-144">FO-144 (Amarelo)</option>
+  </select>
+  <label for="cableWidth">Espessura:</label><input type="number" id="cableWidth" min="1" max="10" value="3" />
+  <p id="cableDrawnDistance">Lançamento: 0 m</p>
+  <p id="cableReserveDistance">Reserva: 0 m</p>
+  <p id="cableTotalDistance" style="font-weight: bold;">Total: 0 m</p>
+  <div class="cable-box-actions">
+    <button id="saveCableButton">Salvar Cabo</button>
+    <button id="invertCableButton" class="hidden" style="background-color: #ffc107; color: #333;">Inverter Pontas</button>
+    <button id="cancelCableButton">Cancelar</button>
+    <button id="deleteCableButton" class="hidden">Excluir Cabo</button>
+  </div>
+</div>
+
+    <div id="fusionModal" class="modal">
+      <div class="modal-content fusion-modal-content">
+        <span class="close" id="closeFusionModal">&times;</span>
+        <h2>Plano de Fusão</h2>
+        <div id="trayKitContainer" class="hidden">
+          <label for="trayKitQuantity">Kits de Bandeja:</label>
+          <input type="number" id="trayKitQuantity" min="0" value="0" title="Quantidade de Kits de Bandeja para esta CEO" />
+        </div>
+        <div id="fusion-actions">
+          <button id="addCableToFusion">Adicionar Cabo</button>
+          <button id="addSplitterToFusion">Adicionar Splitter</button>
+        </div>
+        <div id="fusionCanvas" class="fusion-canvas">
+          <svg id="fusion-svg-layer" class="fusion-svg-layer"></svg>
+          <p class="canvas-placeholder">A área de fusão aparecerá aqui.</p>
+        </div>
+        <button id="saveFusionPlan">Salvar Plano</button>
+      </div>
+    </div>
+
+    <div id="splitterSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterModal">&times;</span>
+        <h2>Selecionar Splitter</h2>
+        <div class="splitter-category" data-category="fusao">
+          <h3>Splitter de Fusão</h3>
+          <div class="splitter-grid">
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/2">Splitter 1/2</div>
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/4">Splitter 1/4</div>
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/8">Splitter 1/8</div>
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/16">Splitter 1/16</div>
+          </div>
+        </div>
+        <div class="splitter-category hidden" data-category="atendimento">
+          <h3>Splitter de Atendimento</h3>
+          <div class="splitter-grid">
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/2">Splitter 1/2</div>
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/4">Splitter 1/4</div>
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/8">Splitter 1/8</div>
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/16">Splitter 1/16</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="splitterTypeModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterTypeModal">&times;</span>
+        <h2>Selecione o Tipo de Splitter</h2>
+        <div class="marker-grid">
+          <div class="datacenter-option" data-type="Fusão">Fusão</div>
+          <div class="datacenter-option" data-type="Atendimento">Atendimento</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="splitterConnectorModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterConnectorModal">&times;</span>
+        <h2>Selecione o Tipo de Conector</h2>
+        <div class="marker-grid">
+          <div class="datacenter-option" data-connector="APC">APC</div>
+          <div class="datacenter-option" data-connector="UPC">UPC</div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="splitterStatusSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterStatusModal">&times;</span>
+        <h2>Selecione o estado do Splitter</h2>
+        <div class="marker-grid">
+          <div class="splitter-status-option" data-status="Novo">Novo</div>
+          <div class="splitter-status-option" data-status="Existente">Existente</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cableSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeCableSelectionModal">&times;</span>
+        <h2>Selecionar Cabo Conectado</h2>
+        <div id="connected-cables-list"></div>
+      </div>
+    </div>
+
+    <div id="projectModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeProjectModal">&times;</span>
+        <h2 id="projectModalTitle">Novo Projeto</h2>
+        <div><label for="projectName">Nome do Projeto:</label><input type="text" id="projectName" placeholder="Ex: Expansão Centro" /></div>
+        <div><label for="projectCity">Cidade:</label><input type="text" id="projectCity" placeholder="Ex: Divinópolis" /></div>
+        <div><label for="projectNeighborhood">Bairro:</label><input type="text" id="projectNeighborhood" placeholder="Ex: Santa Clara" /></div>
+        <div>
+          <label for="projectType">Tipo:</label>
+          <select id="projectType"><option value="TCR">TCR</option><option value="TCT">TCT</option><option value="MDU">MDU</option></select>
+        </div>
+        <div style="text-align: right;">
+          <button id="cancelProjectButton" style="background-color: #f44336;">Cancelar</button>
+          <button id="confirmProjectButton" style="background-color: #4CAF50;">Criar Projeto</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="folderModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeFolderModal">&times;</span>
+        <h2 id="folderModalTitle">Nova Pasta</h2>
+        <div><label for="folderNameInput">Nome da Pasta:</label><input type="text" id="folderNameInput" placeholder="Digite o nome da pasta" /></div>
+        <div style="text-align: right;">
+          <button id="cancelFolderButton" style="background-color: #f44336;">Cancelar</button>
+          <button id="confirmFolderButton" style="background-color: #4CAF50;">Criar Pasta</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="reportModal" class="modal">
+      <div class="modal-content" style="max-width: 850px;">
+        <span class="close" id="closeReportModal">&times;</span>
+        <div id="report-project-list">
+          <h2>Selecione um Projeto para Ver o Relatório</h2>
+          <ul id="report-projects-ul">
+            </ul>
+        </div>
+        <div id="report-project-details" class="hidden">
+          <button id="backToProjectList" style="background-color: #6c757d; max-width: 100px; margin-bottom: 15px;">&larr; Voltar</button>
+          <h2 id="report-title">Relatório do Projeto</h2>
+          <div class="report-details-grid">
+              <div class="report-detail-item"><strong>Bairros:</strong> <span id="report-neighborhoods"></span></div>
+              <div class="report-detail-item"><strong>Quantidade de Casas (HP):</strong> <span id="report-houses"></span></div>
+              <div class="report-detail-item"><strong>Portas Existentes (HC):</strong> <span id="report-existing-ports"></span></div>
+              <div class="report-detail-item"><strong>Novas Portas:</strong> <span id="report-new-ports"></span></div>
+              <div class="report-detail-item"><strong>Total de Portas:</strong> <span id="report-total-ports"></span></div>
+              <div class="report-detail-item"><strong>Taxa de Penetração:</strong> <span id="report-penetration-rate"></span></div>
+              <div class="report-detail-item"><strong>Lançamento Estimado:</strong> <span id="report-cable-length"></span></div>
+
+              <div class="report-detail-item sub-item"><strong>Custo Ferragens:</strong> <span id="report-ferragem-cost"></span></div>
+              <div class="report-detail-item sub-item"><strong>Custo Cabos:</strong> <span id="report-cabos-cost"></span></div>
+              <div class="report-detail-item sub-item"><strong>Custo Fusão:</strong> <span id="report-fusao-cost"></span></div>
+              <div class="report-detail-item sub-item"><strong>Custo Data Center:</strong> <span id="report-datacenter-cost"></span></div>
+              <div class="report-detail-item total-item"><strong>Custo Total de Materiais:</strong> <span id="report-material-cost"></span></div>
+
+              <div class="report-detail-item sub-item"><strong>Custo M.O. Regional:</strong> <span id="report-regional-labor-cost"></span></div>
+              <div class="report-detail-item sub-item"><strong>Custo M.O. Terceirizada:</strong> <span id="report-outsourced-labor-cost"></span></div>
+              <div class="report-detail-item total-item"><strong>Custo Total de Mão de Obra:</strong> <span id="report-labor-cost"></span></div>
+
+              <div class="report-detail-item total-item"><strong>Custo Total (Materiais + M.O.):</strong> <span id="report-total-cost"></span></div>
+              <div class="report-detail-item"><strong>Coef. de Segurança (5%):</strong> <span id="report-safety-coef"></span></div>
+              <div class="report-detail-item final-total-item"><strong>Custo total (com Coef.):</strong> <span id="report-final-cost"></span></div>
+              <div class="report-detail-item"><strong>Custo por Nova Porta:</strong> <span id="report-cost-per-port"></span></div>
+              <div class="report-detail-item"><strong>Prazo Estimado da Obra:</strong> <span id="report-duration"></span></div>
+
+              </div> <div id="modalButtonContainer">
+                <button id="openObservationsButton">
+                    Adicionar/Editar Observações
+                </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="alertModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <h2 id="alertModalTitle">Aviso</h2>
+        <div class="modal-body-content">
+          <p id="alertModalMessage"></p>
+        </div>
+        <div style="text-align: right;">
+          <button id="alertModalOkButton">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirmModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <h2 id="confirmModalTitle">Confirmação</h2>
+        <div class="modal-body-content">
+          <p id="confirmModalMessage"></p>
+        </div>
+        <div style="text-align: right;">
+          <button id="confirmModalCancelButton" style="background-color: #6c757d;">Cancelar</button>
+          <button id="confirmModalConfirmButton" style="background-color: #4CAF50;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+
+    <template id="project-template">
+      <div class="folder">
+        <div class="folder-title" data-is-project="true">
+          <span class="folder-icon-sidebar">📁</span>
+          <span class="toggle-icon">►</span>
+          <span class="folder-name-text"></span>
+          <div class="folder-buttons">
+            <button class="visibility-toggle-btn" title="Ocultar/Exibir itens no mapa" data-visible="true">
+              <img src="img/Mostrar.png" width="16" height="16" alt="Visibilidade">
+            </button>
+            <div class="item-actions-dropdown">
+              <button class="item-actions-toggle-btn" title="Mais opções">&#8942;</button>
+              <div class="item-actions-menu">
+                <a href="#" class="edit-folder-btn">Editar</a>
+                <a href="#" class="delete-project-btn">Excluir</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="subfolders hidden"></ul>
+      </div>
+    </template>
+    
+    <template id="folder-template">
+      <li class="folder-wrapper">
+        <div class="folder-title" data-is-project="false">
+          <span class="folder-icon-sidebar">📁</span>
+          <span class="toggle-icon">►</span>
+          <span class="folder-name-text"></span>
+          <div class="folder-buttons">
+            <button class="visibility-toggle-btn" title="Ocultar/Exibir itens no mapa" data-visible="true">
+              <img src="img/Mostrar.png" width="16" height="16" alt="Visibilidade">
+            </button>
+            <div class="item-actions-dropdown">
+              <button class="item-actions-toggle-btn" title="Mais opções">&#8942;</button>
+              <div class="item-actions-menu">
+                <a href="#" class="edit-folder-btn">Editar</a>
+                <a href="#" class="delete-folder-btn">Excluir</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="subfolders hidden"></ul>
+      </li>
+    </template>
+
+    <template id="polygon-template">
+      <li>
+        <span class="item-icon" style="background-color: #2196f3;"></span>
+        <span class="item-name"></span>
+        <button class="visibility-toggle-btn item-toggle" data-visible="true" title="Ocultar/Exibir">
+          <img src="img/Mostrar.png" width="16" height="16" alt="Visibilidade">
+        </button>
+      </li>
+    </template>
+
+    <div id="searchModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSearchModal">&times;</span>
+        <h2>Pesquisar Localização</h2>
+        <div class="modal-body-content">
+
+          <fieldset style="border: 1px solid #ccc; border-radius: 6px; padding: 15px;">
+            <legend><strong>Pesquisar por Coordenadas</strong></legend>
+            <div><label for="searchCoordinates">Latitude, Longitude:</label><input type="text" id="searchCoordinates" placeholder="-20.1394, -44.8872" /></div>
+          </fieldset>
+
+        </div>
+        <div style="text-align: right;">
+          <button id="structuredSearchButton" style="background-color: #4CAF50;">
+            <img src="img/Buscar.png" width="16" height="16" alt="Buscar" style="vertical-align: middle; margin-right: 6px;" />
+            Buscar no Mapa
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cableInfoBox" class="cable-info-box hidden"></div>
+
+    <div id="rulerBox" class="floating-box hidden">
+      <h3>Régua de Medição</h3>
+      <p id="rulerDistance">Distância: 0 m</p>
+      <button id="cancelRulerButton">Finalizar</button>
+    </div>
+
+    <div id="polygonDrawingBox" class="floating-box hidden">
+      <h3 id="polygonBoxTitle">Desenhar Polígono</h3>
+      <div>
+        <label for="polygonName">Nome do Polígono:</label>
+        <input type="text" id="polygonName" placeholder="Ex: Área de Cobertura" />
+      </div>
+      <div>
+        <label for="polygonColor">Cor do Preenchimento:</label>
+        <input type="color" id="polygonColor" value="#2196f3" />
+      </div>
+      <div id="polygonButtons">
+        <button id="savePolygonButton">Salvar Polígono</button>
+        <button id="deletePolygonButton" class="hidden" style="background-color: #f44336">Excluir</button>
+        <button id="cancelPolygonButton">Cancelar</button>
+      </div>
+    </div>
+  
+    <div id="loadProjectModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <span class="close" id="closeLoadProjectModal">&times;</span>
+        <h2>Buscar e Carregar Projeto</h2>
+        <div class="modal-body-content">
+          
+          <fieldset style="border: 1px solid #ccc; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
+            <legend><strong>Filtrar por:</strong></legend>
+            <div style="margin-bottom: 15px;">
+              <label for="searchProjectName">Nome do Projeto:</label>
+              <input type="text" id="searchProjectName" placeholder="Digite o nome exato do projeto" />
+            </div>
+            <div style="margin-bottom: 15px;">
+              <label for="searchProjectCity">Cidade:</label>
+              <input type="text" id="searchProjectCity" placeholder="Digite a cidade" />
+            </div>
+            <div>
+              <label for="searchProjectNeighborhood">Bairro:</label>
+              <input type="text" id="searchProjectNeighborhood" placeholder="Digite o bairro" />
+            </div>
+          </fieldset>
+
+          <div style="text-align: center; margin-bottom: 20px;">
+            <button id="searchProjectsButton" style="background-color: #007bff; width: 50%;">
+              <img src="img/Buscar.png" width="16" height="16" alt="Buscar" style="vertical-align: middle; margin-right: 6px;" />
+              Buscar Projetos
+            </button>
+          </div>
+          
+          <hr>
+          <h3 style="margin-top: 20px;">Resultados da Busca:</h3>
+          <ul id="saved-projects-list" style="list-style: none; padding: 0; max-height: 300px; overflow-y: auto;">
+            </ul>
+
+        </div>
+      </div>
+    </div>
+
+  <div id="lineActionModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <span class="close" id="closeLineActionModal">&times;</span>
+        <h2>Ação da Linha</h2>
+        <div class="modal-body-content">
+          <p id="lineConnectionInfo"></p>
+          <p>O que você deseja fazer com esta conexão?</p>
+        </div>
+        <div class="material-buttons" style="justify-content: center;">
+          <button id="editLineButton" style="background-color: #2196f3;">
+            <img src="img/Editar.png" width="16" height="16" alt="Editar" style="vertical-align: middle; margin-right: 6px;" />
+            Editar Conexão
+          </button>
+          <button id="deleteLineConfirmButton" style="background-color: #f44336;">
+            <img src="img/Lixeira.png" width="16" height="16" alt="Excluir" style="vertical-align: middle; margin-right: 6px;" />
+            Excluir Conexão
+          </button>
+           <button id="cancelLineActionButton" style="background-color: #6c757d;">Cancelar</button>
+        </div>
+      </div>
+    </div>    
+
+    <div id="stickersModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <span class="close" id="closeStickersModal">&times;</span>
+        <h2>Contagem de Adesivos do Projeto</h2>
+        <div class="modal-body-content">
+          
+          <div id="sticker-count-container">
+            <p style="text-align: center; color: #666; font-style: italic;">
+              Nenhuma CTO com adesivos selecionados foi encontrada neste projeto.
+            </p>
+          </div>
+
+        </div>
+        <div style="text-align: right;">
+           <button id="closeStickersModalButton" style="background-color: #6c757d;">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="editMaterialModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeEditMaterialModal">&times;</span>
+        <h2>Editar Item do Material</h2>
+        <div class="modal-body-content">
+          <input type="hidden" id="originalMaterialName" />
+          
+          <div style="margin-bottom: 15px;">
+            <label for="editMaterialName">Nome do Item:</label>
+            <input type="text" id="editMaterialName" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="editMaterialQty">Quantidade:</label>
+            <input type="number" id="editMaterialQty" min="0" step="any" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="editMaterialUnit">Unidade (Ex: un, m, kg):</label>
+            <input type="text" id="editMaterialUnit" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="editMaterialPrice">Preço Unitário (R$):</label>
+            <input type="number" id="editMaterialPrice" min="0" step="0.01" />
+          </div>
+        </div>
+        <div id="modalButtonContainer">
+          <button id="cancelEditMaterial" style="background-color: #6c757d;">Cancelar</button>
+          <button id="confirmEditMaterial" style="background-color: #4CAF50;">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="observationsModal" class="modal">
+      <div class="modal-content">
+          <span class="close" id="closeObservationsModal">&times;</span>
+          <h2>Observações do Projeto</h2>
+          <div class="modal-body-content">
+              <p>Este texto será salvo junto com o projeto. Você pode usar este espaço para anotações, escopo, detalhes de contato ou qualquer outra informação relevante.</p>
+              <input type="hidden" id="observationProjectId" />
+              <textarea id="observationsTextarea" style="width: 100%; height: 250px; margin-top: 15px; font-family: Arial, sans-serif; font-size: 14px;"></textarea>
+          </div>
+          <div id="modalButtonContainer" style="text-align: right;">
+              <button id="cancelObservationButton" style="background-color: #f44336;">Cancelar</button>
+              <button id="saveObservationButton" style="background-color: #4CAF50;">Salvar Observação</button>
+            </div>
+        </div>
+    </div>
+
+  <input type="file" id="kml-file-input" accept=".kml" style="display: none;" />
+    
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script> 
+  <script src="script.js" defer></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry,drawing&callback=initMap" async defer></script>
+  </body>
+</html>
