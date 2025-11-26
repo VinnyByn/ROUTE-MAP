@@ -1,3 +1,4 @@
+/*Animações de zoom para abertura de modais*/
 @keyframes zoomIn {
   from {
     transform: scale(0.9);
@@ -9,6 +10,7 @@
   }
 }
 
+/*Barra superior / top bar - com os botões*/
 .top-bar {
   display: flex;
   justify-content: flex-start;
@@ -23,6 +25,7 @@
   z-index: 1000;
 }
 
+/*Estilos dos botões*/
 .top-bar button {
   margin-right: 10px;
   padding: 10px 20px;
@@ -38,6 +41,7 @@
   background-color: #f1f1f1;
 }
 
+/*Layout principal com a divisão em grid - 3 colunas, sidebar, barra de redimensionamento e mapa*/
 .container {
   display: grid;
   grid-template-columns: 350px 5px 1fr;
@@ -45,6 +49,7 @@
   margin-top: 50px;
 }
 
+/*Barra lateral / sidebar*/
 .sidebar {
   background-color: #f9f9f9;
   padding: 20px;
@@ -54,78 +59,94 @@
   font-size: 14px;
 }
 
+/*Barra de redimensionamento*/
 .resizer {
   background-color: #e0e0e0;
   cursor: col-resize;
   transition: background-color 0.2s;
 }
+
 .resizer:hover {
   background-color: #2196f3;
 }
 
+/*Mapa*/
+.map {
+  height: 100%;
+  background-color: #ccc;
+}
+
+/*Título da pasta*/
 .folder-title {
-    display: flex;
-    align-items: center;
-    padding: 4px 8px;
-    margin: 1px 0;
-    font-size: 14px;
-    color: #333;
-    background-color: #e3f2fd;
-    border-radius: 3px;
-    cursor: pointer;
-    user-select: none;
-    position: relative;
-    min-height: 24px;
-    width: 100%;
-    box-sizing: border-box;
+  display: flex; /*Alinha itens na horizontal*/
+  align-items: center;
+  padding: 4px 8px;
+  margin: 1px 0;
+  font-size: 14px;
+  color: #333;
+  background-color: #e3f2fd;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  min-height: 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/*Ícone da pasta*/
 .folder-icon-sidebar {
-    margin-right: 4px;
-    width: 16px;
-    text-align: center;
-    flex-shrink: 0;
-    color: #555;
+  margin-right: 4px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0; /*Garante que o ícone não "esprema" se o nome for longo*/
+  color: #555;
 }
 
+/*Ícones e botão não encolham*/
 .folder-icon-sidebar,
 .toggle-icon,
 .folder-buttons {
-    flex-shrink: 0;
+  flex-shrink: 0;
 }
 
+/*Pasta selecionada*/
 .folder-title.active {
   background-color: #bbdefb;
   font-weight: bold;
 }
 
+/*Mouse sobre a pasta*/
 .folder-title:hover {
   background-color: #cfe8fc;
 }
 
+/*Setas de expandir e recolher a pasta*/
 .toggle-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 4px;
-    flex-shrink: 0;
-    color: #666; 
-    font-size: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background-image: none !important;
-    content: "";
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  color: #666; 
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-image: none !important;
+  content: "";
 }
 
+/*Nome com o tratamento de texto longo*/
 .folder-name-text,
 .subfolders li > .item-name {
-    flex-grow: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 0 4px;
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
 }
 
+/*Lista com os subitens com o conteúdo dentro da pasta*/
 .subfolders {
   list-style: none;
   padding-left: 20px;
@@ -135,97 +156,122 @@
   opacity: 1;
 }
 
+/*Ajuste na altura*/
 .subfolders.collapsed {
   max-height: 0;
   padding-left: 20px;
 }
 
+/*Estado de cada item de forma individual, marcadores e cabos*/
 .subfolders > li:not(.folder-wrapper){
-    background-color: #ffffff;
-    color: #444;
-    padding: 4px 10px;
-    margin: 2px 0;
-    font-size: 13px;
-    border-left: 3px solid #2196f3;
-    border-radius: 4px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    transition: background-color 0.2s;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
+  background-color: #ffffff;
+  color: #444;
+  padding: 4px 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  border-left: 3px solid #2196f3;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
 }
 
+/*Botão de visibilidade do olho*/
+.visibility-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 5px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.visibility-toggle-btn:hover {
+  opacity: 0.7;
+}
+
+/*Botão da visibilidade*/
 .subfolders li .visibility-toggle-btn {
-    margin-left: 0;
-    flex-shrink: 0;
+  margin-left: 0;
+  flex-shrink: 0;
 }
 
+/*Botão ajustar, que aparece nas importações KML*/
 .subfolders li .adjust-kml-btn {
-    margin-left: auto;
-    margin-right: 4px;
-    flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 4px;
+  flex-shrink: 0;
 }
 
+/*Quadrado que representa a cor do item inserido*/
 .subfolders li .item-icon {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-    margin-right: 6px;
-    border: 1px solid rgba(0,0,0,0.1);
-    flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  border: 1px solid rgba(0,0,0,0.1);
+  flex-shrink: 0;
+  margin-left: 18px;
 }
 
+/*Pasta fechada*/
 .subfolders.hidden {
   max-height: 0;
   opacity: 0;
   pointer-events: none;
 }
 
+/*Botão de ação, editar - excluir - menu*/
 .folder-buttons button, .item-actions-toggle-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px;
-    margin-left: 2px;
-    opacity: 0.7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  margin-left: 2px;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+/*Efeito para o botão de ação*/
 .folder-buttons button:hover, .item-actions-toggle-btn:hover {
-    opacity: 1;
-    background-color: #eee;
-    border-radius: 3px;
+  opacity: 1;
+  background-color: #eee;
+  border-radius: 3px;
 }
 
+/*Tamanho do ícone dentro do botão de visibilidade*/
 .visibility-toggle-btn img { 
-    width: 14px;
-    height: 14px;
+  width: 14px;
+  height: 14px;
 }
 
+/*Item selecionado na sidebar*/
 .subfolders > li:not(.folder-wrapper).active {
   background-color: #cfe8fc;
   font-weight: bold;
 }
 
+/*Drag and Drop*/
 .subfolders li.draggable {
   user-select: none;
 }
 
+/*Efeito visual do arraste*/
 .subfolders li.dragover {
   background-color: #b0bec5 !important;
 }
 
+/*Esconder elemento*/
 .hidden {
   display: none !important;
 }
 
-.map {
-  height: 100%;
-  background-color: #ccc;
-}
-
+/*Fundo escuro que cobre a tela inteira atrás da janela aberta*/
 .modal {
   display: none;
   position: fixed;
@@ -241,6 +287,7 @@
   align-items: center;
 }
 
+/*A caixa da janela aberta*/
 .modal-content {
   background-color: #fefefe;
   margin: auto;
@@ -258,6 +305,7 @@
   animation: zoomIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
+/*Cabeçalho da janela aberta - título*/
 .modal-content h2 {
   padding: 18px 25px;
   margin: 0;
@@ -269,12 +317,14 @@
   text-align: left;
 }
 
+/*Corpo da janela aberta - conteúdo*/
 .modal-body-content {
   padding: 25px;
   overflow-y: auto;
   flex-grow: 1;
 }
 
+/*Botão para fechar*/
 .close {
   position: absolute;
   top: 15px;
@@ -287,6 +337,7 @@
   cursor: pointer;
 }
 
+/*Efeito no botão para fehcar*/
 .close:hover,
 .close:focus {
   color: #dc3545;
@@ -294,25 +345,26 @@
   text-decoration: none;
 }
 
+/*Ajuste na janela do plano de fusão*/
 .fusion-modal-content {
   max-width: 90vw;
   height: 90vh;
 }
 
+/*Espaçamento entre os gurpos de inputs*/
 .modal-content div[id$="Group"],
 .modal-content > div:not(.marker-grid):not(.material-buttons):not(.compact-inputs-container):not(.info-display):not(.modal-body-content) {
   margin-bottom: 18px;
   padding: 0 25px;
 }
-
 .modal-content > div:last-of-type {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
-
 .modal-content h2 + div, .modal-content .info-display + div {
-    margin-top: 20px;
+  margin-top: 20px;
 }
 
+/*Tílulos acima dos campos*/
 .modal-content label {
   display: block;
   margin-bottom: 6px;
@@ -321,6 +373,7 @@
   font-size: 14px;
 }
 
+/*Estilo para os campos dos textos, números e seleções*/
 .modal-content input[type="text"],
 .modal-content input[type="number"],
 .modal-content input[type="color"],
@@ -335,6 +388,7 @@
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
+/*Efeito de foco*/
 .modal-content input[type="text"]:focus,
 .modal-content input[type="number"]:focus,
 .modal-content input[type="color"]:focus,
@@ -345,6 +399,7 @@
   box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
 }
 
+/*Ajuste no seletor de cores*/
 .modal-content input[type="color"] {
   padding: 0;
   height: 40px;
@@ -356,6 +411,7 @@
     min-height: 80px;
 }
 
+/*Container dos botões alinhado à direita*/
 #modalButtonContainer,
 .material-buttons,
 div[style*="text-align: right"] {
@@ -367,6 +423,7 @@ div[style*="text-align: right"] {
   border-top: 1px solid #e0e6ed;
 }
 
+/*Estilo para os botões*/
 .modal-content button {
   margin-top: 0;
   padding: 10px 20px;
@@ -380,6 +437,7 @@ div[style*="text-align: right"] {
   transition: background-color 0.2s, transform 0.1s;
 }
 
+/*Efeitos nos botões*/
 .modal-content button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
@@ -389,6 +447,7 @@ div[style*="text-align: right"] {
   box-shadow: none;
 }
 
+/*Botão verdes - confirmar e salvar*/
 #confirmMarker,
 #confirmProjectButton,
 #confirmFolderButton,
@@ -404,6 +463,7 @@ button[style*="#4CAF50"]:hover {
   background-color: #45a049;
 }
 
+/*Botão vermelho - cancelar e excluir*/
 #deleteMarkerButton,
 #cancelProjectButton,
 #cancelFolderButton,
@@ -419,6 +479,7 @@ button[style*="#f44336"]:hover {
   background-color: #d32f2f;
 }
 
+/*Botão amarelo - editar*/
 #editPositionButton,
 button[style*="#ffc107"] {
   background-color: #ffc107;
@@ -429,6 +490,7 @@ button[style*="#ffc107"]:hover {
   background-color: #ffb300;
 }
 
+/*Organização dos ícones dos marcadores*/
 .marker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -437,6 +499,7 @@ button[style*="#ffc107"]:hover {
   justify-items: center;
 }
 
+/*Estilo das opções*/
 .marker-option,
 .cto-status-option,
 .ceo-status-option,
@@ -462,6 +525,7 @@ button[style*="#ffc107"]:hover {
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
+/*Efeitos para as opções*/
 .marker-option:hover,
 .cto-status-option:hover,
 .ceo-status-option:hover,
@@ -476,6 +540,7 @@ button[style*="#ffc107"]:hover {
   border-color: #2196f3;
 }
 
+/*Opção selecionada*/
 .marker-option.selected {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
@@ -488,7 +553,7 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 8px;
 }
 
-
+/*Janela para as etiqueta dos marcadores novo, existente*/
 .info-display {
   display: flex;
   gap: 10px;
@@ -497,6 +562,7 @@ button[style*="#ffc107"]:hover {
   margin: 0 0 20px 0;
 }
 
+/*Estilo da etiqueta*/
 .info-display > div {
   padding: 6px 12px;
   border-radius: 20px;
@@ -504,27 +570,27 @@ button[style*="#ffc107"]:hover {
   font-weight: 600;
 }
 
+/*Cores das etiquetas por tipo*/
+/*CEO*/
 #ceoStatusInfo {
   background-color: #e3f2fd;
   color: #0d47a1;
 }
 
-#ceoAccessoryInfo, #reservaAccessoryInfo {
+/*Acessórioos e CTO*/
+#ceoAccessoryInfo, #reservaAccessoryInfo, #ctoStatusInfo {
   background-color: #e8f5e9;
   color: #1b5e20;
 }
 
-#ctoStatusInfo {
-  background-color: #e8f5e9; 
-  color: #1b5e20;
-}
-
+/*Cordoalha e Reserva*/
 #cordoalhaStatusInfo,
 #reservaStatusInfo {
   background-color: #fff3e0;
   color: #e65100;
 }
 
+/*Container para alinhar os inputs lado a lado*/
 .compact-inputs-container {
   display: flex;
   gap: 15px;
@@ -533,17 +599,20 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 18px;
 }
 
+/*Inputs com o mesmo espaço*/
 .compact-inputs-container > div {
   flex-grow: 1;
   margin-bottom: 0;
   padding: 0;
 }
 
+/*Campo de tamnaho*/
 .compact-inputs-container #sizeGroup {
   flex-grow: 0;
   width: 100px;
 }
 
+/*Título da seção dos materiais*/
 .material-section h3 {
   margin-top: 0;
   color: #1565c0;
@@ -551,6 +620,7 @@ button[style*="#ffc107"]:hover {
   padding-bottom: 8px;
 }
 
+/*Estrutura da tabela dos materiais*/
 .material-section table {
   width: 100%;
   border-collapse: collapse;
@@ -558,6 +628,7 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 20px;
 }
 
+/*Células da tabela*/
 .material-section th,
 .material-section td {
   padding: 12px 15px;
@@ -565,40 +636,44 @@ button[style*="#ffc107"]:hover {
   text-align: center;
 }
 
+/*Cabeçalho da tabela*/
 .material-section thead tr {
   background-color: #2196f3;
   color: white;
   font-size: 15px;
 }
 
+/*linhas alternadas, cores alternada para facilitar a leitura*/
 .material-section tbody tr:nth-of-type(even) {
   background-color: #f7f9fc;
 }
 
+/*Efeito na linha*/
 .material-section tbody tr:hover {
   background-color: #e3f2fd;
 }
 
+/*Rodapé da tabela com os subtotais*/
 .material-section tfoot {
   font-weight: bold;
   background-color: #f1f8e9;
   color: #33691e;
 }
 
+/*Botões de ação na tabela, editar - excluir*/
 .material-section .edit-qty-btn,
 .material-section .remove-item-btn {
   transition: transform 0.2s;
   background: none;
 }
-
 .material-section .edit-qty-btn:hover {
   transform: scale(1.2);
 }
-
 .material-section .remove-item-btn:hover {
   transform: scale(1.2) rotate(10deg);
 }
 
+/*Valor total gerado no final da janela*/
 .grand-total-container {
   text-align: right;
   font-size: 1.2em;
@@ -614,31 +689,32 @@ button[style*="#ffc107"]:hover {
   margin-left: 10px;
 }
 
+/*Botões abaixo da tabela para realizar as ações*/
 .section-buttons {
-    text-align: right;
-    margin: -10px 0 20px 0;
+  text-align: right;
+  margin: -10px 0 20px 0;
 }
-
 .section-buttons button {
-    background-color: #2196f3;
-    color: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: 500;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 500;
 }
-
 .section-buttons button:hover {
-    background-color: #1976d2;
+  background-color: #1976d2;
 }
 
+/*Lista de selação de projetos para gerar o relatório*/
 #report-projects-ul {
   list-style: none;
   padding: 25px;
   margin: 0;
 }
 
+/*Item da lista de projetos*/
 #report-projects-ul li {
   background-color: #ffffff;
   padding: 20px;
@@ -653,6 +729,7 @@ button[style*="#ffc107"]:hover {
   gap: 5px;
 }
 
+/*Efeito no projeto*/
 #report-projects-ul li:hover {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   transform: translateY(-3px);
@@ -670,48 +747,53 @@ button[style*="#ffc107"]:hover {
   font-weight: normal;
 }
 
+/*Grid para exibir os detalhes do relatório*/
 .report-details-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    gap: 15px 25px;
-    padding: 25px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 15px 25px;
+  padding: 25px;
 }
 
+/*Item individual do relatório*/
 .report-detail-item {
-    background-color: #f7f9fc;
-    border: 1px solid #e0e6ed;
-    border-radius: 8px;
-    padding: 12px 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 15px;
+  background-color: #f7f9fc;
+  border: 1px solid #e0e6ed;
+  border-radius: 8px;
+  padding: 12px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
 }
 
 .report-detail-item strong {
-    color: #495057;
+  color: #495057;
 }
 
 .report-detail-item span {
-    font-weight: bold;
-    color: #0d47a1;
-    text-align: right;
+  font-weight: bold;
+  color: #0d47a1;
+  text-align: right;
 }
 
+/*Destaque para o custo final na cor verde*/
 #report-final-cost {
-    font-size: 1.1em;
-    color: #28a745;
+  font-size: 1.1em;
+  color: #28a745;
 }
 
+/*Detalhes na tabela da mão de obra*/
 #labor-summary-table .details-list {
-    margin: 0;
-    padding-left: 20px;
-    list-style-position: inside;
-    text-align: left;
-    font-size: 13px;
-    color: #555;
+  margin: 0;
+  padding-left: 20px;
+  list-style-position: inside;
+  text-align: left;
+  font-size: 13px;
+  color: #555;
 }
 
+/*Caixa de informação quando mouse esta sobre o cabo*/
 .cable-info-box {
   position: fixed;
   background-color: rgba(30, 30, 30, 0.85);
@@ -726,6 +808,7 @@ button[style*="#ffc107"]:hover {
   transition: opacity 0.1s ease-in-out;
 }
 
+/*Caixa das ferramentas que flutua na tela*/
 .floating-box {
   position: absolute;
   top: 50%; 
@@ -741,6 +824,7 @@ button[style*="#ffc107"]:hover {
   max-width: 350px; 
 }
 
+/*Posição específica para a régua*/
 #rulerBox {
   top: 80px;
   right: 20px;
@@ -748,10 +832,12 @@ button[style*="#ffc107"]:hover {
   transform: none;
 }
 
+/*Estado oculto da caixa flutuante*/
 .floating-box.hidden {
   display: none;
 }
 
+/*Título da ferramenta*/
 .floating-box h3 {
   margin-top: 0;
   color: #333;
@@ -759,6 +845,7 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 15px;
 }
 
+/*Texto dentro da caixa*/
 .floating-box p {
   font-size: 1.1em;
   color: #555;
@@ -766,6 +853,7 @@ button[style*="#ffc107"]:hover {
   font-weight: bold;
 }
 
+/*Inputs dentro da caixa*/
 .floating-box input {
   width: 100%;
   padding: 5px;
@@ -774,6 +862,7 @@ button[style*="#ffc107"]:hover {
   border-radius: 4px;
 }
 
+/*Botões dentro da caixa*/
 .floating-box button {
   background-color: #2196f3;
   color: white;
@@ -785,28 +874,17 @@ button[style*="#ffc107"]:hover {
   transition: background-color 0.2s ease;
 }
 
+/*Efeito*/
 .floating-box button:hover {
   background-color: #1976d2;
 }
 
-.subfolders:empty::before {
-  content: "Arraste itens aqui";
-  display: block;
-  font-style: italic;
-  color: #888;
-  padding: 6px 10px;
-  background-color: #f9f9f9;
-  border: 2px dashed #bbb;
-  border-radius: 4px;
-  margin: 4px 0;
-  text-align: center;
-  font-size: 13px;
-}
-
+/*Cursor de mira para desenho*/
 .cursor-draw {
   cursor: crosshair !important;
 }
 
+/*Ícones*/
 .icon {
   font-size: 24px;
   margin-bottom: 8px;
@@ -815,11 +893,13 @@ button[style*="#ffc107"]:hover {
   color: white;
 }
 
+/*Título da pasta*/
 .folder .folder-title {
   color: #1565c0;
   font-weight: bold;
 }
 
+/*Área em que o item será solto*/
 .drop-placeholder {
   opacity: 0;
   height: 0;
@@ -836,6 +916,7 @@ button[style*="#ffc107"]:hover {
   pointer-events: none;
 }
 
+/*Barra de botão dentro da janela do plano de fusão */
 #fusion-actions {
   padding: 15px;
   margin: 10px 0 20px 0;
@@ -852,6 +933,7 @@ button[style*="#ffc107"]:hover {
   margin-top: 0;
 }
 
+/*Parte do desenho do plano de fusão*/
 .fusion-canvas {
   background-color: #f0f2f5;
   border: 1px solid #ddd;
@@ -863,6 +945,7 @@ button[style*="#ffc107"]:hover {
   flex-grow: 1;
 }
 
+/*Texto A área de fusão aparecerá aqui*/
 .canvas-placeholder {
   position: absolute;
   top: 50%;
@@ -873,6 +956,7 @@ button[style*="#ffc107"]:hover {
   pointer-events: none;
 }
 
+/*Estilo para qualquer caixa dentro do diagrama*/
 .splitter-element,
 .cable-element {
   position: absolute;
@@ -885,6 +969,7 @@ button[style*="#ffc107"]:hover {
   cursor: default;
 }
 
+/*Estilo para o container do splitter*/
 .splitter-element {
   position: absolute;
   z-index: 1;
@@ -893,13 +978,13 @@ button[style*="#ffc107"]:hover {
   padding: 15px 10px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  
   display: flex;
   flex-direction: column;
   align-items: center;
   cursor: default;
 }
 
+/*Coluna de entrada e de saída do splitter*/
 .splitter-input,
 .splitter-outputs {
   display: flex;
@@ -908,6 +993,7 @@ button[style*="#ffc107"]:hover {
   align-items: center;
 }
 
+/*Corpo central do splitter*/
 .splitter-body {
   color: white;
   padding: 15px 10px;
@@ -917,20 +1003,24 @@ button[style*="#ffc107"]:hover {
   text-align: center;
 }
 
+/*Splitter de fusão com sua cor*/
 .splitter-fusao .splitter-body {
   background-color: #ffffff;
   color: #333; 
   border: 1px solid #2196f3; 
 }
 
+/*Splitter de atendimento com sua cor APC*/
 .splitter-atendimento .splitter-body {
   background-color: #4caf50;
 }
 
+/*Splitter de atendimento com sua cor UPC*/
 .splitter-atendimento.splitter-upc .splitter-body {
   background-color: #2196f3;
 }
 
+/*Portas dos splitters*/
 .splitter-port {
   border: 1px dashed #666;
   padding: 8px;
@@ -940,6 +1030,7 @@ button[style*="#ffc107"]:hover {
   border-radius: 4px;
 }
 
+/*linhas de conexão - fusão*/
 .splitter-port-row,
 .fiber-row {
   display: flex;
@@ -960,11 +1051,13 @@ button[style*="#ffc107"]:hover {
   text-shadow: 1px 1px 2px rgba(0,0,0,0.3); 
 }
 
+/*Efeito do mouse na porta*/
 .splitter-port-row:hover, .fiber-row:hover {
   background-color: #d0f0ff;
   border-color: #2196f3;
 }
 
+/*Número dentro do splitter*/
 .splitter-port-number {
   font-family: monospace;
   font-weight: bold;
@@ -972,22 +1065,26 @@ button[style*="#ffc107"]:hover {
   font-size: 13px;
 }
 
+/*Efeito para inputs e outputs*/
 .splitter-input .splitter-port:hover,
 .splitter-outputs .splitter-port:hover {
   background-color: #d0f0ff;
   border-color: #2196f3;
 }
 
+/*Botão para criar projeto*/
 #createProjectButton {
   padding: 10px 20px;
 }
 
+/*Grupo de botões*/
 .radio-group {
   display: flex;
   justify-content: space-around;
   align-items: center;
 }
 
+/*Categoria do splitter dentro da janela*/
 .splitter-category {
   margin-bottom: 25px;
 }
@@ -996,6 +1093,7 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 10px;
 }
 
+/*Título das categorias*/
 .splitter-category h3 {
   text-align: left;
   border-bottom: 1px solid #ddd;
@@ -1004,6 +1102,7 @@ button[style*="#ffc107"]:hover {
   color: #333;
 }
 
+/*Grade de opções dos splitters*/
 .splitter-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1011,6 +1110,7 @@ button[style*="#ffc107"]:hover {
   padding: 0 25px 25px 25px;
 }
 
+/*Opções do splitter*/
 .splitter-option {
   padding: 12px;
   border: 1px solid #ddd;
@@ -1029,6 +1129,7 @@ button[style*="#ffc107"]:hover {
   color: #0d47a1;
 }
 
+/*Lista de cabos disponíveis para o plano de fusão*/
 #connected-cables-list {
   margin-top: 20px;
   padding: 0 25px 25px 25px;
@@ -1037,6 +1138,7 @@ button[style*="#ffc107"]:hover {
   gap: 10px;
 }
 
+/*Itens da lista de cabos*/
 .cable-option {
   display: flex;
   justify-content: space-between;
@@ -1058,6 +1160,7 @@ button[style*="#ffc107"]:hover {
   color: #333;
 }
 
+/*Etiqueta com a quantidade de fibras do cabo*/
 .cable-option .cable-fibers {
   font-weight: 500;
   color: #fff;
@@ -1067,6 +1170,7 @@ button[style*="#ffc107"]:hover {
   font-size: 0.9em;
 }
 
+/*Mensagem caso não tenha cabos*/
 .no-cables-message {
   color: #999;
   font-style: italic;
@@ -1074,10 +1178,12 @@ button[style*="#ffc107"]:hover {
   text-align: center;
 }
 
+/*Largura da caixa do cabo*/
 .cable-element {
   width: 220px;
 }
 
+/*Cabeçalho da caixa do cabo com o nome e ponta*/
 .cable-header {
   font-weight: bold;
   font-size: 1.1em;
@@ -1087,12 +1193,14 @@ button[style*="#ffc107"]:hover {
   text-align: left;
 }
 
+/*Container das fibras*/
 .cable-fibers-container {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+/*Número das fibras*/
 .fiber-number {
   font-family: monospace;
   width: auto;
@@ -1103,6 +1211,7 @@ button[style*="#ffc107"]:hover {
   flex-shrink: 0;
 }
 
+/*Cabeçalho do grupo*/
 .group-header {
   font-weight: bold;
   padding: 5px 8px;
@@ -1117,35 +1226,38 @@ button[style*="#ffc107"]:hover {
   margin-top: 0;
 }
 
+/*Efeito visual no arraste do elemento*/
 .dragging {
     z-index: 10;
     box-shadow: 0 8px 25px rgba(0,0,0,0.2);
     opacity: 0.9;
 }
 
+/*Botão para remover um componente dentro da janela do plano*/
 .delete-component-btn {
-    position: absolute;
-    top: -10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 22px;
-    height: 22px;
-    background-color: #dc3545;
-    color: white;
-    border: 2px solid white;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: bold;
-    z-index: 11;
-    padding: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    display: flex;
-    align-items: center; 
-    justify-content: center; 
-    line-height: 1;           
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  background-color: #dc3545;
+  color: white;
+  border: 2px solid white;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 11;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center; 
+  justify-content: center; 
+  line-height: 1;           
 }
 
+/*Camada que fica sobre o diagrama*/
 .fusion-svg-layer {
   position: absolute;
   top: 0;
@@ -1155,6 +1267,7 @@ button[style*="#ffc107"]:hover {
   z-index: 5;
 }
 
+/*Linha animada durante a criação da conexão - fusão*/
 .connecting-line {
   stroke: #ff4500;
   stroke-width: 2;
@@ -1169,6 +1282,7 @@ button[style*="#ffc107"]:hover {
   }
 }
 
+/*Linha sólida finalizada*/
 .fusion-line {
   stroke: #424242;
   stroke-width: 1.5;
@@ -1179,6 +1293,7 @@ button[style*="#ffc107"]:hover {
   pointer-events: auto; 
 }
 
+/*Ajuste na linha da fusão*/
 .line-handle {
   fill: #ffc107; 
   stroke: #333;
@@ -1189,27 +1304,40 @@ button[style*="#ffc107"]:hover {
   pointer-events: auto; 
 }
 
+/*Ponto temporário ao desenha a linha da fusão*/
+.line-handle-temp {
+  fill: #ffc107;
+  stroke: #333;
+  stroke-width: 1;
+  pointer-events: none; 
+}
+
+/*Aparece quando o mouse fica em cima*/
 .line-handle:hover {
   opacity: 1;
 }
 
+/*Efeito na linha ficando mais grossa e vermelha*/
 .fusion-line:hover {
   stroke: #dc3545;    
   stroke-width: 4;      
   stroke-dasharray: none; 
 }
 
+/*Item conectável*/
 .connectable {
   cursor: pointer;
   border-radius: 3px;
   transition: background-color 0.2s, box-shadow 0.2s;
 }
 
+/*Feedback ao passar o mouse sobre algo conectado*/
 .connectable:hover {
   background-color: #d0f0ff;
   box-shadow: 0 0 5px rgba(33, 150, 243, 0.7);
 }
 
+/*Estado de criação da conexão*/
 .connectable.selected-for-connection {
   background-color: #ffc107 !important;
   font-weight: bold;
@@ -1223,27 +1351,14 @@ button[style*="#ffc107"]:hover {
 }
 
 .folder-name-text {
-    flex-grow: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 0 4px;
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
 }
 
-.visibility-toggle-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 0 5px;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.visibility-toggle-btn:hover {
-  opacity: 0.7;
-}
-
+/*Caixa de texto par as coordenadas - marcador*/
 #markerCoordinatesText {
   background-color: #f0f0f0;
   padding: 10px 12px;
@@ -1257,35 +1372,29 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 0;
 }
 
+/*Contorno preto para o texto do marcador no mapa*/
 .marker-label-with-outline {
     text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px  1px 0 #000, 1px  1px 0 #000;
 }
 
+/*Botões de alternância*/
 .item-toggle {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 0 5px;
-    margin-left: 8px;
-    flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 5px;
+  margin-left: 8px;
+  flex-shrink: 0;
 }
 
-.item-toggle {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 0 5px;
-    margin-left: 8px;
-    flex-shrink: 0;
-}
-
+/*Menus suspensos*/
 .dropdown {
   position: relative;
   display: inline-block;
 }
 
+/*Botão que abre o dropdown*/
 .dropdown .top-bar-button {
   margin-right: 10px;
   padding: 10px 20px;
@@ -1303,6 +1412,7 @@ button[style*="#ffc107"]:hover {
   background-color: #f1f1f1;
 }
 
+/*Conteúdo dentro do dropdown*/
 .dropdown-content {
   display: none;
   position: absolute;
@@ -1332,10 +1442,12 @@ button[style*="#ffc107"]:hover {
   background-color: #e3f2fd;
 }
 
+/*Mostrar o dropdown*/
 .show {
   display: block;
 }
 
+/*Desenho dos polígonos*/
 #polygonDrawingBox {
   top: 80px;
   right: 20px;
@@ -1361,6 +1473,7 @@ button[style*="#ffc107"]:hover {
   padding: 8px 16px;
 }
 
+/*Ícone com cor na barra lateral*/
 .sidebar li .item-icon {
   display: inline-block;
   width: 12px;
@@ -1384,6 +1497,7 @@ button[style*="#ffc107"]:hover {
   align-items: center;
 }
 
+/*Botão para mover dentro do splitter - setas*/
 .splitter-body button {
   background-color: #6c757d; 
   color: white;             
@@ -1402,11 +1516,13 @@ button[style*="#ffc107"]:hover {
   background-color: #5a6268;
 }
 
+/*Margem pora as subpastas*/
 .folder-wrapper > .subfolders {
     margin-top: 2px;
     margin-bottom: 5px; 
 }
 
+/*Caixa de desenho dos cabos*/
 #cableDrawingBox {
   top: 70px;
   right: 15px;
@@ -1422,6 +1538,7 @@ button[style*="#ffc107"]:hover {
   z-index: 1001;
 }
 
+/*Título da caixa de desenho*/
 #cableDrawingBox h3 {
   font-size: 20px;
   font-weight: 600;
@@ -1432,6 +1549,7 @@ button[style*="#ffc107"]:hover {
   border-bottom: 1px solid #f1f3f5;
 }
 
+/*labels dos inputs*/
 #cableDrawingBox label {
   display: block;
   margin-bottom: 6px;
@@ -1440,6 +1558,7 @@ button[style*="#ffc107"]:hover {
   font-weight: 500;
 }
 
+/*Campos de texto, número e select*/
 #cableDrawingBox input[type="text"],
 #cableDrawingBox input[type="number"],
 #cableDrawingBox select {
@@ -1454,6 +1573,7 @@ button[style*="#ffc107"]:hover {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/*Foco nos campos*/
 #cableDrawingBox input[type="text"]:focus,
 #cableDrawingBox input[type="number"]:focus,
 #cableDrawingBox select:focus {
@@ -1462,6 +1582,7 @@ button[style*="#ffc107"]:hover {
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
+/*Painéis de exibição de distância*/
 #cableDrawingBox #cableStatusDisplay,
 #cableDrawingBox #cableDrawnDistance,
 #cableDrawingBox #cableReserveDistance,
@@ -1475,6 +1596,7 @@ button[style*="#ffc107"]:hover {
   font-size: 15px;
 }
 
+/*Destaque*/
 #cableTotalDistance {
   background-color: #007bff;
   color: white;
@@ -1483,6 +1605,7 @@ button[style*="#ffc107"]:hover {
   text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
 }
 
+/*Container dos botões de ação*/
 .cable-box-actions {
   display: flex;
   justify-content: center;
@@ -1493,6 +1616,7 @@ button[style*="#ffc107"]:hover {
   padding-top: 20px;
 }
 
+/*Estilos dos botões de ação*/
 #cableDrawingBox button {
   width: auto;
   max-width: 150px;
@@ -1514,6 +1638,7 @@ button[style*="#ffc107"]:hover {
   transform: translateY(0);
 }
 
+/*Botão salvar*/
 #cableDrawingBox #saveCableButton {
   background-color: #007bff;
   border-color: #007bff;
@@ -1523,6 +1648,7 @@ button[style*="#ffc107"]:hover {
   background-color: #0069d9;
 }
 
+/*Botão cancelar*/
 #cableDrawingBox #cancelCableButton,
 #cableDrawingBox #deleteCableButton {
   background-color: #6c757d;
@@ -1534,6 +1660,7 @@ button[style*="#ffc107"]:hover {
   background-color: #5a6268;
 }
 
+/*Botão de excluir*/
 #cableDrawingBox #deleteCableButton {
     background-color: #dc3545;
     border-color: #dc3545;
@@ -1542,51 +1669,47 @@ button[style*="#ffc107"]:hover {
     background-color: #c82333;
 }
 
+/*Botão de sair*/
 #logoutButton {
   margin-left: auto;
   background-color: #f44336;
   color: white;
 }
-
 #logoutButton:hover {
   background-color: #d32f2f;
 }
 
-.line-handle-temp {
-  fill: #ffc107;
-  stroke: #333;
-  stroke-width: 1;
-  pointer-events: none; 
-}
-
+/*Corpo da janela*/
 .modal-body-content {
   padding: 25px;
   overflow-y: auto;
   flex-grow: 1;
 }
 
+/*Botão amarelo para ajustar os itens importados*/
 .adjust-kml-btn {
-    background-color: #ffc107;
-    color: #333;
-    border: none;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    margin-left: 8px;
-    flex-shrink: 0;
+  background-color: #ffc107;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: 8px;
+  flex-shrink: 0;
 }
-
 .adjust-kml-btn:hover {
-    background-color: #ffb300;
+  background-color: #ffb300;
 }
 
+/*Controle do recuo das pastas*/
 :root {
   --indent-size: 20px; 
   --line-color: #c0c0c0; 
 }
 
+/*Estilo das listas*/
 .sidebar ul {
   list-style: none;
   margin: 0;
@@ -1600,6 +1723,7 @@ button[style*="#ffc107"]:hover {
   position: relative;
 }
 
+/*Subpastas*/
 .sidebar .subfolders {
   padding-left: var(--indent-size);
   min-height: 1px; 
@@ -1608,6 +1732,7 @@ button[style*="#ffc107"]:hover {
   box-sizing: border-box;
 }
 
+/*Linha vertical conectando a ávore de conexão da barra lateral*/
 .subfolders > li::before {
   content: "";
   position: absolute;
@@ -1618,6 +1743,7 @@ button[style*="#ffc107"]:hover {
   background-color: var(--line-color);
 }
 
+/*Linha horizontal conectando a ávore de conexão da barra lateral*/
 .subfolders > li::after {
   content: "";
   position: absolute;
@@ -1628,10 +1754,12 @@ button[style*="#ffc107"]:hover {
   background-color: var(--line-color);
 }
 
+/*Remove o excesso de linha no último item*/
 .subfolders > li:last-child::before {
   height: 13px;
 }
 
+/*Itens que não são pastas como os marcadores e cabos*/
 .subfolders > li:not(.folder-wrapper) {
   background-color: transparent;
   border: none;
@@ -1642,6 +1770,7 @@ button[style*="#ffc107"]:hover {
   align-items: center;
 }
 
+/*Agrupa o título e filhos*/
 li.folder-wrapper {
   margin: 0;
   padding: 0;
@@ -1654,39 +1783,23 @@ li.folder-wrapper {
   clear: both;
 }
 
-.folder-title {
-  display: flex;
-  align-items: center;
-  padding: 4px 0; 
-  margin: 1px 0;
-  font-size: 14px;
-  color: #333;
-  border-radius: 3px;
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  min-height: 24px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
+/*Sobrepor as linhas guia*/
 .folder-title,
 .subfolders > li:not(.folder-wrapper) > * {
   position: relative;
   z-index: 1;
   background-color: #f9f9f9; 
 }
-
 .folder-title:hover,
 .subfolders > li:not(.folder-wrapper):hover {
     background-color: #f0f0f0;
 }
-
 .folder-title.active,
 .subfolders > li:not(.folder-wrapper).active {
     background-color: #ddeaff;
 }
 
+/*Ajuste na seta de expandir*/
 .toggle-icon {
   width: 16px;
   height: 16px;
@@ -1700,37 +1813,11 @@ li.folder-wrapper {
   transform: translateY(1px); 
 }
 
-.folder-icon-sidebar {
-  margin-right: 4px;
-  width: 16px;
-  text-align: center;
-  flex-shrink: 0;
-  color: #555;
-}
-
-.subfolders li .item-icon {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  margin-right: 6px;
-  border: 1px solid rgba(0,0,0,0.1);
-  flex-shrink: 0;
-  margin-left: 18px;
-}
-
-.folder-name-text,
-.subfolders li > .item-name {
-  flex-grow: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 4px;
-}
-
 .subfolders li > .item-name {
     padding-left: 6px;
 }
 
+/*Ajuste no alinhamento na direita*/
 .folder-buttons,
 .subfolders li .adjust-kml-btn,
 .subfolders li .visibility-toggle-btn,
@@ -1746,16 +1833,19 @@ li.folder-wrapper {
   margin-left: 8px;
 }
 
+/*Ajuste no botão de visibilidade*/
 .subfolders li .visibility-toggle-btn {
   margin-left: 4px;
 }
 
+/*Ajustes nas subpastas*/
 .sidebar ul ul ul ul ul > li,
 .sidebar ul ul ul ul ul > .folder-wrapper {
   margin-left: calc(-1 * var(--indent-size));
   padding-left: var(--indent-size);
 }
 
+/*Menu com ação nas pastas - 3 pontinhos*/
 .item-actions-dropdown {
   position: relative;
 }
@@ -1770,6 +1860,7 @@ li.folder-wrapper {
     background-color: #ddeaff;
 }
 
+/*Botão que abre o menu*/
 .item-actions-toggle-btn {
   background: none;
   border: none;
@@ -1803,6 +1894,7 @@ li.folder-wrapper {
   display: block;
 }
 
+/*Menu suspenso nas pastas*/
 .item-actions-menu a {
   color: black;
   padding: 10px 15px;
@@ -1816,58 +1908,59 @@ li.folder-wrapper {
   background-color: #f1f1f1;
 }
 
+/*Menu fique visivel acima dos outros elementos*/
 .folder-title:has(.item-actions-menu.show),
 .subfolders li:has(.item-actions-menu.show) { 
   overflow: visible;
   z-index: 15;
 }
-
 .subfolders:has(.item-actions-menu.show) {
   overflow: visible;
 }
 
+/*Checkbox do kit de derivação*/
 .derivation-kit-container {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: 8px;
-    width: 100%;
-    padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  width: 100%;
+  padding: 4px 0;
 }
 
 .derivation-kit-container input[type="checkbox"] {
-    width: auto;
-    cursor: pointer;
+  width: auto;
+  cursor: pointer;
 }
 
 .derivation-kit-container label {
-    font-size: 13px;
-    font-weight: normal;
-    color: #333;
-    cursor: pointer;
-    margin-bottom: 0;
+  font-size: 13px;
+  font-weight: normal;
+  color: #333;
+  cursor: pointer;
+  margin-bottom: 0;
 }
 
+/*Container de kit bandeja*/
 #trayKitContainer {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 15px 25px;
-    border-bottom: 1px solid #eee;
-    background-color: #f8f9fa;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 25px;
+  border-bottom: 1px solid #eee;
+  background-color: #f8f9fa;
 }
-
 #trayKitContainer label {
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 0;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0;
 }
-
 #trayKitContainer input[type="number"] {
-    width: 80px;
-    margin-bottom: 0;
+  width: 80px;
+  margin-bottom: 0;
 }
 
+/*Informação de conexão das linhas*/
 #lineConnectionInfo {
   background-color: #e3f2fd; 
   border-left: 4px solid #2196f3; 
@@ -1884,41 +1977,61 @@ li.folder-wrapper {
   color: #0d47a1; 
 }
 
+/*Ajustes no Drag and Drop*/
+/*Cursor mão aberta*/
 .draggable {
   cursor: grab;
 }
 
+/*Cursor mão fechada*/
 .draggable:active {
   cursor: grabbing;
 }
 
+/*Cor de fundo da lista no item arrastado*/
 .subfolders.dragover {
   background-color: #e3f2fd; 
 }
 
+/*Pastas abertas não colapsarem*/
 .subfolders:not(.hidden) {
   max-height: none !important;
   height: auto;
 }
-
 .subfolders:empty {
   height: auto;
 }
 
+/*Impede a interação com outros elementos durante o arraste*/
 .is-dragging-globally .subfolders > li:not(.drop-placeholder):not(.is-being-dragged):not(.folder-wrapper) {
-    pointer-events: none;
+  pointer-events: none;
 }
 
+/*Feedback visual do arraste*/
+.folder-title.dragover-target {
+  background-color: #007bff !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.5);
+}
+
+/*AJusta a cor do texto para branco*/
+.folder-title.dragover-target .folder-icon-sidebar,
+.folder-title.dragover-target .toggle-icon,
+.folder-title.dragover-target .folder-name-text {
+  color: white;
+}
+
+/*Botões roxos*/
 #openStickersModalButton,
 #openObservationsButton {
   background-color: #673ab7;
 }
-
 #openStickersModalButton:hover,
 #openObservationsButton:hover {
   background-color: #512da8;
 }
 
+/*Grid de exibição dos adesivos*/
 .sticker-grid-display {
   display: flex;
   flex-wrap: wrap;
@@ -1927,6 +2040,7 @@ li.folder-wrapper {
   padding: 10px;
 }
 
+/*Chip individual do adesivo*/
 .sticker-chip {
   background-color: #f1f3f5;
   border: 1px solid #ced4da;
@@ -1936,7 +2050,6 @@ li.folder-wrapper {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   text-align: center;
 }
-
 .sticker-char {
   display: block;
   font-size: 28px;
@@ -1944,7 +2057,6 @@ li.folder-wrapper {
   color: #212529;
   font-family: monospace;
 }
-
 .sticker-count {
   display: block;
   font-size: 16px;
@@ -1952,18 +2064,7 @@ li.folder-wrapper {
   color: #4CAF50;
 }
 
-.folder-title.dragover-target {
-  background-color: #007bff !important;
-  color: white !important;
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.5);
-}
-
-.folder-title.dragover-target .folder-icon-sidebar,
-.folder-title.dragover-target .toggle-icon,
-.folder-title.dragover-target .folder-name-text {
-  color: white;
-}
-
+/*Tooltip flutuante com o nome ao passar o mouse*/
 #hover-tooltip {
   display: none;
   opacity: 0;
@@ -1983,6 +2084,7 @@ li.folder-wrapper {
   transition: opacity 0.2s ease-in-out;
 }
 
+/*Área de observação no projeto*/
 #observationsTextarea {
   width: 100%;
   height: 250px;
@@ -1994,7 +2096,6 @@ li.folder-wrapper {
   padding: 10px;
   box-sizing: border-box;
 }
-
 #observationsTextarea:focus {
   outline: none;
   border-color: #2196f3;
