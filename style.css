@@ -1,4 +1,3 @@
-/* Estilos da barra superior, layout, sidebar, modal e caixas flutuantes */
 @keyframes zoomIn {
   from {
     transform: scale(0.9);
@@ -61,45 +60,38 @@
   transition: background-color 0.2s;
 }
 .resizer:hover {
-  background-color: #2196f3; /* Destaque azul ao passar o mouse */
+  background-color: #2196f3;
 }
 
 .folder-title {
     display: flex;
     align-items: center;
-    /* Padding simples e consistente */
-    padding: 4px 8px; /* Exemplo: 4px vertical, 8px horizontal */
-    margin: 1px 0; /* Margem vertical mínima */
+    padding: 4px 8px;
+    margin: 1px 0;
     font-size: 14px;
     color: #333;
-    background-color: #e3f2fd; /* Fundo padrão para títulos */
+    background-color: #e3f2fd;
     border-radius: 3px;
     cursor: pointer;
     user-select: none;
-    position: relative; /* Mantido para o menu dropdown */
+    position: relative;
     min-height: 24px;
-
-    /* ESSENCIAL: Ocupa a largura do seu container (seja .folder ou li.folder-wrapper) */
     width: 100%;
-    /* ESSENCIAL: Garante que o padding não aumente a largura calculada */
     box-sizing: border-box;
-
-    /* REMOVA qualquer margin-left negativo ou padding-left calculado daqui */
 }
 
-/* Ícone de pasta padrão */
 .folder-icon-sidebar {
     margin-right: 4px;
     width: 16px;
     text-align: center;
     flex-shrink: 0;
-    color: #555; /* Cor do ícone de pasta */
+    color: #555;
 }
 
 .folder-icon-sidebar,
 .toggle-icon,
 .folder-buttons {
-    flex-shrink: 0; /* Impede que diminuam de tamanho */
+    flex-shrink: 0;
 }
 
 .folder-title.active {
@@ -113,29 +105,26 @@
 
 .toggle-icon {
     width: 16px;
-    height: 16px; /* Altura consistente */
+    height: 16px;
     margin-right: 4px;
     flex-shrink: 0;
-    color: #666; /* Cor do ícone de toggle */
-    font-size: 10px; /* Tamanho do caractere de seta */
-    display: inline-flex; /* Para alinhar o caractere */
+    color: #666; 
+    font-size: 10px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    /* Remover estilos de imagem */
     background-image: none !important;
     content: "";
 }
 
-/* Nome da Pasta/Item */
 .folder-name-text,
-.subfolders li > .item-name { /* Aplica a ambos */
+.subfolders li > .item-name {
     flex-grow: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 0 4px; /* Pequeno espaço interno */
+    padding: 0 4px;
 }
-
 
 .subfolders {
   list-style: none;
@@ -167,13 +156,13 @@
 }
 
 .subfolders li .visibility-toggle-btn {
-    margin-left: 0; /* Não precisa de margem extra se o adjust-kml-btn o empurrar */
+    margin-left: 0;
     flex-shrink: 0;
 }
 
 .subfolders li .adjust-kml-btn {
-    margin-left: auto; /* Empurra para a direita */
-    margin-right: 4px; /* Espaço antes do botão de visibilidade */
+    margin-left: auto;
+    margin-right: 4px;
     flex-shrink: 0;
 }
 
@@ -181,7 +170,7 @@
     width: 12px;
     height: 12px;
     border-radius: 3px;
-    margin-right: 6px; /* Espaço entre ícone e nome */
+    margin-right: 6px;
     border: 1px solid rgba(0,0,0,0.1);
     flex-shrink: 0;
 }
@@ -196,19 +185,21 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: 2px; /* Reduzido */
+    padding: 2px;
     margin-left: 2px;
     opacity: 0.7;
-    display: flex; /* Para alinhar imagem/ícone interno */
+    display: flex;
     align-items: center;
     justify-content: center;
 }
+
 .folder-buttons button:hover, .item-actions-toggle-btn:hover {
     opacity: 1;
     background-color: #eee;
     border-radius: 3px;
 }
-.visibility-toggle-btn img { /* Ajusta o tamanho da imagem do olho */
+
+.visibility-toggle-btn img { 
     width: 14px;
     height: 14px;
 }
@@ -235,7 +226,6 @@
   background-color: #ccc;
 }
 
-/* ===== ESTILIZAÇÃO MELHORADA DOS MODAIS ===== */
 .modal {
   display: none;
   position: fixed;
@@ -314,13 +304,14 @@
   margin-bottom: 18px;
   padding: 0 25px;
 }
+
 .modal-content > div:last-of-type {
     margin-bottom: 0;
 }
+
 .modal-content h2 + div, .modal-content .info-display + div {
     margin-top: 20px;
 }
-
 
 .modal-content label {
   display: block;
@@ -497,7 +488,6 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 8px;
 }
 
-/* ===== NOVOS ESTILOS PARA O MODAL DA CEO ===== */
 
 .info-display {
   display: flex;
@@ -525,14 +515,14 @@ button[style*="#ffc107"]:hover {
 }
 
 #ctoStatusInfo {
-  background-color: #e8f5e9; /* Verde claro */
-  color: #1b5e20; /* Verde escuro */
+  background-color: #e8f5e9; 
+  color: #1b5e20;
 }
 
 #cordoalhaStatusInfo,
 #reservaStatusInfo {
-  background-color: #fff3e0; /* Laranja claro */
-  color: #e65100; /* Laranja escuro */
+  background-color: #fff3e0;
+  color: #e65100;
 }
 
 .compact-inputs-container {
@@ -554,49 +544,57 @@ button[style*="#ffc107"]:hover {
   width: 100px;
 }
 
-/* ===== Tabela de Materiais ===== */
 .material-section h3 {
   margin-top: 0;
   color: #1565c0;
   border-bottom: 2px solid #1565c0;
   padding-bottom: 8px;
 }
+
 .material-section table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
   margin-bottom: 20px;
 }
+
 .material-section th,
 .material-section td {
   padding: 12px 15px;
   border: 1px solid #e0e6ed;
   text-align: center;
 }
+
 .material-section thead tr {
   background-color: #2196f3;
   color: white;
   font-size: 15px;
 }
+
 .material-section tbody tr:nth-of-type(even) {
   background-color: #f7f9fc;
 }
+
 .material-section tbody tr:hover {
   background-color: #e3f2fd;
 }
+
 .material-section tfoot {
   font-weight: bold;
   background-color: #f1f8e9;
   color: #33691e;
 }
+
 .material-section .edit-qty-btn,
 .material-section .remove-item-btn {
   transition: transform 0.2s;
   background: none;
 }
+
 .material-section .edit-qty-btn:hover {
   transform: scale(1.2);
 }
+
 .material-section .remove-item-btn:hover {
   transform: scale(1.2) rotate(10deg);
 }
@@ -620,6 +618,7 @@ button[style*="#ffc107"]:hover {
     text-align: right;
     margin: -10px 0 20px 0;
 }
+
 .section-buttons button {
     background-color: #2196f3;
     color: white;
@@ -629,12 +628,11 @@ button[style*="#ffc107"]:hover {
     cursor: pointer;
     font-weight: 500;
 }
+
 .section-buttons button:hover {
     background-color: #1976d2;
 }
 
-
-/* ===== ESTILOS DO MODAL DE RELATÓRIO ===== */
 #report-projects-ul {
   list-style: none;
   padding: 25px;
@@ -722,42 +720,38 @@ button[style*="#ffc107"]:hover {
   border-radius: 6px;
   z-index: 1002;
   font-size: 14px;
-  pointer-events: none; /* Importante para permitir cliques no mapa abaixo */
+  pointer-events: none;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   transition: opacity 0.1s ease-in-out;
 }
 
-
 .floating-box {
   position: absolute;
-  top: 50%; /* Centraliza verticalmente */
-  left: 50%; /* Centraliza horizontalmente */
-  transform: translate(-50%, -50%); /* Ajusta para a verdadeira centralização */
+  top: 50%; 
+  left: 50%;
+  transform: translate(-50%, -50%);
   background-color: white;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  z-index: 2000; /* Garante que fique acima de outros elementos */
-  text-align: center; /* Centraliza o texto e o botão */
-  min-width: 250px; /* Largura mínima para o conteúdo */
-  max-width: 350px; /* Largura máxima para não ficar muito grande */
+  z-index: 2000; 
+  text-align: center; 
+  min-width: 250px; 
+  max-width: 350px; 
 }
 
-/* Adicione este código para posicionar a caixa da régua no canto */
 #rulerBox {
-  top: 80px;  /* Distância do topo (abaixo da barra de ferramentas) */
-  right: 20px; /* Distância da direita */
-  left: auto;  /* Remove a centralização horizontal */
-  transform: none; /* Remove a centralização vertical */
+  top: 80px;
+  right: 20px;
+  left: auto;
+  transform: none;
 }
 
-/* Esconde a caixa por padrão */
 .floating-box.hidden {
   display: none;
 }
 
-/* Estilos para o título dentro das caixas flutuantes */
 .floating-box h3 {
   margin-top: 0;
   color: #333;
@@ -765,7 +759,6 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 15px;
 }
 
-/* Estilos para parágrafos dentro das caixas flutuantes (como a distância) */
 .floating-box p {
   font-size: 1.1em;
   color: #555;
@@ -781,7 +774,6 @@ button[style*="#ffc107"]:hover {
   border-radius: 4px;
 }
 
-/* Estilos para o botão "Finalizar" dentro das caixas flutuantes */
 .floating-box button {
   background-color: #2196f3;
   color: white;
@@ -834,14 +826,14 @@ button[style*="#ffc107"]:hover {
   overflow: hidden;
   padding: 0;
   margin: 0;
-  border: 2px dashed #bbb; /* Borda para visibilidade */
+  border: 2px dashed #bbb;
   background-color: #f9f9f9;
   text-align: center;
   color: #888;
   font-style: italic;
   transition: all 0.2s ease;
   font-size: 13px;
-  pointer-events: none; /* <-- ADICIONE ESTA LINHA */
+  pointer-events: none;
 }
 
 #fusion-actions {
@@ -881,7 +873,6 @@ button[style*="#ffc107"]:hover {
   pointer-events: none;
 }
 
-
 .splitter-element,
 .cable-element {
   position: absolute;
@@ -891,7 +882,7 @@ button[style*="#ffc107"]:hover {
   padding: 10px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  cursor: default; /* Altere esta linha */
+  cursor: default;
 }
 
 .splitter-element {
@@ -914,7 +905,7 @@ button[style*="#ffc107"]:hover {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  align-items: center; /* Centraliza as portas */
+  align-items: center;
 }
 
 .splitter-body {
@@ -986,6 +977,7 @@ button[style*="#ffc107"]:hover {
   background-color: #d0f0ff;
   border-color: #2196f3;
 }
+
 #createProjectButton {
   padding: 10px 20px;
 }
@@ -999,9 +991,11 @@ button[style*="#ffc107"]:hover {
 .splitter-category {
   margin-bottom: 25px;
 }
+
 .splitter-category:last-child {
   margin-bottom: 10px;
 }
+
 .splitter-category h3 {
   text-align: left;
   border-bottom: 1px solid #ddd;
@@ -1009,12 +1003,14 @@ button[style*="#ffc107"]:hover {
   margin-bottom: 15px;
   color: #333;
 }
+
 .splitter-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   padding: 0 25px 25px 25px;
 }
+
 .splitter-option {
   padding: 12px;
   border: 1px solid #ddd;
@@ -1025,6 +1021,7 @@ button[style*="#ffc107"]:hover {
   font-weight: 500;
   transition: background-color 0.2s, transform 0.2s;
 }
+
 .splitter-option:hover {
   background-color: #e9f5ff;
   border-color: #2196f3;
@@ -1106,7 +1103,6 @@ button[style*="#ffc107"]:hover {
   flex-shrink: 0;
 }
 
-
 .group-header {
   font-weight: bold;
   padding: 5px 8px;
@@ -1139,17 +1135,15 @@ button[style*="#ffc107"]:hover {
     border: 2px solid white;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 16px; /* Aumentado para melhor visualização */
+    font-size: 16px;
     font-weight: bold;
     z-index: 11;
     padding: 0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-
-    /* Novas propriedades para centralizar perfeitamente a letra "X" */
     display: flex;
-    align-items: center;      /* Alinha verticalmente */
-    justify-content: center;  /* Alinha horizontalmente */
-    line-height: 1;           /* Remove espaçamento extra da linha */
+    align-items: center; 
+    justify-content: center; 
+    line-height: 1;           
 }
 
 .fusion-svg-layer {
@@ -1182,27 +1176,27 @@ button[style*="#ffc107"]:hover {
   cursor: pointer;
   transition: stroke 0.2s;
   fill: none;
-  pointer-events: auto; /* <-- ADICIONE ESTA LINHA */
+  pointer-events: auto; 
 }
 
 .line-handle {
-  fill: #ffc107; /* Amarelo */
+  fill: #ffc107; 
   stroke: #333;
   stroke-width: 1.5;
   cursor: move;
   transition: opacity 0.2s;
-  opacity: 0; /* Começa invisível */
-  pointer-events: auto; /* <-- ADICIONE ESTA LINHA */
+  opacity: 0; 
+  pointer-events: auto; 
 }
 
 .line-handle:hover {
-  opacity: 1; /* O ponto fica visível se o mouse estiver sobre ele */
+  opacity: 1;
 }
 
 .fusion-line:hover {
-  stroke: #dc3545;      /* Mantém a mudança de cor para vermelho */
-  stroke-width: 4;      /* (NOVO) Aumenta a espessura da linha para destacá-la */
-  stroke-dasharray: none; /* (NOVO) Torna a linha sólida ao invés de tracejada */
+  stroke: #dc3545;    
+  stroke-width: 4;      
+  stroke-dasharray: none; 
 }
 
 .connectable {
@@ -1264,12 +1258,7 @@ button[style*="#ffc107"]:hover {
 }
 
 .marker-label-with-outline {
-    /* A cor do texto será definida pelo JavaScript, aqui definimos apenas a borda */
-    text-shadow:
-        -1px -1px 0 #000,  
-         1px -1px 0 #000,
-        -1px  1px 0 #000,
-         1px  1px 0 #000;
+    text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px  1px 0 #000, 1px  1px 0 #000;
 }
 
 .item-toggle {
@@ -1282,8 +1271,6 @@ button[style*="#ffc107"]:hover {
     flex-shrink: 0;
 }
 
-/* (código CSS existente) */
-
 .item-toggle {
     background: none;
     border: none;
@@ -1294,15 +1281,11 @@ button[style*="#ffc107"]:hover {
     flex-shrink: 0;
 }
 
-/* Estilos para o novo botão de Ferramentas e Dropdown */
-
-/* Container para o botão e o menu */
 .dropdown {
   position: relative;
   display: inline-block;
 }
 
-/* Botão principal na barra superior */
 .dropdown .top-bar-button {
   margin-right: 10px;
   padding: 10px 20px;
@@ -1320,7 +1303,6 @@ button[style*="#ffc107"]:hover {
   background-color: #f1f1f1;
 }
 
-/* O menu dropdown (escondido por padrão) */
 .dropdown-content {
   display: none;
   position: absolute;
@@ -1332,7 +1314,6 @@ button[style*="#ffc107"]:hover {
   overflow: hidden;
 }
 
-/* Links dentro do dropdown */
 .dropdown-content a {
   color: black;
   padding: 12px 16px;
@@ -1347,23 +1328,20 @@ button[style*="#ffc107"]:hover {
   flex-shrink: 0;
 }
 
-/* Muda a cor dos links no hover */
 .dropdown-content a:hover {
   background-color: #e3f2fd;
 }
 
-/* Classe para mostrar o dropdown com JavaScript */
 .show {
   display: block;
 }
 
-/* Estilos para a nova janela de desenho de polígono */
 #polygonDrawingBox {
-  top: 80px;      /* Posição abaixo da barra de ferramentas */
+  top: 80px;
   right: 20px;
   left: auto;
   transform: none;
-  text-align: left; /* Alinha o conteúdo à esquerda */
+  text-align: left;
 }
 
 #polygonDrawingBox input[type="color"] {
@@ -1383,7 +1361,6 @@ button[style*="#ffc107"]:hover {
   padding: 8px 16px;
 }
 
-/* Estilos para o item de polígono na barra lateral */
 .sidebar li .item-icon {
   display: inline-block;
   width: 12px;
@@ -1402,67 +1379,59 @@ button[style*="#ffc107"]:hover {
   cursor: pointer;
 }
 
-/* Garante que o conteúdo da LI fique alinhado */
 .sidebar ul li {
   display: flex;
   align-items: center;
 }
 
-/* Estilo para os botões de seta dos splitters */
 .splitter-body button {
-  background-color: #6c757d; /* Cor de fundo cinza */
-  color: white;             /* Cor do ícone da seta */
-  border-radius: 50%;       /* Deixa o botão perfeitamente circular */
-  width: 24px;              /* Largura fixa */
-  height: 24px;             /* Altura fixa */
-  padding: 0;               /* Remove o padding para melhor centralização */
-  line-height: 24px;        /* Alinha a seta verticalmente */
+  background-color: #6c757d; 
+  color: white;             
+  border-radius: 50%;      
+  width: 24px;              
+  height: 24px;             
+  padding: 0;              
+  line-height: 24px;      
   font-size: 12px;
-  margin: 0 3px;            /* Espaçamento entre os botões */
-  border: none;             /* Remove qualquer borda existente */
-  transition: background-color 0.2s; /* Adiciona uma transição suave */
+  margin: 0 3px;           
+  border: none;             
+  transition: background-color 0.2s;
 }
 
-/* Efeito ao passar o mouse sobre os botões */
 .splitter-body button:hover {
-  background-color: #5a6268; /* Cinza um pouco mais escuro */
+  background-color: #5a6268;
 }
-
 
 .folder-wrapper > .subfolders {
-    margin-top: 2px; /* Reduzir o espaço entre o título da subpasta e seu conteúdo */
-    margin-bottom: 5px; /* Reduzir o espaço após o conteúdo da subpasta */
+    margin-top: 2px;
+    margin-bottom: 5px; 
 }
 
-/* Define a posição e aparência geral da caixa */
 #cableDrawingBox {
   top: 70px;
   right: 15px;
   left: auto;
   transform: none;
   width: 320px;
-  background-color: #ffffff; /* Fundo branco para maior contraste */
+  background-color: #ffffff;
   border: 1px solid #dee2e6;
-  /* Sombra mais suave e moderna */
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-  border-radius: 8px; /* Cantos um pouco mais arredondados */
+  border-radius: 8px;
   text-align: left;
   padding: 20px;
   z-index: 1001;
 }
 
-/* Melhor hierarquia visual para o título */
 #cableDrawingBox h3 {
   font-size: 20px;
-  font-weight: 600; /* Título mais forte */
-  color: #212529; /* Cor de texto escura, mas não preto puro */
+  font-weight: 600;
+  color: #212529;
   margin-top: 0;
   margin-bottom: 24px;
   padding-bottom: 12px;
   border-bottom: 1px solid #f1f3f5;
 }
 
-/* Tipografia mais limpa para as etiquetas */
 #cableDrawingBox label {
   display: block;
   margin-bottom: 6px;
@@ -1471,7 +1440,6 @@ button[style*="#ffc107"]:hover {
   font-weight: 500;
 }
 
-/* Estilo e interatividade para os campos de input e select */
 #cableDrawingBox input[type="text"],
 #cableDrawingBox input[type="number"],
 #cableDrawingBox select {
@@ -1483,11 +1451,9 @@ button[style*="#ffc107"]:hover {
   border-radius: 6px;
   border: 1px solid #ced4da;
   background-color: #fff;
-  /* Transições suaves para uma experiência mais fluida */
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* NOVO: Efeito de foco para indicar campo ativo */
 #cableDrawingBox input[type="text"]:focus,
 #cableDrawingBox input[type="number"]:focus,
 #cableDrawingBox select:focus {
@@ -1496,8 +1462,6 @@ button[style*="#ffc107"]:hover {
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
-
-/* Campos de status e distância */
 #cableDrawingBox #cableStatusDisplay,
 #cableDrawingBox #cableDrawnDistance,
 #cableDrawingBox #cableReserveDistance,
@@ -1511,13 +1475,11 @@ button[style*="#ffc107"]:hover {
   font-size: 15px;
 }
 
-/* Destaque para o campo "Total" */
 #cableTotalDistance {
   background-color: #007bff;
   color: white;
   border-color: #0069d9;
   font-weight: bold;
-  /* Pequena sombra no texto para melhor legibilidade */
   text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
 }
 
@@ -1544,16 +1506,14 @@ button[style*="#ffc107"]:hover {
   transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
-/* Efeito de "levantar" ao passar o mouse */
 #cableDrawingBox button:hover {
   transform: translateY(-2px);
 }
-/* Efeito de "pressionar" ao clicar */
+
 #cableDrawingBox button:active {
   transform: translateY(0);
 }
 
-/* Botão Salvar (azul) */
 #cableDrawingBox #saveCableButton {
   background-color: #007bff;
   border-color: #007bff;
@@ -1563,7 +1523,6 @@ button[style*="#ffc107"]:hover {
   background-color: #0069d9;
 }
 
-/* Botões Cancelar e Excluir (cinza) */
 #cableDrawingBox #cancelCableButton,
 #cableDrawingBox #deleteCableButton {
   background-color: #6c757d;
@@ -1575,7 +1534,6 @@ button[style*="#ffc107"]:hover {
   background-color: #5a6268;
 }
 
-/* Botão Excluir (vermelho) */
 #cableDrawingBox #deleteCableButton {
     background-color: #dc3545;
     border-color: #dc3545;
@@ -1584,28 +1542,22 @@ button[style*="#ffc107"]:hover {
     background-color: #c82333;
 }
 
-/* Estilos para o novo botão Sair */
 #logoutButton {
-  margin-left: auto; /* ESSA É A PROPRIEDADE PRINCIPAL: ela empurra o botão para a extrema direita */
-  background-color: #f44336; /* Cor de fundo vermelha para indicar uma ação final/saída */
-  color: white; /* Cor do texto branca para bom contraste */
+  margin-left: auto;
+  background-color: #f44336;
+  color: white;
 }
 
-/* Efeito ao passar o mouse por cima do botão Sair */
 #logoutButton:hover {
-  background-color: #d32f2f; /* Um tom de vermelho um pouco mais escuro */
+  background-color: #d32f2f;
 }
-
-/* Adicione ao final de style.css */
 
 .line-handle-temp {
   fill: #ffc107;
   stroke: #333;
   stroke-width: 1;
-  pointer-events: none; /* Impede que os pontos temporários interfiram nos cliques */
+  pointer-events: none; 
 }
-
-/* Adicione esta regra ao final do seu arquivo style.css */
 
 .modal-body-content {
   padding: 25px;
@@ -1613,7 +1565,6 @@ button[style*="#ffc107"]:hover {
   flex-grow: 1;
 }
 
-/* Estilos para o botão de ajuste nos itens da sidebar */
 .adjust-kml-btn {
     background-color: #ffc107;
     color: #333;
@@ -1631,17 +1582,11 @@ button[style*="#ffc107"]:hover {
     background-color: #ffb300;
 }
 
-/* ========================================================= */
-/* ==   NOVO: ESTILOS DE ÁRVORE DA SIDEBAR (COM LINHAS)   == */
-/* ========================================================= */
-
-/* --- Configuração da Variável de Indentação --- */
 :root {
-  --indent-size: 20px; /* Controle o recuo aqui */
-  --line-color: #c0c0c0; /* Cor das linhas da árvore */
+  --indent-size: 20px; 
+  --line-color: #c0c0c0; 
 }
 
-/* --- Reset Básico para Listas da Sidebar --- */
 .sidebar ul {
   list-style: none;
   margin: 0;
@@ -1652,23 +1597,17 @@ button[style*="#ffc107"]:hover {
   list-style: none;
   margin: 0;
   padding: 0;
-  position: relative; /* Essencial para as linhas */
+  position: relative;
 }
 
 .sidebar .subfolders {
   padding-left: var(--indent-size);
-  /* Garante que o UL não colapse quando vazio (para o "Arraste aqui") */
   min-height: 1px; 
-  
-  /* == CORREÇÃO ADICIONADA == */
-  /* Força o UL a ser um container de bloco, empilhando LIs verticalmente */
   display: block; 
   width: 100%;
   box-sizing: border-box;
 }
 
-/* 1. A Linha Vertical ( | ) 
-   Desenha uma linha vertical para todos os itens, exceto o último. */
 .subfolders > li::before {
   content: "";
   position: absolute;
@@ -1679,38 +1618,30 @@ button[style*="#ffc107"]:hover {
   background-color: var(--line-color);
 }
 
-/* 2. A Linha Horizontal ( L )
-   Desenha o "galho" horizontal para todos os itens. */
 .subfolders > li::after {
   content: "";
   position: absolute;
-  top: 13px; /* Alinha verticalmente com o ícone/texto (ajuste se necessário) */
+  top: 13px;
   left: 0;
-  width: calc(var(--indent-size) * 0.6); /* Comprimento do galho (ex: 12px) */
+  width: calc(var(--indent-size) * 0.6);
   height: 1px;
   background-color: var(--line-color);
 }
 
-/* 3. Correção para o ÚLTIMO item da lista
-   Faz a linha vertical parar no "galho", criando o L final. */
 .subfolders > li:last-child::before {
-  height: 13px; /* Deve ser igual ao 'top' do ::after */
+  height: 13px;
 }
 
-/* --- Alinhamento dos Itens e Pastas --- */
-
-/* Remove estilos de item de lista conflitantes */
 .subfolders > li:not(.folder-wrapper) {
   background-color: transparent;
   border: none;
   box-shadow: none;
   margin: 0;
-  padding: 0; /* O padding será no span interno */
-  display: flex; /* Garante que o LI se comporte como flex */
+  padding: 0; 
+  display: flex; 
   align-items: center;
 }
 
-/* O contêiner de uma sub-pasta (VERSÃO CORRIGIDA) */
 li.folder-wrapper {
   margin: 0;
   padding: 0;
@@ -1723,11 +1654,10 @@ li.folder-wrapper {
   clear: both;
 }
 
-/* --- Estilização do Título da Pasta (.folder-title) --- */
 .folder-title {
   display: flex;
   align-items: center;
-  padding: 4px 0; /* Padding vertical, sem padding horizontal */
+  padding: 4px 0; 
   margin: 1px 0;
   font-size: 14px;
   color: #333;
@@ -1740,16 +1670,13 @@ li.folder-wrapper {
   box-sizing: border-box;
 }
 
-/* Traz o conteúdo para a frente das linhas da árvore */
 .folder-title,
 .subfolders > li:not(.folder-wrapper) > * {
   position: relative;
   z-index: 1;
-  /* O fundo do item precisa ser opaco para cobrir a linha vertical */
   background-color: #f9f9f9; 
 }
 
-/* Hover e Active (agora aplicados de forma consistente) */
 .folder-title:hover,
 .subfolders > li:not(.folder-wrapper):hover {
     background-color: #f0f0f0;
@@ -1760,24 +1687,19 @@ li.folder-wrapper {
     background-color: #ddeaff;
 }
 
-/* --- Alinhamento dos Ícones (Toggle e Pasta) --- */
-
-/* O ícone de expandir/recolher (►/▼) */
 .toggle-icon {
-  width: 16px; /* Largura fixa */
+  width: 16px;
   height: 16px;
-  margin-right: 2px; /* Espaço antes do ícone da pasta */
+  margin-right: 2px;
   flex-shrink: 0;
   color: #666;
   font-size: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Alinha o ícone com o "galho" da árvore */
   transform: translateY(1px); 
 }
 
-/* O ícone da pasta (pastinha) */
 .folder-icon-sidebar {
   margin-right: 4px;
   width: 16px;
@@ -1786,9 +1708,6 @@ li.folder-wrapper {
   color: #555;
 }
 
-/* --- Alinhamento dos Itens (NÃO-PASTA) --- */
-
-/* Ícone do item (quadrado colorido, etc.) */
 .subfolders li .item-icon {
   width: 12px;
   height: 12px;
@@ -1796,52 +1715,46 @@ li.folder-wrapper {
   margin-right: 6px;
   border: 1px solid rgba(0,0,0,0.1);
   flex-shrink: 0;
-  /* Adiciona margem à esquerda para alinhar com o ícone da pasta */
-  margin-left: 18px; /* (Largura do toggle-icon + margin) */
+  margin-left: 18px;
 }
 
-/* Nome do Item (para pastas e itens) */
 .folder-name-text,
 .subfolders li > .item-name {
   flex-grow: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 4px; /* Pequeno espaço interno */
+  padding: 0 4px;
 }
-/* O nome do item (não-pasta) precisa de um padding para cobrir a linha */
+
 .subfolders li > .item-name {
     padding-left: 6px;
 }
 
-/* Botões de Ação (Olho, Ajustar, 3-pontos) */
 .folder-buttons,
 .subfolders li .adjust-kml-btn,
 .subfolders li .visibility-toggle-btn,
 .subfolders li .item-actions-dropdown {
-  margin-left: auto; /* Empurra para a direita */
+  margin-left: auto;
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  /* Garante que os botões cubram a linha */
   padding-right: 4px; 
 }
-/* Corrige o espaçamento entre botões de item */
+
 .subfolders li .adjust-kml-btn {
   margin-left: 8px;
 }
+
 .subfolders li .visibility-toggle-btn {
   margin-left: 4px;
 }
 
-/* --- Correção de Nível Máximo (Opcional, mas bom manter) --- */
-/* Impede que itens recuem indefinidamente */
 .sidebar ul ul ul ul ul > li,
 .sidebar ul ul ul ul ul > .folder-wrapper {
   margin-left: calc(-1 * var(--indent-size));
   padding-left: var(--indent-size);
 }
-
 
 .item-actions-dropdown {
   position: relative;
@@ -1849,13 +1762,12 @@ li.folder-wrapper {
 
 .folder-title:hover,
 .subfolders > li:not(.folder-wrapper):hover {
-    background-color: #f0f0f0; /* Hover cinza claro */
+    background-color: #f0f0f0;
 }
 
 .folder-title.active,
 .subfolders > li:not(.folder-wrapper).active {
-    background-color: #ddeaff; /* Active azul claro */
-    /* font-weight: bold; */ /* Opcional: negrito para ativo */
+    background-color: #ddeaff;
 }
 
 .item-actions-toggle-btn {
@@ -1888,7 +1800,7 @@ li.folder-wrapper {
 }
 
 .item-actions-menu.show {
-  display: block; /* Mostra o menu quando tem a classe 'show' */
+  display: block;
 }
 
 .item-actions-menu a {
@@ -1904,20 +1816,8 @@ li.folder-wrapper {
   background-color: #f1f1f1;
 }
 
-/* ========================================================= */
-/* ==   CORREÇÃO PARA MENU DE 3 PONTINHOS ESCONDIDO       == */
-/* ========================================================= */
-
-/*
-  Quando o menu (.item-actions-menu) recebe a classe .show,
-  esta regra encontra o seu ancestral .folder-title e faz duas coisas:
-  1. Define 'overflow: visible' para que o menu possa "escapar" e ser exibido.
-  2. Aumenta o 'z-index' para garantir que o menu apareça sobre
-     qualquer item que esteja abaixo dele na lista.
-*/
-/* Regra 1 (que você já tem): Corrige o corte pelo título da pasta */
 .folder-title:has(.item-actions-menu.show),
-.subfolders li:has(.item-actions-menu.show) { /* Adicionado para itens LI também */
+.subfolders li:has(.item-actions-menu.show) { 
   overflow: visible;
   z-index: 15;
 }
@@ -1926,14 +1826,12 @@ li.folder-wrapper {
   overflow: visible;
 }
 
-/* Adicione no final de style.css */
-
 .derivation-kit-container {
     display: flex;
     align-items: center;
     gap: 5px;
-    margin-top: 8px; /* Espaçamento se quebrar a linha */
-    width: 100%; /* Ocupa a largura para alinhar abaixo do título */
+    margin-top: 8px;
+    width: 100%;
     padding: 4px 0;
 }
 
@@ -1949,8 +1847,6 @@ li.folder-wrapper {
     cursor: pointer;
     margin-bottom: 0;
 }
-
-/* Adicione no final de style.css */
 
 #trayKitContainer {
     display: flex;
@@ -1968,46 +1864,41 @@ li.folder-wrapper {
 }
 
 #trayKitContainer input[type="number"] {
-    width: 80px; /* Deixa o campo menor, ideal para quantidade */
+    width: 80px;
     margin-bottom: 0;
 }
 
 #lineConnectionInfo {
-  background-color: #e3f2fd; /* Azul bem claro */
-  border-left: 4px solid #2196f3; /* Borda azul para destaque */
+  background-color: #e3f2fd; 
+  border-left: 4px solid #2196f3; 
   padding: 12px 15px;
-  margin: 0 0 20px 0; /* Espaçamento abaixo */
+  margin: 0 0 20px 0; 
   text-align: center;
   font-size: 15px;
   color: #333;
   font-weight: 500;
-  line-height: 1.5; /* Melhora a legibilidade com quebras de linha */
+  line-height: 1.5;
 }
 
 #lineConnectionInfo strong {
-  color: #0d47a1; /* Azul escuro para os títulos "De:" e "Para:" */
+  color: #0d47a1; 
 }
 
-/* Muda o cursor para "agarrar" quando o mouse está sobre um item arrastável */
 .draggable {
   cursor: grab;
 }
 
-/* Muda o cursor para "agarrando" enquanto o item está sendo arrastado */
 .draggable:active {
   cursor: grabbing;
 }
 
-/* Destaca a pasta inteira quando algo é arrastado sobre ela */
 .subfolders.dragover {
   background-color: #e3f2fd; 
 }
 
-
-
 .subfolders:not(.hidden) {
-  max-height: none !important; /* Remove qualquer max-height (como 1000px) */
-  height: auto; /* Permite que a altura se ajuste ao conteúdo */
+  max-height: none !important;
+  height: auto;
 }
 
 .subfolders:empty {
@@ -2020,12 +1911,12 @@ li.folder-wrapper {
 
 #openStickersModalButton,
 #openObservationsButton {
-  background-color: #673ab7; /* Roxo */
+  background-color: #673ab7;
 }
 
 #openStickersModalButton:hover,
 #openObservationsButton:hover {
-  background-color: #512da8; /* Roxo mais escuro */
+  background-color: #512da8;
 }
 
 .sticker-grid-display {
@@ -2051,46 +1942,33 @@ li.folder-wrapper {
   font-size: 28px;
   font-weight: bold;
   color: #212529;
-  font-family: monospace; /* Boa fonte para caracteres únicos */
+  font-family: monospace;
 }
 
 .sticker-count {
   display: block;
   font-size: 16px;
   font-weight: 500;
-  color: #4CAF50; /* Verde para destacar a contagem */
+  color: #4CAF50;
 }
 
-/* ========================================================= */
-/* ==   NOVO: ESTILO DE DESTAQUE PARA DROP EM PASTAS      == */
-/* ========================================================= */
-
-/* Estilo de feedback para o TÍTULO da pasta quando é um alvo de drop */
 .folder-title.dragover-target {
-  background-color: #007bff !important; /* Azul forte */
+  background-color: #007bff !important;
   color: white !important;
   box-shadow: 0 2px 8px rgba(0, 123, 255, 0.5);
 }
 
-/* O ícone de pasta e texto ficam brancos para contraste */
 .folder-title.dragover-target .folder-icon-sidebar,
 .folder-title.dragover-target .toggle-icon,
 .folder-title.dragover-target .folder-name-text {
   color: white;
 }
 
-/* ========================================================= */
-/* ==   NOVO: ESTILO DO TOOLTIP DE HOVER (NOME COMPLETO)  == */
-/* ========================================================= */
-
 #hover-tooltip {
-  /* Escondido por padrão */
   display: none;
   opacity: 0;
-  
-  /* Posição e aparência */
-  position: fixed; /* Fica fixo na tela */
-  z-index: 9999;   /* Garante que fique acima de tudo */
+  position: fixed; 
+  z-index: 9999;  
   background-color: #222;
   color: white;
   padding: 6px 12px;
@@ -2099,18 +1977,12 @@ li.folder-wrapper {
   font-family: Arial, sans-serif;
   max-width: 400px;
   text-align: left;
-  white-space: nowrap; /* Garante que o nome completo não quebre a linha */
-  
-  /* Impede que o mouse interaja com o próprio tooltip */
+  white-space: nowrap;
   pointer-events: none; 
-  
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  
-  /* Animação suave de entrada */
   transition: opacity 0.2s ease-in-out;
 }
 
-/* Estilos para o Modal de Observações */
 #observationsTextarea {
   width: 100%;
   height: 250px;
@@ -2120,7 +1992,7 @@ li.folder-wrapper {
   border-radius: 6px;
   border: 1px solid #ccc;
   padding: 10px;
-  box-sizing: border-box; /* Garante que o padding não quebre o layout */
+  box-sizing: border-box;
 }
 
 #observationsTextarea:focus {
