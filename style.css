@@ -271,7 +271,7 @@
   display: none !important;
 }
 
-/*Fundo escuro que cobre a tela inteira atrás da janela aberta*/
+/* Fundo escuro que cobre a tela inteira atrás da janela aberta */
 .modal {
   display: none;
   position: fixed;
@@ -280,14 +280,17 @@
   top: 0;
   width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;  
   background-color: rgba(30, 40, 60, 0.6);
   backdrop-filter: blur(4px);
+  align-items: flex-start; 
   justify-content: center;
-  align-items: center;
+  padding-top: 40px;
+  padding-bottom: 40px; 
 }
 
-/*A caixa da janela aberta*/
+/* A caixa da janela aberta */
 .modal-content {
   background-color: #fefefe;
   margin: auto;
@@ -298,11 +301,50 @@
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
   position: relative;
-  max-height: 90vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  max-height: 90vh;
+  overflow-y: auto; 
   animation: zoomIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Ajustes específicos para telas pequenas*/
+@media (max-width: 768px) {
+  .modal {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    width: 95%;
+    max-height: 85vh;
+  }
+  
+  .modal-content input[type="text"],
+  .modal-content input[type="number"],
+  .modal-content select {
+    font-size: 16px;
+    padding: 12px;
+  }
+  
+  #cableDrawingBox {
+    width: 90%;
+    right: 5%;
+    left: 5%;
+    top: 60px;
+    padding: 15px;
+  }
+  
+  .cable-box-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .cable-box-actions button {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 /*Cabeçalho da janela aberta - título*/
@@ -1536,6 +1578,10 @@ button[style*="#ffc107"]:hover {
   text-align: left;
   padding: 20px;
   z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
 }
 
 /*Título da caixa de desenho*/
