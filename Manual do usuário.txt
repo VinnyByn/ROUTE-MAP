@@ -4,35 +4,38 @@ Manual do Usuário - Route Map
 Tela de Login: Acesse a aplicação. Digite seu e-mail e senha cadastrados.
 Segurança: O sistema utiliza autenticação segura via Google Firebase. Se não possuir conta, contate o administrador do sistema.
 Redirecionamento: Após o login bem-sucedido, você será direcionado para o mapa principal.
-
+--------------------------------------------------------------------------------------------------------------------------------------------
 2. Gerenciamento de Projetos
 No menu superior "Projeto", você encontra as opções fundamentais:
-Novo Projeto: Cria um ambiente limpo. Você deve informar Nome, Cidade, Bairro e Tipo (TCR, TCT, MDU).
+Novo Projeto: Cria um ambiente limpo, em que deve informar Nome, Cidade, Bairro e Tipo (TCR, TCT, MDU).
 Salvar Projeto: Salva todo o progresso (mapa, fusões, materiais) na nuvem. Dica: Salve frequentemente.
 Carregar Projeto: Abre uma lista com seus projetos salvos anteriormente, ordenados por data.
 Importar/Exportar KML: Permite trazer traçados do Google Earth (.kml) ou exportar seu projeto atual para visualização externa.
-
-3. Desenhando a Rede (O Mapa)
+--------------------------------------------------------------------------------------------------------------------------------------------
+3. Desenhando a Rede no mapa
 A barra superior contém as ferramentas de desenho:
 3.1. Pastas e Organização
-Use o botão "Nova Pasta" para organizar sua rede (ex: "Zona Norte", "Backbone", "Distribuição").
+Use o botão "Nova Pasta" para organizar sua rede, criando uma série de possibilidades
 Na barra lateral esquerda, você pode arrastar e soltar itens (Drag & Drop) para movê-los entre pastas.
-3.2. Adicionar Marcadores (Caixas e Postes)
-Clique em "Adicionar Marcador" e escolha o tipo:
+
+3.2. Adicionar Marcadores
+Clique em "Adicionar Marcador" e escolha o tipo e staus:
 CEO (Caixa de Emenda): Defina se é JUMBO (144f), se usa Raquete ou Suporte.
 CTO (Caixa de Atendimento): Defina se é Predial, se precisa de adesivos e o status (Nova/Existente).
 Cordoalha/Reserva: Para detalhamento de infraestrutura.
 Casas: Para contagem de clientes potenciais (HP).
+
 3.3. Desenhar Cabos
 Clique em "Desenhar Cabo".
 Defina o status (Novo/Existente).
 Regra Importante: O cabo deve começar clicando em um marcador existente (CEO, CTO ou Reserva).
 Clique no mapa para criar a rota.
 Clique duas vezes ou selecione "Salvar Cabo" na caixa flutuante para finalizar. O sistema calcula automaticamente o Lançamento e a Reserva Técnica.
+
 3.4. Ferramentas Auxiliares
 Polígono: Para demarcar áreas de cobertura ou bairros.
 Régua: Para medir distâncias rápidas sem desenhar cabos.
-
+--------------------------------------------------------------------------------------------------------------------------------------------
 4. Plano de Fusão (Diagrama)
 Cada caixa (CEO ou CTO) possui um plano de fusão interativo.
 Abra a edição de um marcador (clique no nome na barra lateral ou no ícone).
@@ -41,7 +44,7 @@ Adicionar Cabos: Selecione os cabos que chegam fisicamente na caixa.
 Adicionar Splitter: Insira splitters de Fusão ou Atendimento (1:8, 1:16, APC/UPC).
 Fazer a Fusão: Clique na fibra de um cabo (ex: Verde) e depois na entrada do Splitter ou em outra fibra. Uma linha será desenhada.
 O sistema contabiliza automaticamente os Tubetes e Bandejas necessários.
-
+--------------------------------------------------------------------------------------------------------------------------------------------
 5. Materiais e Relatórios
 O sistema calcula os materiais automaticamente baseando-se no desenho.
 Lista de Materiais: Exibe ferragens, cabos, caixas e ativos. Você pode editar quantidades manualmente ou "Recalcular do Mapa" para resetar conforme o desenho.
