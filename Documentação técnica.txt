@@ -1,0 +1,55 @@
+Esta seção destina-se aos desenvolvedores responsáveis pela manutenção e evolução do Route Map.
+
+1. Visão Geral da Arquitetura
+Tipo: Single Page Application (SPA).
+Frontend: HTML5, CSS3, Vanilla JavaScript (ES6+).
+Backend (BaaS): Google Firebase (Authentication & Firestore).
+Map Engine: Google Maps JavaScript API (Libraries: geometry, drawing).
+Dependências Externas:
+xlsx (SheetJS) para exportação de Excel.
+Firebase SDK (v8.10.1).
+
+2. Estrutura de Arquivos
+login.html / login-style.css: Interface de autenticação isolada.
+index.html: Estrutura principal DOM, Modais e Templates (<template>).
+style.css: Estilização global, responsividade e layout Grid (Sidebar/Map).
+script.js: Núcleo lógico da aplicação (~2500 linhas).
+
+3. Módulos Principais (script.js)
+3.1. Gerenciamento de Estado
+O estado da aplicação é mantido em variáveis globais voláteis que são serializadas para salvar:
+markers: Array de objetos contendo instância do Google Marker e metadados.
+savedCables: Array de objetos contendo instância do Google Polyline e dados de metragem.
+projectBoms: Objeto cacheando a lista de materiais por ID de projeto.
+activeFolderId: Rastreia onde novos itens serão inseridos na árvore da sidebar.
+3.2. Integração Firebase
+Auth: Utiliza auth.signInWithEmailAndPassword. Observador onAuthStateChanged protege a rota index.html.
+Firestore:
+Coleção: users/{uid}/projects/{projectId}.
+Estrutura do Documento:
+sidebar: JSON aninhado representando a árvore de pastas.
+markers, cables, polygons: Arrays de objetos serializados.
+bom: Estado salvo da lista de materiais.
+3.3. Lógica de Mapa e Desenho
+Cabos: Utiliza google.maps.Polyline. A metragem é calculada via google.maps.geometry.spherical.computeLength, adicionando reservas técnicas hardcoded (CEO=25m, CTO=5m).
+Ancoragem: O sistema força (handleCableVertexDragEnd) que pontas de cabos se conectem magneticamente a marcadores válidos (snap-to-marker).
+3.4. Diagrama de Fusão (SVG + DOM)
+O modal de fusão é um mini-sistema gráfico dentro da aplicação:
+Utiliza elementos HTML (div) para representar Cabos e Splitters (permite Drag & Drop dentro do canvas).
+Utiliza uma camada SVG (#fusion-svg-layer) sobreposta para desenhar as linhas de conexão (fibras).
+Algoritmo de Repack: A função repackAllElements reorganiza verticalmente os elementos para evitar sobreposição visual.
+3.5. Motor de Cálculo de Materiais (calculateBomState)
+Esta função varre todos os objetos do mapa e gera a BOM baseada no dicionário MATERIAL_PRICES.
+
+4. Manutenção e Extensão
+Adicionar Novo Material
+Para adicionar um novo material automático:
+Adicione a definição de preço e categoria na constante MATERIAL_PRICES.
+Atualize a função calculateBomState para incluir a lógica de quando esse material deve ser incrementado.
+
+Configuração de API Keys
+As chaves de API estão expostas no código cliente.
+Segurança: Certifique-se de restringir as chaves no console do Google Cloud para permitir apenas o domínio de produção.
+
+Personalização de Kits
+Os kits estão definidos em objetos constantes. Alterar estas constantes reflete imediatamente nos modais de "Data Center".
