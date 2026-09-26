@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - ROUTE MAP</title>
+    <link rel="icon" type="image/png" href="img/Aba.png">
+    <link rel="stylesheet" href="login-style.css?v=20260603" />
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <img src="img/Aba.png" width="56" height="56" alt="ROUTE MAP" />
+            </div>
+            <div class="card-header">
+                <h2>ROUTE MAP</h2>
+                <p>Acesse sua conta para continuar</p>
+            </div>
+
+            <form class="login-form">
+                <div class="input-group">
+                    <label for="email">Email</label>
+                    <div class="input-with-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg>
+                        <input type="email" id="email" name="email" placeholder="seuemail@provedor.com" required autocomplete="off" />
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="password">Senha</label>
+                    <div class="input-with-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM5 9h6v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V9z"/></svg>
+                        <input type="password" id="password" name="password" placeholder="Sua senha" required autocomplete="new-password"/>
+                    </div>
+                </div>
+
+                <p id="errorMessage" class="error-message"></p>
+
+                <button type="submit" class="login-button" id="loginSubmitBtn">Entrar</button>
+            </form>
+            <p class="login-footer">Planejamento de redes · Materiais · Relatórios</p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDj2QaP7aTsJTqD1J-ZgJwEjJgGhRZhArk",
+            authDomain: "routemap-21.firebaseapp.com",
+            projectId: "routemap-21",
+            storageBucket: "routemap-21.firebasestorage.app",
+            messagingSenderId: "855979634466",
+            appId: "1:855979634466:web:ded98c3c3680c9c7e0ff7b"
+        };
+
+        // Inicializa o Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // Seleciona os elementos do HTML
+        const loginForm = document.querySelector('.login-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const errorMessage = document.getElementById('errorMessage');
+        const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+
+        loginForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            errorMessage.style.display = 'none';
+            loginSubmitBtn.disabled = true;
+            loginSubmitBtn.textContent = 'Entrando...';
+
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    // Login bem-sucedido, redireciona para a página principal
+                    console.log('Login bem-sucedido!', userCredential.user);
+                    window.location.href = 'index.html';
+                })
+                .catch((error) => {
+                    console.error('Erro no login:', error.code, error.message);
+                    let friendlyMessage = 'Ocorreu um erro ao tentar fazer login.';
+                    switch (error.code) {
+                        case 'auth/user-not-found':
+                            friendlyMessage = 'Nenhum usuário encontrado com este e-mail.';
+                            break;
+                        case 'auth/wrong-password':
+                        case 'auth/invalid-credential':
+                            friendlyMessage = 'E-mail ou senha incorretos. Tente novamente.';
+                            break;
+                        case 'auth/invalid-email':
+                            friendlyMessage = 'O formato do e-mail é inválido.';
+                            break;
+                        case 'auth/too-many-requests':
+                            friendlyMessage = 'Muitas tentativas. Aguarde um momento e tente de novo.';
+                            break;
+                    }
+                    errorMessage.textContent = friendlyMessage;
+                    errorMessage.style.display = 'block';
+                    loginSubmitBtn.disabled = false;
+                    loginSubmitBtn.textContent = 'Entrar';
+                });
+        });
+    </script>
+</body>
+</html>

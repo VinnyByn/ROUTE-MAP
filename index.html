@@ -1,0 +1,1741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4a8fa8" />
+    <meta name="description" content="ROUTE MAP — planejamento de redes em mapa, materiais e relatórios" />
+    <title>ROUTE MAP — Projetos e Mapas</title>
+    <link rel="icon" type="image/png" href="img/Aba.png">
+    <link rel="stylesheet" href="style.css?v=20260604n" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  </head>
+  <body>
+<div class="top-bar">
+      <div class="top-bar-brand">
+        <img src="img/Aba.png" width="28" height="28" alt="ROUTE MAP" />
+        <div class="top-bar-brand-text">
+          <strong>ROUTE MAP</strong>
+          <span>Projetos de rede</span>
+        </div>
+        <span id="userEmailDisplay" class="top-bar-user-email" title="Conta conectada"></span>
+      </div>
+      <nav class="top-bar-nav" aria-label="Ferramentas principais">
+      <div class="dropdown">
+      <button id="projectButton" class="top-bar-button" type="button">
+        <img src="img/gestor-de-projeto.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Projeto
+      </button>
+       <div id="projectDropdown" class="dropdown-content">
+        <a href="#" id="createProjectButton"><img src="img/gestor-de-projeto.png" width="16" height="16" alt="Novo Projeto"/> Novo Projeto</a>
+        <a href="#" id="loadProjectButton"><img src="img/Nova-Pasta.png" width="16" height="16" alt="Carregar Projeto"/> Carregar Projeto</a>
+        <a href="#" id="saveProjectButton"><img src="img/Salvar.png" width="16" height="16" alt="Salvar Projeto"/> Salvar Projeto</a>
+        
+        <a href="#" id="exportKmlButton"><img src="img/Salvar.png" width="16" height="16" alt="Exportar KML"/> Exportar para KML</a>
+        <a href="#" id="importKmlButton"><img src="img/Nova-Pasta.png" width="16" height="16" alt="Importar KML"/> Importar KML/KMZ</a>
+      </div>
+    </div>
+      <button id="createFolderButton" class="top-bar-button" type="button">
+        <img src="img/Nova-Pasta.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Nova pasta
+      </button>
+      <button id="drawCableButton" class="top-bar-button" type="button">
+        <img src="img/Cabos.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Desenhar Cabo
+      </button>
+      <button id="addMarkerButton" class="top-bar-button" type="button">
+        <img src="img/Marcador.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Adicionar Marcador
+      </button>
+      <div class="dropdown">
+        <button id="toolsButton" class="top-bar-button" type="button">
+          <img src="img/Ferramentas.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+          Ferramentas
+      </button>
+        <div id="toolsDropdown" class="dropdown-content">
+          <a href="#" id="drawPolygonButton"><img src="img/Poligono.png" width="16" height="16" alt="Polígono"/> Desenhar Polígono</a>
+          <a href="#" id="rulerButton"><img src="img/Rota.png" width="16" height="16" alt="Régua"/> Régua de Medição</a>
+        </div>
+      </div>
+      <button id="materialListButton" class="top-bar-button" type="button">
+        <img src="img/Lista-Material.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Lista de Materiais
+      </button>
+      <button id="materialCatalogButton" class="top-bar-button" type="button">
+        <img src="img/Lista-Material.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Materiais
+      </button>
+      <button id="laborButton" class="top-bar-button" type="button">
+        <img src="img/Mão-de-Obra.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Mão de Obra
+      </button>
+      <button id="projectReportButton" class="top-bar-button" type="button">
+        <img src="img/Relatorio.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Relatório do Projeto
+      </button>
+      <button id="openSearchModalButton" class="top-bar-button" type="button">
+        <img src="img/Editar.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Localização
+      </button>
+      <button id="logoutButton" class="top-bar-button top-bar-button-danger" type="button" title="Encerrar sessão">
+        <img src="img/Sair.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        Sair
+      </button>
+      </nav>
+    </div>
+
+    <div class="container">
+      <div class="sidebar-column">
+        <div class="sidebar-header ge-pro-panel-header">
+          <h3>Projetos</h3>
+        </div>
+        <div class="sidebar ge-pro-places-panel" id="sidebar" role="tree" aria-label="Projetos"></div>
+      </div>
+      <div class="resizer" id="dragHandle" role="separator" aria-orientation="vertical" aria-label="Redimensionar painel Projetos" title="Arraste para ajustar a largura · duplo clique para restaurar"></div>
+      <div id="map" class="map" role="application" aria-label="Mapa do projeto"></div>
+    </div>
+
+    <div id="materialModal" class="modal">
+      <div class="modal-content material-modal-content">
+        <span class="close" id="closeMaterialModal">&times;</span>
+        <h2 id="materialModalTitle">Lista de Materiais</h2>
+        <div class="modal-body-content material-modal-body">
+          
+          <div class="material-section">
+            <h3>Ferragens</h3>
+            <div class="material-table-wrap">
+            <table id="ferragem-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Qtd.</th>
+                  <th>Un.</th>
+                  <th>Ações</th>
+                  <th>Preço Unit. (R$)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="ferragem-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6">Subtotal Ferragens</td>
+                  <td id="ferragem-total-price">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+            </div>
+          </div>
+
+          <div class="material-section">
+            <h3>Cabos</h3>
+            <div class="material-table-wrap">
+            <table id="cabos-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Medição (m)</th>
+                  <th>Acr.%</th>
+                  <th>Qtd. (m)</th>
+                  <th>Un.</th>
+                  <th>Ações</th>
+                  <th>Preço Unit. (R$/m)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="cabos-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="8">Subtotal Cabos</td>
+                  <td id="cabos-total-price">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+            </div>
+          </div>
+
+          <div class="material-section">
+            <h3>Materiais de Fusão</h3>
+            <div class="material-table-wrap">
+            <table id="fusao-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Qtd.</th>
+                  <th>Un.</th>
+                  <th>Ações</th>
+                  <th>Preço Unit. (R$)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="fusao-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6">Subtotal Fusão</td>
+                  <td id="fusao-total-price">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+            </div>
+          </div>
+
+          <div class="material-section">
+            <h3>Data Center</h3>
+            <div class="material-table-wrap">
+            <table id="datacenter-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Tipo</th>
+                  <th>Qtd.</th>
+                  <th>Un.</th>
+                  <th>Ações</th>
+                  <th>Preço Unit. (R$)</th>
+                  <th>Preço Total (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="datacenter-list-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6">Subtotal Data Center</td>
+                  <td id="datacenter-total-price">R$ 0,00</td>
+                </tr>
+              </tfoot>
+            </table>
+            </div>
+            <div class="section-buttons">
+                <button type="button" id="addDatacenterEquipmentButton" class="material-section-add-btn">+ Adicionar Equipamento</button>
+            </div>
+          </div>
+          
+          <div class="grand-total-container">
+            <span class="grand-total-label">Total Geral de Materiais</span>
+            <span id="grand-total-price">R$ 0,00</span>
+          </div>
+
+        </div>
+        <div class="material-buttons material-toolbar">
+          <button type="button" id="saveMaterialChangesButton" class="material-toolbar-btn material-toolbar-btn-primary">
+            <img src="img/Salvar.png" width="16" height="16" alt="" />
+            Salvar Alterações
+          </button>
+          <button type="button" id="recalculateBomButton" class="material-toolbar-btn material-toolbar-btn-warning">
+            <img src="img/Rota.png" width="16" height="16" alt="" />
+            Recalcular do Mapa
+          </button>
+          <button type="button" id="addMaterialButton" class="material-toolbar-btn material-toolbar-btn-success">
+            <img src="img/Mais.png" width="16" height="16" alt="" />
+            Adicionar Material
+          </button>
+          <button type="button" id="exportMaterialButton" class="material-toolbar-btn material-toolbar-btn-secondary">
+            <img src="img/Lista.png" width="16" height="16" alt="" />
+            Exportar
+          </button>
+          <button type="button" id="openStickersModalButton" class="material-toolbar-btn material-toolbar-btn-accent">
+            <img src="img/Adesivo.png" width="16" height="16" alt="" />
+            Adesivos
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="addMaterialModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeAddMaterialModal">&times;</span>
+        <h2 id="addMaterialModalTitle">Adicionar Novo Material</h2>
+        <div class="modal-form-body">
+          <div class="form-group"><label for="materialNameInput">Nome do Item</label><input type="text" id="materialNameInput" placeholder="Ex: Fita Isolante" /></div>
+          <div class="form-group"><label for="materialQtyInput">Quantidade</label><input type="number" id="materialQtyInput" value="1" min="0" /></div>
+          <div class="form-group">
+            <label for="materialCategoryInput">Tipo (Categoria)</label>
+            <select id="materialCategoryInput">
+              <option value="Ferragem">Ferragem</option>
+              <option value="Lançamento">Lançamento</option>
+              <option value="Fusão">Fusão</option>
+              <option value="Data Center">Data Center</option>
+              <option value="Mão de Obra">Mão de Obra</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+          <div class="form-group"><label for="materialPriceInput">Preço Unitário (R$)</label><input type="number" id="materialPriceInput" value="0" min="0" step="0.01" /></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelAddMaterial" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmAddMaterial" class="btn btn-success">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cadastro de Materiais e Kits -->
+    <div id="materialCatalogModal" class="modal">
+      <div class="modal-content material-catalog-content">
+        <span class="close" id="closeMaterialCatalogModal">&times;</span>
+        <h2>Cadastro de Materiais e Kits</h2>
+        <div class="modal-body-content material-catalog-body">
+          <div class="catalog-header">
+            <p class="catalog-subtitle">Gerencie materiais, preços, fornecedores e kits usados na lista de materiais.</p>
+            <div class="catalog-stats">
+              <span class="catalog-stat"><strong id="catalogMaterialsCount">0</strong> materiais</span>
+              <span class="catalog-stat"><strong id="catalogKitsCount">0</strong> kits</span>
+            </div>
+          </div>
+
+          <div class="catalog-tabs" role="tablist">
+            <button type="button" class="catalog-tab active" data-catalog-tab="materials" role="tab">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <span>Materiais</span>
+            </button>
+            <button type="button" class="catalog-tab" data-catalog-tab="kits" role="tab">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <span>Kits</span>
+            </button>
+            <button type="button" class="catalog-tab" data-catalog-tab="config" role="tab">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Configurações</span>
+            </button>
+          </div>
+
+          <div class="catalog-toolbar" id="catalogToolbar">
+            <div class="catalog-search-wrap">
+              <svg class="catalog-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="search" id="catalogSearchInput" class="catalog-search" placeholder="Pesquisar por nome, categoria ou fornecedor..." />
+            </div>
+            <select id="catalogCategoryFilter" class="catalog-category-filter">
+              <option value="">Todas as categorias</option>
+            </select>
+            <button type="button" id="catalogImportButton" class="btn btn-secondary catalog-import-btn" title="Importar preços de uma planilha (.xlsx)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Importar planilha
+            </button>
+            <input type="file" id="catalogImportFile" accept=".xlsx,.xls,.csv" style="display:none;" />
+            <button type="button" id="catalogAddButton" class="btn btn-success catalog-add-btn">+ Adicionar</button>
+          </div>
+
+          <div id="catalogMaterialsView" class="catalog-view">
+            <div class="material-table-wrap catalog-table-wrap">
+              <table class="catalog-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Categoria</th>
+                    <th>Un.</th>
+                    <th>Preço Unit. (R$)</th>
+                    <th>Fornecedor</th>
+                    <th class="catalog-col-actions">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="catalogMaterialsBody"></tbody>
+              </table>
+              <div id="catalogMaterialsEmpty" class="catalog-empty" style="display:none;">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <p>Nenhum material encontrado.</p>
+                <small>Ajuste a busca/filtro ou clique em “+ Adicionar”.</small>
+              </div>
+            </div>
+          </div>
+
+          <div id="catalogKitsView" class="catalog-view" style="display:none;">
+            <div id="catalogKitsList" class="catalog-kits-list"></div>
+            <div id="catalogKitsEmpty" class="catalog-empty" style="display:none;">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <p>Nenhum kit cadastrado.</p>
+              <small>Crie um kit agrupando materiais e quantidades.</small>
+            </div>
+          </div>
+
+          <div id="catalogConfigView" class="catalog-view" style="display:none;">
+            <div class="catalog-config-section">
+              <div class="catalog-config-title">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+                <div>
+                  <h3>Lançamento de cabos</h3>
+                  <p class="catalog-config-hint">Define como as ferragens de lançamento são calculadas a partir do comprimento dos cabos.</p>
+                </div>
+              </div>
+              <div class="catalog-config-grid">
+                <div class="form-group catalog-config-highlight">
+                  <label for="configPoleSpan">Distância entre postes / vão (m)</label>
+                  <input type="number" id="configPoleSpan" min="1" step="1" value="35" />
+                  <small>Padrão: 35 m</small>
+                </div>
+                <div class="form-group">
+                  <label for="configPlaquetaPerPole">Plaquetas por poste</label>
+                  <input type="number" id="configPlaquetaPerPole" min="0" step="1" value="1" />
+                </div>
+                <div class="form-group">
+                  <label for="configBapPerPole">Abraçadeiras BAP por poste</label>
+                  <input type="number" id="configBapPerPole" min="0" step="1" value="1" />
+                </div>
+                <div class="form-group">
+                  <label for="configSupaPerPole">Suportes de ancoragem (SUPAS) por poste</label>
+                  <input type="number" id="configSupaPerPole" min="0" step="1" value="2" />
+                </div>
+                <div class="form-group">
+                  <label for="configAlcaPerSupa">Alças preformadas por SUPA</label>
+                  <input type="number" id="configAlcaPerSupa" min="0" step="1" value="1" />
+                </div>
+              </div>
+              <p class="catalog-config-preview" id="configLancamentoPreview"></p>
+              <div class="catalog-config-actions">
+                <button type="button" id="saveLancamentoConfig" class="btn btn-success">Salvar configurações</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário de material (adicionar/editar) -->
+    <div id="materialFormModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeMaterialFormModal">&times;</span>
+        <h2 id="materialFormTitle">Adicionar Material</h2>
+        <div class="modal-form-body">
+          <input type="hidden" id="materialFormId" />
+          <div class="form-group"><label for="materialFormName">Nome do material</label><input type="text" id="materialFormName" placeholder="Ex: Fita Isolante" /></div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="materialFormCategory">Categoria</label>
+              <input type="text" id="materialFormCategory" list="catalogCategoryOptions" placeholder="Ex: Ferragem" />
+              <datalist id="catalogCategoryOptions"></datalist>
+            </div>
+            <div class="form-group">
+              <label for="materialFormUnit">Unidade</label>
+              <select id="materialFormUnit">
+                <option value="un">un</option>
+                <option value="m">m</option>
+                <option value="kit">kit</option>
+                <option value="cx">cx</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group"><label for="materialFormPrice">Preço unitário (R$)</label><input type="number" id="materialFormPrice" value="0" min="0" step="0.01" /></div>
+            <div class="form-group"><label for="materialFormCode">Código / SKU</label><input type="text" id="materialFormCode" placeholder="Opcional" /></div>
+          </div>
+          <div class="form-group"><label for="materialFormSupplier">Fornecedor</label><input type="text" id="materialFormSupplier" placeholder="Ex: Furukawa, Intelbras..." /></div>
+          <div class="form-group"><label for="materialFormNotes">Observações</label><textarea id="materialFormNotes" rows="2" placeholder="Opcional"></textarea></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelMaterialForm" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="saveMaterialForm" class="btn btn-success">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário de kit (adicionar/editar) -->
+    <div id="kitFormModal" class="modal">
+      <div class="modal-content" style="max-width: 680px;">
+        <span class="close" id="closeKitFormModal">&times;</span>
+        <h2 id="kitFormTitle">Adicionar Kit</h2>
+        <div class="modal-form-body">
+          <input type="hidden" id="kitFormId" />
+          <div class="form-grid-2">
+            <div class="form-group"><label for="kitFormName">Nome do kit</label><input type="text" id="kitFormName" placeholder="Ex: KIT CTO" /></div>
+            <div class="form-group">
+              <label for="kitFormCategory">Categoria</label>
+              <input type="text" id="kitFormCategory" list="catalogCategoryOptions" placeholder="Ex: Fusão" />
+            </div>
+          </div>
+          <div class="kit-components-block">
+            <div class="kit-components-head">
+              <span>Materiais do kit</span>
+              <button type="button" id="kitAddComponentButton" class="btn btn-secondary">+ Item</button>
+            </div>
+            <div id="kitComponentsList" class="kit-components-list"></div>
+            <datalist id="kitMaterialOptions"></datalist>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelKitForm" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="saveKitForm" class="btn btn-success">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Importação de planilha de preços -->
+    <div id="materialImportModal" class="modal">
+      <div class="modal-content material-import-content">
+        <span class="close" id="closeMaterialImportModal">&times;</span>
+        <h2>Importar preços da planilha</h2>
+        <div class="modal-body-content material-import-body">
+          <p class="import-file-name" id="importFileName"></p>
+          <div class="import-summary" id="importSummary"></div>
+          <div class="import-filter-row">
+            <label class="import-check-all"><input type="checkbox" id="importToggleAll" /> Selecionar tudo</label>
+            <span class="import-legend">
+              <span class="import-badge update">Atualizar</span>
+              <span class="import-badge same">Sem alteração</span>
+              <span class="import-badge new">Novo</span>
+              <span class="import-badge invalid">Inválido</span>
+            </span>
+          </div>
+          <div class="import-table-wrap">
+            <table class="import-table">
+              <thead>
+                <tr>
+                  <th class="import-col-check"></th>
+                  <th>Item da planilha</th>
+                  <th>Material no sistema</th>
+                  <th>Preço atual</th>
+                  <th>Preço planilha</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="importPreviewBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelMaterialImport" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="applyMaterialImport" class="btn btn-success">Aplicar selecionados</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="laborModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" id="closeLaborModal">&times;</span>
+            <h2>Planilha de Mão de Obra</h2>
+            <div class="modal-body-content">
+                <div class="material-section" style="margin: 0;">
+                    <table id="labor-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Detalhes</th>
+                                <th>Custo Total (R$)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="labor-items-body">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="grand-total-container" style="margin-top: 20px;">
+                    <strong>Custo Total da Mão de Obra:</strong>
+                    <span id="labor-grand-total-price">R$ 0,00</span>
+                </div>
+            </div>
+            <div class="material-buttons centered">
+                <button type="button" id="addNewRegionalLaborButton" class="btn btn-primary">+ Adicionar Regional</button>
+                <button type="button" id="addNewOutsourcedLaborButton" class="btn btn-warning">+ Adicionar Terceirizada</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="regionalLaborModal" class="modal">
+    <div class="modal-content">
+        <span class="close" id="closeRegionalLaborModal">&times;</span>
+        <h2>Adicionar Mão de Obra Regional</h2>
+        
+        <div class="modal-form-body">
+            
+            <div class="info-display" style="justify-content: center; border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
+                <div class="info-badge info-blue">
+                    Dias Calculados (Estimativa): <strong id="regionalDaysDisplay">0</strong>
+                </div>
+            </div>
+
+            <div class="compact-inputs-container">
+                <div class="form-group">
+                    <label for="regionalTechs">Quantidade de Técnicos</label>
+                    <input type="number" id="regionalTechs" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="regionalDaysInput">Dias Informados (para Custo)</label>
+                    <input type="number" id="regionalDaysInput" value="0" min="0">
+                </div>
+            </div>
+
+            <fieldset>
+                <legend>Despesas Adicionais</legend>
+
+                <div class="form-group">
+                    <label>Combustível</label>
+                    <div class="compact-inputs-container">
+                        <div class="form-group">
+                            <label for="regionalFuelQty">Quantidade (L ou R$)</label>
+                            <input type="number" id="regionalFuelQty" value="0" min="0" step="any">
+                        </div>
+                        <div class="form-group">
+                            <label for="regionalFuelPrice">Valor Unit. (R$)</label>
+                            <input type="number" id="regionalFuelPrice" value="0" min="0" step="any">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Alimentação</label>
+                    <div class="compact-inputs-container">
+                        <div class="form-group">
+                            <label for="regionalFoodQty">Quantidade (Dias/Refeições)</label>
+                            <input type="number" id="regionalFoodQty" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="regionalFoodPrice">Valor Unit. (R$)</label>
+                            <input type="number" id="regionalFoodPrice" value="0" min="0" step="any">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Hospedagem</label>
+                    <div class="compact-inputs-container">
+                        <div class="form-group">
+                            <label for="regionalLodgingQty">Quantidade (Diárias)</label>
+                            <input type="number" id="regionalLodgingQty" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="regionalLodgingPrice">Valor Unit. (R$)</label>
+                            <input type="number" id="regionalLodgingPrice" value="0" min="0" step="any">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Pedágio</label>
+                    <div class="compact-inputs-container">
+                        <div class="form-group">
+                            <label for="regionalTollQty">Quantidade</label>
+                            <input type="number" id="regionalTollQty" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="regionalTollPrice">Valor Unit. (R$)</label>
+                            <input type="number" id="regionalTollPrice" value="0" min="0" step="any">
+                        </div>
+                    </div>
+                </div>
+
+            </fieldset>
+            <div class="cost-summary-row">
+                <div id="regionalBaseCostDisplay" class="info-badge info-orange">
+                    Custo Base: R$ 0,00
+                </div>
+                <div id="regionalTotalCostDisplay" class="info-badge info-green">
+                    Custo Total: R$ 0,00
+                </div>
+            </div>
+
+        </div>
+        <div class="modal-footer">
+            <button type="button" id="cancelRegionalLabor" class="btn btn-danger">Cancelar</button>
+            <button type="button" id="confirmRegionalLabor" class="btn btn-success">Confirmar</button>
+        </div>
+
+    </div> </div>
+
+    <div id="outsourcedLaborModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" id="closeOutsourcedLaborModal">&times;</span>
+            <h2>Adicionar Mão de Obra Terceirizada</h2>
+            <div class="modal-form-body">
+                <div class="form-group">
+                    <label for="outsourcedCompanyName">Nome da Empresa</label>
+                    <input type="text" id="outsourcedCompanyName" placeholder="Digite o nome da empresa" />
+                </div>
+                <div class="material-section outsourced-services-scroll">
+                    <table id="outsourced-services-table">
+                        <thead>
+                            <tr>
+                                <th>Serviço</th>
+                                <th>Preço Unit.</th>
+                                <th>Quantidade</th>
+                                <th>Subtotal</th>
+                                <th class="outsourced-actions-col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="outsourcedServicesBody">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="outsourced-add-service-row">
+                    <button type="button" id="addOutsourcedServiceBtn" class="btn btn-primary">+ Adicionar Serviço</button>
+                </div>
+                <div class="grand-total-container" style="margin-top: 15px;">
+                    Custo Total Terceirizado: <span id="outsourcedTotalCostDisplay">R$ 0,00</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelOutsourcedLabor" class="btn btn-danger">Cancelar</button>
+                <button type="button" id="confirmOutsourcedLabor" class="btn btn-success">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="outsourcedDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" id="closeOutsourcedDetailsModal">&times;</span>
+            <h2 id="outsourcedDetailsTitle">Detalhes da Mão de Obra Terceirizada</h2>
+            <div class="modal-body-content">
+                <div class="material-section">
+                    <table id="outsourced-details-table">
+                        <thead>
+                            <tr>
+                                <th>Nome do Serviço</th>
+                                <th>Quantidade</th>
+                                <th>Unidade</th>
+                                <th>Valor Unitário</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outsourcedDetailsBody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="markerTypeModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeTypeModal">&times;</span>
+        <h2>Selecione o tipo de marcador</h2>
+        <p class="selection-modal-hint">Escolha o elemento que deseja adicionar ao mapa</p>
+        <div class="marker-grid selection-grid selection-grid--markers">
+          <div class="marker-option selection-card" data-type="CEO" role="button" tabindex="0">
+            <img src="img/CEO.png" width="32" height="32" alt="" />
+            <span class="selection-card__title">CEO</span>
+            <span class="selection-card__hint">Caixa de emenda</span>
+          </div>
+          <div class="marker-option selection-card" data-type="CTO" role="button" tabindex="0">
+            <img src="img/CTO.png" width="32" height="32" alt="" />
+            <span class="selection-card__title">CTO</span>
+            <span class="selection-card__hint">Caixa de atendimento</span>
+          </div>
+          <div class="marker-option selection-card" data-type="CORDOALHA" role="button" tabindex="0">
+            <img src="img/Cordoalha.png" width="32" height="32" alt="" />
+            <span class="selection-card__title">Cordoalha</span>
+            <span class="selection-card__hint">Derivação em T</span>
+          </div>
+          <div class="marker-option selection-card" data-type="RESERVA" role="button" tabindex="0">
+            <img src="img/Reserva.png" width="32" height="32" alt="" />
+            <span class="selection-card__title">Reserva</span>
+            <span class="selection-card__hint">Reserva técnica</span>
+          </div>
+          <div class="marker-option selection-card" data-type="CASA" role="button" tabindex="0">
+            <img src="img/Casa.png" width="32" height="32" alt="" />
+            <span class="selection-card__title">Casas</span>
+            <span class="selection-card__hint">Unidades consumidoras</span>
+          </div>
+          <div class="marker-option selection-card" data-type="POP" role="button" tabindex="0">
+            <span class="marker-letter-icon" aria-hidden="true">P</span>
+            <span class="selection-card__title">POP</span>
+            <span class="selection-card__hint">Ponto de presença</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cableStatusSelectionModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeCableStatusModal">&times;</span>
+        <h2>Selecione o estado do cabo</h2>
+        <p class="selection-modal-hint">Define se o cabo entra na lista de materiais</p>
+        <div class="selection-grid selection-grid--2">
+          <div class="cable-status-option selection-card selection-card--new" data-status="Novo" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">N</span>
+            <span class="selection-card__title">Novo</span>
+            <span class="selection-card__hint">Lançamento novo</span>
+          </div>
+          <div class="cable-status-option selection-card selection-card--existing" data-status="Existente" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">E</span>
+            <span class="selection-card__title">Existente</span>
+            <span class="selection-card__hint">Já instalado no campo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ctoStatusSelectionModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeCtoStatusModal">&times;</span>
+        <h2>Selecione o estado da CTO</h2>
+        <p class="selection-modal-hint">Impacta materiais e opções da caixa</p>
+        <div class="selection-grid selection-grid--3">
+          <div class="cto-status-option selection-card selection-card--new" data-status="Nova" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">N</span>
+            <span class="selection-card__title">Nova</span>
+            <span class="selection-card__hint">Instalação nova</span>
+          </div>
+          <div class="cto-status-option selection-card selection-card--existing" data-status="Existente" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">E</span>
+            <span class="selection-card__title">Existente</span>
+            <span class="selection-card__hint">Já no campo</span>
+          </div>
+          <div class="cto-status-option selection-card selection-card--swap" data-status="Troca" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">T</span>
+            <span class="selection-card__title">Troca</span>
+            <span class="selection-card__hint">Substituição</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ceoStatusSelectionModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeCeoStatusModal">&times;</span>
+        <h2>Selecione o estado da CEO</h2>
+        <p class="selection-modal-hint">Define o impacto na lista de materiais</p>
+        <div class="selection-grid selection-grid--3">
+          <div class="ceo-status-option selection-card selection-card--new" data-status="Nova" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">N</span>
+            <span class="selection-card__title">Nova</span>
+            <span class="selection-card__hint">Instalação nova</span>
+          </div>
+          <div class="ceo-status-option selection-card selection-card--existing" data-status="Existente" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">E</span>
+            <span class="selection-card__title">Existente</span>
+            <span class="selection-card__hint">Já no campo</span>
+          </div>
+          <div class="ceo-status-option selection-card selection-card--swap" data-status="Troca" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">T</span>
+            <span class="selection-card__title">Troca</span>
+            <span class="selection-card__hint">Substituição</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ceoAccessorySelectionModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeCeoAccessoryModal">&times;</span>
+        <h2>Selecione o tipo de instalação</h2>
+        <p class="selection-modal-hint">Forma de fixação da caixa</p>
+        <div class="selection-grid selection-grid--2">
+          <div class="ceo-accessory-option selection-card selection-card--accessory" data-accessory="Raquete" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">R</span>
+            <span class="selection-card__title">Raquete</span>
+            <span class="selection-card__hint">Fixação em raquete</span>
+          </div>
+          <div class="ceo-accessory-option selection-card selection-card--accessory" data-accessory="Suporte" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">S</span>
+            <span class="selection-card__title">Suporte</span>
+            <span class="selection-card__hint">Suporte de CEO</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cordoalhaStatusSelectionModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeCordoalhaStatusModal">&times;</span>
+        <h2>Selecione o estado da cordoalha</h2>
+        <p class="selection-modal-hint">Define o impacto na lista de materiais</p>
+        <div class="selection-grid selection-grid--2">
+          <div class="cordoalha-status-option selection-card selection-card--new" data-status="Nova" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">N</span>
+            <span class="selection-card__title">Nova</span>
+            <span class="selection-card__hint">Instalação nova</span>
+          </div>
+          <div class="cordoalha-status-option selection-card selection-card--existing" data-status="Existente" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">E</span>
+            <span class="selection-card__title">Existente</span>
+            <span class="selection-card__hint">Já no campo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="reservaStatusSelectionModal" class="modal">
+      <div class="modal-content modal-content--selection">
+        <span class="close" id="closeReservaStatusModal">&times;</span>
+        <h2>Selecione o estado da reserva</h2>
+        <p class="selection-modal-hint">Define o impacto na lista de materiais</p>
+        <div class="selection-grid selection-grid--2">
+          <div class="reserva-status-option selection-card selection-card--new" data-status="Nova" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">N</span>
+            <span class="selection-card__title">Nova</span>
+            <span class="selection-card__hint">Instalação nova</span>
+          </div>
+          <div class="reserva-status-option selection-card selection-card--existing" data-status="Existente" role="button" tabindex="0">
+            <span class="selection-card__badge" aria-hidden="true">E</span>
+            <span class="selection-card__title">Existente</span>
+            <span class="selection-card__hint">Já no campo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="datacenterChoiceModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeDatacenterChoiceModal">&times;</span>
+        <h2>Adicionar Equipamento de Data Center</h2>
+        <div class="marker-grid">
+          <div class="datacenter-option" data-item="PLACA">PLACA</div>
+          <div class="datacenter-option" data-item="OLT">OLT</div>
+          <div class="datacenter-option" data-item="POP">POP</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="placaKitModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closePlacaKitModal">&times;</span>
+        <h2>Adicionar Kit PLACA</h2>
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label for="placaCordaoQty">Quantidade de Cordão Óptico</label>
+            <input type="number" id="placaCordaoQty" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="placaOltQty">Quantidade de Placa OLT</label>
+            <input type="number" id="placaOltQty" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="placaSfpQty">Quantidade de Módulo SFP</label>
+            <input type="number" id="placaSfpQty" value="1" min="0" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelPlacaKit" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmPlacaKit" class="btn btn-success">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="oltKitModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeOltKitModal">&times;</span>
+        <h2>Adicionar Kit OLT</h2>
+        <div class="modal-form-body">
+          <p class="kit-section-title">Itens com quantidade variável</p>
+          <div class="form-group">
+            <label for="oltCordaoQty">Cordão Óptico (SC/UPC &gt; SC\APC)</label>
+            <input type="number" id="oltCordaoQty" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="oltPlacaOltQty">Placa OLT Line Anypon (16 Portas)</label>
+            <input type="number" id="oltPlacaOltQty" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="oltSfpQty">Módulo SFP C+</label>
+            <input type="number" id="oltSfpQty" value="1" min="0" />
+          </div>
+          <hr>
+          <p class="kit-section-title">Itens com quantidade fixa (adicionados automaticamente)</p>
+          <ul class="kit-fixed-list">
+            <li><b>1x</b> CHASSI OLT C650 ZTE</li>
+            <li><b>1x</b> LICENÇA OLT</li>
+            <li><b>2x</b> MÓDULO DE ENERGIA DC C650-C600</li>
+            <li><b>1x</b> PLACA CONTROLADORA E SWITCHING</li>
+            <li><b>1x</b> SWITCH MPLS 24 PORTAS</li>
+            <li><b>2x</b> SFP 850NM 10G 0,3KM MULTIMODO</li>
+            <li><b>1x</b> SFP GBIC ELÉTRICO</li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelOltKit" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmOltKit" class="btn btn-success">Confirmar</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="popKitModal" class="modal">
+      <div class="modal-content" style="max-width: 800px;">
+        <span class="close" id="closePopKitModal">&times;</span>
+        <h2>Adicionar Kit POP</h2>
+        <div class="modal-form-body">
+          <p class="kit-section-title">Itens com quantidade variável</p>
+          <div class="form-group">
+            <label for="popPlacaOltQty">Placa OLT Line Anypon 16 Ports Card (HFTH)</label>
+            <input type="number" id="popPlacaOltQty" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="popSfpQty">Módulo SFP C+ Para Placa OLT Line Anypon ZTE</label>
+            <input type="number" id="popSfpQty" value="1" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="popCordaoScApcQty">Cordão Óptico Simplex Monomodo SC/UPC &gt; SC/APC 2M</label>
+            <input type="number" id="popCordaoScApcQty" value="1" min="0" />
+          </div>
+          <hr>
+          <p class="kit-section-title">Itens com quantidade fixa (adicionados automaticamente)</p>
+          <ul id="popFixedItemsList" class="kit-fixed-list two-columns">
+             </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelPopKit" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmPopKit" class="btn btn-success">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="markerModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeModal">&times;</span>
+        <h2 id="markerModalTitle">Adicionar Marcador</h2>
+
+        <div class="marker-modal-top">
+          <div id="markerSummaryPanel" class="marker-summary-panel hidden">
+            <p class="marker-summary-panel__label">Configuração selecionada</p>
+            <div id="ceoInfoDisplay" class="marker-summary-badges hidden">
+              <div id="ceoStatusInfo" class="status-pill"></div>
+              <div id="ceoAccessoryInfo" class="status-pill status-pill--accessory"></div>
+            </div>
+            <div id="ctoInfoDisplay" class="marker-summary-badges hidden">
+              <div id="ctoStatusInfo" class="status-pill"></div>
+            </div>
+            <div id="cordoalhaInfoDisplay" class="marker-summary-badges hidden">
+              <div id="cordoalhaStatusInfo" class="status-pill"></div>
+            </div>
+            <div id="reservaInfoDisplay" class="marker-summary-badges hidden">
+              <div id="reservaStatusInfo" class="status-pill"></div>
+              <div id="reservaAccessoryInfo" class="status-pill status-pill--accessory"></div>
+            </div>
+          </div>
+
+          <div id="markerMetaRow" class="marker-meta-row">
+            <div id="markerInfraStatusGroup" class="marker-meta-field hidden">
+              <label for="markerInfraStatus">Status</label>
+              <select id="markerInfraStatus" title="Impacta a lista de materiais">
+                <option value="Nova">Novo</option>
+                <option value="Existente">Existente</option>
+                <option value="Troca">Troca</option>
+              </select>
+            </div>
+            <div id="ceoAccessoryEditGroup" class="marker-meta-field hidden">
+              <label for="ceoAccessorySelect">Instalação</label>
+              <select id="ceoAccessorySelect" title="Impacta a lista de materiais">
+                <option value="Raquete">Utilizando Raquete</option>
+                <option value="Suporte">Utilizando Suporte de CEO</option>
+              </select>
+            </div>
+            <div id="nameGroup" class="marker-meta-field marker-meta-field--grow">
+              <label for="markerName">Nome</label>
+              <input type="text" id="markerName" placeholder="Nome do marcador" />
+            </div>
+          </div>
+        </div>
+        
+        <div id="casaEditorPanel" class="casa-editor-panel hidden">
+          <div id="houseNumberGroup"><label>Quantidade de casas:</label><input type="number" id="markerNumber" placeholder="Ex: 10" /></div>
+
+          <div class="casa-editor-panel__colors">
+            <div id="casaBalloonColorGroup" class="casa-color-field">
+              <label for="casaMarkerBalloonColor">Cor do balão</label>
+              <input type="color" id="casaMarkerBalloonColor" value="#ffffff" />
+            </div>
+            <div id="casaLabelColorGroup" class="casa-color-field">
+              <label for="casaMarkerLabelColor">Cor do número</label>
+              <input type="color" id="casaMarkerLabelColor" value="#000000" />
+            </div>
+          </div>
+
+          <div id="casaPositionRow" class="casa-editor-panel__coordinates hidden">
+            <label for="markerCoordinatesText">Coordenadas (Lat, Lng)</label>
+            <p id="markerCoordinatesText" class="casa-coordinates-line"></p>
+          </div>
+        </div>
+
+        <div id="markerStyleSection" class="marker-style-section">
+          <div class="compact-inputs-container">
+              <div id="colorGroup"><label>Cor do Ícone:</label><input type="color" id="markerColor" value="#ff0000" /></div>
+              <div id="labelColorGroup" class="hidden"><label>Cor do Nome:</label><input type="color" id="markerLabelColor" value="#000000" /></div>
+              <div id="sizeGroup"><label>Espessura:</label><input type="number" id="markerSize" value="4" min="1" max="20" /></div>
+          </div>
+
+          <div id="markerPositionRow" class="marker-position-row hidden">
+            <div id="infraMarkerCoordinatesGroup">
+              <label>Coordenadas (Lat, Lng)</label>
+              <p id="infraMarkerCoordinatesText" class="marker-coordinates-line"></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="descGroup"><label>Descrição (opcional):</label><textarea id="markerDescription" rows="3" placeholder="Detalhes do marcador..."></textarea></div>
+
+        <div id="ctoOptionsPanel" class="marker-type-options hidden">
+          <p class="marker-type-options__label">Opções da CTO</p>
+          <div id="ctoPredialGroup" class="modal-option-chip">
+            <input type="checkbox" id="ctoPredialCheckbox">
+            <label for="ctoPredialCheckbox">Esta CTO é predial?</label>
+          </div>
+          <div id="ctoStickerGroup" class="modal-option-chip">
+            <input type="checkbox" id="ctoStickerCheckbox">
+            <label for="ctoStickerCheckbox">Incluir adesivos para a caixa</label>
+          </div>
+        </div>
+
+        <div id="ceo144Group" class="hidden modal-checkbox-row">
+          <input type="checkbox" id="ceo144Checkbox">
+          <label for="ceo144Checkbox">É uma Caixa de 144 Fusões (Jumbo)?</label>
+        </div>
+
+        <div id="derivationTGroup" class="hidden"><label>Quantidade de Derivação em T:</label><input type="number" id="markerDerivationT" value="0" placeholder="Ex: 2" /></div>
+
+        
+        
+        <div id="modalButtonContainer" class="modal-footer marker-modal-footer">
+          <div class="marker-modal-footer__actions">
+            <button type="button" id="deleteMarkerButton" class="btn btn-danger hidden">Excluir</button>
+            <button type="button" id="editPositionButton" class="btn btn-warning hidden">Editar posição</button>
+            <button type="button" id="fusionPlanButton" class="btn btn-primary hidden" disabled title="Salve o marcador para definir o plano de fusão">Plano de fusão</button>
+          </div>
+          <button type="button" id="confirmMarker" class="btn btn-success marker-modal-footer__confirm">Confirmar</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="cableDrawingBox" class="floating-box hidden">
+      <div class="cable-draw-body">
+      <div class="cable-draw-form">
+        <div class="cable-draw-field cable-draw-field--full">
+          <label for="cableStatusSelect">Status</label>
+          <select id="cableStatusSelect" title="Impacta a lista de materiais">
+            <option value="Novo">Novo</option>
+            <option value="Existente">Existente</option>
+          </select>
+        </div>
+        <div class="cable-draw-field cable-draw-field--full">
+          <label for="cableName">Nome</label>
+          <input type="text" id="cableName" placeholder="Ex: Cabo 1" />
+        </div>
+        <div class="cable-draw-field">
+          <label for="cableASType">Tipo de vão</label>
+          <select id="cableASType">
+            <option value="AS 80">AS 80</option>
+            <option value="AS 200">AS 200</option>
+          </select>
+        </div>
+        <div class="cable-draw-field">
+          <label for="cableWidth">Espessura</label>
+          <input type="number" id="cableWidth" min="1" max="10" value="4" />
+        </div>
+        <div class="cable-draw-field cable-draw-field--full">
+          <label for="cableType">Tipo de fibra</label>
+          <select id="cableType" title="Define a cor do cabo no mapa">
+            <option value="FO-06">FO-06 (Preto)</option>
+            <option value="FO-12">FO-12 (Verde)</option>
+            <option value="FO-24">FO-24 (Rosa)</option>
+            <option value="FO-36">FO-36 (Azul)</option>
+            <option value="FO-48">FO-48 (Vermelho)</option>
+            <option value="FO-72">FO-72 (Roxo)</option>
+            <option value="FO-144">FO-144 (Amarelo)</option>
+          </select>
+        </div>
+      </div>
+      <div class="cable-draw-metrics">
+        <p id="cableDrawnDistance" class="cable-draw-metric">Lançamento: 0 m</p>
+        <p id="cableReserveDistance" class="cable-draw-metric">Reserva: 0 m</p>
+        <p id="cableTotalDistance" class="cable-draw-metric cable-draw-metric--total">Total: 0 m</p>
+      </div>
+      </div>
+      <div class="cable-box-actions">
+        <button type="button" id="invertCableButton" class="hidden cable-box-actions__tool cable-box-actions__warning">Inverter pontas</button>
+        <button type="button" id="deleteCableButton" class="hidden cable-box-actions__tool cable-box-actions__danger">Excluir</button>
+        <button type="button" id="cancelCableButton" class="cable-box-actions__secondary">Cancelar</button>
+        <button type="button" id="saveCableButton" class="cable-box-actions__primary">Salvar cabo</button>
+      </div>
+    </div>
+
+    <div id="fusionModal" class="modal">
+      <div class="modal-content fusion-modal-content">
+        <span class="close" id="closeFusionModal">&times;</span>
+        <h2 id="fusionModalTitle">Plano de Fusão</h2>
+        <div id="trayKitContainer" class="hidden">
+          <label for="trayKitQuantity">Kits de Bandeja:</label>
+          <input type="number" id="trayKitQuantity" min="0" value="0" title="Quantidade de Kits de Bandeja para esta CEO" />
+        </div>
+        <div id="fusion-actions">
+          <button type="button" id="addCableToFusion">Adicionar Cabo</button>
+          <button type="button" id="addSplitterToFusion">Adicionar Splitter</button>
+        </div>
+        <div id="fusionCanvas" class="fusion-canvas">
+          <svg id="fusion-svg-layer" class="fusion-svg-layer">
+            <defs>
+              <filter id="fusion-line-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000000" flood-opacity="0.18"/>
+              </filter>
+            </defs>
+          </svg>
+          <p class="canvas-placeholder">A área de fusão aparecerá aqui.</p>
+          <div id="fusionDrawingHint" class="fusion-drawing-hint">
+            <span class="hint-icon">&#9678;</span>
+            Clique em outra porta para conectar &middot; clique no canvas para adicionar um vértice &middot; botão direito para cancelar
+          </div>
+          <div id="fusionLineTooltip" class="fusion-line-tooltip"></div>
+        </div>
+        <button id="saveFusionPlan">Salvar Plano</button>
+      </div>
+    </div>
+
+    <div id="splitterOltConfigModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterOltConfigModal">&times;</span>
+        <h2>OLT / Placa / PON</h2>
+        <p id="splitterOltConfigSubtitle" class="splitter-olt-config-subtitle"></p>
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label for="splitterConfigOlt">OLT</label>
+            <input type="text" id="splitterConfigOlt" placeholder="Ex: OLT-01" />
+          </div>
+          <div class="form-group">
+            <label for="splitterConfigPlaca">Placa</label>
+            <input type="number" id="splitterConfigPlaca" min="1" max="16" placeholder="Ex: 1" />
+          </div>
+          <div class="form-group">
+            <label for="splitterConfigPon">PON</label>
+            <input type="number" id="splitterConfigPon" min="1" max="16" placeholder="Ex: 3" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelSplitterOltConfig" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmSplitterOltConfig" class="btn btn-success">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="splitterSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterModal">&times;</span>
+        <h2>Selecionar Splitter</h2>
+        <div class="splitter-category" data-category="fusao">
+          <h3>Splitter de Fusão</h3>
+          <div class="splitter-grid">
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/2">Splitter 1/2</div>
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/4">Splitter 1/4</div>
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/8">Splitter 1/8</div>
+            <div class="splitter-option" data-type="Fusão" data-ratio="1/16">Splitter 1/16</div>
+          </div>
+        </div>
+        <div class="splitter-category hidden" data-category="atendimento">
+          <h3>Splitter de Atendimento</h3>
+          <div class="splitter-grid">
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/2">Splitter 1/2</div>
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/4">Splitter 1/4</div>
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/8">Splitter 1/8</div>
+            <div class="splitter-option" data-type="Atendimento" data-ratio="1/16">Splitter 1/16</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="splitterTypeModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterTypeModal">&times;</span>
+        <h2>Selecione o Tipo de Splitter</h2>
+        <div class="marker-grid">
+          <div class="datacenter-option" data-type="Fusão">Fusão</div>
+          <div class="datacenter-option" data-type="Atendimento">Atendimento</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="splitterConnectorModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterConnectorModal">&times;</span>
+        <h2>Selecione o Tipo de Conector</h2>
+        <div class="marker-grid">
+          <div class="datacenter-option" data-connector="APC">APC</div>
+          <div class="datacenter-option" data-connector="UPC">UPC</div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="splitterStatusSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSplitterStatusModal">&times;</span>
+        <h2>Selecione o estado do Splitter</h2>
+        <div class="marker-grid">
+          <div class="splitter-status-option" data-status="Novo">Novo</div>
+          <div class="splitter-status-option" data-status="Existente">Existente</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cableSelectionModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeCableSelectionModal">&times;</span>
+        <h2>Selecionar Cabo Conectado</h2>
+        <div id="cableSelectionActions" class="cable-selection-actions">
+          <button type="button" id="deriveAllCablesButton" class="btn btn-success hidden">Derivar todos os cabos</button>
+        </div>
+        <div id="connected-cables-list"></div>
+      </div>
+    </div>
+
+    <div id="projectModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeProjectModal">&times;</span>
+        <h2 id="projectModalTitle">Novo Projeto</h2>
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label for="projectName">Nome do Projeto</label>
+            <input type="text" id="projectName" placeholder="Ex: Expansão Centro" />
+          </div>
+          <div class="form-group">
+            <label for="projectCity">Cidade</label>
+            <input type="text" id="projectCity" placeholder="Ex: Divinópolis" />
+          </div>
+          <div class="form-group">
+            <label for="projectNeighborhood">Bairro</label>
+            <input type="text" id="projectNeighborhood" placeholder="Ex: Santa Clara" />
+          </div>
+          <div class="form-group">
+            <label for="projectType">Tipo</label>
+            <select id="projectType">
+              <option value="TCR">TCR</option>
+              <option value="TCT">TCT</option>
+              <option value="MDU">MDU</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelProjectButton" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmProjectButton" class="btn btn-success">Criar Projeto</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="folderModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeFolderModal">&times;</span>
+        <h2 id="folderModalTitle">Nova Pasta</h2>
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label for="folderNameInput">Nome da Pasta</label>
+            <input type="text" id="folderNameInput" placeholder="Digite o nome da pasta" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelFolderButton" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmFolderButton" class="btn btn-success">Criar Pasta</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="folderMarkerStyleModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeFolderMarkerStyleModal">&times;</span>
+        <h2 id="folderMarkerStyleModalTitle">Padronizar marcadores</h2>
+        <p id="folderMarkerStyleHint" class="folder-style-hint"></p>
+        <div class="compact-inputs-container folder-style-inputs">
+          <div>
+            <label for="folderMarkerColor">Cor do ícone</label>
+            <input type="color" id="folderMarkerColor" value="#ff0000" />
+          </div>
+          <div>
+            <label for="folderMarkerLabelColor">Cor do nome</label>
+            <input type="color" id="folderMarkerLabelColor" value="#000000" />
+          </div>
+          <div>
+            <label for="folderMarkerSize">Espessura</label>
+            <input type="number" id="folderMarkerSize" value="4" min="1" max="20" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelFolderMarkerStyle" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmFolderMarkerStyle" class="btn btn-success">Aplicar na pasta</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="reportModal" class="modal">
+      <div class="modal-content" style="max-width: 850px;">
+        <span class="close" id="closeReportModal">&times;</span>
+        <div id="report-project-list">
+          <h2>Selecione um Projeto para Ver o Relatório</h2>
+          <div class="report-list-body">
+            <p class="report-list-hint">Escolha um projeto abaixo para visualizar métricas, custos e prazos estimados.</p>
+            <div class="report-list-search-wrap hidden" id="reportProjectSearchWrap">
+              <input type="search" id="reportProjectSearch" class="report-list-search" placeholder="Filtrar por nome, cidade ou bairro..." autocomplete="off" />
+            </div>
+            <ul id="report-projects-ul" role="listbox" aria-label="Lista de projetos"></ul>
+          </div>
+        </div>
+        <div id="report-project-details" class="hidden">
+          <div class="report-details-header">
+            <button type="button" id="backToProjectList" class="report-back-btn">&larr; Voltar</button>
+            <div class="report-details-header-text">
+              <h2 id="report-title">Relatório do Projeto</h2>
+              <p id="report-subtitle" class="report-subtitle"></p>
+            </div>
+          </div>
+
+          <div class="report-details-body">
+            <div class="report-kpi-row">
+              <div class="report-kpi-card kpi-primary">
+                <span class="report-kpi-label">Custo Total (c/ Coef.)</span>
+                <span class="report-kpi-value" id="report-kpi-final-cost">R$ 0,00</span>
+              </div>
+              <div class="report-kpi-card">
+                <span class="report-kpi-label">Novas Portas</span>
+                <span class="report-kpi-value" id="report-kpi-new-ports">0</span>
+              </div>
+              <div class="report-kpi-card">
+                <span class="report-kpi-label">Lançamento</span>
+                <span class="report-kpi-value" id="report-kpi-cable">0 m</span>
+              </div>
+              <div class="report-kpi-card">
+                <span class="report-kpi-label">Prazo Estimado</span>
+                <span class="report-kpi-value" id="report-kpi-duration">0 dias</span>
+              </div>
+            </div>
+
+            <section class="report-section">
+              <h3 class="report-section-title">Rede e Cobertura</h3>
+              <div class="report-section-grid">
+                <div class="report-detail-item"><strong>Bairro</strong><span id="report-neighborhoods"></span></div>
+                <div class="report-detail-item"><strong>Casas (HP)</strong><span id="report-houses"></span></div>
+                <div class="report-detail-item"><strong>Portas Existentes (HC)</strong><span id="report-existing-ports"></span></div>
+                <div class="report-detail-item"><strong>Novas Portas</strong><span id="report-new-ports"></span></div>
+                <div class="report-detail-item"><strong>Total de Portas</strong><span id="report-total-ports"></span></div>
+                <div class="report-detail-item"><strong>Taxa de Penetração</strong><span id="report-penetration-rate"></span></div>
+                <div class="report-detail-item report-detail-wide"><strong>Lançamento Estimado</strong><span id="report-cable-length"></span></div>
+              </div>
+            </section>
+
+            <section class="report-section">
+              <h3 class="report-section-title">Materiais</h3>
+              <div class="report-section-grid">
+                <div class="report-detail-item is-sub"><strong>Ferragens</strong><span id="report-ferragem-cost"></span></div>
+                <div class="report-detail-item is-sub"><strong>Cabos</strong><span id="report-cabos-cost"></span></div>
+                <div class="report-detail-item is-sub"><strong>Fusão</strong><span id="report-fusao-cost"></span></div>
+                <div class="report-detail-item is-sub"><strong>Data Center</strong><span id="report-datacenter-cost"></span></div>
+                <div class="report-detail-item is-total report-detail-wide"><strong>Total de Materiais</strong><span id="report-material-cost"></span></div>
+              </div>
+            </section>
+
+            <section class="report-section">
+              <h3 class="report-section-title">Mão de Obra</h3>
+              <div class="report-section-grid">
+                <div class="report-detail-item is-sub"><strong>M.O. Regional</strong><span id="report-regional-labor-cost"></span></div>
+                <div class="report-detail-item is-sub"><strong>M.O. Terceirizada</strong><span id="report-outsourced-labor-cost"></span></div>
+                <div class="report-detail-item is-total report-detail-wide"><strong>Total de Mão de Obra</strong><span id="report-labor-cost"></span></div>
+              </div>
+            </section>
+
+            <section class="report-section report-section-summary">
+              <h3 class="report-section-title">Resumo Financeiro</h3>
+              <div class="report-section-grid">
+                <div class="report-detail-item"><strong>Subtotal (Mat. + M.O.)</strong><span id="report-total-cost"></span></div>
+                <div class="report-detail-item"><strong>Coef. de Segurança (5%)</strong><span id="report-safety-coef"></span></div>
+                <div class="report-detail-item"><strong>Custo por Nova Porta</strong><span id="report-cost-per-port"></span></div>
+                <div class="report-detail-item"><strong>Prazo da Obra</strong><span id="report-duration"></span></div>
+                <div class="report-detail-item is-final report-detail-wide"><strong>Custo Total Final</strong><span id="report-final-cost"></span></div>
+              </div>
+            </section>
+          </div>
+
+          <div class="modal-footer report-details-footer">
+            <button type="button" id="exportReportPdfButton" class="btn btn-secondary">
+              Exportar PDF
+            </button>
+            <button type="button" id="openObservationsButton" class="btn btn-primary">
+              Adicionar/Editar Observações
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="reportPreviewModal" class="modal">
+      <div class="modal-content report-preview-modal">
+        <span class="close" id="closeReportPreviewModal">&times;</span>
+        <div class="report-details-header report-preview-header">
+          <div class="report-details-header-text">
+            <h2 id="reportPreviewModalTitle">Pré-visualização do relatório</h2>
+            <p class="report-subtitle report-preview-hint">Revise o documento em folhas A4. Clique em qualquer texto para editar antes de exportar em PDF ou Word.</p>
+          </div>
+        </div>
+        <div class="report-preview-scroll">
+          <div id="reportPreviewPages" class="report-preview-pages" aria-label="Pré-visualização editável do relatório"></div>
+          <div id="reportPreviewMeasure" class="report-preview-measure" aria-hidden="true"></div>
+        </div>
+        <div class="modal-footer report-details-footer report-preview-footer">
+          <button type="button" id="resetReportPreviewButton" class="btn btn-secondary">Restaurar original</button>
+          <button type="button" id="cancelReportPreviewButton" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmReportWordExportButton" class="btn btn-primary">Baixar Word</button>
+          <button type="button" id="confirmReportPdfExportButton" class="btn btn-success">Baixar PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="sidebarFolderContextMenu" class="sidebar-folder-context-menu hidden" role="menu" aria-hidden="true">
+      <button type="button" data-action="edit" role="menuitem">Editar</button>
+      <button type="button" data-action="style" role="menuitem">Padronizar cores e espessura</button>
+      <button type="button" data-action="delete" class="danger" role="menuitem">Excluir</button>
+    </div>
+
+    <div id="alertModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <h2 id="alertModalTitle">Aviso</h2>
+        <div class="modal-body-content">
+          <p id="alertModalMessage"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="alertModalOkButton" class="btn btn-primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirmModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <h2 id="confirmModalTitle">Confirmação</h2>
+        <div class="modal-body-content">
+          <p id="confirmModalMessage"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="confirmModalCancelButton" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmModalConfirmButton" class="btn btn-success">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+
+    <template id="project-template">
+      <div class="folder ge-pro-project">
+        <div class="folder-title ge-pro-row" data-is-project="true">
+          <span class="toggle-icon ge-expand" aria-hidden="true">►</span>
+          <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn" checked data-visible="true" title="Exibir no mapa" />
+          <span class="folder-icon-sidebar ge-folder-icon" aria-hidden="true"></span>
+          <span class="folder-name-text"></span>
+          <div class="folder-buttons ge-pro-actions">
+            <div class="item-actions-dropdown">
+              <button type="button" class="item-actions-toggle-btn" title="Mais opções">&#8942;</button>
+              <div class="item-actions-menu">
+                <a href="#" class="edit-folder-btn">Editar</a>
+                <a href="#" class="folder-style-btn">Padronizar cores e espessura</a>
+                <a href="#" class="delete-project-btn">Excluir</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="subfolders hidden"></ul>
+      </div>
+    </template>
+    
+    <template id="folder-template">
+      <li class="folder-wrapper ge-pro-folder">
+        <div class="folder-title ge-pro-row" data-is-project="false">
+          <span class="toggle-icon ge-expand" aria-hidden="true">►</span>
+          <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn" checked data-visible="true" title="Exibir no mapa" />
+          <span class="folder-icon-sidebar ge-folder-icon" aria-hidden="true"></span>
+          <span class="folder-name-text"></span>
+          <div class="folder-buttons ge-pro-actions">
+            <div class="item-actions-dropdown">
+              <button type="button" class="item-actions-toggle-btn" title="Mais opções">&#8942;</button>
+              <div class="item-actions-menu">
+                <a href="#" class="edit-folder-btn">Editar</a>
+                <a href="#" class="folder-style-btn">Padronizar cores e espessura</a>
+                <a href="#" class="delete-folder-btn">Excluir</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="subfolders hidden"></ul>
+      </li>
+    </template>
+
+    <template id="polygon-template">
+      <li class="sidebar-tree-item ge-pro-row ge-pro-item">
+        <span class="ge-expand-spacer" aria-hidden="true"></span>
+        <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn item-toggle" checked data-visible="true" title="Exibir no mapa" />
+        <span class="ge-item-icon ge-icon-polygon item-icon" aria-hidden="true"></span>
+        <span class="item-name"></span>
+      </li>
+    </template>
+
+    <div id="searchModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeSearchModal">&times;</span>
+        <h2>Pesquisar Localização</h2>
+        <div class="modal-body-content">
+
+          <fieldset>
+            <legend>Pesquisar por Coordenadas</legend>
+            <div class="form-group"><label for="searchCoordinates">Latitude, Longitude</label><input type="text" id="searchCoordinates" placeholder="-20.1394, -44.8872" /></div>
+          </fieldset>
+
+        </div>
+        <div class="modal-footer centered">
+          <button type="button" id="structuredSearchButton" class="btn btn-success">
+            <img src="img/Buscar.png" width="16" height="16" alt="" />
+            Buscar no Mapa
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cableInfoBox" class="cable-info-box hidden"></div>
+
+    <div id="rulerBox" class="floating-box hidden">
+      <h3>Régua de Medição</h3>
+      <p id="rulerDistance">Distância: 0 m</p>
+      <button id="cancelRulerButton">Finalizar</button>
+    </div>
+
+    <div id="polygonDrawingBox" class="floating-box hidden">
+      <h3 id="polygonBoxTitle">Desenhar Polígono</h3>
+      <div>
+        <label for="polygonName">Nome do Polígono:</label>
+        <input type="text" id="polygonName" placeholder="Ex: Área de Cobertura" />
+      </div>
+      <div>
+        <label for="polygonColor">Cor do Preenchimento:</label>
+        <input type="color" id="polygonColor" value="#2dd4bf" />
+      </div>
+      <div id="polygonButtons">
+        <button type="button" id="savePolygonButton">Salvar Polígono</button>
+        <button type="button" id="deletePolygonButton" class="hidden">Excluir</button>
+        <button type="button" id="cancelPolygonButton">Cancelar</button>
+      </div>
+    </div>
+  
+    <div id="loadProjectModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <span class="close" id="closeLoadProjectModal">&times;</span>
+        <h2>Buscar e Carregar Projeto</h2>
+        <div class="modal-form-body">
+          
+          <fieldset>
+            <legend>Filtrar por</legend>
+            <div class="form-group">
+              <label for="searchProjectName">Nome do Projeto</label>
+              <input type="text" id="searchProjectName" placeholder="Digite o nome exato do projeto" />
+            </div>
+            <div class="form-group">
+              <label for="searchProjectCity">Cidade</label>
+              <input type="text" id="searchProjectCity" placeholder="Digite a cidade" />
+            </div>
+            <div class="form-group">
+              <label for="searchProjectNeighborhood">Bairro</label>
+              <input type="text" id="searchProjectNeighborhood" placeholder="Digite o bairro" />
+            </div>
+          </fieldset>
+
+          <div class="search-action-row">
+            <button type="button" id="searchProjectsButton" class="btn btn-primary">
+              <img src="img/Buscar.png" width="16" height="16" alt="" />
+              Buscar Projetos
+            </button>
+          </div>
+          
+          <hr>
+          <h3>Resultados da Busca</h3>
+          <ul id="saved-projects-list">
+            </ul>
+
+        </div>
+      </div>
+    </div>
+
+  <div id="lineActionModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <span class="close" id="closeLineActionModal">&times;</span>
+        <h2>Ação da Linha</h2>
+        <div class="modal-body-content">
+          <p id="lineConnectionInfo"></p>
+          <p>O que você deseja fazer com esta conexão?</p>
+        </div>
+        <div class="material-buttons centered">
+          <button type="button" id="editLineButton" class="btn btn-primary">
+            <img src="img/Editar.png" width="16" height="16" alt="" />
+            Editar Conexão
+          </button>
+          <button type="button" id="deleteLineConfirmButton" class="btn btn-danger">
+            <img src="img/Lixeira.png" width="16" height="16" alt="" />
+            Excluir Conexão
+          </button>
+           <button type="button" id="cancelLineActionButton" class="btn btn-danger">Cancelar</button>
+        </div>
+      </div>
+    </div>    
+
+    <div id="stickersModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <span class="close" id="closeStickersModal">&times;</span>
+        <h2>Contagem de Adesivos do Projeto</h2>
+        <div class="modal-body-content">
+          
+          <div id="sticker-count-container">
+            <p class="empty-state-text">
+              Nenhuma CTO com adesivos selecionados foi encontrada neste projeto.
+            </p>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+           <button type="button" id="closeStickersModalButton" class="btn btn-secondary">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="editMaterialModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeEditMaterialModal">&times;</span>
+        <h2>Editar Item do Material</h2>
+        <div class="modal-form-body">
+          <input type="hidden" id="originalMaterialName" />
+          
+          <div class="form-group">
+            <label for="editMaterialName">Nome do Item</label>
+            <input type="text" id="editMaterialName" />
+          </div>
+          <div class="form-group">
+            <label for="editMaterialQty">Quantidade</label>
+            <input type="number" id="editMaterialQty" min="0" step="any" />
+          </div>
+          <div class="form-group">
+            <label for="editMaterialUnit">Unidade (Ex: un, m, kg)</label>
+            <input type="text" id="editMaterialUnit" />
+          </div>
+          <div class="form-group">
+            <label for="editMaterialPrice">Preço Unitário (R$)</label>
+            <input type="number" id="editMaterialPrice" min="0" step="0.01" />
+          </div>
+        </div>  
+        <div class="modal-footer">
+          <button type="button" id="cancelEditMaterial" class="btn btn-danger">Cancelar</button>
+          <button type="button" id="confirmEditMaterial" class="btn btn-success">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="materialUsageModal" class="modal">
+      <div class="modal-content" style="max-width: 560px;">
+        <span class="close" id="closeMaterialUsageModal">&times;</span>
+        <h2 id="materialUsageModalTitle">Utilização do Material</h2>
+        <div class="modal-body-content">
+          <p class="material-usage-hint">Detalhamento de onde este material é utilizado no projeto.</p>
+          <div id="materialUsageModalBody"></div>
+          <p id="materialUsageModalTotal" class="material-usage-total"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="closeMaterialUsageModalBtn" class="btn btn-secondary">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="observationsModal" class="modal">
+      <div class="modal-content">
+          <span class="close" id="closeObservationsModal">&times;</span>
+          <h2>Observações do Projeto</h2>
+          <div class="modal-body-content">
+              <p>Este texto será salvo junto com o projeto. Você pode usar este espaço para anotações, escopo, detalhes de contato ou qualquer outra informação relevante.</p>
+              <input type="hidden" id="observationProjectId" />
+              <textarea id="observationsTextarea" placeholder="Digite suas observações sobre o projeto..."></textarea>
+          </div>
+          <div class="modal-footer">
+              <button type="button" id="cancelObservationButton" class="btn btn-danger">Cancelar</button>
+              <button type="button" id="saveObservationButton" class="btn btn-success">Salvar Observação</button>
+            </div>
+        </div>
+    </div>
+
+  <input type="file" id="kml-file-input" accept=".kml,.kmz" style="display: none;" />
+    
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script> 
+  <script src="script.js?v=20260604n" defer></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry,drawing&callback=initMap" defer></script>
+  </body>
+</html>
