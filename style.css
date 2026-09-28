@@ -32,10 +32,10 @@
   --color-sky-light: #b8e4fa;
   --color-lavender: #89CFF0;
   --color-lavender-light: #d4effc;
-  --color-lavender-muted: #F5F5DC;
-  /* Areia */
-  --color-sand: #F5F5DC;
-  --color-sand-light: #fafaf0;
+  --color-lavender-muted: #f3f7fa;
+  /* Areia — alinhada ao restante (sem bege) */
+  --color-sand: #f3f7fa;
+  --color-sand-light: #f8fbfd;
   --color-gold: #89CFF0;
   --color-gold-light: #b8e4fa;
   --color-gold-dark: #82C8E5;
@@ -44,42 +44,42 @@
   --color-coral-light: #89CFF0;
   /* Superfícies */
   --color-surface: #ffffff;
-  --color-surface-elevated: #fafaf0;
-  --color-surface-muted: #F5F5DC;
-  --color-surface-hover: #eef8fc;
-  --color-surface-active: #e3f4fa;
-  --color-surface-tint: #f0faf4;
-  --color-border: #c5e0ea;
-  --color-border-light: #b8dce8;
-  --color-text: #3d6575;
-  --color-text-muted: #5a8594;
-  --color-text-dim: #7aa0ad;
+  --color-surface-elevated: #ffffff;
+  --color-surface-muted: #f3f7fa;
+  --color-surface-hover: #eef6fa;
+  --color-surface-active: #e2f1f7;
+  --color-surface-tint: #eef8f3;
+  --color-border: #d2e3eb;
+  --color-border-light: #e4eef3;
+  --color-text: #1f3d4d;
+  --color-text-muted: #5a7380;
+  --color-text-dim: #7d94a0;
   --color-danger: #dc2626;
-  --color-success: #93C572;
-  --color-btn-confirm: #22a04a;
-  --color-btn-confirm-hover: #1a8339;
-  --color-btn-cancel: #e04545;
-  --color-btn-cancel-hover: #c73a3a;
-  --color-warning: #82C8E5;
+  --color-success: #22a04a;
+  --color-btn-confirm: #1f9d4a;
+  --color-btn-confirm-hover: #17803b;
+  --color-btn-cancel: #e04848;
+  --color-btn-cancel-hover: #c53636;
+  --color-warning: #f59e0b;
   --input-bg: #ffffff;
-  --input-border: #c5e0ea;
-  --topbar-height: 56px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --shadow-sm: 0 1px 3px rgba(74, 143, 168, 0.12);
-  --shadow-md: 0 8px 24px rgba(74, 143, 168, 0.16);
-  --transition-fast: 0.15s ease;
-  --line-color: #c5e0ea;
-  --gradient-brand: #4a8fa8;
-  --gradient-brand-strong: #3d7a92;
-  --gradient-gold: #89CFF0;
-  --gradient-surface-tint: #F5F5DC;
-  --gradient-surface-tint-h: #eef8fc;
+  --input-border: #c9dce5;
+  --topbar-height: 60px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 3px rgba(31, 61, 77, 0.08);
+  --shadow-md: 0 12px 32px rgba(31, 61, 77, 0.14);
+  --transition-fast: 0.16s ease;
+  --line-color: #d2e3eb;
+  --gradient-brand: linear-gradient(135deg, #24586c 0%, #3d7a92 48%, #4a8fa8 100%);
+  --gradient-brand-strong: #24586c;
+  --gradient-gold: #7ec8e0;
+  --gradient-surface-tint: #f3f7fa;
+  --gradient-surface-tint-h: #eef6fa;
   /* Painéis internos dos modais — tom único e coeso */
-  --panel-tint: #f1f8fc;
-  --panel-tint-strong: #e7f3fa;
-  --panel-border: #cfe5ef;
+  --panel-tint: #f4f8fb;
+  --panel-tint-strong: #e8f2f7;
+  --panel-border: #d4e4ed;
   --panel-card: #ffffff;
 }
 
@@ -6974,4 +6974,169 @@ li.folder-wrapper {
 }
 @media (max-width: 720px) {
   .import-map-select { min-width: 150px; }
+}
+
+/* =====================================================================
+   SYSTEM DESIGN REFRESH — barra, botões, sidebar, dropdowns e modais
+   ===================================================================== */
+body {
+  background: #eef3f6;
+}
+
+.top-bar {
+  background: var(--gradient-brand);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 24px rgba(20, 48, 62, 0.22);
+}
+
+.top-bar-brand-text strong {
+  letter-spacing: 0.06em;
+}
+
+.top-bar button,
+.top-bar .top-bar-button {
+  background: rgba(255, 255, 255, 0.96);
+  color: #24586c;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 8px 13px;
+  box-shadow: 0 2px 8px rgba(15, 40, 55, 0.12);
+}
+
+.top-bar button:hover,
+.top-bar .top-bar-button:hover {
+  background: #ffffff;
+  color: #1b4a5c;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(15, 40, 55, 0.16);
+}
+
+.top-bar .top-bar-button-danger {
+  background: #d94848;
+  border-color: #d94848;
+  color: #fff;
+}
+
+.top-bar .top-bar-button-danger:hover {
+  background: #c03636;
+  color: #fff;
+}
+
+.sidebar-header {
+  background: #ffffff;
+  padding: 16px 16px 14px;
+}
+
+.sidebar-header h3 {
+  color: #1f5a70;
+  font-size: 15px;
+}
+
+.sidebar {
+  background: #f6f9fb;
+}
+
+.folder-title {
+  background: #edf5f8;
+  border-radius: 8px;
+  color: #1f3d4d;
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+.folder-title:hover {
+  background: #e3eef4;
+}
+
+.folder-title.active {
+  background: #d7ebf3;
+  box-shadow: inset 3px 0 0 #3d8eaa;
+}
+
+.sidebar .sidebar-tree-item,
+.subfolders > li:not(.folder-wrapper) {
+  border-radius: 8px;
+  box-shadow: none;
+  border: 1px solid #e6eef3;
+}
+
+.dropdown-content {
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(31, 61, 77, 0.16);
+  padding: 6px;
+}
+
+.dropdown-content a {
+  border-radius: 8px;
+}
+
+.dropdown-content a:hover {
+  background: #eef6fa;
+}
+
+.btn-primary,
+.modal-content button:not([class*="btn-"]):not([style*="background"]):not(#cancelPolygonButton):not(#cancelRulerButton) {
+  background-color: #2f7a94;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: #24586c;
+  color: #ffffff;
+}
+
+.modal-content .btn,
+.modal-content button,
+.btn,
+button.btn {
+  border-radius: 10px;
+  min-height: 40px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.modal .modal-content {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.modal .modal-content > h2,
+#reportModal #report-project-list > h2,
+.modal-content > h2,
+#report-project-list > h2 {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.modal .modal-content input[type="text"],
+.modal .modal-content input[type="number"],
+.modal .modal-content input[type="search"],
+.modal .modal-content textarea,
+.modal .modal-content select {
+  border-radius: 10px;
+  min-height: 40px;
+  background: #fff;
+}
+
+.sidebar-empty-state button {
+  background: #2f7a94;
+  border-radius: 10px;
+  color: #fff;
+}
+
+.catalog-icon-btn {
+  border-radius: 9px;
+  min-height: 32px;
+}
+
+.material-section h3,
+.catalog-config-section h3 {
+  letter-spacing: 0.02em;
+}
+
+.ge-pro-panel-header,
+.ge-pro-places-panel {
+  background: #ffffff;
 }
