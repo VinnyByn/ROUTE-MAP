@@ -18,7 +18,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=20260928n" />
+    <link rel="stylesheet" href="style.css?v=20260928o" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
@@ -37,6 +37,7 @@
       <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 16 16 3l5 5L8 21 3 16z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2"/></symbol>
       <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4" cy="7" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="17" r="1.2"/></symbol>
       <symbol id="i-package" viewBox="0 0 24 24"><path d="M3 8.5 12 4l9 4.5v9L12 22 3 17.5v-9z"/><path d="M12 22V13M3 8.5l9 4.5 9-4.5"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c.8-3.2 3.4-5 7-5s6.2 1.8 7 5"/></symbol>
       <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c.6-3 3-5 6-5s5.4 2 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.2.4 3.8 1.9 4.3 4.3"/></symbol>
       <symbol id="i-report" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7V3z"/><path d="M14 3v5h5M9 17v-4M12 17v-7M15 17v-2"/></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></symbol>
@@ -64,7 +65,6 @@
           <strong>ROUTE MAP</strong>
           <span>Projetos de rede</span>
         </div>
-        <span id="userEmailDisplay" class="top-bar-user-email" title="Conta conectada"></span>
       </div>
       <nav class="top-bar-nav" aria-label="Ferramentas principais">
       <div class="dropdown">
@@ -122,15 +122,29 @@
         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
         Localização
       </button>
-      <button id="themeToggleButton" class="top-bar-button" type="button" title="Alternar tema claro ou escuro">
-        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
-        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <span id="themeToggleLabel">Escuro</span>
-      </button>
-      <button id="logoutButton" class="top-bar-button top-bar-button-danger" type="button" title="Encerrar sessão">
-        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout"></use></svg>
-        Sair
-      </button>
+      <div class="dropdown dropdown-user">
+        <button id="userMenuButton" class="top-bar-button" type="button" title="Conta e configurações">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"></use></svg>
+          Usuário
+        </button>
+        <div id="userDropdown" class="dropdown-content dropdown-content--user">
+          <div class="user-menu-header">
+            <strong id="userEmailDisplay">Conta conectada</strong>
+            <span>Configurações da conta</span>
+          </div>
+          <a href="#" id="themeToggleButton" title="Alternar tema claro ou escuro">
+            <span class="user-menu-theme-icons">
+              <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
+              <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            </span>
+            <span id="themeToggleLabel">Tema escuro</span>
+          </a>
+          <a href="#" id="logoutButton" class="dropdown-item-danger" title="Encerrar sessão">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout"></use></svg>
+            <span>Sair</span>
+          </a>
+        </div>
+      </div>
       </nav>
     </div>
 
@@ -1784,7 +1798,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script> 
-  <script src="script.js?v=20260928l" defer></script>
+  <script src="script.js?v=20260928o" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry,drawing&callback=initMap" defer></script>
   </body>
 </html>

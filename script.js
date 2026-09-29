@@ -29,7 +29,7 @@ function applyTheme(theme) {
     try { localStorage.setItem(THEME_STORAGE_KEY, nextTheme); } catch (e) { /* ignora */ }
     const label = document.getElementById('themeToggleLabel');
     const button = document.getElementById('themeToggleButton');
-    if (label) label.textContent = nextTheme === 'dark' ? 'Claro' : 'Escuro';
+    if (label) label.textContent = nextTheme === 'dark' ? 'Tema claro' : 'Tema escuro';
     if (button) button.setAttribute('aria-pressed', nextTheme === 'dark' ? 'true' : 'false');
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.setAttribute('content', nextTheme === 'dark' ? '#152028' : '#2f7a94');
@@ -45,7 +45,8 @@ function setupThemeToggle() {
     const button = document.getElementById('themeToggleButton');
     if (!button || button.dataset.themeWired === '1') return;
     button.dataset.themeWired = '1';
-    button.addEventListener('click', () => {
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
         applyTheme(getStoredTheme() === 'dark' ? 'light' : 'dark');
     });
 }
@@ -58,6 +59,10 @@ auth.onAuthStateChanged((user) => {
         if (userEmailDisplay) {
             userEmailDisplay.textContent = user.email;
             userEmailDisplay.title = `Conta: ${user.email}`;
+        }
+        const userMenuButton = document.getElementById('userMenuButton');
+        if (userMenuButton) {
+            userMenuButton.title = `Conta e configurações: ${user.email}`;
         }
     } else {
         if (userEmailDisplay) {
@@ -958,8 +963,11 @@ let dropdownInteractionsReady = false;
 
 function positionDropdownMenu(button, menu) {
     const rect = button.getBoundingClientRect();
+    const menuWidth = menu.offsetWidth || 240;
+    const alignEnd = menu.classList.contains('dropdown-content--user') || !!button.closest('.dropdown-user');
+    const rawLeft = alignEnd ? rect.right - menuWidth : rect.left;
     menu.style.top = `${rect.bottom + 6}px`;
-    menu.style.left = `${Math.max(8, rect.left)}px`;
+    menu.style.left = `${Math.max(8, Math.min(rawLeft, window.innerWidth - menuWidth - 8))}px`;
 }
 
 function setupDropdownInteractions() {
@@ -989,8 +997,8 @@ function setupDropdownInteractions() {
                 }
             });
             if (!isAlreadyOpen) {
-                positionDropdownMenu(button, dropdownContent);
                 dropdownContent.classList.add('show');
+                positionDropdownMenu(button, dropdownContent);
             } else {
                 dropdownContent.classList.remove('show');
             }
@@ -1781,7 +1789,8 @@ function initMap() {
     document.getElementById('cancelRulerButton').addEventListener('click', stopRuler);
     const logoutButton = document.getElementById('logoutButton');
     if (logoutButton) {
-        logoutButton.addEventListener('click', () => {
+        logoutButton.addEventListener('click', (event) => {
+            event.preventDefault();
             auth.signOut().then(() => {
                 window.location.href = 'login.html';
             }).catch((error) => {

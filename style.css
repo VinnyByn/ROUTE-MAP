@@ -228,17 +228,59 @@ body {
   font-weight: 400;
 }
 
-.top-bar-user-email {
-  font-size: 12px;
-  font-weight: 500;
-  opacity: 0.92;
-  padding-left: 12px;
-  margin-left: 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  max-width: 240px;
+.dropdown-user {
+  margin-left: auto;
+}
+
+.dropdown-content--user {
+  min-width: 260px;
+}
+
+.user-menu-header {
+  padding: 10px 12px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.user-menu-header strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.user-menu-header span {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted, #6b8490);
+  opacity: 0.85;
+}
+
+.dropdown-content a .user-menu-theme-icons {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+}
+
+.user-menu-theme-icons .theme-icon {
+  grid-area: 1 / 1;
+  width: 16px;
+  height: 16px;
+}
+
+.dropdown-content a.dropdown-item-danger {
+  color: #c03636;
+}
+
+.dropdown-content a.dropdown-item-danger:hover {
+  background: rgba(217, 72, 72, 0.12);
 }
 
 .top-bar-nav {
@@ -4904,10 +4946,6 @@ button[style*="#ffc107"]:hover {
     margin-right: 4px;
   }
 
-  .top-bar-user-email {
-    max-width: 140px;
-  }
-
   .top-bar-nav {
     padding-right: 8px;
     gap: 5px;
@@ -7632,6 +7670,14 @@ html[data-theme="dark"] .modal {
 
 html[data-theme="dark"] .dropdown-content a:hover {
   background: var(--color-surface-hover);
+}
+
+html[data-theme="dark"] .dropdown-content a.dropdown-item-danger {
+  color: #f3a3a3;
+}
+
+html[data-theme="dark"] .dropdown-content a.dropdown-item-danger:hover {
+  background: rgba(217, 72, 72, 0.18);
 }
 
 html[data-theme="dark"] .top-bar button,
