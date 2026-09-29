@@ -6,15 +6,60 @@
     <meta name="theme-color" content="#4a8fa8" />
     <meta name="description" content="ROUTE MAP — planejamento de redes em mapa, materiais e relatórios" />
     <title>ROUTE MAP — Projetos e Mapas</title>
-    <link rel="icon" type="image/png" href="img/Aba.png">
-    <link rel="stylesheet" href="style.css?v=20260928" />
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('routeMapTheme');
+          if (theme !== 'dark' && theme !== 'light') theme = 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="style.css?v=20260928n" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
   <body>
+    <svg xmlns="http://www.w3.org/2000/svg" class="ui-icon-sprite" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <symbol id="i-project" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M8 13h8M8 16h5"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></symbol>
+      <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M12 11v6M9 14h6"/></symbol>
+      <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5V3z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4"/><path d="M5 19h14"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 20V9M8 13l4-4 4 4"/><path d="M5 5h14"/></symbol>
+      <symbol id="i-cable" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.5 12h7"/></symbol>
+      <symbol id="i-marker" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
+      <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 1 4 5.7L15 15.7 8.3 9 12 5.3a4 4 0 0 1 2.7 1z"/><path d="M8.3 9 4 13.3V18h4.7L13 13.7"/></symbol>
+      <symbol id="i-polygon" viewBox="0 0 24 24"><path d="M12 3l8 5v8l-8 5-8-5V8z"/></symbol>
+      <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 16 16 3l5 5L8 21 3 16z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4" cy="7" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="17" r="1.2"/></symbol>
+      <symbol id="i-package" viewBox="0 0 24 24"><path d="M3 8.5 12 4l9 4.5v9L12 22 3 17.5v-9z"/><path d="M12 22V13M3 8.5l9 4.5 9-4.5"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c.6-3 3-5 6-5s5.4 2 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.2.4 3.8 1.9 4.3 4.3"/></symbol>
+      <symbol id="i-report" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7V3z"/><path d="M14 3v5h5M9 17v-4M12 17v-7M15 17v-2"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M16 8l4 4-4 4M10 12h10"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="8" cy="8" r="1.3"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16v4z"/><path d="M13 7l4 4"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M9.9 9.9A3 3 0 0 0 14 14M6.1 6.3C3.8 7.8 2 12 2 12s4 7 10 7c1.8 0 3.4-.5 4.8-1.3M10.6 5.1C11.1 5 11.5 5 12 5c6 0 10 7 10 7a18 18 0 0 1-3.2 3.8"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 5v5h-5"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="i-ceo" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M8 10h8M8 14h5"/><circle cx="16.5" cy="14" r="1.2"/></symbol>
+      <symbol id="i-cto" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="11" rx="2"/><path d="M8 18v-3M12 20v-5M16 18v-3"/></symbol>
+      <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 8.2v7.6M8.2 6h5.3A4.5 4.5 0 0 1 18 10.5"/></symbol>
+      <symbol id="i-reserve" viewBox="0 0 24 24"><path d="M7 8a5 5 0 1 1 7.5 4.3L12 15l-2.5-2.7A5 5 0 0 1 7 8z"/><path d="M8 18h8"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-6h4v6"/></symbol>
+      <symbol id="i-pop" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></symbol>
+    </svg>
 <div class="top-bar">
       <div class="top-bar-brand">
-        <img src="img/Aba.png" width="28" height="28" alt="ROUTE MAP" />
+        <img class="brand-logo" src="img/logo.svg" width="28" height="28" alt="ROUTE MAP" />
         <div class="top-bar-brand-text">
           <strong>ROUTE MAP</strong>
           <span>Projetos de rede</span>
@@ -24,62 +69,66 @@
       <nav class="top-bar-nav" aria-label="Ferramentas principais">
       <div class="dropdown">
       <button id="projectButton" class="top-bar-button" type="button">
-        <img src="img/gestor-de-projeto.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-project"></use></svg>
         Projeto
       </button>
        <div id="projectDropdown" class="dropdown-content">
-        <a href="#" id="createProjectButton"><img src="img/gestor-de-projeto.png" width="16" height="16" alt="Novo Projeto"/> Novo Projeto</a>
-        <a href="#" id="loadProjectButton"><img src="img/Nova-Pasta.png" width="16" height="16" alt="Carregar Projeto"/> Carregar Projeto</a>
-        <a href="#" id="saveProjectButton"><img src="img/Salvar.png" width="16" height="16" alt="Salvar Projeto"/> Salvar Projeto</a>
-        
-        <a href="#" id="exportKmlButton"><img src="img/Salvar.png" width="16" height="16" alt="Exportar KML"/> Exportar para KML</a>
-        <a href="#" id="importKmlButton"><img src="img/Nova-Pasta.png" width="16" height="16" alt="Importar KML"/> Importar KML/KMZ</a>
+        <a href="#" id="createProjectButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus"></use></svg><span>Novo Projeto</span></a>
+        <a href="#" id="loadProjectButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder"></use></svg><span>Carregar Projeto</span></a>
+        <a href="#" id="saveProjectButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-save"></use></svg><span>Salvar Projeto</span></a>
+        <a href="#" id="exportKmlButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg><span>Exportar para KML</span></a>
+        <a href="#" id="importKmlButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"></use></svg><span>Importar KML/KMZ</span></a>
       </div>
     </div>
       <button id="createFolderButton" class="top-bar-button" type="button">
-        <img src="img/Nova-Pasta.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus"></use></svg>
         Nova pasta
       </button>
       <button id="drawCableButton" class="top-bar-button" type="button">
-        <img src="img/Cabos.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg>
         Desenhar Cabo
       </button>
       <button id="addMarkerButton" class="top-bar-button" type="button">
-        <img src="img/Marcador.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg>
         Adicionar Marcador
       </button>
       <div class="dropdown">
         <button id="toolsButton" class="top-bar-button" type="button">
-          <img src="img/Ferramentas.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tools"></use></svg>
           Ferramentas
       </button>
         <div id="toolsDropdown" class="dropdown-content">
-          <a href="#" id="drawPolygonButton"><img src="img/Poligono.png" width="16" height="16" alt="Polígono"/> Desenhar Polígono</a>
-          <a href="#" id="rulerButton"><img src="img/Rota.png" width="16" height="16" alt="Régua"/> Régua de Medição</a>
+          <a href="#" id="drawPolygonButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Desenhar Polígono</span></a>
+          <a href="#" id="rulerButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ruler"></use></svg><span>Régua de Medição</span></a>
         </div>
       </div>
       <button id="materialListButton" class="top-bar-button" type="button">
-        <img src="img/Lista-Material.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg>
         Lista de Materiais
       </button>
       <button id="materialCatalogButton" class="top-bar-button" type="button">
-        <img src="img/Lista-Material.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-package"></use></svg>
         Materiais
       </button>
       <button id="laborButton" class="top-bar-button" type="button">
-        <img src="img/Mão-de-Obra.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg>
         Mão de Obra
       </button>
       <button id="projectReportButton" class="top-bar-button" type="button">
-        <img src="img/Relatorio.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-report"></use></svg>
         Relatório do Projeto
       </button>
       <button id="openSearchModalButton" class="top-bar-button" type="button">
-        <img src="img/Editar.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
         Localização
       </button>
+      <button id="themeToggleButton" class="top-bar-button" type="button" title="Alternar tema claro ou escuro">
+        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
+        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <span id="themeToggleLabel">Escuro</span>
+      </button>
       <button id="logoutButton" class="top-bar-button top-bar-button-danger" type="button" title="Encerrar sessão">
-        <img src="img/Sair.png" width="16" height="16" alt="" class="top-bar-btn-icon" />
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout"></use></svg>
         Sair
       </button>
       </nav>
@@ -219,23 +268,23 @@
         </div>
         <div class="material-buttons material-toolbar">
           <button type="button" id="saveMaterialChangesButton" class="material-toolbar-btn material-toolbar-btn-primary">
-            <img src="img/Salvar.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-save"></use></svg>
             Salvar Alterações
           </button>
           <button type="button" id="recalculateBomButton" class="material-toolbar-btn material-toolbar-btn-warning">
-            <img src="img/Rota.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg>
             Recalcular do Mapa
           </button>
           <button type="button" id="addMaterialButton" class="material-toolbar-btn material-toolbar-btn-success">
-            <img src="img/Mais.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg>
             Adicionar Material
           </button>
           <button type="button" id="exportMaterialButton" class="material-toolbar-btn material-toolbar-btn-secondary">
-            <img src="img/Lista.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg>
             Exportar
           </button>
           <button type="button" id="openStickersModalButton" class="material-toolbar-btn material-toolbar-btn-accent">
-            <img src="img/Adesivo.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tag"></use></svg>
             Adesivos
           </button>
         </div>
@@ -285,29 +334,29 @@
 
           <div class="catalog-tabs" role="tablist">
             <button type="button" class="catalog-tab active" data-catalog-tab="materials" role="tab">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-package"></use></svg>
               <span>Materiais</span>
             </button>
             <button type="button" class="catalog-tab" data-catalog-tab="kits" role="tab">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg>
               <span>Kits</span>
             </button>
             <button type="button" class="catalog-tab" data-catalog-tab="config" role="tab">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg>
               <span>Configurações</span>
             </button>
           </div>
 
           <div class="catalog-toolbar" id="catalogToolbar">
             <div class="catalog-search-wrap">
-              <svg class="catalog-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <svg class="ui-icon catalog-search-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
               <input type="search" id="catalogSearchInput" class="catalog-search" placeholder="Pesquisar por nome, categoria ou fornecedor..." />
             </div>
             <select id="catalogCategoryFilter" class="catalog-category-filter">
               <option value="">Todas as categorias</option>
             </select>
             <button type="button" id="catalogImportButton" class="btn btn-secondary catalog-import-btn" title="Importar preços de uma planilha (.xlsx)">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"></use></svg>
               Importar planilha
             </button>
             <input type="file" id="catalogImportFile" accept=".xlsx,.xls,.csv" style="display:none;" />
@@ -697,32 +746,32 @@
         <p class="selection-modal-hint">Escolha o elemento que deseja adicionar ao mapa</p>
         <div class="marker-grid selection-grid selection-grid--markers">
           <div class="marker-option selection-card" data-type="CEO" role="button" tabindex="0">
-            <img src="img/CEO.png" width="32" height="32" alt="" />
+            <svg class="ui-icon ui-icon--lg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ceo"></use></svg>
             <span class="selection-card__title">CEO</span>
             <span class="selection-card__hint">Caixa de emenda</span>
           </div>
           <div class="marker-option selection-card" data-type="CTO" role="button" tabindex="0">
-            <img src="img/CTO.png" width="32" height="32" alt="" />
+            <svg class="ui-icon ui-icon--lg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cto"></use></svg>
             <span class="selection-card__title">CTO</span>
             <span class="selection-card__hint">Caixa de atendimento</span>
           </div>
           <div class="marker-option selection-card" data-type="CORDOALHA" role="button" tabindex="0">
-            <img src="img/Cordoalha.png" width="32" height="32" alt="" />
+            <svg class="ui-icon ui-icon--lg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg>
             <span class="selection-card__title">Cordoalha</span>
             <span class="selection-card__hint">Derivação em T</span>
           </div>
           <div class="marker-option selection-card" data-type="RESERVA" role="button" tabindex="0">
-            <img src="img/Reserva.png" width="32" height="32" alt="" />
+            <svg class="ui-icon ui-icon--lg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-reserve"></use></svg>
             <span class="selection-card__title">Reserva</span>
             <span class="selection-card__hint">Reserva técnica</span>
           </div>
           <div class="marker-option selection-card" data-type="CASA" role="button" tabindex="0">
-            <img src="img/Casa.png" width="32" height="32" alt="" />
+            <svg class="ui-icon ui-icon--lg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-home"></use></svg>
             <span class="selection-card__title">Casas</span>
             <span class="selection-card__hint">Unidades consumidoras</span>
           </div>
           <div class="marker-option selection-card" data-type="POP" role="button" tabindex="0">
-            <span class="marker-letter-icon" aria-hidden="true">P</span>
+            <svg class="ui-icon ui-icon--lg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pop"></use></svg>
             <span class="selection-card__title">POP</span>
             <span class="selection-card__hint">Ponto de presença</span>
           </div>
@@ -1554,7 +1603,7 @@
         </div>
         <div class="modal-footer centered">
           <button type="button" id="structuredSearchButton" class="btn btn-success">
-            <img src="img/Buscar.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
             Buscar no Mapa
           </button>
         </div>
@@ -1610,7 +1659,7 @@
 
           <div class="search-action-row">
             <button type="button" id="searchProjectsButton" class="btn btn-primary">
-              <img src="img/Buscar.png" width="16" height="16" alt="" />
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
               Buscar Projetos
             </button>
           </div>
@@ -1634,11 +1683,11 @@
         </div>
         <div class="material-buttons centered">
           <button type="button" id="editLineButton" class="btn btn-primary">
-            <img src="img/Editar.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-edit"></use></svg>
             Editar Conexão
           </button>
           <button type="button" id="deleteLineConfirmButton" class="btn btn-danger">
-            <img src="img/Lixeira.png" width="16" height="16" alt="" />
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>
             Excluir Conexão
           </button>
            <button type="button" id="cancelLineActionButton" class="btn btn-danger">Cancelar</button>
@@ -1735,7 +1784,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script> 
-  <script src="script.js?v=20260604n" defer></script>
+  <script src="script.js?v=20260928l" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry,drawing&callback=initMap" defer></script>
   </body>
 </html>

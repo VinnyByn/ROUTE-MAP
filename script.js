@@ -1,4 +1,4 @@
-﻿//Lógica de autenticação
+//Lógica de autenticação
 //Objeto de configuração do Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyDj2QaP7aTsJTqD1J-ZgJwEjJgGhRZhArk",
@@ -12,6 +12,43 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+const THEME_STORAGE_KEY = 'routeMapTheme';
+
+function getStoredTheme() {
+    try {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === 'dark' || stored === 'light') return stored;
+    } catch (e) { /* ignora */ }
+    return 'light';
+}
+
+function applyTheme(theme) {
+    const nextTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    try { localStorage.setItem(THEME_STORAGE_KEY, nextTheme); } catch (e) { /* ignora */ }
+    const label = document.getElementById('themeToggleLabel');
+    const button = document.getElementById('themeToggleButton');
+    if (label) label.textContent = nextTheme === 'dark' ? 'Claro' : 'Escuro';
+    if (button) button.setAttribute('aria-pressed', nextTheme === 'dark' ? 'true' : 'false');
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', nextTheme === 'dark' ? '#152028' : '#2f7a94');
+}
+
+function uiIcon(name, extraClass) {
+    const cls = extraClass ? `ui-icon ${extraClass}` : 'ui-icon';
+    return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+}
+
+function setupThemeToggle() {
+    applyTheme(getStoredTheme());
+    const button = document.getElementById('themeToggleButton');
+    if (!button || button.dataset.themeWired === '1') return;
+    button.dataset.themeWired = '1';
+    button.addEventListener('click', () => {
+        applyTheme(getStoredTheme() === 'dark' ? 'light' : 'dark');
+    });
+}
 //Verifica o estado de autenticação do usuário
 auth.onAuthStateChanged((user) => {
     const userEmailDisplay = document.getElementById('userEmailDisplay');
@@ -313,7 +350,7 @@ function updateSidebarEmptyState() {
             empty.id = 'sidebar-empty-state';
             empty.className = 'sidebar-empty-state';
             empty.innerHTML = `
-                <div class="empty-icon" aria-hidden="true">📁</div>
+                <div class="empty-icon" aria-hidden="true">${uiIcon('folder', 'ui-icon--lg')}</div>
                 <h4>Nenhum projeto aberto</h4>
                 <p>Crie um novo projeto ou carregue um existente para começar a desenhar no mapa.</p>
                 <button type="button" id="sidebar-empty-create-btn">+ Novo projeto</button>
@@ -1028,6 +1065,7 @@ function disableMapRightDoubleClickZoomOut(mapInstance, mapElement) {
 
 function initMap() {
     setupDropdownInteractions();
+    setupThemeToggle();
     initMaterialCatalog();
     setupMaterialCatalogUI();
 
@@ -7221,8 +7259,7 @@ function handleVisibilityToggle(element, explicitVisible) {
         element.checked = newVisibility;
         element.title = newVisibility ? 'Ocultar no mapa' : 'Exibir no mapa';
     } else {
-        const iconSrc = newVisibility ? 'img/Mostrar.png' : 'img/Ocultar.png';
-        element.innerHTML = `<img src="${iconSrc}" width="16" height="16" alt="Visibilidade">`;
+        element.innerHTML = uiIcon(newVisibility ? 'eye' : 'eye-off');
         element.title = newVisibility ? 'Ocultar itens no mapa' : 'Exibir itens no mapa';
     }
     folderIdsToToggle.forEach((id) => {
@@ -7781,8 +7818,8 @@ function buildCatalogMaterialRowHtml(m) {
             <td>${m.supplier ? escapeHtml(m.supplier) : '<span class="catalog-supplier-empty">—</span>'}</td>
             <td>
                 <div class="catalog-row-actions">
-                    <button type="button" class="catalog-icon-btn" data-edit-material="${m.id}">Editar</button>
-                    <button type="button" class="catalog-icon-btn danger" data-delete-material="${m.id}">Excluir</button>
+                    <button type="button" class="catalog-icon-btn" data-edit-material="${m.id}">${uiIcon('edit')} Editar</button>
+                    <button type="button" class="catalog-icon-btn danger" data-delete-material="${m.id}">${uiIcon('trash')} Excluir</button>
                 </div>
             </td>
         </tr>`;
@@ -7838,8 +7875,8 @@ function renderCatalogKits() {
             <span class="kit-card-meta"><span class="catalog-cat-pill">${escapeHtml(k.category || 'Outros')}</span> ${k.components.length} item(ns)</span>
             <ul>${k.components.map(c => `<li><span>${escapeHtml(c.name)}</span><span class="kit-li-qty">${c.quantity}</span></li>`).join('') || '<li style="color:#9aa7af">Sem itens</li>'}</ul>
             <div class="catalog-row-actions">
-                <button type="button" class="catalog-icon-btn" data-edit-kit="${k.id}">Editar</button>
-                <button type="button" class="catalog-icon-btn danger" data-delete-kit="${k.id}">Excluir</button>
+                <button type="button" class="catalog-icon-btn" data-edit-kit="${k.id}">${uiIcon('edit')} Editar</button>
+                <button type="button" class="catalog-icon-btn danger" data-delete-kit="${k.id}">${uiIcon('trash')} Excluir</button>
             </div>
         </div>`).join('');
     if (empty) empty.style.display = kits.length ? 'none' : 'flex';
@@ -8779,8 +8816,8 @@ function createMaterialRow(bomKey, material) {
       <td class="material-unit">${unit}</td>
       <td>
         <div class="material-actions">
-          <button type="button" class="edit-qty-btn" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Editar quantidade" aria-label="Editar">✏</button>
-          <button type="button" class="remove-item-btn" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Remover item" aria-label="Remover">✕</button>
+          <button type="button" class="edit-qty-btn" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Editar quantidade" aria-label="Editar">${uiIcon('edit')}</button>
+          <button type="button" class="remove-item-btn" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Remover item" aria-label="Remover">${uiIcon('x')}</button>
         </div>
       </td>
       <td class="material-price">${formattedUnitPrice}</td>
@@ -8833,8 +8870,8 @@ function renderCabosTable(tbody, projectId) {
       <td class="material-unit">m</td>
       <td>
         <div class="material-actions">
-          <button type="button" class="edit-qty-btn" data-bom-key="${safeBomKey}" title="Editar item" aria-label="Editar">✏</button>
-          <button type="button" class="remove-item-btn" data-bom-key="${safeBomKey}" title="Remover item" aria-label="Remover">✕</button>
+          <button type="button" class="edit-qty-btn" data-bom-key="${safeBomKey}" title="Editar item" aria-label="Editar">${uiIcon('edit')}</button>
+          <button type="button" class="remove-item-btn" data-bom-key="${safeBomKey}" title="Remover item" aria-label="Remover">${uiIcon('x')}</button>
         </div>
       </td>
       <td class="material-price">R$ ${unitPrice.toFixed(2).replace('.', ',')}</td>
@@ -13290,6 +13327,7 @@ function invertCableDirection() {
 
 //Listener de inicialização
 document.addEventListener('DOMContentLoaded', () => {
+   setupThemeToggle();
    setupDropdownInteractions();
    loadSavedSidebarWidth();
    document.getElementById("invertCableButton")?.addEventListener("click", invertCableDirection);

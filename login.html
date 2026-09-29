@@ -4,14 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login - ROUTE MAP</title>
-    <link rel="icon" type="image/png" href="img/Aba.png">
-    <link rel="stylesheet" href="login-style.css?v=20260928" />
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('routeMapTheme');
+          if (theme !== 'dark' && theme !== 'light') theme = 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="login-style.css?v=20260928h" />
 </head>
 <body>
+    <button id="loginThemeToggle" class="login-theme-toggle" type="button" title="Alternar tema claro ou escuro">
+      <span id="loginThemeLabel">Tema escuro</span>
+    </button>
     <div class="login-container">
         <div class="login-card">
             <div class="login-logo">
-                <img src="img/Aba.png" width="56" height="56" alt="ROUTE MAP" />
+                <img class="brand-logo" src="img/logo.svg" width="56" height="56" alt="ROUTE MAP" />
             </div>
             <div class="card-header">
                 <h2>ROUTE MAP</h2>
@@ -106,6 +120,23 @@
                     loginSubmitBtn.textContent = 'Entrar';
                 });
         });
+
+        (function setupLoginTheme() {
+            const button = document.getElementById('loginThemeToggle');
+            const label = document.getElementById('loginThemeLabel');
+            function apply(theme) {
+                const nextTheme = theme === 'dark' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', nextTheme);
+                try { localStorage.setItem('routeMapTheme', nextTheme); } catch (e) {}
+                if (label) label.textContent = nextTheme === 'dark' ? 'Tema claro' : 'Tema escuro';
+            }
+            apply(document.documentElement.getAttribute('data-theme'));
+            if (button) {
+                button.addEventListener('click', function () {
+                    apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+                });
+            }
+        })();
     </script>
 </body>
 </html>
