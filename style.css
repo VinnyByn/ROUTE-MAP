@@ -2080,6 +2080,21 @@ body.sidebar-resizing * {
   box-shadow: 0 1px 4px rgba(61, 122, 146, 0.1);
 }
 
+html[data-theme="dark"] .grand-total-container {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(61, 122, 146, 0.16) 100%);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .grand-total-container,
+html[data-theme="dark"] .grand-total-label {
+  color: var(--color-text);
+}
+
+html[data-theme="dark"] .grand-total-container span:last-child,
+html[data-theme="dark"] #grand-total-price {
+  color: #4ade80;
+}
+
 .grand-total-label {
   font-size: 15px;
   font-weight: 700;
@@ -4235,13 +4250,13 @@ li.folder-wrapper {
     align-items: center;
     gap: 10px;
     padding: 15px 25px;
-    border-bottom: 1px solid #eee;
-    background-color: #f8f9fa;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-surface);
 }
 
 #trayKitContainer label {
     font-weight: 600;
-    color: #333;
+    color: var(--color-text);
     margin-bottom: 0;
 }
 
