@@ -2097,3 +2097,12 @@ html[data-theme="dark"] .cat3-card__icon--labor { background: #2b2008; color: #f
 #fusionModal .fx-card__kind { display: none; }
 
 #fusionModal .fx-card.fx-splitter { width: 226px; }
+
+/* Logo da marca */
+.top-bar-brand .brand-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}

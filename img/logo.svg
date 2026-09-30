@@ -1,22 +1,45 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ROUTE MAP">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ROUTE MAP — projetos de rede de fibra óptica">
   <defs>
-    <linearGradient id="rm-bg" x1="8" y1="2" x2="58" y2="62" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1d4a5c"/>
-      <stop offset="1" stop-color="#3d7f96"/>
+    <linearGradient id="rm-bg" x1="6" y1="2" x2="58" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#173f4e"/>
+      <stop offset="1" stop-color="#2f7a94"/>
     </linearGradient>
-    <linearGradient id="rm-route" x1="12" y1="48" x2="44" y2="16" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7ad4ef"/>
-      <stop offset="1" stop-color="#ffffff"/>
+    <linearGradient id="rm-fiber" x1="10" y1="54" x2="50" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5ee0f5"/>
+      <stop offset="1" stop-color="#b8f2ff"/>
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="16" fill="url(#rm-bg)"/>
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="rgba(255,255,255,0.42)" stroke-width="2"/>
-  <g stroke="rgba(255,255,255,0.18)" stroke-width="1.2" fill="none">
-    <path d="M8 20h48M8 32h48M8 44h24"/>
-    <path d="M20 8v48M34 8v40M48 8v28"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="1.6"/>
+  <!-- ruas do mapa -->
+  <g stroke="rgba(255,255,255,0.13)" stroke-width="1.1" fill="none">
+    <path d="M6 22h52M6 46h52"/>
+    <path d="M22 6v52M46 44v14"/>
   </g>
-  <path d="M11 50c6-10 10-8 16-17s10-11 16-16" fill="none" stroke="#7ad4ef" stroke-width="5.5" stroke-linecap="round" opacity="0.38"/>
-  <path d="M11 50c6-10 10-8 16-17s10-11 16-16" fill="none" stroke="url(#rm-route)" stroke-width="3" stroke-linecap="round"/>
-  <path d="M43 7.5c-4.8 0-8.7 3.8-8.7 8.5 0 6.3 8.7 13 8.7 13s8.7-6.7 8.7-13c0-4.7-3.9-8.5-8.7-8.5z" fill="#fff"/>
-  <circle cx="43" cy="16.1" r="2.7" fill="#1d4a5c"/>
+  <!-- fibra: tronco do POP até a caixa e três saídas (1:3) -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#5ee0f5" stroke-width="7" opacity="0.28">
+      <path d="M12 52c8 0 10-10 18-15"/>
+      <path d="M30 37c6-2 11-4 13-9"/>
+      <path d="M30 37c8 3 15 3 22 1"/>
+      <path d="M30 37c3 8 9 13 18 15"/>
+    </g>
+    <g stroke="url(#rm-fiber)" stroke-width="3.2">
+      <path d="M12 52c8 0 10-10 18-15"/>
+      <path d="M30 37c6-2 11-4 13-9"/>
+      <path d="M30 37c8 3 15 3 22 1"/>
+      <path d="M30 37c3 8 9 13 18 15"/>
+    </g>
+  </g>
+  <!-- POP (origem) -->
+  <rect x="7.5" y="47.5" width="9" height="9" rx="2.2" fill="#fff"/>
+  <path d="M12 49.4l3 2.6h-1v3.1h-4V52h-1z" fill="#2f7a94"/>
+  <!-- caixa de emenda / splitter -->
+  <circle cx="30" cy="37" r="4.6" fill="#fff"/>
+  <circle cx="30" cy="37" r="2" fill="#2f7a94"/>
+  <!-- clientes -->
+  <path d="M43 6.5c-5 0-9 3.9-9 8.8 0 6.5 9 13.7 9 13.7s9-7.200 9-13.700c0-4.900-4-8.800-9-8.800z" fill="#fff"/>
+  <circle cx="43" cy="15.2" r="3" fill="#2f7a94"/>
+  <circle cx="53" cy="38" r="3.6" fill="#6ee7a1" stroke="#fff" stroke-width="1.6"/>
+  <circle cx="49" cy="52.4" r="3.6" fill="#6ee7a1" stroke="#fff" stroke-width="1.6"/>
 </svg>
