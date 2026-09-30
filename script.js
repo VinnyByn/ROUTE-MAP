@@ -552,7 +552,7 @@ function loadAndDisplayProject(projectId, projectData) {
     refreshClientDrops({ recompute: true });
     //Recria a lista de material
     if (projectData.bom) {
-        projectBoms[projectId] = projectData.bom;
+        projectBoms[projectId] = normalizeBomState(projectData.bom); //Converte nomes antigos de materiais
     }
     //Carrega as observações salvas
     if (projectData.observations) {
@@ -1765,6 +1765,7 @@ function removeCableFromSavedFusionPlans(cableName, markerNames) {
 //Remoção do material da BOM
 function removeMaterialFromBom(materialName, quantity) {
     if (!activeFolderId) return;
+    materialName = resolveMaterialName(materialName);
     //Identifica o projeto raiz do elemento que está ativo
     const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
     if (!projectRootElement) return;
@@ -4040,6 +4041,7 @@ document.querySelectorAll(".datacenter-option").forEach(option => {
 //Adicionar material a BOM
 function addMaterialToBom(materialName, quantity) {
     if (!activeFolderId) return;
+    materialName = resolveMaterialName(materialName);
     //Identifica o projeto e inicializa a BOM se necessário
     const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
     if (!projectRootElement) return;
@@ -4071,6 +4073,7 @@ function addMaterialToBom(materialName, quantity) {
 //Remover material da BOM
 function removeMaterialFromBom(materialName, quantity) {
     if (!activeFolderId) return;
+    materialName = resolveMaterialName(materialName);
     const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
     if (!projectRootElement) return;
     const projectId = projectRootElement.querySelector('.folder-title').dataset.folderId;
@@ -4583,8 +4586,65 @@ function handleVisibilityToggle(element, explicitVisible) {
     });
 }
 
-//Banco de dados de preços e materiais
-const MATERIAL_PRICES = {
+//Nomes antigos do sistema → nomes da planilha de preços da empresa.
+//O código continua usando os nomes antigos internamente (tipos de cabo, splitters…);
+//tudo que vira material (preço, lista de materiais, catálogo, relatórios) passa pelo nome novo.
+const MATERIAL_RENAMES = {
+    "SUPORTE ANCORAGEM PARA CABOS OPTICOS (SUPAS)": "SUPORTE ANCORAGEM PARA CABOS OPTICOS (SUPA)",
+    "RESERVA OPTILOOP": "RESERVA OPTILOOP (RAQUETE)",
+    "DERIVAÇÃO EM T": "ALÇA PREFORMADA DERIVAÇÃO EM T",
+    "FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M": "FITA DE AÇO INOX 3/4\" (FITA FUSIMEC) ROLO DE 25M",
+    "PLAQUETA DE IDENTIFICAÇÃO": "PLAQUETA DE IDENTIFICAÇÃO DE CABOS",
+    "ALÇA PREFORMADA OPDE 1007 - 12,8MM A 14,2MM": "ALÇA PREFORMADA OPDE 1007 - 12,8mm a 14,2mm",
+    "ARAME DE ESPIMAR (105 m)": "ARAME DE ESPINAR (BOBINA DE 105M)",
+    "PRENSA DE ESPINAR": "PRENÇA PARA ESPINAR",
+    "CABO DROP FLAT LOW FRICTION 1F": "DROP FLAT 1FO",
+    "Cabo AS 80 FO-06": "CFOA SM ASU 80 S 06 FIBRAS NR",
+    "Cabo AS 80 FO-12": "CFOA SM ASU 80 S 12 FIBRAS NR",
+    "Cabo AS 80 FO-24": "CFOA SM AS 80 S 24 FIBRAS NR KP",
+    "Cabo AS 80 FO-36": "CFOA SM AS 80 S 36 FIBRAS NR KP",
+    "Cabo AS 80 FO-48": "CFOA SM AS 80 S 48 FIBRAS NR KP",
+    "Cabo AS 80 FO-72": "CFOA SM AS 80 S 72 FIBRAS NR KP",
+    "Cabo AS 80 FO-144": "CFOA SM AS 80 S 144 FIBRAS NR KP",
+    "Cabo AS 200 FO-12": "CFOA SM AS 200 S 12 FIBRAS NR KP",
+    "Cabo AS 200 FO-24": "CFOA SM AS 200 S 24 FIBRAS NR KP",
+    "Cabo AS 200 FO-36": "CFOA SM AS 200 S 36 FIBRAS NR KP",
+    "CAIXA DE ATENDIMENTO": "CTO FIBERSUL",
+    "CAIXA DE EMENDA OPTICA (CEO) 144 FUSÕES": "CAIXAS DE EMENDA OPTICA DE 144 FIBRAS",
+    "CAIXA DE EMENDA ÓPTICA (CEO)": "CAIXAS DE FUSÃO - 24F (EXPANSIVA)",
+    "Splitter 1/2": "SPLITTER FUSÃO 1/2",
+    "Splitter 1/4": "SPLITTER FUSÃO 1/4",
+    "Splitter 1/8": "SPLITTER FUSÃO 1/8",
+    "Splitter 1/8 APC": "SPLITTER CONECTORIZADO 1/8 SC/APC",
+    "Splitter 1/8 UPC": "SPLITTER CONECTORIZADO 1/8 SC/UPC",
+    "Splitter 1/16 APC": "SPLITTER CONECTORIZADO 1/16 SC/APC",
+    "Splitter 1/16 UPC": "SPLITTER CONECTORIZADO 1/16 SC/UPC",
+    "KIT DE BANDEJA PARA CAIXA DE EMENDA": "KIT DE BANDEJA PARA CAIXA TIPO FOSC - 24F",
+    "KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA": "KIT DERIVAÇÃO PARA CAIXA DE EMENDA ÓPTICA",
+    "PTO - PONTO DE TERMINAÇÃO ÓPTICA": "PONTO DE TERMINAÇÃO ÓPTICA (PTO)",
+    "CAIXA DE ATENDIMENTO PREDIAL": "CAIXA DE TERMINAÇÃO ÓPTICA PREDIAL",
+    "CONECTOR DE CAMPO SC/APC": "CONECTOR PRÉ-POLIDO",
+    "RODIZIO RP50 PL50X67 - KIT 4 PEÇAS": "KIT RODIZIO DE 4 PEÇAS COM 4 RODAS PARA RACK IPMETAL 60X60CM RP50 PL50X67",
+    "KIT PORCA GAIOLA + PARAFUSO": "PORCA GAIOLA + PARAFUSO",
+    "ROLO VELCRO DE 3 METROS PARA ORGANIZAR CABOS": "ROLO VELCRO 3M PARA ORGANIZAR CABOS",
+    "DGO 144 SC/APC COM PIGTAILS COR PRETA": "DIO DE 144 POSIÇÕES SC/APC COM PIGTAILS COR PRETA",
+    "CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m": "CORDÕES SC-PC/ SC-APC",
+    "CORDÃO ÓPTICO DUPLEX MULTIMODO LC/UPC > LC/UPC OM3 2M": "CORDÃO ÓPTICO DUPLEX MULTIMODO LC/UPC - LC/UPC 2m",
+    "CORDÃO ÓPTICO DUPLEX MONOMODO LC/UPC > SC/APC 2M": "CORDÃO ÓPTICO DUPLEX MONOMODO LC/UPC - SC/APC 2m",
+    "PATCHCORD CAT6 AZUL 1,5M": "PATCHCORD MAXITELECOM CAT6 1,5m",
+    "SFP 1270NM TX/1330NM RX 20KM, 10G, BIDI": "SFP+ (1270nm TX/1330nm RX 20Km, 10G, BIDI)",
+    "SFP 1330NM TX/1270NM RX 20KM, 10G, BIDI": "SFP+ (1330nm TX/1270nm RX 20Km, 10G, BIDI)",
+    "SFP 850NM 10G 0,3KM MULTIMODO DUPLEX": "SFP (MULTIMODO, 10G, DUPLEX)",
+    "FONTE INVERSORA 48VCC/110VCA 600W": "INVERSOR 48VCC/110VCA 600W - XPS",
+    "AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO 220V": "AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUs FRIO"
+};
+
+function resolveMaterialName(name) {
+    return MATERIAL_RENAMES[name] || name;
+}
+
+//Banco de dados de preços e materiais (chaves com os nomes da planilha; aceita também os antigos)
+const MATERIAL_PRICES_BASE = {
     //Define itens que, ao serem adicionados, inserem automaticamente subcomponentes na BOM
     "CTO": {
         price: 0,
@@ -4724,6 +4784,19 @@ const MATERIAL_PRICES = {
     "Mão de Obra Regional": { price: 320.00, unit: 'un', category: 'Mão de Obra' }, // Custo por técnico/dia (8h * R$40/h)
     "Mão de Obra Terceirizada": { price: 0, unit: 'un', category: 'Mão de Obra' }
 };
+Object.keys(MATERIAL_RENAMES).forEach(oldName => {
+    if (!(oldName in MATERIAL_PRICES_BASE)) return;
+    const newName = MATERIAL_RENAMES[oldName];
+    if (!(newName in MATERIAL_PRICES_BASE)) MATERIAL_PRICES_BASE[newName] = MATERIAL_PRICES_BASE[oldName];
+    delete MATERIAL_PRICES_BASE[oldName];
+});
+const materialPriceKey = (key) => (typeof key === 'string' ? resolveMaterialName(key) : key);
+const MATERIAL_PRICES = new Proxy(MATERIAL_PRICES_BASE, {
+    get: (target, key) => target[materialPriceKey(key)],
+    set: (target, key, value) => { target[materialPriceKey(key)] = value; return true; },
+    has: (target, key) => materialPriceKey(key) in target,
+    deleteProperty: (target, key) => delete target[materialPriceKey(key)],
+});
 
 /* =====================================================================
    CADASTRO DE MATERIAIS E KITS
@@ -4947,7 +5020,7 @@ function buildSeedCatalog() {
                 id: generateCatalogId('kit'),
                 name,
                 category: info.category || 'Outros',
-                components: info.components.map(c => ({ name: c.name, quantity: Number(c.quantity) || 1 }))
+                components: info.components.map(c => ({ name: resolveMaterialName(c.name), quantity: Number(c.quantity) || 1 }))
             });
         } else {
             materials.push({
@@ -4971,7 +5044,7 @@ function buildSeedCatalog() {
             id: generateCatalogId('kit'),
             name: kitName,
             category: defaults[kitName].category || 'Outros',
-            components: defaults[kitName].components.map(c => ({ name: c.name, quantity: Number(c.quantity) || 1 }))
+            components: defaults[kitName].components.map(c => ({ name: resolveMaterialName(c.name), quantity: Number(c.quantity) || 1 }))
         });
     });
     return { materials, kits };
@@ -4987,20 +5060,20 @@ function loadMaterialCatalog(stored) {
     //Normaliza itens salvos
     const materials = stored.materials.map(m => ({
         id: m.id || generateCatalogId('mat'),
-        name: String(m.name || '').trim(),
+        name: resolveMaterialName(String(m.name || '').trim()),
         category: m.category || 'Outros',
         unit: m.unit || 'un',
         price: Number(m.price) || 0,
         supplier: m.supplier || '',
         code: m.code || '',
         notes: m.notes || ''
-    })).filter(m => m.name);
+    })).filter((m, i, all) => m.name && all.findIndex(o => o.name === m.name) === i); //Nome antigo e novo viram um só
     const kits = Array.isArray(stored.kits) ? stored.kits.map(k => ({
         id: k.id || generateCatalogId('kit'),
         name: String(k.name || '').trim(),
         category: k.category || 'Outros',
         components: Array.isArray(k.components) ? k.components.map(c => ({
-            name: String(c.name || '').trim(),
+            name: resolveMaterialName(String(c.name || '').trim()),
             quantity: Number(c.quantity) || 1
         })).filter(c => c.name) : []
     })).filter(k => k.name) : [];
@@ -5724,7 +5797,7 @@ const SHEET_MATERIAL_ALIASES = {
 //Encontra o melhor material correspondente para um nome da planilha
 function findCatalogMatch(sheetName, code = '') {
     //Equivalência conhecida entre a planilha e o sistema
-    const aliasName = SHEET_MATERIAL_ALIASES[normalizeMaterialName(sheetName)];
+    const aliasName = SHEET_MATERIAL_ALIASES[normalizeMaterialName(sheetName)] ? resolveMaterialName(SHEET_MATERIAL_ALIASES[normalizeMaterialName(sheetName)]) : null;
     if (aliasName) {
         const aliasTarget = normalizeMaterialName(aliasName);
         const byAlias = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === aliasTarget);
@@ -6266,7 +6339,7 @@ const BOM_GROUP_ORDER = {
 };
 
 function makeBomKey(materialName, group) {
-    return materialName;
+    return resolveMaterialName(materialName);
 }
 
 function resolveBomKey(key) {
@@ -6299,11 +6372,12 @@ function getBomGroup(bomKey, material) {
 }
 
 function inferBomGroup(materialName, category) {
-    if (category === 'Lançamento' || materialName.startsWith('Cabo ') || materialName.includes('CABO ÓPTICO')) {
+    if (category === 'Lançamento' || materialName.startsWith('Cabo ') || materialName.startsWith('CFOA ') || materialName.includes('CABO ÓPTICO')) {
         return materialName;
     }
-    if (materialName.includes('(CEO)') || materialName.includes('CEO') && category === 'Fusão') return 'CEO';
-    if (materialName === 'CAIXA DE ATENDIMENTO' || materialName === 'CAIXA DE ATENDIMENTO PREDIAL') return 'CTO';
+    const ceoNames = [resolveMaterialName('CAIXA DE EMENDA ÓPTICA (CEO)'), resolveMaterialName('CAIXA DE EMENDA OPTICA (CEO) 144 FUSÕES')];
+    if (ceoNames.includes(materialName) || materialName.includes('(CEO)') || materialName.includes('CEO') && category === 'Fusão') return 'CEO';
+    if (materialName === resolveMaterialName('CAIXA DE ATENDIMENTO') || materialName === resolveMaterialName('CAIXA DE ATENDIMENTO PREDIAL')) return 'CTO';
     if (category === 'Data Center') return 'Data Center';
     if (category === 'Fusão') return 'Fusão Geral';
     return 'Outros';
@@ -6472,7 +6546,7 @@ function normalizeBomState(state) {
     const normalized = {};
     for (const key in state || {}) {
         const item = { ...state[key] };
-        const materialName = item.materialName || parseBomKey(key).materialName;
+        const materialName = resolveMaterialName(item.materialName || parseBomKey(key).materialName);
         const consolidatedKey = makeBomKey(materialName);
         item.materialName = materialName;
         if (!item.bomGroup) item.bomGroup = getBomGroup(key, item);
@@ -6631,7 +6705,7 @@ function handleCableSurchargeChange(input) {
     if (projectId) {
         if (!projectBoms[projectId]) projectBoms[projectId] = {};
         if (!projectBoms[projectId][bomKey]) {
-            projectBoms[projectId][bomKey] = { category: 'Lançamento', materialName: cableType };
+            projectBoms[projectId][bomKey] = { category: 'Lançamento', materialName: resolveMaterialName(cableType) };
         }
         projectBoms[projectId][bomKey].surchargePercent = surcharge;
         delete projectBoms[projectId][bomKey].manualQuantity;
@@ -7065,6 +7139,7 @@ function calculateBomState() {
     let raqueteInstallCount = 0;
     const addOrUpdateMaterial = (name, quantity, type = 'unit', group = 'Outros', detail = null) => {
         if (!name || quantity <= 0) return;
+        name = resolveMaterialName(name);
         const priceInfo = MATERIAL_PRICES[name] || { price: 0, category: 'Outros' };
         const bomKey = makeBomKey(name, group);
         if (!bomState[bomKey]) {
@@ -7222,14 +7297,14 @@ function calculateBomState() {
     Object.keys(cableGroups).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((cableType) => {
         const cables = cableGroups[cableType];
         const baseSum = getCableTypeBaseLength(cables);
-        const surcharge = Math.max(0, parseFloat(preservedCableSurcharges[cableType]) || 0);
+        const surcharge = Math.max(0, parseFloat(preservedCableSurcharges[resolveMaterialName(cableType)] ?? preservedCableSurcharges[cableType]) || 0);
         const billableLength = getCableTypeBillableLength(cables, surcharge);
         const priceInfo = MATERIAL_PRICES[cableType] || { price: 0, category: 'Lançamento' };
         const bomKey = makeBomKey(cableType);
         const savedCableItem = currentProjectBom[cableType] || currentProjectBom[bomKey];
         const manualQuantity = !!savedCableItem?.manualQuantity;
         bomState[bomKey] = {
-            materialName: cableType,
+            materialName: resolveMaterialName(cableType),
             bomGroup: 'Lançamento',
             quantity: manualQuantity
                 ? roundLengthUpToTen(savedCableItem.quantity)
@@ -7250,7 +7325,7 @@ function calculateBomState() {
     const tapeName = "FITA ISOLANTE";
     const hasFusionConsumables = Object.entries(bomState).some(([key, item]) => {
         const name = getMaterialDisplayName(key, item);
-        return name === "TUBETE PROTETOR DE EMENDA OPTICA" || name === "KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA";
+        return name === resolveMaterialName("TUBETE PROTETOR DE EMENDA OPTICA") || name === resolveMaterialName("KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA");
     });
     if (hasFusionConsumables && !bomState[tapeName]) {
         addOrUpdateMaterial(tapeName, 1, 'unit', 'Fusão Geral');
@@ -8115,6 +8190,7 @@ function calculateProjectCost(projectMarkers, projectCables) {
     let raqueteInstallCount = 0;
     const addOrUpdate = (name, qty, type = 'unit') => {
         if (!name || qty <= 0) return;
+        name = resolveMaterialName(name);
         const priceInfo = MATERIAL_PRICES[name] || { price: 0, category: 'Outros' };
         if (!tempBomState[name]) {
         tempBomState[name] = { quantity: 0, type: type, unitPrice: priceInfo.price, category: priceInfo.category };
