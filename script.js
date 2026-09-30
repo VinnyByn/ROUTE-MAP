@@ -4274,7 +4274,10 @@ function addCustomMarker(location, importedData = null) {
     //Um erro no visual ou na lista de materiais não pode deixar o marcador sem eventos nem travar o posicionamento
     try {
         updateMarkerAppearance(markerInfo);
-        if (markerInfo.type === "CLIENTE") refreshBomAfterProjectChange();
+        if (markerInfo.type === "CLIENTE") {
+            refreshBomAfterProjectChange();
+            if (!importedData) fillClientAddressFromMap(markerInfo);
+        }
     } catch (error) {
         console.error(`Erro ao atualizar o marcador "${markerInfo.name}":`, error);
     }

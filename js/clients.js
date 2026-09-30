@@ -42,6 +42,19 @@ const CLIENT_KINDS = {
 };
 let clientDropsSuspended = false; //true enquanto um projeto é carregado (cabos ainda não existem)
 
+//IP e bloco ficam separados; dados antigos guardavam "200.160.10.8/29" num campo só
+function splitIpBlock(ip, block) {
+    const text = String(ip || '').trim();
+    const match = text.match(/^(.*?)\/(\d{1,3})$/);
+    if (match && !block) return { ip: match[1], block: `/${match[2]}` };
+    return { ip: text, block: block || '' };
+}
+
+function normalizeIpBlock(value) {
+    const text = String(value || '').trim();
+    return /^\d{1,3}$/.test(text) ? `/${text}` : text;
+}
+
 function getClientStatus(statusId) {
     return CLIENT_STATUSES.find(s => s.id === statusId) || CLIENT_STATUSES.find(s => s.id === DEFAULT_CLIENT_STATUS);
 }
@@ -549,6 +562,55 @@ function refreshClientDrops(options = {}) {
 }
 
 // ---------------------------------------------------------------
+// Endereço automático (Nominatim/OpenStreetMap, gratuito; Google Geocoder como reserva)
+// ---------------------------------------------------------------
+
+function formatNominatimAddress(data) {
+    const a = data?.address || {};
+    const street = a.road || a.pedestrian || a.footway || a.residential || '';
+    const number = a.house_number || '';
+    const district = a.suburb || a.neighbourhood || a.quarter || a.city_district || '';
+    const city = a.city || a.town || a.village || a.municipality || '';
+    const parts = [[street, number].filter(Boolean).join(', '), district, city].filter(Boolean);
+    return parts.join(' - ') || data?.display_name || '';
+}
+
+async function reverseGeocode(position) {
+    const lat = position.lat();
+    const lng = position.lng();
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=pt-BR`;
+        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (response.ok) {
+            const text = formatNominatimAddress(await response.json());
+            if (text) return text;
+        }
+    } catch (e) {
+        //Tenta o Google
+    }
+    try {
+        const { results } = await new google.maps.Geocoder().geocode({ location: { lat, lng } });
+        return results?.[0]?.formatted_address || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+//Preenche o endereço do cliente pelo ponto no mapa (não sobrescreve o que foi digitado)
+async function fillClientAddressFromMap(clientInfo, { force = false } = {}) {
+    if (!clientInfo?.marker || !clientInfo.client) return;
+    if (clientInfo.client.address && !force && !clientInfo.client.addressAuto) return;
+    const position = clientInfo.marker.getPosition();
+    const address = await reverseGeocode(position);
+    if (!address || !markers.includes(clientInfo)) return;
+    if (!clientInfo.marker.getPosition().equals(position)) return; //Foi movido de novo: a próxima busca atualiza
+    clientInfo.client.address = address;
+    clientInfo.client.addressAuto = true;
+    applyClientAppearance(clientInfo);
+    if (editingClient === clientInfo) document.getElementById('clientAddress').value = address;
+}
+
+// ---------------------------------------------------------------
 // Aparência e materiais
 // ---------------------------------------------------------------
 
@@ -915,7 +977,8 @@ function openClientModal(clientInfo, presetKind) {
         clientB2BBandwidth: b2b.bandwidth || '',
         clientB2BSla: b2b.sla || '',
         clientB2BVlan: b2b.vlan || '',
-        clientB2BIp: b2b.ip || '',
+        clientB2BIp: splitIpBlock(b2b.ip, b2b.block).ip,
+        clientB2BBlock: splitIpBlock(b2b.ip, b2b.block).block,
         clientB2BGateway: b2b.gateway || '',
         clientB2BIpv6: b2b.ipv6 || '',
         clientB2BContactName: b2b.contactName || '',
@@ -961,6 +1024,7 @@ function collectClientForm() {
             phone: value('clientPhone'),
             plan: value('clientPlan'),
             address: value('clientAddress'),
+            addressAuto: !!editingClient?.client?.addressAuto && value('clientAddress') === editingClient.client.address,
             ctoUid: ctoUid && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid : null,
             ctoPort: ctoUid && ctoUid !== 'auto' && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? Number(value('clientPort')) || null : null,
             cableName: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid.slice(CLIENT_CABLE_PREFIX.length) : null,
@@ -979,6 +1043,7 @@ function collectClientForm() {
                 sla: value('clientB2BSla'),
                 vlan: value('clientB2BVlan'),
                 ip: value('clientB2BIp'),
+                block: normalizeIpBlock(value('clientB2BBlock')),
                 gateway: value('clientB2BGateway'),
                 ipv6: value('clientB2BIpv6'),
                 contactName: value('clientB2BContactName'),
@@ -1013,8 +1078,11 @@ function saveClient(event) {
     if (client.ctoUid && client.ctoUid !== 'auto' && !client.ctoPort) {
         return showClientFormError('Essa CTO não tem porta livre. Escolha outra CTO ou "Sem CTO".');
     }
-    if (client.b2b?.ip && !/^[0-9a-f.:]+(\/\d{1,3})?$/i.test(client.b2b.ip)) {
-        return showClientFormError('IP / bloco inválido. Use o formato 200.160.10.8/29.');
+    if (client.b2b?.ip && !/^[0-9a-f.:]+$/i.test(client.b2b.ip)) {
+        return showClientFormError('IP inválido. Use o formato 200.160.10.8.');
+    }
+    if (client.b2b?.block && !/^(\/\d{1,3}|\d{1,3}(\.\d{1,3}){3})$/.test(client.b2b.block)) {
+        return showClientFormError('Bloco inválido. Use /29 ou a máscara 255.255.255.248.');
     }
     if (editingClient) {
         const previous = editingClient.client || {};
@@ -1075,6 +1143,7 @@ function moveClient() {
         google.maps.event.removeListener(dragListener);
         clientInfo.marker.setDraggable(false);
         clientInfo.position = clientInfo.marker.getPosition();
+        fillClientAddressFromMap(clientInfo); //Atualiza só se o endereço foi preenchido automaticamente
         refreshClientDrops();
         refreshBomAfterProjectChange();
         openClientModal(clientInfo);
