@@ -645,12 +645,13 @@ function setupMarkerPanel() {
     document.querySelectorAll('#markerTypeModal .marker-option').forEach(option => {
         const type = option.getAttribute('data-type');
         const icon = option.querySelector('.marker-type-glyph');
-        if (icon) icon.style.backgroundImage = `url("${getMarkerIconDataUrl(type, getMarkerTypeMeta(type).color, { text: type === 'CASA' ? '12' : '' })}")`;
+        const kind = option.getAttribute('data-kind');
+        if (icon) icon.style.backgroundImage = `url("${getMarkerIconDataUrl(type, getMarkerTypeMeta(type).color, { text: type === 'CASA' ? '12' : '', variant: kind === 'residencial' ? '' : kind })}")`;
         option.addEventListener('click', () => {
             document.getElementById('markerTypeModal').style.display = 'none';
             if (type === 'CLIENTE') {
                 resetMarkerModal();
-                openClientModal(null);
+                openClientModal(null, kind || 'residencial');
                 return;
             }
             openMarkerCreatePanel(type);

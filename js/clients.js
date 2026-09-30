@@ -1,4 +1,4 @@
-// Marcador Cliente: residencial ou empresarial (B2B), status, vínculo CTO + porta, drop pela rua,
+// Marcador Cliente: residencial, empresarial (B2B) ou predial (prédio/condomínio, sem drop), status, vínculo CTO + porta, drop pela rua,
 // serviço/IP (B2B) e equipamentos. Clientes vivem no array global `markers` (type 'CLIENTE'), então
 // salvar, pastas, visibilidade e KML funcionam como nos demais marcadores. Depende de script.js.
 
@@ -19,6 +19,7 @@ const DROP_CTO_ATTACH_M = 30;          //CTO que não é ponta de cabo: liga no 
 const DROP_ROUTE_LABELS = {
     rede: 'pela rede (postes)',
     rua: 'pelas ruas',
+    osrm: 'pelas ruas (OpenStreetMap)',
     manual: 'desenhado à mão',
     reta: 'em linha reta (sem rede próxima)',
 };
@@ -26,6 +27,18 @@ const DROP_ROUTE_LABELS = {
 let editingClient = null; //Cliente aberto na janela (null = criação)
 let dropEditSession = null; //Edição do traçado do drop no mapa
 let streetRoutingAvailable = null; //Routes API do Google: null = ainda não testada
+let osrmRoutingAvailable = null;   //OSRM público (gratuito, sem chave): null = ainda não testado
+//Servidores OSRM públicos e gratuitos (dados do OpenStreetMap). O perfil a pé segue calçadas e ruas.
+const OSRM_ROUTE_SERVERS = [
+    'https://routing.openstreetmap.de/routed-foot/route/v1/foot',
+    'https://router.project-osrm.org/route/v1/foot',
+];
+const osrmRouteCache = new Map();
+const CLIENT_KINDS = {
+    residencial: { label: 'Cliente', short: '' },
+    b2b: { label: 'Cliente B2B', short: 'B2B' },
+    predial: { label: 'Predial', short: 'Predial' },
+};
 let clientDropsSuspended = false; //true enquanto um projeto é carregado (cabos ainda não existem)
 
 function getClientStatus(statusId) {
@@ -34,6 +47,11 @@ function getClientStatus(statusId) {
 
 function isB2BClient(clientInfo) {
     return clientInfo?.client?.kind === 'b2b';
+}
+
+//Predial: os clientes estão no próprio prédio, então não há drop até o marcador
+function isPredialClient(clientInfo) {
+    return clientInfo?.client?.kind === 'predial';
 }
 
 function findMarkerByUid(uid) {
@@ -259,8 +277,58 @@ function getDropKey(cto, clientInfo) {
     return `${cto.uid}|${latLngKey(cto.marker.getPosition())}|${latLngKey(clientInfo.marker.getPosition())}`;
 }
 
-//Rota pelas ruas com a Routes API do Google (só é usada se estiver liberada na chave)
+//Aplica uma rota pelas ruas se o cliente ainda estiver onde estava quando a rota foi pedida
+function applyStreetDropRoute(clientInfo, cto, key, path, route) {
+    if (!path?.length || clientInfo.client.dropKey !== key || clientInfo.client.dropRoute !== 'reta') return false;
+    //Termina exatamente no marcador do cliente (segue o marcador mesmo fora da rua)
+    const full = [cto.marker.getPosition(), ...path, clientInfo.marker.getPosition()];
+    clientInfo.client.dropPath = full.map(p => ({ lat: p.lat(), lng: p.lng() }));
+    clientInfo.client.dropRoute = route;
+    drawClientDropLine(clientInfo);
+    refreshBomAfterProjectChange();
+    if (editingClient === clientInfo) updateClientDropSummary();
+    return true;
+}
+
+//Rota pelas ruas com o OSRM público (API gratuita do OpenStreetMap, sem chave)
+async function fetchOsrmRoute(from, to) {
+    const coords = `${from.lng().toFixed(6)},${from.lat().toFixed(6)};${to.lng().toFixed(6)},${to.lat().toFixed(6)}`;
+    if (osrmRouteCache.has(coords)) return osrmRouteCache.get(coords);
+    for (const server of OSRM_ROUTE_SERVERS) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 8000);
+            const response = await fetch(`${server}/${coords}?overview=full&geometries=geojson`, { signal: controller.signal });
+            clearTimeout(timer);
+            if (!response.ok) continue;
+            const data = await response.json();
+            const line = data?.code === 'Ok' ? data.routes?.[0]?.geometry?.coordinates : null;
+            if (!line?.length) continue;
+            const path = line.map(([lng, lat]) => new google.maps.LatLng(lat, lng));
+            osrmRouteCache.set(coords, path);
+            return path;
+        } catch (e) {
+            //Tenta o próximo servidor
+        }
+    }
+    return null;
+}
+
+async function requestOsrmDropRoute(clientInfo, cto, key) {
+    if (osrmRoutingAvailable === false) return false;
+    const path = await fetchOsrmRoute(cto.marker.getPosition(), clientInfo.marker.getPosition());
+    if (!path) {
+        if (osrmRoutingAvailable === null) osrmRoutingAvailable = false;
+        return false;
+    }
+    osrmRoutingAvailable = true;
+    return applyStreetDropRoute(clientInfo, cto, key, path, 'osrm');
+}
+
+//Rota pelas ruas: OSRM gratuito primeiro; Routes API do Google só se o OSRM falhar e estiver liberada na chave
 async function requestStreetDropRoute(clientInfo, cto, key) {
+    if (await requestOsrmDropRoute(clientInfo, cto, key)) return;
+    if (clientInfo.client.dropKey !== key || clientInfo.client.dropRoute !== 'reta') return;
     if (streetRoutingAvailable === false || !google.maps.importLibrary) return;
     try {
         const { Route } = await google.maps.importLibrary('routes');
@@ -271,14 +339,7 @@ async function requestStreetDropRoute(clientInfo, cto, key) {
             fields: ['path'],
         });
         streetRoutingAvailable = true;
-        const path = routes?.[0]?.path;
-        if (!path?.length || clientInfo.client.dropKey !== key || clientInfo.client.dropRoute !== 'reta') return;
-        const full = [cto.marker.getPosition(), ...path.map(toLatLng), clientInfo.marker.getPosition()];
-        clientInfo.client.dropPath = full.map(p => ({ lat: p.lat(), lng: p.lng() }));
-        clientInfo.client.dropRoute = 'rua';
-        drawClientDropLine(clientInfo);
-        refreshBomAfterProjectChange();
-        if (editingClient === clientInfo) updateClientDropSummary();
+        applyStreetDropRoute(clientInfo, cto, key, routes?.[0]?.path?.map(toLatLng), 'rua');
     } catch (e) {
         streetRoutingAvailable = false; //Routes API não habilitada: fica na linha reta
     }
@@ -303,7 +364,7 @@ function ensureClientDropPath(clientInfo, cto, { force = false, getNetwork }) {
     if (routed) {
         data.dropPath = routed.map(p => ({ lat: p.lat(), lng: p.lng() }));
         data.dropRoute = 'rede';
-    } else if (data.dropRoute === 'rua' && hasPath && data.dropKey === key) {
+    } else if ((data.dropRoute === 'rua' || data.dropRoute === 'osrm') && hasPath && data.dropKey === key) {
         return;
     } else {
         data.dropPath = [{ lat: ctoPos.lat(), lng: ctoPos.lng() }, { lat: clientPos.lat(), lng: clientPos.lng() }];
@@ -317,6 +378,7 @@ function ensureClientDropPath(clientInfo, cto, { force = false, getNetwork }) {
 
 //Metragem do drop: traçado + sobra da empresa, ou o valor informado
 function getClientDropInfo(clientInfo) {
+    if (isPredialClient(clientInfo)) return null;
     const cto = findMarkerByUid(clientInfo.client?.ctoUid);
     if (!cto?.marker || !clientInfo.marker) return null;
     const straight = google.maps.geometry.spherical.computeDistanceBetween(cto.marker.getPosition(), clientInfo.marker.getPosition());
@@ -372,7 +434,7 @@ function refreshClientDrops(options = {}) {
         if (clientInfo.type !== 'CLIENTE' || clientInfo === dropEditSession?.clientInfo) return;
         const cto = findMarkerByUid(clientInfo.client?.ctoUid);
         if (onlyCto && cto !== onlyCto) return;
-        if (!cto?.marker) {
+        if (!cto?.marker || isPredialClient(clientInfo)) {
             clientInfo.dropLine?.setPath([]);
             return;
         }
@@ -401,13 +463,15 @@ function applyClientAppearance(clientInfo) {
     const status = getClientStatus(clientInfo.client.status);
     clientInfo.client.status = status.id;
     clientInfo.color = status.color;
-    const b2b = isB2BClient(clientInfo);
+    const kind = CLIENT_KINDS[clientInfo.client.kind];
+    const variant = clientInfo.client.kind === 'residencial' ? '' : clientInfo.client.kind;
     clientInfo.marker.setLabel(null);
-    clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant: b2b ? 'b2b' : '', faded: status.id === 'cancelado' }));
+    clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const link = cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
-    clientInfo.marker.setTitle(`${clientInfo.name}${b2b ? ' (B2B)' : ''} · ${status.label}${link}`);
-    setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${b2b ? 'Cliente B2B' : 'Cliente'} · ${status.label}${cto ? ` · ${cto.name}` : ''}`);
+    const units = isPredialClient(clientInfo) && clientInfo.client.predial?.units ? ` · ${clientInfo.client.predial.units} unidades` : '';
+    clientInfo.marker.setTitle(`${clientInfo.name}${kind.short ? ` (${kind.short})` : ''}${units} · ${status.label}${link}`);
+    setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${kind.label}${units} · ${status.label}${cto ? ` · ${cto.name}` : ''}`);
     if (clientInfo.listItem) clientInfo.listItem.title = clientInfo.client.address || '';
     applyMarkerSidebarColorStyles(clientInfo);
 }
@@ -415,7 +479,8 @@ function applyClientAppearance(clientInfo) {
 //Completa dados de clientes antigos (equipamento único → lista)
 function normalizeClientData(data = {}) {
     const client = { ...data };
-    client.kind = client.kind === 'b2b' ? 'b2b' : 'residencial';
+    client.kind = CLIENT_KINDS[client.kind] ? client.kind : 'residencial';
+    client.predial = client.predial || {};
     if (!Array.isArray(client.equipments)) {
         const legacy = client.equipment;
         client.equipments = legacy && (legacy.model || legacy.serial || legacy.mac)
@@ -477,7 +542,7 @@ function renderCtoClientsPanel(cto) {
             const li = document.createElement('li');
             li.innerHTML = `
                 <span class="cto-clients-list__port">${client.client.ctoPort ? `P${client.client.ctoPort}` : '—'}</span>
-                <button type="button" class="cto-clients-list__name btn-link">${escapeHtml(client.name)}${isB2BClient(client) ? ' <small>B2B</small>' : ''}</button>
+                <button type="button" class="cto-clients-list__name btn-link">${escapeHtml(client.name)}${CLIENT_KINDS[client.client?.kind]?.short ? ` <small>${CLIENT_KINDS[client.client.kind].short}</small>` : ''}</button>
                 <span class="cto-clients-list__status" style="--status-color:${status.color}">${status.label}</span>`;
             li.querySelector('button').addEventListener('click', () => {
                 resetMarkerModal({ discardPositionChanges: false });
@@ -524,20 +589,27 @@ function getSelectedClientStatus() {
 }
 
 function setClientKind(kind) {
+    kind = CLIENT_KINDS[kind] ? kind : 'residencial';
     const b2b = kind === 'b2b';
+    const predial = kind === 'predial';
     document.querySelectorAll('#clientKindGroup button').forEach(b => {
-        const active = b.dataset.kind === (b2b ? 'b2b' : 'residencial');
+        const active = b.dataset.kind === kind;
         b.classList.toggle('is-active', active);
         b.setAttribute('aria-checked', active ? 'true' : 'false');
     });
     document.getElementById('clientB2BSection').hidden = !b2b;
+    document.getElementById('clientPredialSection').hidden = !predial;
+    document.getElementById('clientDropOverrideGroup').hidden = predial;
     document.getElementById('clientModal').classList.toggle('is-b2b', b2b);
-    document.getElementById('clientNameLabel').textContent = b2b ? 'Razão social *' : 'Nome *';
-    document.getElementById('clientDocumentLabel').textContent = b2b ? 'CNPJ' : 'CPF / CNPJ';
+    document.getElementById('clientModal').classList.toggle('is-predial', predial);
+    document.getElementById('clientNameLabel').textContent = b2b ? 'Razão social *' : predial ? 'Nome do prédio / condomínio *' : 'Nome *';
+    document.getElementById('clientDocumentLabel').textContent = b2b || predial ? 'CNPJ' : 'CPF / CNPJ';
+    if (document.getElementById('clientModal').style.display === 'flex') updateClientDropSummary();
 }
 
 function getSelectedClientKind() {
-    return document.querySelector('#clientKindGroup button.is-active')?.dataset.kind === 'b2b' ? 'b2b' : 'residencial';
+    const kind = document.querySelector('#clientKindGroup button.is-active')?.dataset.kind;
+    return CLIENT_KINDS[kind] ? kind : 'residencial';
 }
 
 function populateClientCtoSelect(selectedUid) {
@@ -598,6 +670,10 @@ function updateClientDropSummary() {
     const ctoUid = document.getElementById('clientCto').value;
     const override = Number(document.getElementById('clientDropOverride').value) || null;
     actions.hidden = true;
+    if (getSelectedClientKind() === 'predial') {
+        summary.textContent = 'Predial: os clientes estão no próprio prédio, então não há drop até o marcador.';
+        return;
+    }
     if (!editingClient) {
         summary.textContent = ctoUid === ''
             ? 'Sem CTO: o drop não será calculado.'
@@ -657,11 +733,12 @@ function collectClientEquipments() {
     })).filter(e => e.model || e.serial || e.mac);
 }
 
-function openClientModal(clientInfo) {
+function openClientModal(clientInfo, presetKind) {
     editingClient = clientInfo || null;
-    const data = normalizeClientData(clientInfo?.client || {});
+    const data = normalizeClientData(clientInfo?.client || (presetKind ? { kind: presetKind } : {}));
     const b2b = data.b2b || {};
-    document.getElementById('clientModalTitle').textContent = clientInfo ? 'Editar cliente' : 'Novo cliente';
+    const noun = data.kind === 'predial' ? 'predial' : 'cliente';
+    document.getElementById('clientModalTitle').textContent = clientInfo ? `Editar ${noun}` : `Novo ${noun}`;
     document.getElementById('clientFormError').hidden = true;
     renderClientStatusButtons(data.status || DEFAULT_CLIENT_STATUS);
     setClientKind(data.kind);
@@ -683,6 +760,10 @@ function openClientModal(clientInfo) {
         clientB2BIpv6: b2b.ipv6 || '',
         clientB2BContactName: b2b.contactName || '',
         clientB2BContactPhone: b2b.contactPhone || '',
+        clientPredialUnits: data.predial.units || '',
+        clientPredialFloors: data.predial.floors || '',
+        clientPredialManager: data.predial.manager || '',
+        clientPredialManagerPhone: data.predial.managerPhone || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
     document.getElementById('clientEquipmentList').innerHTML = '';
@@ -724,6 +805,12 @@ function collectClientForm() {
             ctoPort: ctoUid && ctoUid !== 'auto' ? Number(value('clientPort')) || null : null,
             dropOverride: Number(value('clientDropOverride')) > 0 ? Number(value('clientDropOverride')) : null,
             equipments: collectClientEquipments(),
+            predial: kind === 'predial' ? {
+                units: Number(value('clientPredialUnits')) > 0 ? Number(value('clientPredialUnits')) : null,
+                floors: Number(value('clientPredialFloors')) > 0 ? Number(value('clientPredialFloors')) : null,
+                manager: value('clientPredialManager'),
+                managerPhone: value('clientPredialManagerPhone'),
+            } : null,
             b2b: kind === 'b2b' ? {
                 service: value('clientB2BService'),
                 bandwidth: value('clientB2BBandwidth'),
@@ -749,7 +836,8 @@ function showClientFormError(message) {
 function saveClient(event) {
     event.preventDefault();
     const { name, client } = collectClientForm();
-    if (!name) return showClientFormError(client.kind === 'b2b' ? 'Informe a razão social do cliente.' : 'Informe o nome do cliente.');
+    if (!name) return showClientFormError(client.kind === 'b2b' ? 'Informe a razão social do cliente.' : client.kind === 'predial' ? 'Informe o nome do prédio.' : 'Informe o nome do cliente.');
+    if (client.kind === 'predial') client.dropOverride = null;
     if (client.ctoUid && client.ctoUid !== 'auto' && !client.ctoPort) {
         return showClientFormError('Essa CTO não tem porta livre. Escolha outra CTO ou "Sem CTO".');
     }

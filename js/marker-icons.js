@@ -1,6 +1,6 @@
 // Ícones dos marcadores em SVG: mesmo desenho no mapa, na barra lateral e nos painéis.
 // CEO = círculo, CTO = quadrado, cordoalha = +, reserva = espiral, casas = pin com a
-// quantidade, POP = casinha, cliente = pin com pessoa (B2C) ou prédio (B2B).
+// quantidade, POP = casinha, cliente = pin com pessoa (residencial), maleta (B2B) ou prédio (predial).
 
 const MARKER_ICON_OUTLINE = 'rgba(15, 23, 42, 0.55)';
 const markerIconCache = new Map();
@@ -62,9 +62,16 @@ function getMarkerShapeSvg(type, color, options = {}) {
     }
     case 'CLIENTE': {
         const pin = 'M16 38.5s12-10.6 12-21A12 12 0 0 0 4 17.5c0 10.4 12 21 12 21z';
-        const glyph = options.variant === 'b2b'
-            ? '<path d="M11 24.5v-12h6v12M17 15.5h4v9M10 24.5h12M13 15h2M13 18h2M13 21h2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
-            : '<circle cx="16" cy="14" r="3.6" fill="#ffffff"/><path d="M10.5 23.2c1-2.9 3-4.4 5.5-4.4s4.5 1.5 5.5 4.4" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>';
+        const glyphs = {
+            //Empresa: maleta
+            b2b: '<rect x="9.5" y="13" width="13" height="9.5" rx="1.6" fill="#ffffff"/><path d="M13.5 13v-1.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V13" fill="none" stroke="#ffffff" stroke-width="1.7"/><path d="M9.5 17h13" stroke="' + fill + '" stroke-width="1.3"/>',
+            //Predial: prédio de apartamentos com janelas
+            predial: '<rect x="10.5" y="8.5" width="11" height="15.5" rx="1" fill="#ffffff"/>' +
+                '<path d="M13 11.5h2M17 11.5h2M13 14.5h2M17 14.5h2M13 17.5h2M17 17.5h2" stroke="' + fill + '" stroke-width="1.5" stroke-linecap="round"/>' +
+                '<rect x="14.6" y="20.2" width="2.8" height="3.8" fill="' + fill + '"/>',
+        };
+        const glyph = glyphs[options.variant]
+            || '<circle cx="16" cy="14" r="3.6" fill="#ffffff"/><path d="M10.5 23.2c1-2.9 3-4.4 5.5-4.4s4.5 1.5 5.5 4.4" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>';
         return `<path d="${pin}" ${outline}/><path d="${pin}" fill="${fill}" ${halo} opacity="${options.faded ? 0.6 : 1}"/>${glyph}`;
     }
     default:

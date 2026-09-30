@@ -239,7 +239,7 @@ function applyMarkerSidebarColorStyles(markerInfo) {
     if (sidebarIcon) {
         sidebarIcon.style.setProperty('--ge-item-color', markerColor);
         applyMarkerIconToElement(sidebarIcon, markerInfo.type, markerColor, {
-            variant: markerInfo.client?.kind === 'b2b' ? 'b2b' : '',
+            variant: ['b2b', 'predial'].includes(markerInfo.client?.kind) ? markerInfo.client.kind : '',
             faded: markerInfo.client?.status === 'cancelado',
         });
     }
@@ -8225,6 +8225,7 @@ function computeProjectReportData(projectId) {
     const clients = {
         total: clientMarkers.length,
         b2b: clientMarkers.filter(c => c.client?.kind === 'b2b').length,
+        predial: clientMarkers.filter(c => c.client?.kind === 'predial').length,
         viabilidade: clientMarkers.filter(c => c.client?.status === 'viabilidade').length,
         aInstalar: clientMarkers.filter(c => c.client?.status === 'a_instalar').length,
         instalado: clientMarkers.filter(c => c.client?.status === 'instalado').length,
@@ -8500,6 +8501,7 @@ function createReportPreviewSnapshot(data) {
         clientRows: clients.total ? [
             { label: 'Clientes cadastrados', value: String(clients.total) },
             { label: 'Empresariais (B2B)', value: String(clients.b2b) },
+            { label: 'Prediais', value: String(clients.predial) },
             { label: 'Em viabilidade', value: String(clients.viabilidade) },
             { label: 'A instalar', value: String(clients.aInstalar) },
             { label: 'Instalados', value: String(clients.instalado) },
@@ -9506,6 +9508,7 @@ function showProjectReportDetails(projectId, projectName) {
     clientsCard.hidden = !data.clients.total;
     setRv('clientsTotal', String(data.clients.total));
     setRv('clientsB2b', String(data.clients.b2b));
+    setRv('clientsPredial', String(data.clients.predial ?? 0));
     setRv('clientsViab', String(data.clients.viabilidade));
     setRv('clientsInstall', String(data.clients.aInstalar));
     setRv('clientsDone', String(data.clients.instalado));

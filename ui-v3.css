@@ -1393,6 +1393,17 @@ html[data-theme="dark"] #fusionModal .fx-port.has-client:not(.is-connected) .fx-
 
 html[data-theme="dark"] #clientModal.is-b2b .client-kind .btn-kind.is-active { color: #93c5fd !important; }
 
+#clientModal.is-predial .client-kind .btn-kind.is-active {
+  color: #7c3aed !important;
+}
+
+html[data-theme="dark"] #clientModal.is-predial .client-kind .btn-kind.is-active { color: #c4b5fd !important; }
+
+.client-section--predial {
+  border-color: color-mix(in srgb, #7c3aed 35%, var(--color-border));
+  background: color-mix(in srgb, #7c3aed 5%, var(--color-surface-muted));
+}
+
 .client-section--b2b {
   border-color: color-mix(in srgb, #2563eb 35%, var(--color-border));
   background: color-mix(in srgb, #2563eb 5%, var(--color-surface-muted));
