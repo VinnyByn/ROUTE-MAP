@@ -831,12 +831,19 @@ function showClientFormError(message) {
     const el = document.getElementById('clientFormError');
     el.textContent = message;
     el.hidden = false;
+    //A mensagem fica no fim da janela: rola até ela e avisa também com um toast
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast('Não foi possível continuar', message);
 }
 
 function saveClient(event) {
     event.preventDefault();
-    const { name, client } = collectClientForm();
-    if (!name) return showClientFormError(client.kind === 'b2b' ? 'Informe a razão social do cliente.' : client.kind === 'predial' ? 'Informe o nome do prédio.' : 'Informe o nome do cliente.');
+    let { name, client } = collectClientForm();
+    //Sem nome: gera um automático (ex.: "Cliente 12") para não travar o posicionamento
+    if (!name) {
+        const base = client.kind === 'predial' ? 'Predial' : client.kind === 'b2b' ? 'Cliente B2B' : 'Cliente';
+        name = `${base} ${markers.filter(m => m.type === 'CLIENTE').length + 1}`;
+    }
     if (client.kind === 'predial') client.dropOverride = null;
     if (client.ctoUid && client.ctoUid !== 'auto' && !client.ctoPort) {
         return showClientFormError('Essa CTO não tem porta livre. Escolha outra CTO ou "Sem CTO".');
