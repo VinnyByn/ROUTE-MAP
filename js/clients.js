@@ -962,6 +962,11 @@ function getClientEquipmentMaterialName(equipment) {
         const norm = normalizeMaterialName(model);
         const match = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === norm || (m.code && String(m.code).trim() === model));
         if (match) return match.name;
+        //Modelo digitado que é parte do nome de um único material do catálogo
+        const partial = norm.length >= 4
+            ? materialCatalog.materials.filter(m => normalizeMaterialName(m.name).includes(norm))
+            : [];
+        if (partial.length === 1) return partial[0].name;
     }
     return [equipment.type, model].filter(Boolean).join(' - ') || 'Equipamento do cliente';
 }

@@ -8561,7 +8561,7 @@ function calculateProjectCost(projectMarkers, projectCables) {
     const tempBomState = {};
     let ctoCount = 0;
     let raqueteInstallCount = 0;
-    const addOrUpdate = (name, qty, type = 'unit') => {
+    const addOrUpdate = (name, qty, type = 'unit', group = null) => {
         if (!name || qty <= 0) return;
         name = resolveMaterialName(name);
         if (isDroppedMaterial(name)) return;
@@ -8569,6 +8569,8 @@ function calculateProjectCost(projectMarkers, projectCables) {
         if (!tempBomState[name]) {
         tempBomState[name] = { quantity: 0, type: type, unitPrice: priceInfo.price, category: priceInfo.category };
         }
+        //Equipamentos dos clientes contam como Data Center, como na lista de materiais
+        if (group === 'Data Center') tempBomState[name].category = 'Data Center';
         tempBomState[name].quantity += qty;
     };
     //Processamento dos marcadores
