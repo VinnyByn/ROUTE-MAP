@@ -407,8 +407,7 @@ function applyClientAppearance(clientInfo) {
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const link = cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
     clientInfo.marker.setTitle(`${clientInfo.name}${b2b ? ' (B2B)' : ''} · ${status.label}${link}`);
-    const nameSpan = clientInfo.listItem?.querySelector('.item-name');
-    if (nameSpan) nameSpan.textContent = `${clientInfo.name} (${b2b ? 'Cliente B2B' : 'Cliente'} · ${status.label})`;
+    setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${b2b ? 'Cliente B2B' : 'Cliente'} · ${status.label}${cto ? ` · ${cto.name}` : ''}`);
     if (clientInfo.listItem) clientInfo.listItem.title = clientInfo.client.address || '';
     applyMarkerSidebarColorStyles(clientInfo);
 }
