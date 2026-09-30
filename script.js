@@ -4784,6 +4784,54 @@ const MATERIAL_PRICES_BASE = {
     "Mão de Obra Regional": { price: 320.00, unit: 'un', category: 'Mão de Obra' }, // Custo por técnico/dia (8h * R$40/h)
     "Mão de Obra Terceirizada": { price: 0, unit: 'un', category: 'Mão de Obra' }
 };
+//Materiais do sistema que não estão na planilha de preços da empresa: saem do catálogo e dos preços
+//(se algum cálculo ainda usar, aparece na lista de materiais sem preço)
+const MATERIALS_NOT_IN_SHEET = [
+    "Splitter 1/16",
+    "Splitter 1/2 APC",
+    "Splitter 1/4 APC",
+    "Splitter 1/2 UPC",
+    "Splitter 1/4 UPC",
+    "ADAPTADOR SC/APC SEM ABAS (PASSANTE)",
+    "SUPORTE REFORÇADO HORIZONTAL PARA BAP",
+    "RAQUETE PARA CEO",
+    "SUPORTE PRESBOW (REX)",
+    "ISOLADOR ROLDANA",
+    "KIT DERIVAÇÃO POR CABO",
+    "ESTICADOR PARA CABO DROP",
+    "CHASSI OLT C650 ZTE",
+    "LICENÇA OLT",
+    "MÓDULO DE ENERGIA DC C650-C600 PARA OLT ZTE",
+    "PLACA CONTROLADORA E SWITCHING C600/C650",
+    "XFP 850NM 10G 0,3KM MULTIMODO DUPLEX",
+    "RACK INDOOR IPMETAL 44U 800X1000MM / PRETO / PORTA DIANTEIRA PERFURADO E TRASEIRA BI-PARTIDA PERFURADO / CALHA LATERAL",
+    "BANDEJA DE VENTILAÇÃO DE TETO PARA RACK IPMETAL 44U 1000MM",
+    "RÉGUA DE TOMADA 2P+T 10A, CABO DE 2,5M COM BITOLA 1,5MM² / SEM FUSÍVEL E DISJUNTOR",
+    "CAIXA DE EMENDA OPTICA FIBRACEM 216F JUMBO SVM COM REENTRADA DIAMETRO 13 A 18MM",
+    "KIT DE DERIVAÇÃO SVM PARA CEO 144F GROMMET (2 ENTRADAS 7 A 13MM)",
+    "BRAÇADEIRA BAP 3",
+    "CABO DE AÇO CORDOALHA 3/16 POL D",
+    "ALÇA PREFORMADA PARA CORDOALHA 3/16 (4,8MM)",
+    "PATCHCORD CAT6 AZUL 2,5M",
+    "PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)",
+    "MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE",
+    "SWITCH MPLS 24 PORTAS",
+    "SFP GBIC ELÉTRICO",
+    "FONTE RETIFICADORA 48VCC / 100A ~ 200A",
+    "BATERIA DE LÍTIO 100A FB100B3 ZTE",
+    "VALOR ESTIMADO COM MATERIAIS ELÉTRICOS, DISJUNTORES, QDC, CABOS, ILUMINAÇÃO, ETC,.",
+    "PRESTAÇÃO DE SERVIÇO ELETRICISTA",
+    "PRESTAÇÃO DE SERVIÇO INSTALAÇÃO AR CONDICIONADO",
+    "CAMERA DE MONITORAMENTO IP INTELBRAS VIP 1220 B G3",
+    "MÉDIA DE ALUGUEL MENSAL",
+    "CABO ÓPTICO AS 80 S 144 FIBRAS NR KP",
+    "Cabo AS 200 FO-06",
+    "Cabo AS 200 FO-48",
+    "Cabo AS 200 FO-72",
+    "Cabo AS 200 FO-144",
+];
+MATERIALS_NOT_IN_SHEET.forEach(name => { delete MATERIAL_PRICES_BASE[name]; });
+const MATERIALS_NOT_IN_SHEET_SET = new Set(MATERIALS_NOT_IN_SHEET.map(name => String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()));
 Object.keys(MATERIAL_RENAMES).forEach(oldName => {
     if (!(oldName in MATERIAL_PRICES_BASE)) return;
     const newName = MATERIAL_RENAMES[oldName];
@@ -5083,7 +5131,8 @@ function loadMaterialCatalog(stored) {
         supplier: m.supplier || '',
         code: m.code || '',
         notes: m.notes || ''
-    })).filter((m, i, all) => m.name && all.findIndex(o => o.name === m.name) === i); //Nome antigo e novo viram um só
+    })).filter((m, i, all) => m.name && all.findIndex(o => o.name === m.name) === i) //Nome antigo e novo viram um só
+        .filter(m => !MATERIALS_NOT_IN_SHEET_SET.has(normalizeMaterialName(m.name))); //Fora da planilha da empresa
     const kits = Array.isArray(stored.kits) ? stored.kits.map(k => ({
         id: k.id || generateCatalogId('kit'),
         name: String(k.name || '').trim(),
