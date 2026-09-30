@@ -19,8 +19,8 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=20260930b" />
-    <link rel="stylesheet" href="ui-v3.css?v=20260930b" />
+    <link rel="stylesheet" href="style.css?v=20260930d" />
+    <link rel="stylesheet" href="ui-v3.css?v=20260930d" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
@@ -63,6 +63,8 @@
       <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 8.2v7.6M8.2 6h5.3A4.5 4.5 0 0 1 18 10.5"/></symbol>
       <symbol id="i-reserve" viewBox="0 0 24 24"><path d="M7 8a5 5 0 1 1 7.5 4.3L12 15l-2.5-2.7A5 5 0 0 1 7 8z"/><path d="M8 18h8"/></symbol>
       <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-6h4v6"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+      <symbol id="i-money" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5h.01M17.5 14.5h.01"/></symbol>
       <symbol id="i-pop" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></symbol>
     </svg>
 <div class="top-bar">
@@ -1371,98 +1373,147 @@
     </div>
     
     <div id="reportModal" class="modal">
-      <div class="modal-content" style="max-width: 850px;">
+      <div class="modal-content report-modal">
         <span class="close" id="closeReportModal">&times;</span>
-        <div id="report-project-list">
-          <h2>Selecione um Projeto para Ver o Relatório</h2>
+        <h2 id="reportModalTitle">Relatório do projeto</h2>
+
+        <div id="report-project-list" class="report-view">
           <div class="report-list-body">
-            <p class="report-list-hint">Escolha um projeto abaixo para visualizar métricas, custos e prazos estimados.</p>
-            <div class="report-list-search-wrap hidden" id="reportProjectSearchWrap">
-              <input type="search" id="reportProjectSearch" class="report-list-search" placeholder="Filtrar por nome, cidade ou bairro..." autocomplete="off" />
+            <p class="report-list-hint">Escolha um projeto para ver métricas, custos e prazo estimado e para exportar o relatório em PDF ou Word.</p>
+            <div class="project-picker__search report-list-search-wrap hidden" id="reportProjectSearchWrap">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
+              <input type="search" id="reportProjectSearch" placeholder="Buscar por nome, cidade ou bairro" autocomplete="off" />
             </div>
-            <ul id="report-projects-ul" role="listbox" aria-label="Lista de projetos"></ul>
+            <ul id="report-projects-ul" class="report-pick-list" role="listbox" aria-label="Projetos"></ul>
           </div>
         </div>
-        <div id="report-project-details" class="hidden">
-          <div class="report-details-header">
-            <button type="button" id="backToProjectList" class="report-back-btn">&larr; Voltar</button>
-            <div class="report-details-header-text">
-              <h2 id="report-title">Relatório do Projeto</h2>
+
+        <div id="report-project-details" class="report-view hidden">
+          <div class="report-identity">
+            <button type="button" id="backToProjectList" class="btn btn-secondary btn-sm">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Projetos
+            </button>
+            <div class="report-identity__text">
+              <h3 id="report-title">Relatório do Projeto</h3>
               <p id="report-subtitle" class="report-subtitle"></p>
             </div>
+            <span class="report-type-pill" id="report-type"></span>
           </div>
 
           <div class="report-details-body">
-            <div class="report-kpi-row">
-              <div class="report-kpi-card kpi-primary">
-                <span class="report-kpi-label">Custo Total (c/ Coef.)</span>
-                <span class="report-kpi-value" id="report-kpi-final-cost">R$ 0,00</span>
+            <div class="rv-kpis">
+              <div class="rv-kpi rv-kpi--primary">
+                <span class="rv-kpi__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-money"></use></svg></span>
+                <div><span class="rv-kpi__label">Custo total (com coef.)</span><strong class="rv-kpi__value" id="report-kpi-final-cost">R$ 0,00</strong></div>
               </div>
-              <div class="report-kpi-card">
-                <span class="report-kpi-label">Novas Portas</span>
-                <span class="report-kpi-value" id="report-kpi-new-ports">0</span>
+              <div class="rv-kpi">
+                <span class="rv-kpi__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cto"></use></svg></span>
+                <div><span class="rv-kpi__label">Novas portas</span><strong class="rv-kpi__value" id="report-kpi-new-ports">0</strong></div>
               </div>
-              <div class="report-kpi-card">
-                <span class="report-kpi-label">Lançamento</span>
-                <span class="report-kpi-value" id="report-kpi-cable">0 m</span>
+              <div class="rv-kpi">
+                <span class="rv-kpi__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
+                <div><span class="rv-kpi__label">Lançamento</span><strong class="rv-kpi__value" id="report-kpi-cable">0 m</strong></div>
               </div>
-              <div class="report-kpi-card">
-                <span class="report-kpi-label">Prazo Estimado</span>
-                <span class="report-kpi-value" id="report-kpi-duration">0 dias</span>
+              <div class="rv-kpi">
+                <span class="rv-kpi__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"></use></svg></span>
+                <div><span class="rv-kpi__label">Prazo estimado</span><strong class="rv-kpi__value" id="report-kpi-duration">0 dias</strong></div>
               </div>
             </div>
 
-            <section class="report-section">
-              <h3 class="report-section-title">Rede e Cobertura</h3>
-              <div class="report-section-grid">
-                <div class="report-detail-item"><strong>Bairro</strong><span id="report-neighborhoods"></span></div>
-                <div class="report-detail-item"><strong>Casas (HP)</strong><span id="report-houses"></span></div>
-                <div class="report-detail-item"><strong>Portas Existentes (HC)</strong><span id="report-existing-ports"></span></div>
-                <div class="report-detail-item"><strong>Novas Portas</strong><span id="report-new-ports"></span></div>
-                <div class="report-detail-item"><strong>Total de Portas</strong><span id="report-total-ports"></span></div>
-                <div class="report-detail-item"><strong>Taxa de Penetração</strong><span id="report-penetration-rate"></span></div>
-                <div class="report-detail-item report-detail-wide"><strong>Lançamento Estimado</strong><span id="report-cable-length"></span></div>
-              </div>
-            </section>
+            <div class="rv-grid">
+              <section class="rv-card">
+                <h4 class="rv-card__title">Rede e cobertura</h4>
+                <dl class="rv-rows">
+                  <div><dt>Bairro</dt><dd data-rv="neighborhood"></dd></div>
+                  <div><dt>Casas (HP)</dt><dd data-rv="houses"></dd></div>
+                  <div><dt>Portas existentes (HC)</dt><dd data-rv="existingPorts"></dd></div>
+                  <div><dt>Novas portas</dt><dd data-rv="newPorts"></dd></div>
+                  <div class="is-strong"><dt>Total de portas</dt><dd data-rv="totalPorts"></dd></div>
+                </dl>
+                <div class="rv-meter">
+                  <div class="rv-meter__head"><span>Taxa de penetração</span><strong data-rv="penetration"></strong></div>
+                  <div class="rv-meter__track"><span class="rv-meter__fill" id="rv-penetration-bar"></span></div>
+                </div>
+              </section>
 
-            <section class="report-section">
-              <h3 class="report-section-title">Materiais</h3>
-              <div class="report-section-grid">
-                <div class="report-detail-item is-sub"><strong>Ferragens</strong><span id="report-ferragem-cost"></span></div>
-                <div class="report-detail-item is-sub"><strong>Cabos</strong><span id="report-cabos-cost"></span></div>
-                <div class="report-detail-item is-sub"><strong>Fusão</strong><span id="report-fusao-cost"></span></div>
-                <div class="report-detail-item is-sub"><strong>Data Center</strong><span id="report-datacenter-cost"></span></div>
-                <div class="report-detail-item is-total report-detail-wide"><strong>Total de Materiais</strong><span id="report-material-cost"></span></div>
-              </div>
-            </section>
+              <section class="rv-card">
+                <h4 class="rv-card__title">Rede nova</h4>
+                <div class="rv-tiles">
+                  <div class="rv-tile"><strong data-rv="cableLength"></strong><span>Lançamento</span></div>
+                  <div class="rv-tile"><strong data-rv="posts"></strong><span>Postes (est.)</span></div>
+                  <div class="rv-tile"><strong data-rv="ctos"></strong><span>CTOs</span></div>
+                  <div class="rv-tile"><strong data-rv="ceos"></strong><span>CEOs</span></div>
+                  <div class="rv-tile"><strong data-rv="reservas"></strong><span>Reservas</span></div>
+                  <div class="rv-tile"><strong data-rv="cordoalhas"></strong><span>Cordoalhas</span></div>
+                </div>
+              </section>
 
-            <section class="report-section">
-              <h3 class="report-section-title">Mão de Obra</h3>
-              <div class="report-section-grid">
-                <div class="report-detail-item is-sub"><strong>M.O. Regional</strong><span id="report-regional-labor-cost"></span></div>
-                <div class="report-detail-item is-sub"><strong>M.O. Terceirizada</strong><span id="report-outsourced-labor-cost"></span></div>
-                <div class="report-detail-item is-total report-detail-wide"><strong>Total de Mão de Obra</strong><span id="report-labor-cost"></span></div>
-              </div>
-            </section>
+              <section class="rv-card">
+                <h4 class="rv-card__title">Materiais</h4>
+                <ul class="rv-bars" id="rv-material-bars"></ul>
+                <dl class="rv-rows rv-rows--total">
+                  <div class="is-strong"><dt>Total de materiais</dt><dd data-rv="materialCost"></dd></div>
+                </dl>
+              </section>
 
-            <section class="report-section report-section-summary">
-              <h3 class="report-section-title">Resumo Financeiro</h3>
-              <div class="report-section-grid">
-                <div class="report-detail-item"><strong>Subtotal (Mat. + M.O.)</strong><span id="report-total-cost"></span></div>
-                <div class="report-detail-item"><strong>Coef. de Segurança (5%)</strong><span id="report-safety-coef"></span></div>
-                <div class="report-detail-item"><strong>Custo por Nova Porta</strong><span id="report-cost-per-port"></span></div>
-                <div class="report-detail-item"><strong>Prazo da Obra</strong><span id="report-duration"></span></div>
-                <div class="report-detail-item is-final report-detail-wide"><strong>Custo Total Final</strong><span id="report-final-cost"></span></div>
-              </div>
-            </section>
+              <section class="rv-card">
+                <h4 class="rv-card__title">Mão de obra</h4>
+                <dl class="rv-rows">
+                  <div><dt>M.O. regional</dt><dd data-rv="regionalLabor"></dd></div>
+                  <div><dt>M.O. terceirizada</dt><dd data-rv="outsourcedLabor"></dd></div>
+                  <div class="rv-row--optional" id="rv-labor-detail" hidden><dt>Equipe regional</dt><dd data-rv="laborDetail"></dd></div>
+                  <div class="is-strong"><dt>Total de mão de obra</dt><dd data-rv="laborCost"></dd></div>
+                </dl>
+              </section>
+
+              <section class="rv-card rv-card--wide" id="rv-clients-card" hidden>
+                <h4 class="rv-card__title">Clientes</h4>
+                <div class="rv-tiles rv-tiles--5">
+                  <div class="rv-tile"><strong data-rv="clientsTotal"></strong><span>Cadastrados</span></div>
+                  <div class="rv-tile"><strong data-rv="clientsB2b"></strong><span>Empresariais</span></div>
+                  <div class="rv-tile"><strong data-rv="clientsViab"></strong><span>Viabilidade</span></div>
+                  <div class="rv-tile"><strong data-rv="clientsInstall"></strong><span>A instalar</span></div>
+                  <div class="rv-tile"><strong data-rv="clientsDone"></strong><span>Instalados</span></div>
+                </div>
+              </section>
+
+              <section class="rv-card rv-card--wide rv-card--summary">
+                <h4 class="rv-card__title">Resumo financeiro</h4>
+                <div class="rv-stack" role="img" aria-label="Composição do custo">
+                  <span class="rv-stack__seg rv-stack__seg--mat" id="rv-stack-mat"></span>
+                  <span class="rv-stack__seg rv-stack__seg--lab" id="rv-stack-lab"></span>
+                  <span class="rv-stack__seg rv-stack__seg--coef" id="rv-stack-coef"></span>
+                </div>
+                <ul class="rv-legend">
+                  <li><i class="rv-dot rv-dot--mat"></i>Materiais<b data-rv="materialCost"></b></li>
+                  <li><i class="rv-dot rv-dot--lab"></i>Mão de obra<b data-rv="laborCost"></b></li>
+                  <li><i class="rv-dot rv-dot--coef"></i>Coef. de segurança (5%)<b data-rv="safetyCoef"></b></li>
+                </ul>
+                <div class="rv-final">
+                  <div class="rv-final__meta">
+                    <span>Subtotal (materiais + mão de obra) <b data-rv="totalCost"></b></span>
+                    <span>Custo por nova porta <b data-rv="costPerPort"></b></span>
+                    <span>Prazo da obra <b data-rv="duration"></b></span>
+                  </div>
+                  <div class="rv-final__total"><small>Custo total final</small><strong data-rv="finalCost"></strong></div>
+                </div>
+              </section>
+
+              <section class="rv-card rv-card--wide">
+                <h4 class="rv-card__title">Observações</h4>
+                <p class="rv-notes" id="rv-notes"></p>
+              </section>
+            </div>
           </div>
 
           <div class="modal-footer report-details-footer">
-            <button type="button" id="exportReportPdfButton" class="btn btn-secondary">
-              Exportar PDF
+            <button type="button" id="openObservationsButton" class="btn btn-secondary">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-edit"></use></svg>
+              Observações
             </button>
-            <button type="button" id="openObservationsButton" class="btn btn-primary">
-              Adicionar/Editar Observações
+            <button type="button" id="exportReportPdfButton" class="btn btn-success">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"></use></svg>
+              Exportar PDF
             </button>
           </div>
         </div>
@@ -1472,10 +1523,13 @@
     <div id="reportPreviewModal" class="modal">
       <div class="modal-content report-preview-modal">
         <span class="close" id="closeReportPreviewModal">&times;</span>
-        <div class="report-details-header report-preview-header">
-          <div class="report-details-header-text">
-            <h2 id="reportPreviewModalTitle">Pré-visualização do relatório</h2>
-            <p class="report-subtitle report-preview-hint">Revise o documento em folhas A4. Clique em qualquer texto para editar antes de exportar em PDF ou Word.</p>
+        <h2 id="reportPreviewModalTitle">Exportar relatório</h2>
+        <div class="report-preview-toolbar">
+          <p class="report-preview-hint">Revise as folhas A4. Clique em qualquer texto para editar antes de exportar.</p>
+          <div class="report-preview-options" role="group" aria-label="Conteúdo do relatório">
+            <label class="map-tool-chip"><input type="checkbox" id="rpOptBom" checked /><span>Lista de materiais</span></label>
+            <label class="map-tool-chip"><input type="checkbox" id="rpOptLabor" checked /><span>Detalhe da mão de obra</span></label>
+            <label class="map-tool-chip"><input type="checkbox" id="rpOptNotes" checked /><span>Observações</span></label>
           </div>
         </div>
         <div class="report-preview-scroll">
@@ -2148,14 +2202,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-  <script src="js/supabase-client.js?v=20260930b"></script>
-  <script src="script.js?v=20260930b" defer></script>
-  <script src="js/permissions.js?v=20260930b" defer></script>
-  <script src="js/marker-icons.js?v=20260930b" defer></script>
-  <script src="js/marker-panel.js?v=20260930b" defer></script>
-  <script src="js/fusion.js?v=20260930b" defer></script>
-  <script src="js/account.js?v=20260930b" defer></script>
-  <script src="js/clients.js?v=20260930b" defer></script>
+  <script src="js/supabase-client.js?v=20260930d"></script>
+  <script src="script.js?v=20260930d" defer></script>
+  <script src="js/permissions.js?v=20260930d" defer></script>
+  <script src="js/marker-icons.js?v=20260930d" defer></script>
+  <script src="js/marker-panel.js?v=20260930d" defer></script>
+  <script src="js/fusion.js?v=20260930d" defer></script>
+  <script src="js/account.js?v=20260930d" defer></script>
+  <script src="js/clients.js?v=20260930d" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>

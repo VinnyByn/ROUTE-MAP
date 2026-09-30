@@ -1547,6 +1547,8 @@ function initMap() {
     backToProjectList.addEventListener("click", () => {
         document.getElementById("report-project-details").classList.add("hidden");
         document.getElementById("report-project-list").classList.remove("hidden");
+        document.querySelector('#reportModal .report-modal').classList.remove('is-details');
+        document.getElementById('reportModalTitle').textContent = 'Relatório do projeto';
     });
     const reportProjectSearch = document.getElementById("reportProjectSearch");
     if (reportProjectSearch) {
@@ -1562,6 +1564,7 @@ function initMap() {
     document.getElementById('confirmReportPdfExportButton')?.addEventListener('click', confirmReportPdfExport);
     document.getElementById('confirmReportWordExportButton')?.addEventListener('click', confirmReportWordExport);
     document.getElementById('resetReportPreviewButton')?.addEventListener('click', resetReportPreview);
+    setupReportOptions();
     //Ações gerais e sidebar
     updateSidebarEmptyState();
     document.addEventListener('keydown', (e) => {
@@ -8668,6 +8671,7 @@ function getReportProjectTypeClass(type) {
 function buildReportProjectListItem(projEl) {
     const li = document.createElement("li");
     li.dataset.projectId = projEl.dataset.folderId;
+    li.className = 'report-pick';
     li.setAttribute("role", "option");
     li.setAttribute("tabindex", "0");
 
@@ -8675,20 +8679,30 @@ function buildReportProjectListItem(projEl) {
     const projectCity = projEl.dataset.folderCity || 'Cidade não informada';
     const projectNeighborhood = projEl.dataset.folderNeighborhood || 'Bairro não informado';
     const projectType = projEl.dataset.folderType || 'TCR';
-    const searchText = `${projectName} ${projectCity} ${projectNeighborhood} ${projectType}`.toLowerCase();
-    li.dataset.searchText = searchText;
+    li.dataset.searchText = `${projectName} ${projectCity} ${projectNeighborhood} ${projectType}`.toLowerCase();
 
-    const typeClass = getReportProjectTypeClass(projectType);
+    //Resumo rápido (custo e portas) para escolher o projeto certo
+    let quickStats = '';
+    try {
+        const data = computeProjectReportData(projEl.dataset.folderId);
+        if (data) {
+            quickStats = `<span class="report-pick__stat"><b>${formatPdfCurrency(data.finalCost)}</b> custo total</span>`
+                + `<span class="report-pick__stat"><b>${data.novasPortas}</b> novas portas</span>`
+                + `<span class="report-pick__stat"><b>${data.quantities.cableLength} m</b> lançamento</span>`;
+        }
+    } catch (e) { /* projeto ainda incompleto: sem resumo */ }
+
     li.innerHTML = `
-        <div class="report-card-icon" aria-hidden="true">📊</div>
-        <div class="report-card-content">
-            <span class="report-project-name">${projectName}</span>
-            <div class="report-project-meta">
-                <span class="report-project-location">${projectCity} · ${projectNeighborhood}</span>
-                <span class="report-project-type ${typeClass}">${projectType}</span>
+        <span class="report-pick__icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><use href="#i-report"></use></svg></span>
+        <div class="report-pick__body">
+            <div class="report-pick__head">
+                <strong>${escapeHtml(projectName)}</strong>
+                <span class="report-type-pill">${escapeHtml(projectType)}</span>
             </div>
+            <span class="report-pick__place">${escapeHtml(projectCity)} · ${escapeHtml(projectNeighborhood)}</span>
+            ${quickStats ? `<div class="report-pick__stats">${quickStats}</div>` : ''}
         </div>
-        <span class="report-card-arrow" aria-hidden="true">›</span>
+        <svg class="ui-icon report-pick__arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
     `;
 
     const openReport = () => showProjectReportDetails(li.dataset.projectId, projectName);
@@ -8699,7 +8713,6 @@ function buildReportProjectListItem(projEl) {
             openReport();
         }
     });
-
     return li;
 }
 
@@ -8725,6 +8738,7 @@ function openReportModal() {
     const searchInput = document.getElementById("reportProjectSearch");
     const searchWrap = document.getElementById("reportProjectSearchWrap");
     projectListUl.innerHTML = "";
+    document.getElementById('reportModalTitle').textContent = 'Relatório do projeto';
 
     const projectElements = document.querySelectorAll('.folder-title[data-is-project="true"]');
 
@@ -8733,9 +8747,9 @@ function openReportModal() {
         if (searchInput) searchInput.value = "";
         projectListUl.innerHTML = `
             <li class="report-list-empty">
-                <div class="report-list-empty-icon">📁</div>
-                <p>Nenhum projeto encontrado</p>
-                <span>Crie um projeto na barra lateral para gerar relatórios.</span>
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus"></use></svg>
+                <p>Nenhum projeto aberto</p>
+                <span>Abra ou crie um projeto para gerar o relatório.</span>
             </li>
         `;
     } else {
@@ -8749,16 +8763,13 @@ function openReportModal() {
         noResults.textContent = "Nenhum projeto corresponde à sua busca.";
         projectListUl.appendChild(noResults);
 
-        if (projectElements.length > 3) {
-            searchWrap?.classList.remove("hidden");
-        } else {
-            searchWrap?.classList.add("hidden");
-        }
+        searchWrap?.classList.toggle("hidden", projectElements.length <= 3);
         if (searchInput) searchInput.value = "";
     }
 
     document.getElementById("report-project-details").classList.add("hidden");
     document.getElementById("report-project-list").classList.remove("hidden");
+    document.querySelector('#reportModal .report-modal').classList.remove('is-details');
     document.getElementById("reportModal").style.display = "flex";
 }
 
@@ -8804,6 +8815,15 @@ function computeProjectReportData(projectId) {
     const { portasExistentes, novasPortas, totalPortas } = countProjectPorts(projectMarkers);
     const totalCasas = projectMarkers.filter(m => m.type === 'CASA').reduce((sum, m) => sum + parseInt(m.name || 0, 10), 0);
 
+    const clientMarkers = projectMarkers.filter(m => m.type === 'CLIENTE');
+    const clients = {
+        total: clientMarkers.length,
+        b2b: clientMarkers.filter(c => c.client?.kind === 'b2b').length,
+        viabilidade: clientMarkers.filter(c => c.client?.status === 'viabilidade').length,
+        aInstalar: clientMarkers.filter(c => c.client?.status === 'a_instalar').length,
+        instalado: clientMarkers.filter(c => c.client?.status === 'instalado').length,
+    };
+
     const projectBomForReport = normalizeBomState(projectBoms[projectId] || {});
     const materialCosts = summarizeBomCosts(projectBomForReport);
     const laborCosts = calculateProjectLaborCost(projectItems, projectBomForReport);
@@ -8833,6 +8853,7 @@ function computeProjectReportData(projectId) {
         neighborhood: projectElement.dataset.folderNeighborhood || '',
         projectType: projectElement.dataset.folderType || 'TCR',
         quantities,
+        clients,
         portasExistentes,
         novasPortas,
         totalPortas,
@@ -9028,53 +9049,76 @@ function createReportPreviewSnapshot(data) {
         .flatMap(({ key }) => bom[key] || [])
         .reduce((sum, row) => sum + (row.total || 0), 0);
 
+    const clients = data.clients || { total: 0 };
+    const shareBase = (data.materialCost + data.laborCost + data.safetyCoef) || 1;
+
     const snapshot = {
         projectId: data.projectId,
         projectCode: data.projectCode || data.projectName,
-        title: `Relatório do Projeto — ${data.projectName}`,
+        projectType: data.projectType,
+        company: AppSession.company?.name || '',
+        author: AppSession.displayName || '',
+        title: data.projectName,
         locationLine,
         generatedAt: `Gerado em ${new Date().toLocaleString('pt-BR')}`,
+        options: { bom: true, labor: true, notes: true },
+        costShare: {
+            mat: (data.materialCost / shareBase) * 100,
+            lab: (data.laborCost / shareBase) * 100,
+            coef: (data.safetyCoef / shareBase) * 100,
+            matText: formatPdfCurrency(data.materialCost),
+            labText: formatPdfCurrency(data.laborCost),
+            coefText: formatPdfCurrency(data.safetyCoef),
+        },
         kpis: [
-            { label: 'Custo Total (c/ Coef.)', value: formatPdfCurrency(data.finalCost) },
-            { label: 'Novas Portas', value: String(data.novasPortas) },
+            { label: 'Custo total (com coef.)', value: formatPdfCurrency(data.finalCost) },
+            { label: 'Novas portas', value: String(data.novasPortas) },
             { label: 'Lançamento', value: `${q.cableLength || 0} m` },
-            { label: 'Prazo Estimado', value: `${data.prazoEstimado} dias` },
+            { label: 'Prazo estimado', value: `${data.prazoEstimado} dias` },
         ],
         networkRows: [
             { label: 'Bairro', value: data.neighborhood || 'N/A' },
             { label: 'Casas (HP)', value: String(data.totalCasas) },
-            { label: 'Portas Existentes (HC)', value: String(data.portasExistentes) },
-            { label: 'Novas Portas', value: String(data.novasPortas) },
-            { label: 'Total de Portas', value: String(data.totalPortas) },
-            { label: 'Taxa de Penetração', value: `${data.penetrationRate.toFixed(2)}%` },
-            { label: 'Lançamento Estimado', value: `${q.cableLength || 0} m` },
-            { label: 'CTOs (novas)', value: String(q.ctoCount || 0) },
-            { label: 'CEOs (novas)', value: String(q.ceoCount || 0) },
-            { label: 'Reservas (novas)', value: String(q.reservaCount || 0) },
-            { label: 'Cordoalha (novas)', value: String(q.cordoalhaCount || 0) },
+            { label: 'Portas existentes (HC)', value: String(data.portasExistentes) },
+            { label: 'Novas portas', value: String(data.novasPortas) },
+            { label: 'Total de portas', value: String(data.totalPortas) },
+            { label: 'Taxa de penetração', value: `${data.penetrationRate.toFixed(2).replace('.', ',')}%` },
+            { label: 'Lançamento estimado', value: `${q.cableLength || 0} m` },
+            { label: 'Postes (estimativa)', value: String(data.postCount || 0) },
+            { label: 'CTOs novas', value: String(q.ctoCount || 0) },
+            { label: 'CEOs novas', value: String(q.ceoCount || 0) },
+            { label: 'Reservas novas', value: String(q.reservaCount || 0) },
+            { label: 'Cordoalhas novas', value: String(q.cordoalhaCount || 0) },
         ],
+        clientRows: clients.total ? [
+            { label: 'Clientes cadastrados', value: String(clients.total) },
+            { label: 'Empresariais (B2B)', value: String(clients.b2b) },
+            { label: 'Em viabilidade', value: String(clients.viabilidade) },
+            { label: 'A instalar', value: String(clients.aInstalar) },
+            { label: 'Instalados', value: String(clients.instalado) },
+        ] : [],
         materialRows: [
             { label: 'Ferragens', value: formatPdfCurrency(data.materialCosts.ferragemTotal) },
             { label: 'Cabos', value: formatPdfCurrency(data.materialCosts.cabosTotal) },
             { label: 'Fusão', value: formatPdfCurrency(data.materialCosts.fusaoTotal) },
             { label: 'Data Center', value: formatPdfCurrency(data.materialCosts.datacenterTotal) },
-            { label: 'Total de Materiais', value: formatPdfCurrency(data.materialCost) },
+            { label: 'Total de materiais', value: formatPdfCurrency(data.materialCost) },
         ],
         bomCategories,
         bomGrandTotalText: bomGrandTotalNum > 0 ? formatPdfCurrency(bomGrandTotalNum) : null,
         laborRows: [
-            { label: 'M.O. Regional', value: formatPdfCurrency(data.laborCosts.regionalCost) },
-            { label: 'M.O. Terceirizada', value: formatPdfCurrency(data.laborCosts.outsourcedCost) },
-            { label: 'Total de Mão de Obra', value: formatPdfCurrency(data.laborCost) },
+            { label: 'M.O. regional', value: formatPdfCurrency(data.laborCosts.regionalCost) },
+            { label: 'M.O. terceirizada', value: formatPdfCurrency(data.laborCosts.outsourcedCost) },
+            { label: 'Total de mão de obra', value: formatPdfCurrency(data.laborCost) },
         ],
         regionalLabor: null,
         outsourcedLabor: null,
         financialRows: [
-            { label: 'Subtotal (Mat. + M.O.)', value: formatPdfCurrency(data.totalCost) },
-            { label: 'Coef. de Segurança (5%)', value: formatPdfCurrency(data.safetyCoef) },
-            { label: 'Custo por Nova Porta', value: formatPdfCurrency(data.costPerPort) },
-            { label: 'Prazo da Obra', value: `${data.prazoEstimado} dias` },
-            { label: 'Custo Total Final', value: formatPdfCurrency(data.finalCost) },
+            { label: 'Subtotal (materiais + mão de obra)', value: formatPdfCurrency(data.totalCost) },
+            { label: 'Coef. de segurança (5%)', value: formatPdfCurrency(data.safetyCoef) },
+            { label: 'Custo por nova porta', value: formatPdfCurrency(data.costPerPort) },
+            { label: 'Prazo da obra', value: `${data.prazoEstimado} dias` },
+            { label: 'Custo total final', value: formatPdfCurrency(data.finalCost) },
         ],
         observations: (data.observations && data.observations.trim())
             ? data.observations.trim()
@@ -9084,7 +9128,7 @@ function createReportPreviewSnapshot(data) {
     if (data.regionalLaborDetails) {
         const rd = data.regionalLaborDetails;
         snapshot.regionalLabor = {
-            title: 'Detalhe — M.O. Regional',
+            title: 'Detalhe — M.O. regional',
             rows: [
                 { label: 'Técnicos', value: String(rd.techs) },
                 { label: 'Dias', value: String(rd.days) },
@@ -9097,7 +9141,7 @@ function createReportPreviewSnapshot(data) {
     if (data.outsourcedLaborDetails?.services?.length) {
         const od = data.outsourcedLaborDetails;
         snapshot.outsourcedLabor = {
-            title: `Detalhe — M.O. Terceirizada (${od.companyName})`,
+            title: `Detalhe — M.O. terceirizada (${od.companyName})`,
             rows: od.services.map((service) => ({
                 name: service.name || '—',
                 qty: String(service.qty ?? 0),
@@ -9213,12 +9257,18 @@ function getReportPreviewContentCapacityPx() {
 function updateReportPreviewPageFooters() {
     const pages = document.querySelectorAll('#reportPreviewPages .report-preview-page');
     const total = pages.length;
+    const label = reportPreviewCurrentSnapshot ? getReportFooterLabel(reportPreviewCurrentSnapshot) : '';
     pages.forEach((page, index) => {
         const footer = page.querySelector('.report-preview-page-footer');
         if (footer) {
-            footer.textContent = total > 1 ? `Página ${index + 1} de ${total}` : 'Página 1';
+            footer.innerHTML = `<span>${escapeReportPreviewHtml(label)}</span><span>Página ${index + 1} de ${total}</span>`;
         }
     });
+}
+
+//Texto do rodapé (esquerda) de cada folha
+function getReportFooterLabel(snapshot) {
+    return ['ROUTE MAP', snapshot.company, snapshot.title].filter(Boolean).join(' · ');
 }
 
 function buildReportPreviewTableChunk({
@@ -9326,7 +9376,27 @@ function splitOversizedTableBlock(block, capacity) {
 }
 
 function expandReportPreviewBlocksForLayout(blockElements, capacity) {
-    return blockElements.flatMap((block) => splitOversizedTableBlock(block, capacity));
+    const expanded = blockElements.flatMap((block) => splitOversizedTableBlock(block, capacity));
+    //Títulos marcados com rp-keep-next ficam na mesma página da primeira tabela que os segue
+    const result = [];
+    for (let i = 0; i < expanded.length; i++) {
+        const block = expanded[i];
+        const next = expanded[i + 1];
+        if (next && block.classList.contains('rp-keep-next')) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'rp-flow-block rp-avoid-break';
+            wrapper.appendChild(block.cloneNode(true));
+            wrapper.appendChild(next.cloneNode(true));
+            wrapper.firstChild.classList.remove('rp-keep-next');
+            if (!capacity || measureReportPreviewBlock(wrapper) <= capacity) {
+                result.push(wrapper);
+                i++;
+                continue;
+            }
+        }
+        result.push(block);
+    }
+    return result;
 }
 
 function layoutReportPreviewPages(blockElements) {
@@ -9381,9 +9451,10 @@ function scheduleReportPreviewRelayout() {
 
 function buildReportPreviewFlowBlocks(snapshot) {
     const blocks = [];
+    const options = snapshot.options || { bom: true, labor: true, notes: true };
 
-    const renderDetailRows = (rows, sectionKey) => rows.map((row, index) => `
-        <div class="rp-detail-row">
+    const renderDetailRows = (rows, sectionKey, { highlightLast = false } = {}) => rows.map((row, index) => `
+        <div class="rp-detail-row${highlightLast && index === rows.length - 1 ? ' rp-detail-row--final' : ''}">
             <strong>${escapeReportPreviewHtml(row.label)}</strong>
             <span contenteditable="true" data-rp-section="${sectionKey}" data-rp-row="${index}">${escapeReportPreviewHtml(row.value)}</span>
         </div>
@@ -9411,9 +9482,9 @@ function buildReportPreviewFlowBlocks(snapshot) {
             <table class="rp-table">
                 <thead>
                     <tr>
-                        <th>Material / Descrição</th>
-                        <th class="num">Quantidade</th>
-                        <th class="num">Unidade</th>
+                        <th>Material</th>
+                        <th class="num">Qtd.</th>
+                        <th class="num">Un.</th>
                         <th class="num">Valor unit.</th>
                         <th class="num">Total</th>
                     </tr>
@@ -9440,8 +9511,8 @@ function buildReportPreviewFlowBlocks(snapshot) {
             <thead>
                 <tr>
                     <th>Serviço</th>
-                    <th class="num">Quantidade</th>
-                    <th class="num">Unidade</th>
+                    <th class="num">Qtd.</th>
+                    <th class="num">Un.</th>
                     <th class="num">Valor unit.</th>
                     <th class="num">Total</th>
                 </tr>
@@ -9464,10 +9535,24 @@ function buildReportPreviewFlowBlocks(snapshot) {
         </table>
     ` : '';
 
+    //Capa: marca, empresa, projeto e local
     blocks.push(createReportPreviewFlowBlock(`
+        <div class="rp-brand">
+            <img class="rp-brand__logo" src="img/logo.png" alt="" width="34" height="34" />
+            <div class="rp-brand__text">
+                <strong>ROUTE MAP</strong>
+                <span>${escapeReportPreviewHtml(snapshot.company || 'Redes de fibra óptica')}</span>
+            </div>
+            <div class="rp-brand__doc">
+                <small>Relatório do projeto</small>
+                <span contenteditable="true" data-rp-field="generatedAt">${escapeReportPreviewHtml(snapshot.generatedAt)}</span>
+            </div>
+        </div>
         <div class="rp-title" contenteditable="true" data-rp-field="title">${escapeReportPreviewHtml(snapshot.title)}</div>
-        ${snapshot.locationLine ? `<div class="rp-subtitle" contenteditable="true" data-rp-field="location">${escapeReportPreviewHtml(snapshot.locationLine)}</div>` : ''}
-        <div class="rp-subtitle" contenteditable="true" data-rp-field="generatedAt">${escapeReportPreviewHtml(snapshot.generatedAt)}</div>
+        <div class="rp-meta">
+            ${snapshot.locationLine ? `<span class="rp-chip" contenteditable="true" data-rp-field="location">${escapeReportPreviewHtml(snapshot.locationLine)}</span>` : ''}
+            ${snapshot.author ? `<span class="rp-chip rp-chip--muted">Elaborado por <span contenteditable="true" data-rp-field="author">${escapeReportPreviewHtml(snapshot.author)}</span></span>` : ''}
+        </div>
     `));
 
     blocks.push(createReportPreviewFlowBlock(`
@@ -9476,59 +9561,80 @@ function buildReportPreviewFlowBlocks(snapshot) {
     `, 'rp-avoid-break'));
 
     blocks.push(createReportPreviewFlowBlock(`
-        <div class="rp-section-title">Rede e Cobertura</div>
+        <div class="rp-section-title">Rede e cobertura</div>
         <div class="rp-detail-grid">${renderDetailRows(snapshot.networkRows, 'network')}</div>
     `, 'rp-avoid-break'));
 
-    blocks.push(createReportPreviewFlowBlock(`
-        <div class="rp-section-title">Materiais — Resumo de Custos</div>
-        <div class="rp-detail-grid">${renderDetailRows(snapshot.materialRows, 'material')}</div>
-    `, 'rp-avoid-break'));
-
-    blocks.push(createReportPreviewFlowBlock(`
-        <div class="rp-section-title">Lista de Materiais</div>
-        <p class="rp-bom-hint">Tabela detalhada por categoria (simulação de planilha da lista de materiais do projeto).</p>
-    `));
-
-    bomCategoryBlocks.forEach((categoryHtml) => {
-        blocks.push(createReportPreviewFlowBlock(categoryHtml, 'rp-avoid-break'));
-    });
-
-    if (snapshot.bomGrandTotalText) {
+    if (snapshot.clientRows?.length) {
         blocks.push(createReportPreviewFlowBlock(`
-            <table class="rp-table">
-                <tbody>
-                    <tr class="grand-total">
-                        <td colspan="4" style="text-align:right;">Total geral da lista de materiais</td>
-                        <td class="num" contenteditable="true" data-rp-bom-grand-total="1">${escapeReportPreviewHtml(snapshot.bomGrandTotalText)}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="rp-section-title">Clientes</div>
+            <div class="rp-detail-grid">${renderDetailRows(snapshot.clientRows, 'clients')}</div>
         `, 'rp-avoid-break'));
     }
 
     blocks.push(createReportPreviewFlowBlock(`
-        <div class="rp-section-title">Mão de Obra</div>
+        <div class="rp-section-title">Materiais — resumo de custos</div>
+        <div class="rp-detail-grid">${renderDetailRows(snapshot.materialRows, 'material')}</div>
+    `, 'rp-avoid-break'));
+
+    if (options.bom && snapshot.bomCategories.length) {
+        blocks.push(createReportPreviewFlowBlock(`
+            <div class="rp-section-title">Lista de materiais</div>
+            <p class="rp-bom-hint">Quantitativos por categoria, com valor unitário e subtotais.</p>
+        `, 'rp-avoid-break rp-keep-next'));
+
+        bomCategoryBlocks.forEach((categoryHtml) => {
+            blocks.push(createReportPreviewFlowBlock(categoryHtml, 'rp-avoid-break'));
+        });
+
+        if (snapshot.bomGrandTotalText) {
+            blocks.push(createReportPreviewFlowBlock(`
+                <table class="rp-table">
+                    <tbody>
+                        <tr class="grand-total">
+                            <td colspan="4" style="text-align:right;">Total geral da lista de materiais</td>
+                            <td class="num" contenteditable="true" data-rp-bom-grand-total="1">${escapeReportPreviewHtml(snapshot.bomGrandTotalText)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `, 'rp-avoid-break'));
+        }
+    }
+
+    blocks.push(createReportPreviewFlowBlock(`
+        <div class="rp-section-title">Mão de obra</div>
         <div class="rp-detail-grid">${renderDetailRows(snapshot.laborRows, 'labor')}</div>
     `, 'rp-avoid-break'));
 
-    if (regionalHtml) {
-        blocks.push(createReportPreviewFlowBlock(regionalHtml, 'rp-avoid-break'));
+    if (options.labor) {
+        if (regionalHtml) blocks.push(createReportPreviewFlowBlock(regionalHtml, 'rp-avoid-break'));
+        if (outsourcedHtml) blocks.push(createReportPreviewFlowBlock(outsourcedHtml, 'rp-avoid-break'));
     }
 
-    if (outsourcedHtml) {
-        blocks.push(createReportPreviewFlowBlock(outsourcedHtml, 'rp-avoid-break'));
+    const share = snapshot.costShare;
+    const stackHtml = share ? `
+        <div class="rp-stack" aria-hidden="true">
+            <span class="rp-stack__seg rp-stack__seg--mat" style="width:${Math.max(0, share.mat).toFixed(2)}%"></span>
+            <span class="rp-stack__seg rp-stack__seg--lab" style="width:${Math.max(0, share.lab).toFixed(2)}%"></span>
+            <span class="rp-stack__seg rp-stack__seg--coef" style="width:${Math.max(0, share.coef).toFixed(2)}%"></span>
+        </div>
+        <div class="rp-legend">
+            <span><i class="rp-dot rp-dot--mat"></i>Materiais ${escapeReportPreviewHtml(share.matText)}</span>
+            <span><i class="rp-dot rp-dot--lab"></i>Mão de obra ${escapeReportPreviewHtml(share.labText)}</span>
+            <span><i class="rp-dot rp-dot--coef"></i>Coef. de segurança ${escapeReportPreviewHtml(share.coefText)}</span>
+        </div>` : '';
+    blocks.push(createReportPreviewFlowBlock(`
+        <div class="rp-section-title">Resumo financeiro</div>
+        ${stackHtml}
+        <div class="rp-detail-grid">${renderDetailRows(snapshot.financialRows, 'financial', { highlightLast: true })}</div>
+    `, 'rp-avoid-break'));
+
+    if (options.notes) {
+        blocks.push(createReportPreviewFlowBlock(`
+            <div class="rp-section-title">Observações</div>
+            <div class="rp-observations" contenteditable="true" data-rp-field="observations">${escapeReportPreviewHtml(snapshot.observations)}</div>
+        `, 'rp-avoid-break'));
     }
-
-    blocks.push(createReportPreviewFlowBlock(`
-        <div class="rp-section-title">Resumo Financeiro</div>
-        <div class="rp-detail-grid">${renderDetailRows(snapshot.financialRows, 'financial')}</div>
-    `, 'rp-avoid-break'));
-
-    blocks.push(createReportPreviewFlowBlock(`
-        <div class="rp-section-title">Observações</div>
-        <div class="rp-observations" contenteditable="true" data-rp-field="observations">${escapeReportPreviewHtml(snapshot.observations)}</div>
-    `, 'rp-avoid-break'));
 
     return blocks;
 }
@@ -9555,6 +9661,7 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
     snapshot.title = readEditableText('[data-rp-field="title"]') || snapshot.title;
     snapshot.locationLine = readEditableText('[data-rp-field="location"]') || snapshot.locationLine;
     snapshot.generatedAt = readEditableText('[data-rp-field="generatedAt"]') || snapshot.generatedAt;
+    snapshot.author = readEditableText('[data-rp-field="author"]') || snapshot.author;
     snapshot.observations = readEditableText('[data-rp-field="observations"]') || snapshot.observations;
 
     snapshot.kpis.forEach((kpi, index) => {
@@ -9567,6 +9674,7 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
         });
     };
     readSectionRows('network', snapshot.networkRows);
+    if (snapshot.clientRows?.length) readSectionRows('clients', snapshot.clientRows);
     readSectionRows('material', snapshot.materialRows);
     readSectionRows('labor', snapshot.laborRows);
     readSectionRows('financial', snapshot.financialRows);
@@ -9576,11 +9684,12 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
 
     snapshot.bomCategories.forEach((category, catIndex) => {
         category.rows.forEach((row, rowIndex) => {
-            row.name = document.querySelector(`[data-rp-bom-cat="${catIndex}"][data-rp-bom-row="${rowIndex}"][data-rp-bom-col="name"]`)?.textContent.trim() || row.name;
-            row.qty = document.querySelector(`[data-rp-bom-cat="${catIndex}"][data-rp-bom-row="${rowIndex}"][data-rp-bom-col="qty"]`)?.textContent.trim() || row.qty || row.qtyText;
-            row.unit = document.querySelector(`[data-rp-bom-cat="${catIndex}"][data-rp-bom-row="${rowIndex}"][data-rp-bom-col="unit"]`)?.textContent.trim() || row.unit || 'un';
-            row.unitPriceText = document.querySelector(`[data-rp-bom-cat="${catIndex}"][data-rp-bom-row="${rowIndex}"][data-rp-bom-col="unitPrice"]`)?.textContent.trim() || row.unitPriceText;
-            row.totalText = document.querySelector(`[data-rp-bom-cat="${catIndex}"][data-rp-bom-row="${rowIndex}"][data-rp-bom-col="total"]`)?.textContent.trim() || row.totalText;
+            const cell = (col) => document.querySelector(`[data-rp-bom-cat="${catIndex}"][data-rp-bom-row="${rowIndex}"][data-rp-bom-col="${col}"]`)?.textContent.trim();
+            row.name = cell('name') || row.name;
+            row.qty = cell('qty') || row.qty || row.qtyText;
+            row.unit = cell('unit') || row.unit || 'un';
+            row.unitPriceText = cell('unitPrice') || row.unitPriceText;
+            row.totalText = cell('total') || row.totalText;
             delete row.qtyText;
         });
         category.subtotalText = readEditableText(`[data-rp-bom-subtotal="${catIndex}"]`) || category.subtotalText;
@@ -9592,11 +9701,12 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
     if (snapshot.outsourcedLabor) {
         snapshot.outsourcedLabor.title = readEditableText('[data-rp-outsourced-title="1"]') || snapshot.outsourcedLabor.title;
         snapshot.outsourcedLabor.rows.forEach((row, rowIndex) => {
-            row.name = document.querySelector(`[data-rp-outsourced-row="${rowIndex}"][data-rp-outsourced-col="name"]`)?.textContent.trim() || row.name;
-            row.qty = document.querySelector(`[data-rp-outsourced-row="${rowIndex}"][data-rp-outsourced-col="qty"]`)?.textContent.trim() || row.qty || row.qtyText;
-            row.unit = document.querySelector(`[data-rp-outsourced-row="${rowIndex}"][data-rp-outsourced-col="unit"]`)?.textContent.trim() || row.unit || 'un';
-            row.unitPriceText = document.querySelector(`[data-rp-outsourced-row="${rowIndex}"][data-rp-outsourced-col="unitPrice"]`)?.textContent.trim() || row.unitPriceText;
-            row.totalText = document.querySelector(`[data-rp-outsourced-row="${rowIndex}"][data-rp-outsourced-col="total"]`)?.textContent.trim() || row.totalText;
+            const cell = (col) => document.querySelector(`[data-rp-outsourced-row="${rowIndex}"][data-rp-outsourced-col="${col}"]`)?.textContent.trim();
+            row.name = cell('name') || row.name;
+            row.qty = cell('qty') || row.qty || row.qtyText;
+            row.unit = cell('unit') || row.unit || 'un';
+            row.unitPriceText = cell('unitPrice') || row.unitPriceText;
+            row.totalText = cell('total') || row.totalText;
             delete row.qtyText;
         });
         snapshot.outsourcedLabor.totalText = readEditableText('[data-rp-outsourced-total="1"]') || snapshot.outsourcedLabor.totalText;
@@ -9604,6 +9714,8 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
 
     return snapshot;
 }
+
+let reportPreviewCurrentSnapshot = null;
 
 function openReportPreviewModal() {
     const projectId = document.getElementById('report-project-details')?.dataset.currentProjectId;
@@ -9619,8 +9731,10 @@ function openReportPreviewModal() {
     }
 
     reportPreviewOriginalSnapshot = createReportPreviewSnapshot(data);
+    reportPreviewCurrentSnapshot = JSON.parse(JSON.stringify(reportPreviewOriginalSnapshot));
+    syncReportOptionCheckboxes();
     document.getElementById('reportPreviewModal').style.display = 'flex';
-    renderReportPreviewHtml(reportPreviewOriginalSnapshot);
+    renderReportPreviewHtml(reportPreviewCurrentSnapshot);
 }
 
 function closeReportPreviewModal() {
@@ -9629,12 +9743,40 @@ function closeReportPreviewModal() {
 
 function resetReportPreview() {
     if (!reportPreviewOriginalSnapshot) return;
-    renderReportPreviewHtml(JSON.parse(JSON.stringify(reportPreviewOriginalSnapshot)));
+    reportPreviewCurrentSnapshot = JSON.parse(JSON.stringify(reportPreviewOriginalSnapshot));
+    syncReportOptionCheckboxes();
+    renderReportPreviewHtml(reportPreviewCurrentSnapshot);
+}
+
+function syncReportOptionCheckboxes() {
+    const options = reportPreviewCurrentSnapshot?.options || { bom: true, labor: true, notes: true };
+    document.getElementById('rpOptBom').checked = !!options.bom;
+    document.getElementById('rpOptLabor').checked = !!options.labor;
+    document.getElementById('rpOptNotes').checked = !!options.notes;
+}
+
+//Liga/desliga seções do documento mantendo o que já foi editado
+function handleReportOptionChange() {
+    if (!reportPreviewCurrentSnapshot) return;
+    const edited = readReportPreviewSnapshotFromDom(reportPreviewCurrentSnapshot);
+    edited.options = {
+        bom: document.getElementById('rpOptBom').checked,
+        labor: document.getElementById('rpOptLabor').checked,
+        notes: document.getElementById('rpOptNotes').checked,
+    };
+    reportPreviewCurrentSnapshot = edited;
+    renderReportPreviewHtml(edited);
+}
+
+function setupReportOptions() {
+    ['rpOptBom', 'rpOptLabor', 'rpOptNotes'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', handleReportOptionChange);
+    });
 }
 
 //Altura útil (em px) de uma página A4 no PDF, descontando as margens de exportação.
-const REPORT_EXPORT_PAGE_MARGIN_TOP_MM = 12;
-const REPORT_EXPORT_PAGE_MARGIN_BOTTOM_MM = 14;
+const REPORT_EXPORT_PAGE_MARGIN_TOP_MM = 14;
+const REPORT_EXPORT_PAGE_MARGIN_BOTTOM_MM = 17;
 
 function getReportExportContentCapacityPx() {
     const usableMm = REPORT_PREVIEW_PAGE_HEIGHT_MM
@@ -9669,6 +9811,37 @@ function buildReportPreviewExportFlow(snapshot, { forPdf = false } = {}) {
     return flow;
 }
 
+//Cabeçalho (páginas 2+), rodapé com número de página e propriedades do arquivo
+function decorateReportPdf(pdf, snapshot) {
+    const total = pdf.internal.getNumberOfPages();
+    const width = pdf.internal.pageSize.getWidth();
+    const height = pdf.internal.pageSize.getHeight();
+    const marginX = 16;
+    const footerLabel = getReportFooterLabel(snapshot);
+    for (let page = 1; page <= total; page++) {
+        pdf.setPage(page);
+        pdf.setLineWidth(0.2);
+        pdf.setDrawColor(219, 229, 235);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(91, 116, 131);
+        pdf.line(marginX, height - 12.5, width - marginX, height - 12.5);
+        pdf.text(footerLabel, marginX, height - 8.5);
+        pdf.text(`Página ${page} de ${total}`, width - marginX, height - 8.5, { align: 'right' });
+        if (page > 1) {
+            pdf.text('ROUTE MAP · Relatório do projeto', marginX, 8);
+            pdf.text(String(snapshot.title || ''), width - marginX, 8, { align: 'right' });
+            pdf.line(marginX, 10.2, width - marginX, 10.2);
+        }
+    }
+    pdf.setProperties({
+        title: `Relatório do projeto - ${snapshot.title || ''}`,
+        subject: snapshot.locationLine || 'Relatório de projeto de rede',
+        author: snapshot.author || 'ROUTE MAP',
+        creator: 'ROUTE MAP',
+    });
+}
+
 async function exportReportPreviewPdfDocument(snapshot, filename) {
     const flow = buildReportPreviewExportFlow(snapshot, { forPdf: true });
     const wrapper = document.createElement('div');
@@ -9677,13 +9850,15 @@ async function exportReportPreviewPdfDocument(snapshot, filename) {
     document.body.appendChild(wrapper);
 
     try {
+        //Espera o logo e o layout ficarem prontos antes de capturar
+        await Promise.all(Array.from(flow.querySelectorAll('img')).map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve())));
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         await html2pdf()
             .set({
-                margin: [12, 16, 14, 16],
+                margin: [REPORT_EXPORT_PAGE_MARGIN_TOP_MM, 16, REPORT_EXPORT_PAGE_MARGIN_BOTTOM_MM, 16],
                 filename,
-                image: { type: 'jpeg', quality: 0.98 },
+                image: { type: 'jpeg', quality: 0.96 },
                 html2canvas: {
                     scale: 2,
                     useCORS: true,
@@ -9691,13 +9866,16 @@ async function exportReportPreviewPdfDocument(snapshot, filename) {
                     backgroundColor: '#ffffff',
                     logging: false,
                 },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
                 pagebreak: {
                     mode: ['css', 'legacy'],
                     avoid: ['tr', '.rp-kpi-card', '.rp-detail-row', '.rp-avoid-break'],
                 },
             })
             .from(flow)
+            .toPdf()
+            .get('pdf')
+            .then((pdf) => decorateReportPdf(pdf, snapshot))
             .save();
     } finally {
         wrapper.remove();
@@ -9705,28 +9883,39 @@ async function exportReportPreviewPdfDocument(snapshot, filename) {
 }
 
 const REPORT_PREVIEW_WORD_STYLES = `
-body { font-family: Segoe UI, Arial, sans-serif; font-size: 11pt; color: #3d2a32; line-height: 1.45; }
-.rp-title { font-size: 16pt; font-weight: bold; color: #3d6575; margin: 0 0 4pt; }
-.rp-subtitle { font-size: 10pt; color: #5a8594; margin: 0 0 2pt; }
-.rp-section-title { font-size: 11pt; font-weight: bold; color: #3d6575; text-transform: uppercase; letter-spacing: 0.06em; margin: 14pt 0 8pt; border-bottom: 2px solid #82C8E5; padding-bottom: 4pt; }
-.rp-subsection-title { font-size: 10pt; font-weight: bold; color: #3d6575; margin: 8pt 0 4pt; }
-.rp-bom-hint { font-size: 9pt; color: #4a6b85; margin: 0 0 8pt; }
-.rp-kpi-label { display: block; font-size: 8pt; color: #4a6b85; font-weight: bold; text-transform: uppercase; margin-bottom: 4pt; }
-.rp-kpi-value { display: block; font-size: 12pt; font-weight: bold; color: #3d2a32; }
-.rp-kpi-primary .rp-kpi-value { color: #2e7d32; }
-.rp-observations { min-height: 48pt; padding: 8pt; border: 1px dashed #a8cce0; border-radius: 6pt; font-size: 9pt; white-space: pre-wrap; background: #eef6fb; }
+body { font-family: Segoe UI, Arial, sans-serif; font-size: 11pt; color: #16323f; line-height: 1.45; }
+.rp-brand { margin: 0 0 10pt; }
+.rp-brand__text strong { font-size: 13pt; color: #173f4e; }
+.rp-brand__text span, .rp-brand__doc { font-size: 9pt; color: #5b7483; }
+.rp-brand__doc small { display: block; font-size: 8pt; text-transform: uppercase; }
+.rp-title { font-size: 20pt; font-weight: bold; color: #173f4e; margin: 6pt 0 4pt; }
+.rp-chip { font-size: 9pt; color: #24586c; }
+.rp-meta { margin: 0 0 8pt; }
+.rp-subtitle { font-size: 10pt; color: #5b7483; margin: 0 0 2pt; }
+.rp-section-title { font-size: 11pt; font-weight: bold; color: #173f4e; text-transform: uppercase; letter-spacing: 0.06em; margin: 14pt 0 8pt; border-bottom: 2px solid #2f7a94; padding-bottom: 4pt; }
+.rp-subsection-title { font-size: 10pt; font-weight: bold; color: #24586c; margin: 8pt 0 4pt; }
+.rp-bom-hint { font-size: 9pt; color: #5b7483; margin: 0 0 8pt; }
+.rp-legend { font-size: 9pt; color: #5b7483; margin: 0 0 6pt; }
+.rp-legend span { margin-right: 12pt; }
+.rp-kpi-label { display: block; font-size: 8pt; color: #5b7483; font-weight: bold; text-transform: uppercase; margin-bottom: 4pt; }
+.rp-kpi-value { display: block; font-size: 12pt; font-weight: bold; color: #16323f; }
+.rp-kpi-primary .rp-kpi-value { color: #1f9d4a; }
+.rp-observations { min-height: 48pt; padding: 8pt; border: 1px dashed #b8ccd6; border-radius: 6pt; font-size: 9pt; white-space: pre-wrap; background: #f5f8fa; }
 .rp-table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; font-size: 9pt; }
-.rp-table th, .rp-table td { border: 1px solid #f0d4da; padding: 4pt 5pt; }
-.rp-table th { background: #F5F5DC; font-weight: bold; color: #3d6575; text-align: left; }
+.rp-table th, .rp-table td { border: 1px solid #dbe5eb; padding: 4pt 5pt; }
+.rp-table th { background: #173f4e; font-weight: bold; color: #ffffff; text-align: left; }
 .rp-table td.num, .rp-table th.num { text-align: right; }
-.rp-table tr.subtotal td { background: #e0f7fa; font-weight: bold; }
-.rp-table tr.grand-total td { background: #fef9e7; font-weight: bold; }
+.rp-table tr.subtotal td { background: #e3f1f6; font-weight: bold; }
+.rp-table tr.grand-total td { background: #173f4e; color: #ffffff; font-weight: bold; }
 .rp-export-table { width: 100%; border-collapse: collapse; margin-bottom: 8pt; font-size: 10pt; }
-.rp-export-table td { border: 1px solid #f0d4da; padding: 6pt 8pt; vertical-align: top; }
-.rp-export-detail td:last-child { text-align: right; color: #3d6575; font-weight: bold; }
+.rp-export-table td { border: 1px solid #dbe5eb; padding: 6pt 8pt; vertical-align: top; }
+.rp-export-detail td:last-child { text-align: right; color: #173f4e; font-weight: bold; }
 `;
 
 function convertReportPreviewGridsForWord(clone) {
+    //Logo por caminho relativo e barras de proporção não entram no Word
+    clone.querySelectorAll('.rp-brand__logo, .rp-stack').forEach((el) => el.remove());
+
     clone.querySelectorAll('.rp-kpi-grid').forEach((grid) => {
         const cards = [...grid.querySelectorAll('.rp-kpi-card')];
         if (!cards.length) return;
@@ -9785,12 +9974,16 @@ function downloadReportBlob(blob, filename) {
 }
 
 function getReportExportContext() {
-    if (!reportPreviewOriginalSnapshot) return null;
+    if (!reportPreviewCurrentSnapshot) return null;
     const pagesRoot = getReportPreviewPagesRoot();
     if (!pagesRoot || !pagesRoot.querySelector('.report-preview-page')) return null;
-    const snapshot = readReportPreviewSnapshotFromDom(reportPreviewOriginalSnapshot);
-    const baseName = (snapshot.projectCode || 'relatorio').replace(/[^a-z0-9_-]+/gi, '_');
-    return { pagesRoot, snapshot, baseName };
+    const snapshot = readReportPreviewSnapshotFromDom(reportPreviewCurrentSnapshot);
+    const slug = String(snapshot.projectCode || 'projeto')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'projeto';
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return { pagesRoot, snapshot, baseName: `Relatorio_${slug}_${stamp}` };
 }
 
 function setReportPreviewExportButtonsBusy(isBusy, activeButton, busyLabel) {
@@ -9818,15 +10011,14 @@ async function confirmReportPdfExport() {
     }
 
     const exportBtn = document.getElementById('confirmReportPdfExportButton');
-
+    const filename = `${context.baseName}.pdf`;
     setReportPreviewExportButtonsBusy(true, exportBtn, 'Gerando PDF...');
+    showToast('Gerando PDF', 'Montando as páginas do relatório…', 'progress');
 
     try {
-        await exportReportPreviewPdfDocument(
-            context.snapshot,
-            `${context.baseName}_relatorio.pdf`
-        );
+        await exportReportPreviewPdfDocument(context.snapshot, filename);
         closeReportPreviewModal();
+        showToast('PDF gerado', filename);
     } catch (err) {
         console.error('Erro ao exportar relatório PDF:', err);
         const detail = err?.message ? `\n\nDetalhe: ${err.message}` : '';
@@ -9847,14 +10039,14 @@ function confirmReportWordExport() {
         const clone = buildReportPreviewExportFlow(context.snapshot);
         convertReportPreviewGridsForWord(clone);
         const html = buildReportPreviewWordHtml(clone);
-        const filename = `${context.baseName}_relatorio.docx`;
+        const filename = `${context.baseName}.docx`;
 
         if (typeof htmlDocx !== 'undefined' && typeof htmlDocx.asBlob === 'function') {
             const blob = htmlDocx.asBlob(html);
             downloadReportBlob(blob, filename);
         } else {
             const fallbackBlob = new Blob(['\ufeff', html], { type: 'application/msword' });
-            downloadReportBlob(fallbackBlob, `${context.baseName}_relatorio.doc`);
+            downloadReportBlob(fallbackBlob, `${context.baseName}.doc`);
             showAlert('Aviso', 'O arquivo foi gerado como .doc (Word). Se preferir .docx, recarregue a página e tente novamente.');
         }
         closeReportPreviewModal();
@@ -9867,7 +10059,6 @@ function confirmReportWordExport() {
 }
 
 function showProjectReportDetails(projectId, projectName) {
-    console.log(`--- Gerando Relatório para Projeto ID: ${projectId}, Nome: ${projectName} ---`);
     document.getElementById('report-project-details').dataset.currentProjectId = projectId;
 
     const data = computeProjectReportData(projectId);
@@ -9876,36 +10067,94 @@ function showProjectReportDetails(projectId, projectName) {
         return;
     }
 
-    document.getElementById("report-title").textContent = projectName;
-    const subtitleParts = [data.city, data.neighborhood, data.projectType].filter(Boolean);
-    document.getElementById("report-subtitle").textContent = subtitleParts.join(' · ') || 'Sem informações de localização';
-    document.getElementById("report-neighborhoods").textContent = data.neighborhood || 'N/A';
-    document.getElementById("report-houses").textContent = data.totalCasas;
-    document.getElementById("report-existing-ports").textContent = data.portasExistentes;
-    document.getElementById("report-new-ports").textContent = data.novasPortas;
-    document.getElementById("report-total-ports").textContent = data.totalPortas;
-    document.getElementById("report-penetration-rate").textContent = `${data.penetrationRate.toFixed(2)}%`;
-    document.getElementById("report-cable-length").textContent = `${data.quantities.cableLength} m`;
-    document.getElementById("report-kpi-final-cost").textContent = formatPdfCurrency(data.finalCost);
-    document.getElementById("report-kpi-new-ports").textContent = data.novasPortas;
-    document.getElementById("report-kpi-cable").textContent = `${data.quantities.cableLength} m`;
-    document.getElementById("report-kpi-duration").textContent = `${data.prazoEstimado} dias`;
-    document.getElementById("report-ferragem-cost").textContent = formatPdfCurrency(data.materialCosts.ferragemTotal);
-    document.getElementById("report-cabos-cost").textContent = formatPdfCurrency(data.materialCosts.cabosTotal);
-    document.getElementById("report-fusao-cost").textContent = formatPdfCurrency(data.materialCosts.fusaoTotal);
-    document.getElementById("report-datacenter-cost").textContent = formatPdfCurrency(data.materialCosts.datacenterTotal);
-    document.getElementById("report-material-cost").textContent = formatPdfCurrency(data.materialCost);
-    document.getElementById("report-regional-labor-cost").textContent = formatPdfCurrency(data.laborCosts.regionalCost);
-    document.getElementById("report-outsourced-labor-cost").textContent = formatPdfCurrency(data.laborCosts.outsourcedCost);
-    document.getElementById("report-labor-cost").textContent = formatPdfCurrency(data.laborCost);
-    document.getElementById("report-total-cost").textContent = formatPdfCurrency(data.totalCost);
-    document.getElementById("report-safety-coef").textContent = formatPdfCurrency(data.safetyCoef);
-    document.getElementById("report-final-cost").textContent = formatPdfCurrency(data.finalCost);
-    document.getElementById("report-cost-per-port").textContent = formatPdfCurrency(data.costPerPort);
-    document.getElementById("report-duration").textContent = `${data.prazoEstimado} dias`;
+    const root = document.getElementById('report-project-details');
+    const money = formatPdfCurrency;
+    const setById = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const setRv = (key, text) => root.querySelectorAll(`[data-rv="${key}"]`).forEach((el) => { el.textContent = text; });
+    const q = data.quantities;
+
+    document.getElementById('reportModalTitle').textContent = 'Relatório do projeto';
+    setById('report-title', projectName);
+    const subtitleParts = [data.city, data.neighborhood].filter(Boolean);
+    setById('report-subtitle', subtitleParts.join(' · ') || 'Sem informações de localização');
+    setById('report-type', data.projectType || 'TCR');
+
+    setById('report-kpi-final-cost', money(data.finalCost));
+    setById('report-kpi-new-ports', String(data.novasPortas));
+    setById('report-kpi-cable', `${q.cableLength} m`);
+    setById('report-kpi-duration', `${data.prazoEstimado} dias`);
+
+    setRv('neighborhood', data.neighborhood || 'N/A');
+    setRv('houses', String(data.totalCasas));
+    setRv('existingPorts', String(data.portasExistentes));
+    setRv('newPorts', String(data.novasPortas));
+    setRv('totalPorts', String(data.totalPortas));
+    setRv('penetration', `${data.penetrationRate.toFixed(2).replace('.', ',')}%`);
+    document.getElementById('rv-penetration-bar').style.width = `${Math.min(100, data.penetrationRate)}%`;
+
+    setRv('cableLength', `${q.cableLength} m`);
+    setRv('posts', String(data.postCount || 0));
+    setRv('ctos', String(q.ctoCount || 0));
+    setRv('ceos', String(q.ceoCount || 0));
+    setRv('reservas', String(q.reservaCount || 0));
+    setRv('cordoalhas', String(q.cordoalhaCount || 0));
+
+    //Materiais: barra proporcional ao peso de cada categoria
+    const mc = data.materialCosts;
+    const categories = [
+        { label: 'Ferragens', value: mc.ferragemTotal, color: '#b45309' },
+        { label: 'Cabos', value: mc.cabosTotal, color: '#2563eb' },
+        { label: 'Fusão', value: mc.fusaoTotal, color: '#7c3aed' },
+        { label: 'Data Center', value: mc.datacenterTotal, color: '#0f766e' },
+    ];
+    const materialsTotal = categories.reduce((sum, c) => sum + c.value, 0) || 1;
+    document.getElementById('rv-material-bars').innerHTML = categories.map((c) => `
+        <li style="--bar:${c.color}">
+            <div class="rv-bars__head"><span>${c.label}</span><strong>${money(c.value)}</strong></div>
+            <div class="rv-bars__track"><span style="width:${((c.value / materialsTotal) * 100).toFixed(1)}%"></span></div>
+        </li>`).join('');
+    setRv('materialCost', money(data.materialCost));
+
+    setRv('regionalLabor', money(data.laborCosts.regionalCost));
+    setRv('outsourcedLabor', money(data.laborCosts.outsourcedCost));
+    setRv('laborCost', money(data.laborCost));
+    const laborDetail = document.getElementById('rv-labor-detail');
+    if (data.regionalLaborDetails) {
+        const rd = data.regionalLaborDetails;
+        setRv('laborDetail', `${rd.techs} técnico(s) · ${rd.days} dia(s)`);
+        laborDetail.hidden = false;
+    } else {
+        laborDetail.hidden = true;
+    }
+
+    const clientsCard = document.getElementById('rv-clients-card');
+    clientsCard.hidden = !data.clients.total;
+    setRv('clientsTotal', String(data.clients.total));
+    setRv('clientsB2b', String(data.clients.b2b));
+    setRv('clientsViab', String(data.clients.viabilidade));
+    setRv('clientsInstall', String(data.clients.aInstalar));
+    setRv('clientsDone', String(data.clients.instalado));
+
+    //Composição do custo final
+    const base = (data.materialCost + data.laborCost + data.safetyCoef) || 1;
+    document.getElementById('rv-stack-mat').style.width = `${(data.materialCost / base) * 100}%`;
+    document.getElementById('rv-stack-lab').style.width = `${(data.laborCost / base) * 100}%`;
+    document.getElementById('rv-stack-coef').style.width = `${(data.safetyCoef / base) * 100}%`;
+    setRv('safetyCoef', money(data.safetyCoef));
+    setRv('totalCost', money(data.totalCost));
+    setRv('costPerPort', money(data.costPerPort));
+    setRv('duration', `${data.prazoEstimado} dias`);
+    setRv('finalCost', money(data.finalCost));
+
+    const notes = document.getElementById('rv-notes');
+    const hasNotes = !!(data.observations && data.observations.trim());
+    notes.textContent = hasNotes ? data.observations.trim() : 'Nenhuma observação registrada. Use o botão Observações para adicionar.';
+    notes.classList.toggle('is-empty', !hasNotes);
 
     document.getElementById("report-project-list").classList.add("hidden");
     document.getElementById("report-project-details").classList.remove("hidden");
+    document.querySelector('#reportModal .report-modal').classList.add('is-details');
+    root.querySelector('.report-details-body').scrollTop = 0;
 }
 
 //Atualiza a posição da caixa

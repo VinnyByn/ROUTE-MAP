@@ -65,7 +65,13 @@ markerInfo.client: { kind: 'residencial'|'b2b', status, code, document, phone, p
 Drop: buildDropNetwork monta um grafo com os vértices dos cabos do projeto; routeDropAlongNetwork faz Dijkstra da CTO até o ponto da rede mais perto do cliente (até 120 m) e segue reto até a casa.
 dropRoute: 'rede' (pelos cabos), 'rua' (Routes API do Google, se estiver liberada na chave), 'manual' (ajustado no mapa) ou 'reta'. dropKey guarda CTO + posições; ao mudar, a rota automática é refeita e a manual só ajusta as pontas.
 A Routes API não está liberada na chave atual: a tentativa falha uma vez e o sistema fica na linha reta quando não há rede próxima.
-4.8. Motor de Cálculo de Materiais (calculateBomState)
+4.8. Relatório e exportação em PDF/Word
+computeProjectReportData reúne os números do projeto (inclui clientes). showProjectReportDetails preenche a janela (#reportModal; valores em elementos [data-rv], barras proporcionais e composição do custo).
+O documento é montado a partir de um "snapshot" (createReportPreviewSnapshot) → blocos (buildReportPreviewFlowBlocks) → folhas A4 (layoutReportPreviewPages). snapshot.options liga/desliga lista de materiais, detalhe da mão de obra e observações; edições feitas na folha são lidas por readReportPreviewSnapshotFromDom e preservadas ao alternar opções (reportPreviewCurrentSnapshot; o original fica em reportPreviewOriginalSnapshot para "Restaurar original").
+Blocos com a classe rp-keep-next são unidos ao bloco seguinte para não ficarem órfãos no fim da página; tabelas maiores que uma página são divididas (splitOversizedTableBlock) repetindo o cabeçalho.
+PDF: html2pdf renderiza o fluxo contínuo (.report-preview-export-flow, 178 mm) e decorateReportPdf (jsPDF) grava cabeçalho, rodapé "Página n de N" e metadados; as margens estão em REPORT_EXPORT_PAGE_MARGIN_*_MM. O CSS do documento (ui-v3.css, .report-preview-page) usa uma paleta fixa (--rp-*) e força as cores das tabelas: as regras globais do tema escuro (ex.: html[data-theme="dark"] table td) não podem vazar para o PDF. Word: REPORT_PREVIEW_WORD_STYLES + convertReportPreviewGridsForWord (grades viram tabelas; logo e barras são removidos).
+
+4.9. Motor de Cálculo de Materiais (calculateBomState)
 Varre marcadores, cabos e planos de fusão e gera a BOM com base em MATERIAL_PRICES, que recebe os preços do catálogo da empresa (applyCatalogToMaterialPrices). Clientes entram por addClientMaterialsToBom (metragem do drop = traçado + sobra).
 
 5. Manutenção e Extensão

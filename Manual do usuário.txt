@@ -102,4 +102,12 @@ Preços, kits e configurações (catálogo da empresa):
 - Kits: cartões com os itens, o custo de cada item e o custo total do kit.
 - Regras de cálculo: lançamento de cabos (vão, plaquetas, BAP, SUPAS, alças), clientes (sobra por drop) e mão de obra (custo/hora, jornada e produtividade), com exemplos do cálculo.
 Somente o administrador altera; projetistas e membros apenas consultam.
-Relatório do Projeto: Gera um resumo executivo com total de portas (HC) e casas (HP), taxa de penetração, custo total (CAPEX) por material e mão de obra, e custo por porta.
+Relatório do Projeto (botão "Relatório" na barra):
+- Lista de projetos: cada projeto mostra custo total, novas portas e lançamento para você escolher o certo.
+- Painel do projeto: custo total, novas portas, lançamento e prazo no topo; cartões de rede e cobertura (com a taxa de penetração), rede nova (lançamento, postes, CTOs, CEOs, reservas, cordoalhas), materiais por categoria, mão de obra, clientes (quando houver), resumo financeiro (composição do custo, coeficiente de segurança de 5%, custo por nova porta e custo total final) e observações.
+- "Observações" (projetista e administrador) abre o campo de texto que também sai no relatório. Lembre de salvar o projeto para guardá-las.
+Exportar PDF:
+- O botão "Exportar PDF" abre a pré-visualização em folhas A4. Clique em qualquer texto para editar antes de exportar.
+- Marque ou desmarque "Lista de materiais", "Detalhe da mão de obra" e "Observações" para escolher o que entra no documento; suas edições são mantidas.
+- "Baixar PDF" e "Baixar Word" geram o arquivo Relatorio_<projeto>_<data>. O PDF tem capa com a marca e o nome da empresa, cabeçalho nas páginas seguintes, rodapé com "Página n de N", tabelas com o cabeçalho repetido e propriedades do arquivo (título e autor). O documento sai sempre com o visual claro, mesmo com o sistema no tema escuro.
+- "Restaurar original" descarta as edições e volta aos valores calculados.
