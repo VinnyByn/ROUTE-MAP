@@ -5,6 +5,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *' # A cada 6 horas: republica o materiais.json com os preços da planilha
 
 permissions:
   contents: read
@@ -17,6 +19,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gerar materiais.json a partir da planilha de preços
+        run: |
+          pip install --quiet -r api/requirements.txt
+          cd api && python export_json.py ../materiais.json
       - name: Instalar Firebase CLI
         # Instala numa pasta à parte para fixar dependências quebradas no npm (ignore@7.0.11 foi retirado do registro)
         run: |

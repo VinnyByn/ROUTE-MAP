@@ -5857,10 +5857,19 @@ function handleCatalogImportFile(file) {
 }
 
 // ---------------------------------------------------------------
-// Preços pela API de materiais (FastAPI em api/, lê a planilha da empresa)
+// Preços pela API de materiais (mesmo formato da FastAPI em api/)
+// Ordem: API configurada → planilha ao vivo (Google Sheets) → materiais.json publicado no deploy
 // ---------------------------------------------------------------
 const MATERIALS_API_URL_KEY = 'routeMapMaterialsApiUrl';
-const DEFAULT_MATERIALS_API_URL = ''; //Preencher com a URL publicada da API (ex.: https://routemap-materiais.onrender.com)
+const DEFAULT_MATERIALS_API_URL = ''; //URL da FastAPI, se for publicada num servidor (ex.: https://routemap-materiais.onrender.com)
+const MATERIALS_SHEET_ID = '1vM1Oobfzbz0MnTKku1Vo6Nxpf9sOkYWBN9tiUqzjMbk';
+const MATERIALS_SHEET_GID = '0';
+const MATERIALS_HEADER_ALIASES = {
+    codigo: ['codigo', 'cod', 'cod.', 'codigo do item', 'item', 'sku', 'referencia', 'ref'],
+    descricao: ['descricao', 'descricao do item', 'material', 'produto', 'nome'],
+    unidade: ['unidade', 'und', 'un', 'unid', 'unid.', 'medida'],
+    valor_unitario: ['valor unitario', 'vlr unitario', 'preco unitario', 'valor unit', 'valor', 'preco', 'custo unitario'],
+};
 
 function getMaterialsApiUrl() {
     let saved = '';
@@ -5868,36 +5877,100 @@ function getMaterialsApiUrl() {
     return (saved || DEFAULT_MATERIALS_API_URL).replace(/\/+$/, '');
 }
 
-async function syncCatalogFromApi() {
-    let baseUrl = getMaterialsApiUrl();
-    if (!baseUrl) {
-        baseUrl = (window.prompt('Endereço da API de materiais (ex.: https://routemap-materiais.onrender.com):') || '').trim().replace(/\/+$/, '');
-        if (!baseUrl) return;
-        try { localStorage.setItem(MATERIALS_API_URL_KEY, baseUrl); } catch (e) { /* sem armazenamento */ }
+function normalizeSheetHeader(text) {
+    return String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function parseSheetPrice(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    let text = String(value ?? '').trim();
+    if (!/\d/.test(text)) return null;
+    text = text.replace(/[^0-9,.-]/g, '');
+    if (text.includes(',') && text.includes('.')) {
+        text = text.lastIndexOf(',') > text.lastIndexOf('.') ? text.replace(/\./g, '').replace(',', '.') : text.replace(/,/g, '');
+    } else if (text.includes(',')) {
+        text = text.replace(/\./g, '').replace(',', '.');
     }
+    const number = parseFloat(text);
+    return Number.isFinite(number) ? number : null;
+}
+
+//Lê o CSV da planilha no mesmo formato de resposta da API: { itens: [{ codigo, descricao, unidade, valor_unitario }] }
+function parseMaterialsSheetCsv(csvText) {
+    const wb = XLSX.read(csvText, { type: 'string', raw: true });
+    const matrix = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+    let start = -1;
+    let cols = null;
+    for (let r = 0; r < Math.min(matrix.length, 30) && start < 0; r++) {
+        const cells = (matrix[r] || []).map(normalizeSheetHeader);
+        const found = {};
+        Object.entries(MATERIALS_HEADER_ALIASES).forEach(([field, aliases]) => {
+            const col = cells.findIndex((cell, i) => !Object.values(found).includes(i)
+                && (aliases.includes(cell) || aliases.some(a => a.length > 3 && cell.startsWith(a))));
+            if (col >= 0) found[field] = col;
+        });
+        if ('descricao' in found && 'valor_unitario' in found) { start = r; cols = found; }
+    }
+    if (start < 0) throw new Error('Cabeçalho não encontrado na planilha (Descrição e Valor unitário).');
+    const get = (row, field) => (field in cols ? String(row[cols[field]] ?? '').trim() : '');
+    const itens = [];
+    matrix.slice(start + 1).forEach(row => {
+        const descricao = get(row, 'descricao');
+        const valor = parseSheetPrice(get(row, 'valor_unitario'));
+        if (!descricao || valor == null || ['total', 'subtotal'].includes(normalizeSheetHeader(descricao))) return;
+        itens.push({ codigo: get(row, 'codigo'), descricao, unidade: get(row, 'unidade') || 'un', valor_unitario: valor });
+    });
+    return { itens, atualizado_em: new Date().toISOString() };
+}
+
+async function fetchMaterialsData() {
+    const errors = [];
+    const apiUrl = getMaterialsApiUrl();
+    if (apiUrl) {
+        try {
+            const response = await fetch(`${apiUrl}/materiais?atualizar=true`);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || `Erro ${response.status}`);
+            return { data, source: 'API de materiais' };
+        } catch (error) { errors.push(`API: ${error.message}`); }
+    }
+    try {
+        const url = `https://docs.google.com/spreadsheets/d/${MATERIALS_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${MATERIALS_SHEET_GID}&t=${Date.now()}`;
+        const response = await fetch(url);
+        const text = await response.text();
+        if (!response.ok || /^\s*</.test(text)) throw new Error('planilha não está pública');
+        return { data: parseMaterialsSheetCsv(text), source: 'planilha (ao vivo)' };
+    } catch (error) { errors.push(`Planilha: ${error.message}`); }
+    try {
+        const response = await fetch(`materiais.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Erro ${response.status}`);
+        return { data: await response.json(), source: 'materiais.json (gerado no deploy)' };
+    } catch (error) { errors.push(`materiais.json: ${error.message}`); }
+    throw new Error(errors.join(' · '));
+}
+
+async function syncCatalogFromApi() {
     const button = document.getElementById('catalogApiSyncButton');
     if (button) button.disabled = true;
-    showToast('Buscando preços', 'Lendo a planilha de materiais pela API…', 'progress');
+    showToast('Buscando preços', 'Lendo a planilha de materiais…', 'progress');
     try {
-        const response = await fetch(`${baseUrl}/materiais?atualizar=true`);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || `Erro ${response.status}`);
+        const { data, source } = await fetchMaterialsData();
         const rows = (data.itens || [])
             .filter(item => item.descricao && Number.isFinite(Number(item.valor_unitario)))
             .map(item => ({ name: item.descricao, code: item.codigo || '', unit: normalizeImportUnit(item.unidade), price: Number(item.valor_unitario), block: 0 }));
         if (!rows.length) {
-            showAlert('Planilha vazia', 'A API não retornou itens com preço válido.');
+            showAlert('Planilha vazia', 'Não encontrei itens com descrição e valor unitário na planilha.');
             return;
         }
         currentImportPreview = buildImportPreview(rows);
-        document.getElementById('importFileName').textContent = `Fonte: API de materiais · ${rows.length} itens · ${new Date(data.atualizado_em || Date.now()).toLocaleString('pt-BR')}`;
+        document.getElementById('importFileName').textContent = `Fonte: ${source} · ${rows.length} itens · ${new Date(data.atualizado_em || Date.now()).toLocaleString('pt-BR')}`;
         renderImportPreview();
         const toggleAll = document.getElementById('importToggleAll');
         if (toggleAll) toggleAll.checked = false;
         document.getElementById('materialImportModal').style.display = 'flex';
     } catch (error) {
-        console.error('Erro na API de materiais:', error);
-        showAlert('Erro na API de materiais', `${error.message || 'Não foi possível buscar os preços.'} Endereço usado: ${baseUrl}. Segure Shift ao clicar no botão para trocar o endereço.`);
+        console.error('Erro ao buscar a planilha de materiais:', error);
+        showAlert('Não foi possível ler a planilha', `Confira se a planilha está compartilhada como "Qualquer pessoa com o link: Leitor". Detalhes: ${error.message}`);
     } finally {
         if (button) button.disabled = false;
     }
@@ -6030,11 +6103,7 @@ function setupMaterialCatalogUI() {
     const importBtn = document.getElementById('catalogImportButton');
     const importFile = document.getElementById('catalogImportFile');
     importBtn?.addEventListener('click', () => importFile?.click());
-    document.getElementById('catalogApiSyncButton')?.addEventListener('click', (e) => {
-        //Shift + clique troca o endereço da API
-        if (e.shiftKey) { try { localStorage.removeItem(MATERIALS_API_URL_KEY); } catch (err) { /* ignora */ } }
-        syncCatalogFromApi();
-    });
+    document.getElementById('catalogApiSyncButton')?.addEventListener('click', syncCatalogFromApi);
     importFile?.addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
         handleCatalogImportFile(file);

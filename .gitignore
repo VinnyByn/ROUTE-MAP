@@ -84,3 +84,4 @@ supabase/.branches/
 __pycache__/
 .pytest_cache/
 .venv/
+materiais.json

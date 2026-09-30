@@ -41,7 +41,16 @@ uvicorn main:app --reload --port 8000
 
 Testes: `pip install pytest && pytest -q`
 
-## Publicar
+## Como funciona sem servidor
+
+O botão **Atualizar pela API** tenta, nesta ordem:
+
+1. a FastAPI publicada, se houver uma URL configurada;
+2. a planilha ao vivo, lida direto no navegador (mesmas regras de colunas da API);
+3. o `materiais.json` gerado por `export_json.py` a cada deploy e a cada 6 horas
+   (GitHub Actions), publicado junto com o site.
+
+## Publicar a FastAPI (opcional)
 
 A API precisa de um servidor Python (o Firebase Hosting só serve arquivos estáticos).
 Com o `Dockerfile` desta pasta, funciona em Render, Railway, Fly.io ou Google Cloud Run.
