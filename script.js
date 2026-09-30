@@ -6963,8 +6963,10 @@ function applyPersistedBomEdits(calculated, saved) {
             calculated[key].quantity = savedItem.quantity;
         }
         //Preço sempre do catálogo (fonte de verdade); preserva o salvo só p/ itens fora do catálogo
+        //(um preço zerado salvo não apaga o valor informado no equipamento do cliente)
         if (savedItem.unitPrice !== calculated[key].unitPrice
-            && !MATERIAL_PRICES[calculated[key].materialName]) {
+            && !MATERIAL_PRICES[calculated[key].materialName]
+            && (Number(savedItem.unitPrice) > 0 || !(calculated[key].unitPrice > 0))) {
             calculated[key].unitPrice = savedItem.unitPrice;
         }
     }
@@ -7505,7 +7507,7 @@ function calculateBomState() {
     //variáveis auxiliares
     let ctoCount = 0;
     let raqueteInstallCount = 0;
-    const addOrUpdateMaterial = (name, quantity, type = 'unit', group = 'Outros', detail = null) => {
+    const addOrUpdateMaterial = (name, quantity, type = 'unit', group = 'Outros', detail = null, unitPrice = undefined) => {
         if (!name || quantity <= 0) return;
         name = resolveMaterialName(name);
         if (isDroppedMaterial(name)) return;
@@ -7523,6 +7525,8 @@ function calculateBomState() {
                 usage: {}
             };
         }
+        //Preço informado fora do catálogo (ex.: equipamento digitado no cliente)
+        if (unitPrice > 0 && !(bomState[bomKey].unitPrice > 0)) bomState[bomKey].unitPrice = unitPrice;
         bomState[bomKey].quantity += quantity;
         addUsageEntry(bomState[bomKey], group, quantity, detail);
     };
@@ -8561,7 +8565,7 @@ function calculateProjectCost(projectMarkers, projectCables) {
     const tempBomState = {};
     let ctoCount = 0;
     let raqueteInstallCount = 0;
-    const addOrUpdate = (name, qty, type = 'unit') => {
+    const addOrUpdate = (name, qty, type = 'unit', group = null, detail = null, unitPrice = undefined) => {
         if (!name || qty <= 0) return;
         name = resolveMaterialName(name);
         if (isDroppedMaterial(name)) return;
@@ -8569,6 +8573,9 @@ function calculateProjectCost(projectMarkers, projectCables) {
         if (!tempBomState[name]) {
         tempBomState[name] = { quantity: 0, type: type, unitPrice: priceInfo.price, category: priceInfo.category };
         }
+        //Equipamentos dos clientes contam como Data Center, como na lista de materiais
+        if (group === 'Data Center') tempBomState[name].category = 'Data Center';
+        if (unitPrice > 0 && !(tempBomState[name].unitPrice > 0)) tempBomState[name].unitPrice = unitPrice;
         tempBomState[name].quantity += qty;
     };
     //Processamento dos marcadores

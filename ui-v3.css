@@ -1451,7 +1451,7 @@ html[data-theme="dark"] #clientModal.is-predial .client-kind .btn-kind.is-active
 .client-equipment-head,
 .client-equipment-row {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 34px;
+  grid-template-columns: 150px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 96px 34px;
   gap: 6px;
   align-items: center;
 }
