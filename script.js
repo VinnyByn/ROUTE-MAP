@@ -4083,7 +4083,7 @@ function addMaterialToBom(materialName, quantity, unitPrice) {
     //Cria o item se não existir ou incrementa a quantidade
     const priceInfo = MATERIAL_PRICES[materialName] || { price: 0, category: 'Outros' };
     if (!projectBoms[projectId][materialName]) {
-        projectBoms[projectId][materialName] = { quantity: 0, type: priceInfo.unit || 'un', unitPrice: unitPrice ?? priceInfo.price, category: priceInfo.category || 'Data Center', removed: false };
+        projectBoms[projectId][materialName] = { quantity: 0, type: priceInfo.unit || 'un', unitPrice: unitPrice ?? priceInfo.price, category: unitPrice !== undefined ? 'Data Center' : (priceInfo.category || 'Outros'), removed: false };
     }
     projectBoms[projectId][materialName].quantity += quantity;
 }
@@ -5177,7 +5177,7 @@ async function addMissingSheetMaterials() {
         materialCatalog.materials.push({
             id: generateCatalogId('mat'),
             name,
-            category: inferCategoryFromName(name),
+            category: classifyPriceSheetCategory(name),
             unit: normalizeImportUnit(item.unidade),
             price,
             supplier: '',
@@ -5372,6 +5372,7 @@ function persistMaterialCatalog() {
 
 //Aplica os preços/itens do catálogo ao MATERIAL_PRICES (reflete na BOM)
 function applyCatalogToMaterialPrices() {
+    applyMaterialCategoryRules(materialCatalog.materials);
     materialCatalog.materials.forEach(m => {
         const existing = MATERIAL_PRICES[m.name] || {};
         MATERIAL_PRICES[m.name] = {
@@ -6037,6 +6038,24 @@ function parseImportWorkbook(arrayBuffer) {
         if (blockHasItems) { block++; blockHasItems = false; } //Separa por planilha
     });
     return rows;
+}
+
+//Categoria dos materiais da planilha de preços: só Lançamento (cabos), Fusão ou Ferragem.
+//Data Center fica para o que vem da planilha de kits e não existe na planilha de preços.
+function classifyPriceSheetCategory(name) {
+    const n = normalizeMaterialName(name);
+    if (/\b(CFOA|DROP|FIGURA 08|CABO OPTICO|CABO UTP)\b/.test(n)) return 'Lançamento';
+    if (/\b(SPLITTER|ADAPTADOR|TUBETE|EMENDA|CEO|BANDEJA|FUSAO|FUSOES|CTO|CAIXA|CAIXAS|PIGTAIL|PIGTAILS|CONECTOR|PTO|DERIVACAO|DIO|DGO|CORDAO|CORDOES|PATCHCORD|TERMINACAO|FOSC)\b/.test(n)) return 'Fusão';
+    return 'Ferragem';
+}
+
+//Aplica a regra de categorias no catálogo (itens de mão de obra e marcadores internos ficam como estão)
+const CATALOG_FIXED_CATEGORY_NAMES = new Set(['CTO', 'RESERVA', 'CASA', 'PLACA', 'MAO DE OBRA REGIONAL', 'MAO DE OBRA TERCEIRIZADA']);
+function applyMaterialCategoryRules(materials) {
+    materials.forEach(m => {
+        if (CATALOG_FIXED_CATEGORY_NAMES.has(normalizeMaterialName(m.name))) return;
+        m.category = m.notes === 'Da planilha de kits' ? 'Data Center' : classifyPriceSheetCategory(m.name);
+    });
 }
 
 //Infere a categoria de um material novo pelo nome
@@ -6995,7 +7014,7 @@ function renderCabosTable(tbody, projectId) {
         row.dataset.cableType = cableType;
         row.dataset.bomKey = bomKey;
         row.innerHTML = `
-      <td class="material-item-name material-item-clickable cable-type-usage-trigger" data-cable-type="${safeType}" title="Ver trechos deste cabo">${cableType}</td>
+      <td class="material-item-name material-item-clickable cable-type-usage-trigger" data-cable-type="${safeType}" title="Ver trechos deste cabo">${escapeHtml(resolveMaterialName(cableType))}</td>
       <td><span class="material-category-badge">Lançamento</span></td>
       <td class="material-qty">${formatMaterialLengthValue(baseSum)}</td>
       <td class="material-surcharge-cell">
@@ -7055,7 +7074,7 @@ function openCableTypeUsageModal(cableType) {
     const bodyEl = document.getElementById('materialUsageModalBody');
     const totalEl = document.getElementById('materialUsageModalTotal');
 
-    titleEl.textContent = cableType;
+    titleEl.textContent = resolveMaterialName(cableType);
     bodyEl.innerHTML = '';
 
     const table = document.createElement('table');
@@ -7316,7 +7335,7 @@ function applyCableFerragensToBom(projectId, addOrUpdateMaterialFn) {
         const alcaName = getCableAlca(cableName);
         if (totalLength <= 0 || !alcaName) return;
         const hardwareItems = calculateHardwareForCable(totalLength, alcaName);
-        const hardwareGroup = `Ferragens: ${cableName}`;
+        const hardwareGroup = `Ferragens: ${resolveMaterialName(cableName)}`;
         for (const itemName in hardwareItems) {
             addOrUpdateMaterialFn(itemName, hardwareItems[itemName], 'unit', hardwareGroup);
         }
