@@ -4984,7 +4984,6 @@ function getDefaultKitDefinitions() {
             { name: "CABO DE AÇO CORDOALHA 3/16 POL", quantity: 50 }
         ]},
         "KIT POP": { category: 'Data Center', components: (typeof POP_KIT_CONFIG !== 'undefined' ? POP_KIT_CONFIG.fixed : []).map(i => ({ name: i.name, quantity: i.quantity })) },
-        ...getDefaultCableKitDefinitions(),
         "KIT OLT": { category: 'Data Center', components: [
             { name: 'CHASSI OLT C650 ZTE', quantity: 1 },
             { name: 'LICENÇA OLT', quantity: 1 },
@@ -4997,27 +4996,12 @@ function getDefaultKitDefinitions() {
     };
 }
 
-//Kits de lançamento: um por tipo de cabo, com o cabo e as ferragens por poste (alça, SUPA, BAP e plaqueta).
-//O cálculo da lista de materiais usa esses kits; editar as quantidades aqui muda as ferragens dos projetos.
-function getCableKitName(cableType) {
-    return `KIT LANÇAMENTO ${resolveMaterialName(cableType)} (POR POSTE)`;
-}
+//Kit "Cabos e alças": qual alça preformada cada tipo de cabo usa (editável no catálogo, aba Kits)
+const CABLE_ALCA_KIT_NAME = 'KIT CABOS E ALÇAS';
 
-function getDefaultCableKitDefinitions() {
-    if (typeof CABLE_HARDWARE_MAP === 'undefined') return {};
-    const cfg = DEFAULT_LANCAMENTO_CONFIG;
-    const kits = {};
-    Object.entries(CABLE_HARDWARE_MAP).forEach(([cableType, alcaName]) => {
-        if (!MATERIAL_PRICES[cableType]) return;
-        kits[getCableKitName(cableType)] = { category: 'Lançamento', components: [
-            { name: resolveMaterialName(cableType), quantity: cfg.poleSpan },
-            { name: resolveMaterialName(alcaName), quantity: cfg.supaPerPole * cfg.alcaPerSupa },
-            { name: resolveMaterialName('SUPORTE ANCORAGEM PARA CABOS OPTICOS (SUPAS)'), quantity: cfg.supaPerPole },
-            { name: resolveMaterialName('ABRAÇADEIRA BAP 3'), quantity: cfg.bapPerPole },
-            { name: resolveMaterialName('PLAQUETA DE IDENTIFICAÇÃO'), quantity: cfg.plaquetaPerPole },
-        ]};
-    });
-    return kits;
+function getCableAlca(cableType) {
+    const custom = materialCatalog.cableAlcas?.[cableType];
+    return resolveMaterialName(custom || CABLE_HARDWARE_MAP[cableType] || '') || null;
 }
 
 //Retorna os componentes de um kit, priorizando o que está no catálogo (editável)
@@ -5078,7 +5062,7 @@ function buildSeedCatalog() {
 function loadMaterialCatalog(stored) {
     const seed = buildSeedCatalog();
     if (!stored || !Array.isArray(stored.materials)) {
-        materialCatalog = seed;
+        materialCatalog = { ...seed, cableAlcas: {} };
         return;
     }
     //Normaliza itens salvos
@@ -5109,7 +5093,12 @@ function loadMaterialCatalog(stored) {
     seed.kits.forEach(sk => {
         if (!existingNames.has(sk.name.toUpperCase())) kits.push(sk);
     });
-    materialCatalog = { materials, kits };
+    //Kits de lançamento por cabo (versão anterior) viraram o kit único "Cabos e alças"
+    materialCatalog = {
+        materials,
+        kits: kits.filter(k => !k.name.toUpperCase().startsWith('KIT LANÇAMENTO ')),
+        cableAlcas: stored.cableAlcas && typeof stored.cableAlcas === 'object' ? { ...stored.cableAlcas } : {},
+    };
 }
 
 //Salva o catálogo da empresa no banco
@@ -5499,7 +5488,9 @@ function renderCatalogKits() {
             (k.category || '').toLowerCase().includes(term) ||
             k.components.some(c => c.name.toLowerCase().includes(term)))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    list.innerHTML = kits.map(k => {
+    const cableKitMatches = (!category || category === 'Lançamento') && (!term || CABLE_ALCA_KIT_NAME.toLowerCase().includes(term) || 'cabo alça'.includes(term));
+    const cableKitHtml = cableKitMatches ? renderCableAlcaKit(priceOf) : '';
+    list.innerHTML = cableKitHtml + kits.map(k => {
         const total = k.components.reduce((sum, c) => sum + priceOf(c.name) * (Number(c.quantity) || 0), 0);
         const color = getCatalogCategoryColor(k.category || 'Outros');
         return `
@@ -5518,7 +5509,41 @@ function renderCatalogKits() {
             </div>
         </article>`;
     }).join('');
-    if (empty) empty.style.display = kits.length ? 'none' : 'flex';
+    if (empty) empty.style.display = kits.length || cableKitHtml ? 'none' : 'flex';
+}
+
+//Cartão do kit "Cabos e alças": clicando, lista cada cabo com a sua alça (trocável)
+function renderCableAlcaKit(priceOf) {
+    const alcaOptions = [...new Set(materialCatalog.materials
+        .filter(m => /ALÇA PREFORMADA OPDE/i.test(m.name))
+        .map(m => m.name))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    const cableTypes = Object.keys(CABLE_HARDWARE_MAP)
+        .sort((a, b) => resolveMaterialName(a).localeCompare(resolveMaterialName(b), 'pt-BR', { numeric: true }));
+    const color = getCatalogCategoryColor('Lançamento');
+    const rows = cableTypes.map(type => {
+        const alca = getCableAlca(type) || '';
+        const options = (alcaOptions.includes(alca) || !alca ? alcaOptions : [alca, ...alcaOptions])
+            .map(name => `<option value="${escapeHtml(name)}"${name === alca ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
+        return `<li class="cable-alca-row">
+            <span class="cable-alca-row__cable">${escapeHtml(resolveMaterialName(type))}</span>
+            <span class="cable-alca-row__arrow" aria-hidden="true">→</span>
+            <select class="cable-alca-row__select" data-cable-alca="${escapeHtml(type)}" aria-label="Alça do cabo"${AppSession.canEdit ? '' : ' disabled'}>${options}</select>
+            <span class="cat3-kit__price">R$ ${formatCatalogPrice(priceOf(alca))}</span>
+        </li>`;
+    }).join('');
+    return `
+        <article class="catalog-kit-card cat3-kit cable-alca-kit" style="--chip:${color}">
+            <details>
+                <summary>
+                    <div>
+                        <h4>${CABLE_ALCA_KIT_NAME}</h4>
+                        <span class="kit-card-meta"><span class="cat3-chip__dot"></span>Lançamento · ${cableTypes.length} cabos · clique para ver cada cabo e a sua alça</span>
+                    </div>
+                </summary>
+                <ul class="cable-alca-list">${rows}</ul>
+                <p class="cable-alca-note">As quantidades por poste (alças por SUPA, SUPA, BAP e plaquetas) ficam em Configurações.</p>
+            </details>
+        </article>`;
 }
 
 //Atualiza os contadores do cabeçalho
@@ -6217,6 +6242,17 @@ function setupMaterialCatalogUI() {
         renderCatalog();
     });
     //Delegação de ações nos cards de kit
+    document.getElementById('catalogKitsList')?.addEventListener('change', (e) => {
+        const select = e.target.closest('[data-cable-alca]');
+        if (!select) return;
+        materialCatalog.cableAlcas = { ...(materialCatalog.cableAlcas || {}), [select.dataset.cableAlca]: select.value };
+        persistMaterialCatalog();
+        refreshBomAfterProjectChange();
+        renderCatalogKits();
+        const reopened = document.querySelector('.cable-alca-kit details');
+        if (reopened) reopened.open = true;
+        showToast('Alça atualizada', `${resolveMaterialName(select.dataset.cableAlca)} → ${select.value}`);
+    });
     document.getElementById('catalogKitsList')?.addEventListener('click', (e) => {
         const editBtn = e.target.closest('[data-edit-kit]');
         const delBtn = e.target.closest('[data-delete-kit]');
@@ -6954,22 +6990,11 @@ function exportTablesToExcel() {
 }
 
 //Calculo dos postes através dos cabos
-function calculateHardwareForCable(cableLength, alcaPreformadaName, cableType = null) {
+function calculateHardwareForCable(cableLength, alcaPreformadaName) {
     const hardware = {};
     //Calcula total de postes a partir do vão configurável (padrão 35m)
     const totalPostes = Math.ceil(cableLength / getPoleSpanDistance());
     if (totalPostes <= 0) return hardware;
-    //Kit de lançamento do cabo editado no catálogo: ferragens por poste (o cabo vem da metragem medida)
-    const kit = cableType && materialCatalog.kits.find(k => k.name.toUpperCase() === getCableKitName(cableType).toUpperCase());
-    if (kit && kit.components.length) {
-        const cableName = normalizeMaterialName(resolveMaterialName(cableType));
-        kit.components.forEach(c => {
-            if (normalizeMaterialName(c.name) === cableName) return;
-            const qty = Math.ceil(totalPostes * (Number(c.quantity) || 0));
-            if (qty > 0) hardware[c.name] = (hardware[c.name] || 0) + qty;
-        });
-        return hardware;
-    }
     //Quantidades por poste configuráveis (aba Configurações do cadastro de materiais)
     const qtdPlaqueta = totalPostes * (Number(lancamentoConfig.plaquetaPerPole) || 0);
     const qtdBap = totalPostes * (Number(lancamentoConfig.bapPerPole) || 0);
@@ -6998,8 +7023,8 @@ const CABLE_HARDWARE_MAP = {
     "Cabo AS 200 FO-12": "ALÇA PREFORMADA OPDE 1020 - 9,0mm a 9,8mm",
     "Cabo AS 200 FO-24": "ALÇA PREFORMADA OPDE 1021 - 9,6mm a 10,4mm",
     "Cabo AS 200 FO-36": "ALÇA PREFORMADA OPDE 1021 - 9,6mm a 10,4mm",
-    "Cabo AS 200 FO-48": "ALÇA PREFORMADA OPDE 1021 - 9,0mm a 9,8mm",
-    "Cabo AS 200 FO-72": "ALÇA PREFORMADA OPDE 1007- 9,6mm a 10,4mm",
+    "Cabo AS 200 FO-48": "ALÇA PREFORMADA OPDE 1021 - 9,6mm a 10,4mm",
+    "Cabo AS 200 FO-72": "ALÇA PREFORMADA OPDE 1021 - 9,6mm a 10,4mm",
     "Cabo AS 200 FO-144": "ALÇA PREFORMADA OPDE 1007 - 12,8MM A 14,2MM"
 };
 
@@ -7024,9 +7049,9 @@ function applyCableFerragensToBom(projectId, addOrUpdateMaterialFn) {
     const aggregatedCableLengths = getAggregatedCableLengthsForFerragens(projectId);
     Object.keys(aggregatedCableLengths).forEach((cableName) => {
         const totalLength = aggregatedCableLengths[cableName];
-        const alcaName = CABLE_HARDWARE_MAP[cableName];
+        const alcaName = getCableAlca(cableName);
         if (totalLength <= 0 || !alcaName) return;
-        const hardwareItems = calculateHardwareForCable(totalLength, alcaName, cableName);
+        const hardwareItems = calculateHardwareForCable(totalLength, alcaName);
         const hardwareGroup = `Ferragens: ${cableName}`;
         for (const itemName in hardwareItems) {
             addOrUpdateMaterialFn(itemName, hardwareItems[itemName], 'unit', hardwareGroup);

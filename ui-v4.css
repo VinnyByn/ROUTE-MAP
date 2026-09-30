@@ -1686,3 +1686,25 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 #clientModal .client-show-label { align-items: center; }
 #clientModal .client-show-label input[type="color"] { width: 34px; height: 24px; padding: 0 2px; margin-left: 6px; border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; }
 #clientModal .client-show-label input[type="color"]:disabled { opacity: 0.4; cursor: default; }
+
+/* Kit "Cabos e alças" */
+.cable-alca-kit details > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cable-alca-kit details > summary::-webkit-details-marker { display: none; }
+.cable-alca-kit details > summary::after { content: '▾'; color: var(--color-text-muted, #64748b); transition: transform 0.15s ease; }
+.cable-alca-kit details[open] > summary::after { transform: rotate(180deg); }
+.cable-alca-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.cable-alca-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr) auto; align-items: center; gap: 8px; font-size: 12.5px; }
+.cable-alca-row__cable { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.cable-alca-row__arrow { color: var(--color-text-muted, #64748b); }
+.cable-alca-row__select { min-width: 0; width: 100%; font-size: 12px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); color: inherit; }
+.cable-alca-note { margin: 10px 0 0; font-size: 11.5px; color: var(--color-text-muted, #64748b); }
+@media (max-width: 640px) { .cable-alca-row { grid-template-columns: 1fr; } .cable-alca-row__arrow { display: none; } }
+.cable-alca-kit { grid-column: 1 / -1; }
+.cable-alca-kit .cable-alca-row { grid-template-columns: minmax(160px, 1fr) 16px minmax(200px, 1.4fr) 80px; padding: 4px 0; border-bottom: 1px solid var(--color-border); }
+.cable-alca-kit .cable-alca-row .cat3-kit__price { text-align: right; white-space: nowrap; }
+.cable-alca-kit .cable-alca-row__cable { white-space: nowrap; }
+@media (max-width: 640px) { .cable-alca-kit .cable-alca-row { grid-template-columns: 1fr; } }
+#materialCatalogModal .cable-alca-kit ul.cable-alca-list { max-height: none; overflow: visible; background: none; padding: 0; }
+#materialCatalogModal .cable-alca-kit li.cable-alca-row { display: grid; grid-template-columns: minmax(180px, 1fr) 16px minmax(220px, 1.4fr) 80px; align-items: center; gap: 10px; padding: 6px 4px; }
+#materialCatalogModal .cable-alca-kit li.cable-alca-row .cable-alca-row__cable { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { #materialCatalogModal .cable-alca-kit li.cable-alca-row { grid-template-columns: 1fr; } }
