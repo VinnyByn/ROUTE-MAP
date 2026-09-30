@@ -1708,3 +1708,14 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 #materialCatalogModal .cable-alca-kit li.cable-alca-row { display: grid; grid-template-columns: minmax(180px, 1fr) 16px minmax(220px, 1.4fr) 80px; align-items: center; gap: 10px; padding: 6px 4px; }
 #materialCatalogModal .cable-alca-kit li.cable-alca-row .cable-alca-row__cable { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) { #materialCatalogModal .cable-alca-kit li.cable-alca-row { grid-template-columns: 1fr; } }
+
+/* Seletor de materiais Data Center (equipamentos B2B) */
+.client-dc-picker { border: 1px solid var(--color-border); border-radius: 10px; padding: 8px; margin: 6px 0 10px; background: var(--color-surface); }
+.client-dc-picker__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.client-dc-picker__head input[type="search"] { flex: 1 1 200px; min-width: 0; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); color: inherit; }
+.client-dc-picker__all { display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+.client-dc-picker__list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; display: grid; gap: 2px; }
+.client-dc-picker__list button { width: 100%; display: flex; justify-content: space-between; gap: 10px; text-align: left; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-size: 12.5px; }
+.client-dc-picker__list button:hover { background: var(--color-surface-muted, rgba(148, 163, 184, 0.15)); }
+.client-dc-picker__list small { color: var(--color-text-muted, #64748b); white-space: nowrap; }
+.client-dc-picker__empty { padding: 8px; font-size: 12px; color: var(--color-text-muted, #64748b); }

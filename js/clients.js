@@ -665,6 +665,10 @@ function addClientMaterialsToBom(projectMarkers, addMaterial) {
         const drop = getClientDropInfo(clientInfo);
         if (drop) addMaterial(CLIENT_DROP_MATERIAL, drop.length, 'length', 'Clientes', clientInfo.name);
         kit.forEach(c => addMaterial(c.name, c.quantity, 'unit', 'Clientes', clientInfo.name));
+        //Equipamentos escolhidos no catálogo (clientes B2B)
+        (clientInfo.client?.equipments || []).forEach(e => {
+            if (e.material) addMaterial(e.material, 1, 'unit', 'Clientes', clientInfo.name);
+        });
     });
 }
 
@@ -928,7 +932,7 @@ function addClientEquipmentRow(equipment = {}) {
     row.className = 'client-equipment-row';
     row.innerHTML = `
         <select class="client-equipment-type" aria-label="Tipo">${CLIENT_EQUIPMENT_TYPES.map(t => `<option${t === (equipment.type || 'ONU/ONT') ? ' selected' : ''}>${t}</option>`).join('')}</select>
-        <input type="text" class="client-equipment-model" maxlength="60" placeholder="Modelo" aria-label="Modelo" value="${escapeHtml(equipment.model || '')}" />
+        <input type="text" class="client-equipment-model" maxlength="160" placeholder="Modelo" aria-label="Modelo" value="${escapeHtml(equipment.model || '')}"${equipment.material ? ` data-material="${escapeHtml(equipment.material)}" title="Material do catálogo: ${escapeHtml(equipment.material)}"` : ''} />
         <input type="text" class="client-equipment-serial" maxlength="40" placeholder="Nº de série" aria-label="Número de série" value="${escapeHtml(equipment.serial || '')}" />
         <input type="text" class="client-equipment-mac" maxlength="17" placeholder="MAC" aria-label="MAC" value="${escapeHtml(equipment.mac || '')}" />
         <button type="button" class="btn-icon client-equipment-remove" title="Remover equipamento" aria-label="Remover equipamento">
@@ -943,6 +947,45 @@ function addClientEquipmentRow(equipment = {}) {
     return row;
 }
 
+//Seletor de materiais Data Center (equipamentos do cliente B2B)
+function openClientDcPicker() {
+    const picker = document.getElementById('clientDcPicker');
+    picker.hidden = false;
+    document.getElementById('clientDcSearch').value = '';
+    document.getElementById('clientDcShowAll').checked = false;
+    renderClientDcList();
+    document.getElementById('clientDcSearch').focus();
+}
+
+function closeClientDcPicker() {
+    document.getElementById('clientDcPicker').hidden = true;
+}
+
+function renderClientDcList() {
+    const term = normalizeMaterialName(document.getElementById('clientDcSearch').value);
+    const showAll = document.getElementById('clientDcShowAll').checked;
+    const items = materialCatalog.materials
+        .filter(m => !CATALOG_FIXED_CATEGORY_NAMES.has(normalizeMaterialName(m.name)))
+        .filter(m => showAll || m.category === 'Data Center')
+        .filter(m => !term || normalizeMaterialName(`${m.name} ${m.code || ''}`).includes(term))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
+    const list = document.getElementById('clientDcList');
+    list.innerHTML = items.length
+        ? items.map(m => `<li><button type="button" data-dc-material="${escapeHtml(m.name)}"><span>${escapeHtml(m.name)}</span><small>${m.code ? `Cód. ${escapeHtml(m.code)} · ` : ''}R$ ${formatCatalogPrice(Number(m.price) || 0)}</small></button></li>`).join('')
+        : `<li class="client-dc-picker__empty">${showAll ? 'Nenhum material encontrado.' : 'Nenhum material Data Center encontrado. Marque "Todos os materiais" ou digite manualmente.'}</li>`;
+}
+
+function guessEquipmentType(name) {
+    const n = normalizeMaterialName(name);
+    if (/\bEDD\b/.test(n)) return 'EDD';
+    if (/\b(SFP|XFP|GBIC)\b/.test(n)) return 'SFP';
+    if (/\bSWITCH\b/.test(n)) return 'Switch';
+    if (/\b(ROUTER|RB\d+|ROTEADOR|MIKROTIK|GATEWAY)\b/.test(n)) return 'Roteador';
+    if (/\b(ONU|ONT)\b/.test(n)) return 'ONU/ONT';
+    if (/\bCONVERSOR\b/.test(n)) return 'Conversor de mídia';
+    return 'Outro';
+}
+
 function updateClientEquipmentEmptyState() {
     const empty = !document.querySelector('#clientEquipmentList .client-equipment-row');
     document.getElementById('clientEquipmentEmpty').hidden = !empty;
@@ -952,6 +995,9 @@ function collectClientEquipments() {
     return Array.from(document.querySelectorAll('#clientEquipmentList .client-equipment-row')).map(row => ({
         type: row.querySelector('.client-equipment-type').value,
         model: row.querySelector('.client-equipment-model').value.trim(),
+        //Material do catálogo escolhido na lista (entra na lista de materiais do projeto)
+        material: row.querySelector('.client-equipment-model').value.trim() === row.querySelector('.client-equipment-model').dataset.material
+            ? row.querySelector('.client-equipment-model').dataset.material : undefined,
         serial: row.querySelector('.client-equipment-serial').value.trim(),
         mac: row.querySelector('.client-equipment-mac').value.trim(),
     })).filter(e => e.model || e.serial || e.mac);
@@ -959,6 +1005,7 @@ function collectClientEquipments() {
 
 function openClientModal(clientInfo, presetKind) {
     editingClient = clientInfo || null;
+    closeClientDcPicker();
     const data = normalizeClientData(clientInfo?.client || (presetKind ? { kind: presetKind } : {}));
     const b2b = data.b2b || {};
     const noun = data.kind === 'predial' ? 'predial' : 'cliente';
@@ -995,7 +1042,8 @@ function openClientModal(clientInfo, presetKind) {
     document.getElementById('clientB2BLabelColor').value = b2b.labelColor || '#0f172a';
     document.getElementById('clientB2BLabelColor').disabled = !b2b.showLabel;
     document.getElementById('clientEquipmentList').innerHTML = '';
-    const equipments = data.equipments.length ? data.equipments : (clientInfo ? [] : [{ type: 'ONU/ONT' }]);
+    //Cliente novo: residencial/predial começa com uma ONU; B2B escolhe na lista Data Center
+    const equipments = data.equipments.length ? data.equipments : (clientInfo || data.kind === 'b2b' ? [] : [{ type: 'ONU/ONT' }]);
     equipments.forEach(addClientEquipmentRow);
     updateClientEquipmentEmptyState();
     populateClientCtoSelect(clientInfo ? (data.cableName ? CLIENT_CABLE_PREFIX + data.cableName : (data.ctoUid || '')) : 'auto');
@@ -1011,6 +1059,7 @@ function openClientModal(clientInfo, presetKind) {
 }
 
 function closeClientModal() {
+    closeClientDcPicker();
     document.getElementById('clientModal').style.display = 'none';
     editingClient = null;
 }
@@ -1251,8 +1300,26 @@ function setupClientModal() {
     });
     document.getElementById('clientB2BService').innerHTML = B2B_SERVICES.map(s => `<option>${s}</option>`).join('');
     document.getElementById('addClientEquipmentButton').addEventListener('click', () => {
-        const row = addClientEquipmentRow({ type: getSelectedClientKind() === 'b2b' ? 'EDD' : 'ONU/ONT' });
+        //B2B: escolhe o equipamento na lista de materiais Data Center do catálogo
+        if (getSelectedClientKind() === 'b2b') {
+            openClientDcPicker();
+            return;
+        }
+        const row = addClientEquipmentRow({ type: 'ONU/ONT' });
         row.querySelector('.client-equipment-model').focus();
+    });
+    document.getElementById('clientDcSearch').addEventListener('input', renderClientDcList);
+    document.getElementById('clientDcShowAll').addEventListener('change', renderClientDcList);
+    document.getElementById('clientDcManual').addEventListener('click', () => {
+        closeClientDcPicker();
+        addClientEquipmentRow({ type: 'EDD' }).querySelector('.client-equipment-model').focus();
+    });
+    document.getElementById('clientDcList').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-dc-material]');
+        if (!item) return;
+        const name = item.dataset.dcMaterial;
+        addClientEquipmentRow({ type: guessEquipmentType(name), model: name, material: name });
+        closeClientDcPicker();
     });
     document.getElementById('editClientDropButton').addEventListener('click', startClientDropEdit);
     document.getElementById('recalculateClientDropButton').addEventListener('click', recalculateClientDrop);
