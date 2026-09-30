@@ -489,8 +489,14 @@ function startPlacingMarker() {
     showToast('Posicione no mapa', 'Clique no local do marcador. Esc cancela.', 'progress');
     placeMarkerListener = map.addListener('click', (event) => {
         if (!isAddingMarker) return;
-        addCustomMarker(event.latLng);
-        resetMarkerModal();
+        try {
+            addCustomMarker(event.latLng);
+        } catch (error) {
+            console.error('Erro ao posicionar o marcador:', error);
+            showToast('Erro', 'Não foi possível posicionar o marcador. Tente de novo.');
+        } finally {
+            resetMarkerModal();
+        }
     });
 }
 

@@ -470,8 +470,8 @@ function applyClientAppearance(clientInfo) {
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const link = cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
     const units = isPredialClient(clientInfo) && clientInfo.client.predial?.units ? ` · ${clientInfo.client.predial.units} unidades` : '';
-    clientInfo.marker.setTitle(`${clientInfo.name}${kind.short ? ` (${kind.short})` : ''}${units} · ${status.label}${link}`);
-    setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${kind.label}${units} · ${status.label}${cto ? ` · ${cto.name}` : ''}`);
+    clientInfo.marker.setTitle(null); //Sem dica nativa do navegador no mapa
+    setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${kind.label}${units} · ${status.label}${link.replace(' · sem CTO', '')}`);
     if (clientInfo.listItem) clientInfo.listItem.title = clientInfo.client.address || '';
     applyMarkerSidebarColorStyles(clientInfo);
 }

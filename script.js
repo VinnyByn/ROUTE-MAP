@@ -2579,6 +2579,13 @@ function copySidebarSelection() {
         };
         return true;
     }
+    if (selectedSidebarCopyTarget?.type === 'cable') {
+        sidebarClipboard = {
+            type: 'cable',
+            data: serializeCable(selectedSidebarCopyTarget.cableInfo)
+        };
+        return true;
+    }
     if (selectedSidebarCopyTarget?.type === 'folder') {
         const payload = serializeFolderForClipboard(selectedSidebarCopyTarget.folderId);
         if (payload) {
@@ -2599,6 +2606,18 @@ function pasteMarkerFromClipboard(targetFolderId) {
     data.folderId = targetFolderId;
     data.name = `${data.name} (cópia)`;
     rebuildMarker(data);
+    return true;
+}
+
+function pasteCableFromClipboard(targetFolderId) {
+    const clip = sidebarClipboard;
+    if (!clip || clip.type !== 'cable' || !clip.data) return false;
+    if (!document.getElementById(targetFolderId)) return false;
+    const data = { ...clip.data, path: clip.data.path.map(p => ({ ...p })) };
+    data.folderId = targetFolderId;
+    data.name = `${data.name} (cópia)`;
+    delete data.order;
+    rebuildCable(data);
     return true;
 }
 
@@ -2636,6 +2655,9 @@ function pasteSidebarClipboard() {
     if (!sidebarClipboard || !activeFolderId) return false;
     if (sidebarClipboard.type === 'marker') {
         return pasteMarkerFromClipboard(activeFolderId);
+    }
+    if (sidebarClipboard.type === 'cable') {
+        return pasteCableFromClipboard(activeFolderId);
     }
     if (sidebarClipboard.type === 'folder') {
         return pasteFolderFromClipboard(activeFolderId);
@@ -4240,8 +4262,13 @@ function addCustomMarker(location, importedData = null) {
         }
     }
     markers.push(markerInfo);
-    updateMarkerAppearance(markerInfo);
-    if (markerInfo.type === "CLIENTE") refreshBomAfterProjectChange();
+    //Um erro no visual ou na lista de materiais não pode deixar o marcador sem eventos nem travar o posicionamento
+    try {
+        updateMarkerAppearance(markerInfo);
+        if (markerInfo.type === "CLIENTE") refreshBomAfterProjectChange();
+    } catch (error) {
+        console.error(`Erro ao atualizar o marcador "${markerInfo.name}":`, error);
+    }
     wireMarkerDrawHoverCursor(marker, markerInfo);
     //Evento de clique no marcador
     marker.addListener("click", () => {
@@ -4295,7 +4322,8 @@ function updateMarkerAppearance(markerInfo) {
         meta = `Importado · ${pending === 'Existente' ? 'Existente' : 'Novo'}`;
         title = `${markerInfo.name} (${meta})`;
     }
-    markerInfo.marker.setTitle(title);
+    //Sem dica nativa do navegador no mapa (CTO/CEO mostram o cartão próprio); o título fica na barra lateral
+    markerInfo.marker.setTitle(null);
     setSidebarItemLabel(markerInfo.listItem, name, meta);
     if (markerInfo.listItem) markerInfo.listItem.title = markerInfo.description || '';
     applyMarkerSidebarColorStyles(markerInfo);

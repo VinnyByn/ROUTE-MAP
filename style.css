@@ -2360,8 +2360,8 @@ body.sidebar-resizing * {
 
 
 .subfolders:empty::before {
-  content: "Arraste itens aqui";
-  display: block;
+  content: none;
+  display: none;
   font-style: italic;
   color: #888;
   padding: 6px 10px;

@@ -172,7 +172,7 @@ function buildSidebarMenuItems(entity) {
         }
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);
-        if (canEdit && entity.kind === 'marker' && !isClient) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
+        if (canEdit && ((entity.kind === 'marker' && !isClient) || entity.kind === 'cable')) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
         if (canEdit) {
             items.push({ divider: true });
             items.push({ action: 'delete', label: `Excluir ${noun}`, danger: true });
@@ -335,7 +335,8 @@ function handleSidebarMenuAction(action) {
         document.getElementById('fusionModal').style.display = 'flex';
         break;
     case 'copy':
-        selectSidebarMarker(info);
+        if (kind === 'cable') selectSidebarCable(info);
+        else selectSidebarMarker(info);
         if (copySidebarSelection()) showToast('Copiado', `"${info.name}" copiado. Escolha uma pasta e use Ctrl+V ou "Colar aqui".`);
         break;
     default:
