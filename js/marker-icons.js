@@ -1,6 +1,6 @@
 // Ícones dos marcadores em SVG: mesmo desenho no mapa, na barra lateral e nos painéis.
 // Selos modernos com símbolos do Lucide: CEO = emenda, CTO = distribuição, cordoalha = derivação,
-// reserva = voltas de cabo, POP = servidor, casas = balão com a quantidade, cliente = pin com pessoa/maleta/prédio.
+// reserva = voltas de cabo, POP = servidor, casas = balão com a quantidade, cliente = hexágono com pessoa/maleta/prédio.
 
 const MARKER_ICON_OUTLINE = 'rgba(15, 23, 42, 0.55)';
 const markerIconCache = new Map();
@@ -61,10 +61,10 @@ function getMarkerShapeSvg(type, color, options = {}) {
     case 'POP':
         return badge('<rect x="3" y="3" width="26" height="26" rx="7"/>') + markerGlyph('POP', 16, 16, 15, glyphColor);
     case 'CLIENTE': {
-        const pin = 'M16 38.5s12.5-10.3 12.5-22A12.5 12.5 0 0 0 3.5 16.5c0 11.7 12.5 22 12.5 22z';
+        //Mesmo padrão dos outros selos: hexágono arredondado com o símbolo do tipo de cliente
+        const hex = '<path d="M16 2.5 27.7 9.25v13.5L16 29.5 4.3 22.75V9.25z" stroke-linejoin="round"/>';
         const glyph = MARKER_GLYPHS[options.variant] ? options.variant : 'residencial';
-        return `<g opacity="${options.faded ? 0.6 : 1}"><path d="${pin}" ${shadow}/><path d="${pin}" fill="${fill}" ${ring}/></g>` +
-            markerGlyph(glyph, 16, 16.5, 13.5, glyphColor);
+        return `<g opacity="${options.faded ? 0.6 : 1}">${badge(hex)}${markerGlyph(glyph, 16, 16, 15, glyphColor)}</g>`;
     }
     default:
         return badge('<circle cx="16" cy="16" r="11"/>');
@@ -108,15 +108,13 @@ function buildMarkerMapIcon(type, { color, size, text, labelColor, variant, fade
             anchor: new google.maps.Point(sw / 2, sh - 2 * scale),
         };
     } else {
-        const isPin = type === 'CLIENTE';
         const px = type === 'CLIENTE' ? 30 : getMarkerPixelSize(size);
-        const vbH = isPin ? 40 : 32;
-        const h = Math.round(px * vbH / 32);
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${h}" viewBox="0 0 32 ${vbH}">${getMarkerShapeSvg(type, color, { variant, faded })}</svg>`;
+        const h = px;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${h}" viewBox="0 0 32 32">${getMarkerShapeSvg(type, color, { variant, faded })}</svg>`;
         icon = {
             url: svgToDataUrl(svg),
             scaledSize: new google.maps.Size(px, h),
-            anchor: isPin ? new google.maps.Point(px / 2, h - 1) : new google.maps.Point(px / 2, h / 2),
+            anchor: new google.maps.Point(px / 2, h / 2),
             labelOrigin: new google.maps.Point(px / 2, -7),
         };
     }
@@ -141,8 +139,7 @@ function buildMarkerMapLabel(text, labelColor) {
 //Mesmo desenho, pequeno, para a barra lateral e cabeçalhos dos painéis
 function getMarkerIconDataUrl(type, color, options = {}) {
     if (type === 'CASA') return svgToDataUrl(buildCasaPinSvg(options.text || '', color, options.labelColor).svg);
-    const vbH = type === 'CLIENTE' ? 40 : 32;
-    return svgToDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 ${vbH}">${getMarkerShapeSvg(type, color, options)}</svg>`);
+    return svgToDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">${getMarkerShapeSvg(type, color, options)}</svg>`);
 }
 
 function applyMarkerIconToElement(element, type, color, options = {}) {
