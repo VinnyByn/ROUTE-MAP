@@ -19,8 +19,8 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=20260930a" />
-    <link rel="stylesheet" href="ui-v3.css?v=20260930a" />
+    <link rel="stylesheet" href="style.css?v=20260930b" />
+    <link rel="stylesheet" href="ui-v3.css?v=20260930b" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
@@ -132,6 +132,10 @@
           <span class="top-bar-button__label">Salvar</span>
         </button>
       </nav>
+      <button id="onlineChip" class="top-bar-online" data-admin-only type="button" title="Quem está online">
+        <span class="top-bar-online__dot" aria-hidden="true"></span>
+        <span><b data-online-count>1</b> online</span>
+      </button>
       <div class="dropdown dropdown-user top-bar-account">
         <button id="userMenuButton" class="top-bar-button user-menu-trigger" type="button" title="Conta e configurações" aria-haspopup="menu">
           <span class="user-avatar" data-user-initials aria-hidden="true">?</span>
@@ -1761,8 +1765,8 @@
               </form>
               <div class="account-card">
                 <div>
-                  <strong>Seu papel: <span data-user-role></span></strong>
-                  <p>Administradores definem preços, kits e configurações, e gerenciam a equipe. Membros criam e editam projetos.</p>
+                  <strong>Seu cargo: <span data-user-role></span></strong>
+                  <p id="myRoleDescription"></p>
                 </div>
               </div>
               <div class="account-card account-card--danger" id="leaveCompanyCard" hidden>
@@ -1780,18 +1784,31 @@
                 <h3>Convidar pessoa</h3>
                 <form id="inviteForm" class="account-invite-form" novalidate>
                   <input type="email" id="inviteEmail" placeholder="email@empresa.com" aria-label="E-mail do convidado" />
-                  <select id="inviteRole" aria-label="Papel">
-                    <option value="member">Membro</option>
+                  <select id="inviteRole" aria-label="Cargo">
+                    <option value="projetista">Projetista</option>
+                    <option value="member">Membro (somente visualiza)</option>
                     <option value="admin">Administrador</option>
                   </select>
                   <button type="submit" class="btn btn-success">Convidar</button>
                 </form>
+                <p class="account-note" id="inviteRoleHint"></p>
                 <p class="account-note">A pessoa cria a conta em <strong class="app-url-slot"></strong> usando este e-mail e entra direto na equipe.</p>
                 <p class="account-feedback" role="status"></p>
                 <ul id="pendingInvitesList" class="account-list"></ul>
               </div>
-              <h3>Membros</h3>
+              <div class="account-members-head">
+                <h3>Membros</h3>
+                <span class="account-online-summary" id="teamOnlineSummary" hidden></span>
+              </div>
               <ul id="teamMembersList" class="account-list"></ul>
+              <div class="account-roles" data-admin-only>
+                <h3>Cargos</h3>
+                <dl>
+                  <div><dt><span class="account-badge account-badge--admin">Administrador</span></dt><dd>Controla tudo: equipe, convites, dados da empresa, preços, kits e configurações. Vê quem está online.</dd></div>
+                  <div><dt><span class="account-badge account-badge--projetista">Projetista</span></dt><dd>Cria, edita e salva projetos. Não acessa a parte administrativa.</dd></div>
+                  <div><dt><span class="account-badge account-badge--member">Membro</span></dt><dd>Somente visualiza: abre e consulta projetos, sem editar nem salvar.</dd></div>
+                </dl>
+              </div>
             </section>
 
             <!-- Preferências -->
@@ -2131,13 +2148,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-  <script src="js/supabase-client.js?v=20260929b"></script>
-  <script src="script.js?v=20260930a" defer></script>
-  <script src="js/marker-icons.js?v=20260930a" defer></script>
-  <script src="js/marker-panel.js?v=20260930a" defer></script>
-  <script src="js/fusion.js?v=20260930a" defer></script>
-  <script src="js/account.js?v=20260930a" defer></script>
-  <script src="js/clients.js?v=20260930a" defer></script>
+  <script src="js/supabase-client.js?v=20260930b"></script>
+  <script src="script.js?v=20260930b" defer></script>
+  <script src="js/permissions.js?v=20260930b" defer></script>
+  <script src="js/marker-icons.js?v=20260930b" defer></script>
+  <script src="js/marker-panel.js?v=20260930b" defer></script>
+  <script src="js/fusion.js?v=20260930b" defer></script>
+  <script src="js/account.js?v=20260930b" defer></script>
+  <script src="js/clients.js?v=20260930b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>

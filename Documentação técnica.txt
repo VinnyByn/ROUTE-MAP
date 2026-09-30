@@ -14,7 +14,8 @@ index.html: Estrutura principal, modais, painéis laterais e templates (<templat
 style.css: Estilos base. A camada "DESIGN SYSTEM v2" define tokens (claro/escuro), barra, menus, sidebar, modais, botões e notificações.
 ui-v3.css: Camada final (carregada depois de style.css): painéis de marcador e cabo, rótulos/ícones, plano de fusão, catálogo e cliente B2B.
   Atenção: style.css tem a regra legada ".modal-content button:not([class*="btn-"])…" que pinta botões de azul-petróleo; botões novos usam classes com "btn-" ou definem as cores com !important via variáveis (--fx-btn-bg/--fx-btn-fg).
-js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession e loadAppContext().
+js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession (role, isAdmin, canEdit, isViewer), ROLE_LABELS/ROLE_DESCRIPTIONS, requireEdit() e loadAppContext().
+js/permissions.js: aplica o cargo na interface (classes role-*, is-viewer, can-edit no <body>) e lockFormsForViewer() para janelas em modo leitura. O CSS de "somente visualização" está em ui-v3.css (body.is-viewer, .is-readonly). Novas ações de edição devem chamar requireEdit('...') no início e ganhar o seletor de ocultação em ui-v3.css.
 script.js: Núcleo (mapa, sidebar, cabos, materiais, relatórios, persistência de projetos).
 js/marker-icons.js: Ícones SVG dos marcadores (mapa, barra lateral, seletor de tipo) e rótulos com contorno.
 js/marker-panel.js: Painel lateral de criação/edição de marcadores e o posicionamento no mapa.
@@ -23,17 +24,19 @@ js/account.js: Menu do usuário e janela "Minha conta".
 js/clients.js: Marcador Cliente (residencial/B2B, status, CTO/porta, drop pela rede, equipamentos).
 migrar.html: Ferramenta temporária que copia projetos do Firestore antigo (users/{uid}/projects) para a tabela projects.
 supabase/migrations/: SQL do banco (tabelas, RLS e funções RPC).
-Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js (todos defer) → Google Maps (callback initMap).
+Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → permissions.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js (todos defer) → Google Maps (callback initMap).
 
 3. Banco de Dados (Supabase)
-companies: empresas. company_members: vínculo usuário–empresa com papel admin/member (um usuário = uma empresa).
+companies: empresas. company_members: vínculo usuário–empresa com cargo admin | projetista | member (um usuário = uma empresa). "member" é o Membro, somente visualização.
 profiles: nome, cargo, telefone e preferences (jsonb: theme, mapType, reopenLastProject). Criado por trigger no cadastro.
 company_invites: convites por e-mail. O convidado entra na equipe ao criar conta com o mesmo e-mail (accept_pending_invite).
 company_settings: material_catalog ({materials, kits}), lancamento_config (vão, ferragens por poste, dropSlack) e labor_config (custo/hora, horas/dia, produtividade). Somente admin grava.
 projects: id (text, também é o id da <ul> do projeto na sidebar), company_id, name, city, neighborhood, project_type e data (jsonb com sidebar, markers, cables, polygons, bom, observations).
-RLS: cada empresa só enxerga os próprios dados. Projetos: toda a equipe lê/edita; exclusão só pelo autor ou admin.
-RPCs: get_my_context, create_company, accept_pending_invite, list_company_members, set_member_role, remove_member.
-Para alterar o banco, crie um novo arquivo em supabase/migrations/ e rode no SQL Editor do Supabase.
+member_presence: user_id, company_id, last_seen_at, signed_out_at, project_name. Sem políticas: só as funções (security definer) leem e gravam.
+RLS: cada empresa só enxerga os próprios dados. Projetos: toda a equipe lê; só admin e projetista criam/editam (can_edit_projects); exclusão só pelo admin ou pelo autor projetista. Preços, kits, configurações, convites e dados da empresa: só admin.
+RPCs: get_my_context, create_company, accept_pending_invite, list_company_members (traz last_seen_at, is_online e active_project só para o admin), set_member_role (3 cargos; nunca deixa a empresa sem admin), remove_member, heartbeat(p_project) e go_offline().
+Presença: o navegador chama heartbeat a cada 45 s (com a aba visível) e go_offline ao sair/fechar (fetch keepalive). Online = last_seen_at nos últimos 100 s e sem signed_out_at posterior.
+Migrações: 20260929120000_estrutura_multiempresa.sql (base) e 20260930120000_cargos_e_presenca.sql (cargos + presença; quem era "member" vira "projetista"). Para alterar o banco, crie um novo arquivo em supabase/migrations/ e rode no SQL Editor do Supabase ANTES de publicar o código que depende dele.
 
 4. Módulos Principais
 4.1. Sessão

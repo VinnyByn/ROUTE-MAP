@@ -2106,3 +2106,214 @@ html[data-theme="dark"] .cat3-card__icon--labor { background: #2b2008; color: #f
   background: transparent;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+
+/* ---------------------------------------------------------------
+   Cargos: somente visualização (Membro)
+   --------------------------------------------------------------- */
+body.is-viewer #createProjectButton,
+body.is-viewer #saveProjectButton,
+body.is-viewer #createFolderButton,
+body.is-viewer #importKmlButton,
+body.is-viewer #drawCableButton,
+body.is-viewer #addMarkerButton,
+body.is-viewer #drawPolygonButton,
+body.is-viewer #quickSaveButton,
+body.is-viewer #laborButton,
+body.is-viewer #openObservationsButton,
+body.is-viewer #saveMaterialChangesButton,
+body.is-viewer #recalculateBomButton,
+body.is-viewer #addMaterialButton,
+body.is-viewer #addDatacenterEquipmentButton,
+body.is-viewer #sidebar-empty-create-btn,
+body.is-viewer #projectDropdown .dropdown-divider,
+body.is-viewer #toolsDropdown .dropdown-divider,
+body.is-viewer #materialsDropdown .dropdown-divider,
+body.is-viewer .item-actions-menu .edit-folder-btn,
+body.is-viewer .item-actions-menu .folder-style-btn,
+body.is-viewer .item-actions-menu .delete-project-btn,
+body.is-viewer .item-actions-menu .delete-folder-btn,
+body.is-viewer .material-actions,
+body.is-viewer #sidebarFolderContextMenu [data-action="edit"],
+body.is-viewer #sidebarFolderContextMenu [data-action="style"],
+body.is-viewer #sidebarFolderContextMenu [data-action="delete"] {
+  display: none !important;
+}
+
+body.is-viewer .cable-surcharge-input,
+body.is-viewer .sidebar-draggable { pointer-events: auto; }
+body.is-viewer .cable-surcharge-input { opacity: 0.7; pointer-events: none; }
+
+/* Painéis e janelas em modo leitura */
+.is-readonly #confirmMarker,
+.is-readonly #deleteMarkerButton,
+.is-readonly #editPositionButton,
+.is-readonly #saveClientButton,
+.is-readonly #deleteClientButton,
+.is-readonly #moveClientButton,
+.is-readonly #addClientEquipmentButton,
+.is-readonly .client-equipment-remove,
+.is-readonly #editClientDropButton,
+.is-readonly #recalculateClientDropButton,
+.is-readonly .client-equipment-head + .client-equipment-list + .client-equipment-empty,
+.is-readonly #saveFusionPlan,
+.is-readonly .fx-sidebar,
+.is-readonly .fx-card__tools {
+  display: none !important;
+}
+
+.is-readonly .map-tool-segmented button,
+.is-readonly .client-status-chip,
+.is-readonly .client-kind button,
+.is-readonly .stepper button {
+  pointer-events: none;
+}
+
+.is-readonly .fx-layout { grid-template-columns: minmax(0, 1fr); }
+.is-readonly .fx-card__head { cursor: default; }
+.is-readonly input:disabled,
+.is-readonly select:disabled,
+.is-readonly textarea:disabled {
+  opacity: 1;
+  color: var(--color-text);
+  -webkit-text-fill-color: var(--color-text);
+  background: var(--color-surface-muted);
+  cursor: default;
+}
+
+.is-readonly.marker-panel .map-tool-box__actions:not(:has(#fusionPlanButton:not(.hidden))) { display: none; }
+
+/* ---------------------------------------------------------------
+   Presença online e cargos (equipe)
+   --------------------------------------------------------------- */
+.top-bar-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 12px;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font: 600 12.5px var(--font-sans);
+  cursor: pointer;
+}
+
+.top-bar-online:hover { background: rgba(255, 255, 255, 0.16); }
+.top-bar-online + .top-bar-account { margin-left: 8px; }
+.top-bar-online b { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.top-bar-online__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.top-bar-online.has-others .top-bar-online__dot,
+.top-bar-online .top-bar-online__dot { box-shadow: 0 0 0 0 transparent; }
+
+.top-bar-online.has-others .top-bar-online__dot {
+  background: #4ade80;
+  animation: onlinePulse 2.2s ease-out infinite;
+}
+
+.top-bar-online:not(.has-others) .top-bar-online__dot { background: #4ade80; opacity: 0.55; }
+
+@keyframes onlinePulse {
+  0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
+  100% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+}
+
+@media (max-width: 1100px) {
+  .top-bar-online span:last-child { display: none; }
+  .top-bar-online { padding: 0 10px; }
+  .top-bar-online::after { content: attr(data-count); }
+}
+
+.account-members-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.account-online-summary {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #16a34a 40%, transparent);
+  background: color-mix(in srgb, #16a34a 10%, var(--color-surface));
+  color: #15803d;
+  font: 600 12px var(--font-sans);
+}
+
+html[data-theme="dark"] .account-online-summary { color: #6ee7a1; }
+.account-online-summary[hidden] { display: none; }
+
+.user-avatar--presence { position: relative; overflow: visible; }
+
+.user-avatar--presence::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #94a3b8;
+  border: 2px solid var(--color-surface);
+}
+
+.user-avatar--presence.is-online::after { background: #22c55e; }
+
+.presence-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.presence-line i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.presence-line.is-online { color: #15803d !important; font-weight: 600; }
+.presence-line.is-online i { background: #22c55e; }
+html[data-theme="dark"] .presence-line.is-online { color: #6ee7a1 !important; }
+
+.account-badge--projetista {
+  background: color-mix(in srgb, #2563eb 12%, transparent);
+  color: #1d4ed8;
+  border-color: color-mix(in srgb, #2563eb 40%, transparent);
+}
+
+html[data-theme="dark"] .account-badge--projetista { color: #93c5fd; }
+
+.account-roles { margin-top: 18px; }
+
+.account-roles dl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.account-roles dl > div {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-surface-muted);
+}
+
+.account-roles dt { margin: 0; }
+.account-roles dd { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--color-text-muted); }
+.account-roles .account-badge { display: inline-block; }

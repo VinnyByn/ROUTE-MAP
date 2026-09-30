@@ -243,6 +243,11 @@ function openMarkerEditor(markerInfo) {
     configureMarkerPanel(markerInfo.type, 'edit');
     if (markerInfo.type === 'CTO') renderCtoClientsPanel(markerInfo);
     highlightMapMarker(markerInfo, { persistent: true });
+    if (AppSession.isViewer) {
+        document.getElementById('markerPanelSubtitle').textContent = 'Somente visualização';
+        document.getElementById('markerPanelHelp').textContent = 'Seu cargo permite apenas consultar os dados do marcador.';
+    }
+    lockFormsForViewer('markerModal');
     showMarkerPanel();
 }
 

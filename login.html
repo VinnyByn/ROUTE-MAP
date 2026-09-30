@@ -17,7 +17,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="login-style.css?v=20260929b" />
+    <link rel="stylesheet" href="login-style.css?v=20260930b" />
 </head>
 <body>
     <button id="loginThemeToggle" class="login-theme-toggle" type="button" title="Alternar tema claro ou escuro">
@@ -146,7 +146,7 @@
                 <div id="companyInvite" hidden>
                     <div class="card-header">
                         <h2>Você foi convidado</h2>
-                        <p>Você recebeu um convite para entrar na equipe da empresa <strong id="inviteCompanyName"></strong>.</p>
+                        <p>Você recebeu um convite para entrar na equipe da empresa <strong id="inviteCompanyName"></strong> com o cargo de <strong id="inviteRoleName"></strong>.</p>
                     </div>
                     <p class="error-message" role="alert"></p>
                     <button type="button" id="acceptInviteButton" class="login-button">Entrar na equipe</button>
@@ -178,7 +178,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-    <script src="js/supabase-client.js?v=20260929b"></script>
+    <script src="js/supabase-client.js?v=20260930b"></script>
     <script>
         const views = ['authLoading', 'viewLogin', 'viewSignup', 'viewCheckEmail', 'viewForgot', 'viewReset', 'viewCompany'];
         const goTargets = { login: 'viewLogin', signup: 'viewSignup', forgot: 'viewForgot' };
@@ -224,7 +224,10 @@
             const invite = AppSession.pendingInvite;
             document.getElementById('companyInvite').hidden = !invite;
             document.getElementById('companyCreate').hidden = !!invite;
-            if (invite) document.getElementById('inviteCompanyName').textContent = invite.company_name;
+            if (invite) {
+                document.getElementById('inviteCompanyName').textContent = invite.company_name;
+                document.getElementById('inviteRoleName').textContent = ROLE_LABELS[invite.role] || invite.role;
+            }
             showView('viewCompany');
         }
 

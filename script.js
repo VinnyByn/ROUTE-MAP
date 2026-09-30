@@ -414,6 +414,7 @@ function buildProjectRecord(projectRootElement) {
 //Grava (cria ou atualiza) o projeto no banco
 async function persistProject(projectRootElement) {
     await appReady;
+    if (!AppSession.canEdit) throw new Error('Seu cargo é somente de visualização.');
     const record = buildProjectRecord(projectRootElement);
     const { error } = await supabaseClient.from('projects').upsert(record, { onConflict: 'id' });
     if (error) throw error;
@@ -422,6 +423,7 @@ async function persistProject(projectRootElement) {
 
 //Botão "Salvar Projeto"
 async function saveActiveProject() {
+    if (!requireEdit('salvar projetos')) return;
     const projectRootElement = getActiveProjectRoot();
     if (!projectRootElement) {
         showAlert("Atenção", "Selecione um projeto ou um item dentro de um projeto para salvar.");
@@ -440,7 +442,7 @@ async function saveActiveProject() {
 
 //Salvamento silencioso após reorganizar itens na sidebar
 function saveProjectElement(projectRootElement) {
-    if (!projectRootElement) return;
+    if (!projectRootElement || !AppSession.canEdit) return;
     const projectName = projectRootElement.querySelector('.folder-title')?.dataset.folderName || 'Projeto';
     persistProject(projectRootElement).catch((error) => {
         console.error(`Erro ao salvar projeto "${projectName}":`, error);
@@ -1672,7 +1674,7 @@ function initMap() {
     if (logoutButton) {
         logoutButton.addEventListener('click', (event) => {
             event.preventDefault();
-            supabaseClient.auth.signOut().then(({ error }) => {
+            Promise.resolve(supabaseClient.rpc('go_offline')).catch(() => {}).then(() => supabaseClient.auth.signOut()).then(({ error }) => {
                 if (error) throw error;
                 window.location.replace('login.html');
             }).catch((error) => {
@@ -1867,6 +1869,7 @@ function removeMaterialFromBom(materialName, quantity) {
 
 //Exclusão completa de um projeto
 function deleteProject(projectId, projectElement, projectName) {
+    if (!requireEdit('excluir projetos')) return;
     const message = `Excluir o projeto "${projectName}" e todo o seu conteúdo do banco de dados? Ele deixará de aparecer para toda a equipe. Esta ação não pode ser desfeita.`;
     showConfirm('Excluir projeto', message, async () => {
         const { data, error } = await supabaseClient.from('projects').delete().eq('id', projectId).select('id');
@@ -1927,6 +1930,7 @@ function removeProjectFromWorkspace(projectId, projectElement) {
 
 //Exclusão de pasta e conteúdo
 function deleteFolder(folderId, folderElement, folderName) {
+    if (!requireEdit('excluir pastas')) return;
     const message = `Tem certeza que deseja excluir a pasta "${folderName}" e todos os seus conteúdos? Esta ação não pode ser desfeita.`;
     showConfirm('Excluir Pasta', message, () => {
         //Identifica hierarquia de pastas a serem removidas
@@ -2751,6 +2755,7 @@ function pasteFolderFromClipboard(targetFolderId) {
 }
 
 function pasteSidebarClipboard() {
+    if (!AppSession.canEdit) return false;
     if (!sidebarClipboard || !activeFolderId) return false;
     if (sidebarClipboard.type === 'marker') {
         return pasteMarkerFromClipboard(activeFolderId);
@@ -2860,6 +2865,10 @@ function isSidebarDragBlockedTarget(target) {
 }
 
 function beginSidebarDrag(containerElement, e) {
+    if (!AppSession.canEdit) {
+        e.preventDefault();
+        return;
+    }
     e.stopPropagation();
     e.dataTransfer.setData('text/plain', containerElement.id || 'sidebar-item');
     e.dataTransfer.effectAllowed = 'move';
@@ -2974,6 +2983,10 @@ function addFolderWrapperDropListeners(wrapperLi) {
 
 //Evento drop em pastas
 function handleDropOnFolder(e, destinationUl) {
+    if (!AppSession.canEdit) {
+        clearSidebarDropState();
+        return;
+    }
     //Recupera referências globais do item arrastado
     const draggedItem = window.draggedItem;
     const sourceProjectElement = window.draggedItemSourceProject;
@@ -3123,6 +3136,7 @@ function enableDropOnFolder(ul) {
 
 //Criação e edição de projetos
 function createProject() {
+    if (!requireEdit('criar projetos')) return;
     //Captura do formulário
     const projectNameInput = document.getElementById("projectName");
     const projectCityInput = document.getElementById("projectCity");
@@ -3219,6 +3233,7 @@ function createProject() {
 
 //Criação e edição de pastas
 function createFolder() {
+    if (!requireEdit('criar pastas')) return;
     const folderNameInput = document.getElementById("folderNameInput");
     const folderName = folderNameInput.value.trim();
     //Modo edição
@@ -4159,6 +4174,7 @@ document.getElementById("cableType").addEventListener("change", () => {
 
 //Listener do botão desenhar cabo
 document.getElementById("drawCableButton").addEventListener("click", () => {
+    if (!requireEdit('desenhar cabos')) return;
     if (isAddingMarker || isDrawingCable) {
         showAlert("Atenção", "Finalize a ação atual antes de adicionar outro marcador ou cabo.");
         return;
@@ -4322,6 +4338,12 @@ function openCableEditor(cabo) {
         showAlert("Erro", "Não foi possível encontrar o cabo para edição.");
         return;
     }
+    //Somente visualização: mostra os dados do cabo sem abrir o editor
+    if (!AppSession.canEdit) {
+        focusMapToCable(cabo);
+        showToast(cabo.name, `${cabo.type} · ${cabo.status || 'Novo'} · ${cabo.totalLength} m (lançamento ${cabo.lancamento} m + reserva ${cabo.reserva} m)`, 'progress');
+        return;
+    }
     //Não troca de cabo no meio de um desenho: isso fazia o cabo em edição sumir
     if (isDrawingCable) {
         if (editingCableIndex === index) return;
@@ -4370,6 +4392,7 @@ document.getElementById("cancelCableButton").addEventListener("click", () => {
 
 //Inicio da adiçao de marcador
 document.getElementById("addMarkerButton").addEventListener("click", () => {
+    if (!requireEdit('adicionar marcadores')) return;
     //Validação de estado
     if (isAddingMarker || isDrawingCable) {
         showAlert("Atenção", "Finalize a ação atual antes de adicionar outro marcador ou cabo.");
@@ -4817,6 +4840,7 @@ function generatePolylinePath(points) {
 
 //Editor de pastas e projetos
 function openFolderEditor(titleElement) {
+    if (!requireEdit('editar pastas e projetos')) return;
     editingFolderElement = titleElement;
     const isProject = titleElement.dataset.isProject === 'true';
     //Configuração para projetos
@@ -4888,6 +4912,7 @@ function showSidebarFolderContextMenu(titleElement, clientX, clientY) {
 }
 
 function openFolderMarkerStyleModal(titleElement) {
+    if (!requireEdit('padronizar estilos')) return;
     if (!titleElement?.dataset.folderId) return;
     const folderId = titleElement.dataset.folderId;
     const folderName = titleElement.dataset.folderName || 'Pasta';
@@ -10310,6 +10335,7 @@ function openPolygonBox(title, values) {
 
 //Inicia a ferramenta de desenho de polígono
 function startPolygonTool(initialPath) {
+    if (!requireEdit('desenhar polígonos')) return;
     if (isDrawingCable || isAddingMarker) {
         showAlert("Atenção", "Finalize a ação atual antes de desenhar um polígono.");
         return;
@@ -10433,6 +10459,11 @@ function savePolygon() {
 function openPolygonEditor(polygonRef) {
     const polygonInfo = typeof polygonRef === 'number' ? savedPolygons[polygonRef] : polygonRef;
     if (!polygonInfo) return;
+    if (!AppSession.canEdit) {
+        const area = google.maps.geometry.spherical.computeArea(polygonInfo.polygonObject.getPath());
+        showToast(polygonInfo.name || 'Polígono', `Área ${formatArea(area)}`, 'progress');
+        return;
+    }
     const index = savedPolygons.indexOf(polygonInfo);
     if (index === -1) {
         showAlert("Erro", "Não foi possível encontrar o polígono para edição.");
@@ -11342,6 +11373,10 @@ async function readKmlTextFromFile(file) {
 }
 
 function handleKmlFileSelect(event) {
+    if (!requireEdit('importar arquivos KML')) {
+        event.target.value = '';
+        return;
+    }
     const file = event.target.files[0];
     if (!file) return;
 
@@ -11608,6 +11643,7 @@ function parseAndDisplayKML(kmlDoc) {
 
 //Inicia o processo de ajuste de um marcador KML importado, guardando a sua informação e abrindo o modal de seleção de tipo.
 function startMarkerAdjustment(markerInfo) {
+    if (!requireEdit('ajustar marcadores importados')) return;
     // Guarda a informação do marcador que estamos a ajustar
     adjustingKmlMarkerInfo = markerInfo;
     // Abre o primeiro passo do fluxo de criação: a seleção do tipo de marcador

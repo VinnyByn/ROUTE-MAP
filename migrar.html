@@ -15,7 +15,7 @@
         } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
       })();
     </script>
-    <link rel="stylesheet" href="login-style.css?v=20260929b" />
+    <link rel="stylesheet" href="login-style.css?v=20260930b" />
     <style>
       .login-container { max-width: 640px; }
       .migrate-step { margin-top: 18px; }
@@ -83,7 +83,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-    <script src="js/supabase-client.js?v=20260929b"></script>
+    <script src="js/supabase-client.js?v=20260930b"></script>
     <script>
         //Ferramenta temporária: lê users/{uid}/projects no Firestore e grava na tabela projects do Supabase
         const legacyApp = firebase.initializeApp({
@@ -226,6 +226,10 @@
             await loadAppContext();
             if (!AppSession.company) {
                 document.getElementById('sessionMessage').innerHTML = 'Cadastre sua empresa no sistema novo antes de migrar. <a class="link-button" href="login.html">Continuar</a>';
+                return;
+            }
+            if (!AppSession.canEdit) {
+                document.getElementById('sessionMessage').innerHTML = 'Seu cargo é somente de visualização. Peça a um administrador ou projetista para migrar os projetos. <a class="link-button" href="index.html">Voltar</a>';
                 return;
             }
             document.getElementById('targetCompany').textContent = AppSession.company.name;

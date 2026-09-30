@@ -696,8 +696,10 @@ function openClientModal(clientInfo) {
     document.getElementById('deleteClientButton').hidden = !clientInfo;
     document.getElementById('moveClientButton').hidden = !clientInfo;
     document.getElementById('saveClientButton').textContent = clientInfo ? 'Salvar' : 'Posicionar no mapa';
+    if (AppSession.isViewer) document.getElementById('clientModalTitle').textContent = 'Cliente';
+    lockFormsForViewer('clientModal');
     document.getElementById('clientModal').style.display = 'flex';
-    setTimeout(() => document.getElementById('clientName').focus(), 40);
+    if (!AppSession.isViewer) setTimeout(() => document.getElementById('clientName').focus(), 40);
 }
 
 function closeClientModal() {

@@ -8,6 +8,14 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 
+//Cargos: admin controla tudo; projetista cria/edita/salva projetos; member (Membro) só visualiza.
+const ROLE_LABELS = { admin: 'Administrador', projetista: 'Projetista', member: 'Membro' };
+const ROLE_DESCRIPTIONS = {
+    admin: 'Controla tudo: equipe, convites, dados da empresa, preços, kits e configurações. Vê quem está online.',
+    projetista: 'Cria, edita e salva projetos. Não acessa a parte administrativa.',
+    member: 'Somente visualiza: abre e consulta projetos, sem editar nem salvar.'
+};
+
 //Contexto do usuário logado (preenchido por loadAppContext)
 const AppSession = {
     userId: null,
@@ -15,9 +23,25 @@ const AppSession = {
     profile: null,
     company: null,        // { id, name, document, role }
     pendingInvite: null,  // { id, company_name, role }
+    accessToken: null,    // usado só para avisar "saí" ao fechar a página
+    get role() { return this.company?.role || null; },
     get isAdmin() { return this.company?.role === 'admin'; },
+    get canEdit() { return this.company?.role === 'admin' || this.company?.role === 'projetista'; },
+    get isViewer() { return !!this.company && !this.canEdit; },
+    get roleLabel() { return ROLE_LABELS[this.company?.role] || ''; },
     get displayName() { return this.profile?.full_name || this.email || 'Usuário'; }
 };
+
+supabaseClient.auth.onAuthStateChange((_event, session) => { AppSession.accessToken = session?.access_token || null; });
+
+//Barreira de segurança no navegador (o banco também bloqueia por RLS). Retorna false e avisa se o cargo não permite.
+function requireEdit(actionLabel = 'fazer alterações') {
+    if (AppSession.canEdit) return true;
+    const message = `Seu cargo (${AppSession.roleLabel || 'Membro'}) é somente de visualização. Peça a um administrador para ${actionLabel}.`;
+    if (typeof showToast === 'function') showToast('Somente visualização', message, 'progress');
+    else console.warn(message);
+    return false;
+}
 
 async function loadAppContext() {
     const { data, error } = await supabaseClient.rpc('get_my_context');

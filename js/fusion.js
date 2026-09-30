@@ -506,7 +506,9 @@ function setFusionHint(html) {
 }
 
 function resetFusionHint() {
-    setFusionHint('Clique em uma fibra ou porta para começar uma fusão. Clique numa linha para refazer ou desfazer.');
+    setFusionHint(AppSession.canEdit
+        ? 'Clique em uma fibra ou porta para começar uma fusão. Clique numa linha para refazer ou desfazer.'
+        : 'Somente visualização: clique em uma porta ligada para ver o destino da fusão.');
 }
 
 function armFusionPort(port, editingLine = null) {
@@ -584,6 +586,13 @@ function completeFusionConnection(target) {
 
 function handleConnectionClick(event) {
     if (fusionDrag?.moved) return;
+    if (!AppSession.canEdit) {
+        //Visualização: só mostra para onde a porta está ligada
+        const port = event.target.closest('.connectable');
+        const line = port && findLineForPort(port.id);
+        if (line) showToast('Fusão', `${describeFusionPort(document.getElementById(line.dataset.startId))} → ${describeFusionPort(document.getElementById(line.dataset.endId))}`, 'progress');
+        return;
+    }
     const target = event.target;
     if (target.closest('button, input, label, select')) return;
     const hit = target.closest('.fx-line-hit, .fusion-line');
@@ -927,7 +936,7 @@ function wireFusionCard(card) {
 }
 
 function startFusionCardDrag(event, card) {
-    if (event.button !== 0 || event.target.closest('button, input, label, select')) return;
+    if (!AppSession.canEdit || event.button !== 0 || event.target.closest('button, input, label, select')) return;
     const stageRect = getFusionStage().getBoundingClientRect();
     fusionDrag = { card, startX: event.clientX, startY: event.clientY, stageRect, moved: false, pointerId: event.pointerId };
     card.setPointerCapture?.(event.pointerId);
@@ -1090,6 +1099,10 @@ function populateFusionPlan(markerInfo) {
     trayInput.dataset.oldValue = trayInput.value;
     ensureFusionSvgDefs();
     fusionDirty = false;
+    document.getElementById('fusionModal').classList.toggle('is-readonly', AppSession.isViewer);
+    document.getElementById('cancelFusionPlan').textContent = AppSession.isViewer ? 'Fechar' : 'Cancelar';
+    const emptyHint = document.querySelector('#fusionEmptyState span');
+    if (emptyHint) emptyHint.textContent = AppSession.isViewer ? 'Esta caixa ainda não tem um plano de fusão montado.' : 'Adicione os cabos da caixa e os splitters pela coluna ao lado.';
     renderSplitterDraft();
     resetFusionHint();
     requestAnimationFrame(() => {
@@ -1123,7 +1136,7 @@ function serializeFusionPlan() {
 
 function saveFusionPlan() {
     const markerInfo = activeMarkerForFusion;
-    if (!markerInfo) return;
+    if (!markerInfo || !requireEdit('salvar planos de fusão')) return;
     markerInfo.fusionPlan = serializeFusionPlan();
     fusionDirty = false;
     closeFusionModal({ force: true });

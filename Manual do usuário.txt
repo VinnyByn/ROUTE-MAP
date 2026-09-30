@@ -9,9 +9,14 @@ Menu do usuário (avatar no canto superior direito):
 - Meu perfil: nome, cargo e telefone.
 - Senha e segurança: trocar a senha e sair de todos os dispositivos.
 - Empresa: nome e CNPJ (o administrador edita).
-- Equipe e convites: o administrador convida pessoas por e-mail, define quem é administrador ou membro e remove membros.
+- Equipe e convites: o administrador convida pessoas por e-mail, define o cargo de cada uma e remove membros.
 - Preferências e atalhos: tema, tipo de mapa ao abrir, reabrir o último projeto e lista de atalhos do teclado.
-Administrador x membro: o administrador define preços, kits e regras de cálculo e gerencia a equipe. Membros criam e editam os projetos da equipe.
+Cargos:
+- Administrador: controla tudo. Convida pessoas, altera cargos, remove membros, edita os dados da empresa, os preços, kits e regras de cálculo e exclui qualquer projeto. Só ele vê quem está online.
+- Projetista: tudo de projeto liberado (criar, desenhar, editar, salvar, importar KML, plano de fusão, mão de obra, relatórios), menos a parte administrativa. Consulta preços e kits, mas não os altera.
+- Membro: somente visualiza. Abre projetos, navega no mapa, consulta marcadores, cabos, planos de fusão, lista de materiais e relatório, e usa a régua. Não cria, não edita e não salva nada; os botões de edição ficam ocultos.
+Ao convidar, escolha o cargo; a pessoa cria a conta com o mesmo e-mail e já entra com esse cargo. O administrador pode trocar o cargo depois em Equipe e convites. A empresa sempre mantém pelo menos um administrador.
+Quem está online (administrador): o botão "N online" ao lado do avatar mostra quantas pessoas estão conectadas agora e o nome de cada uma. Em Equipe e convites, cada membro mostra "Online agora" (com o projeto aberto) ou "Visto há…". O status atualiza sozinho a cada 30 segundos.
 --------------------------------------------------------------------------------------------------------------------------------------------
 2. Gerenciamento de Projetos
 Os projetos são da equipe: todos da empresa veem e editam.
@@ -96,5 +101,5 @@ Preços, kits e configurações (catálogo da empresa):
 - Materiais e preços: busca, filtro por categoria (chips), preço editável direto na tabela (clique no preço, Enter salva) e importação de planilha.
 - Kits: cartões com os itens, o custo de cada item e o custo total do kit.
 - Regras de cálculo: lançamento de cabos (vão, plaquetas, BAP, SUPAS, alças), clientes (sobra por drop) e mão de obra (custo/hora, jornada e produtividade), com exemplos do cálculo.
-O administrador altera; os membros apenas consultam.
+Somente o administrador altera; projetistas e membros apenas consultam.
 Relatório do Projeto: Gera um resumo executivo com total de portas (HC) e casas (HP), taxa de penetração, custo total (CAPEX) por material e mão de obra, e custo por porta.

@@ -2,8 +2,6 @@
 // Depende de supabase-client.js (supabaseClient, AppSession) e de script.js
 // (showAlert, showConfirm, applyTheme, escapeHtml, appReady, mapReady, map).
 
-const ROLE_LABELS = { admin: 'Administrador', member: 'Membro' };
-
 function getInitials(text) {
     const source = String(text || '').trim();
     if (!source) return '?';
@@ -16,14 +14,14 @@ function getInitials(text) {
 //Preenche nome, e-mail, empresa e papel em todos os lugares da interface
 function renderUserIdentity() {
     const name = AppSession.displayName;
-    const roleLabel = ROLE_LABELS[AppSession.company?.role] || '';
+    const roleLabel = AppSession.roleLabel;
     document.querySelectorAll('[data-user-initials]').forEach(el => { el.textContent = getInitials(AppSession.profile?.full_name || AppSession.email); });
     document.querySelectorAll('[data-user-name]').forEach(el => { el.textContent = name; });
     document.querySelectorAll('[data-user-email]').forEach(el => { el.textContent = AppSession.email; });
     document.querySelectorAll('[data-user-role]').forEach(el => { el.textContent = roleLabel; });
     document.querySelectorAll('.company-name-slot').forEach(el => { el.textContent = AppSession.company?.name || ''; });
     document.querySelectorAll('.app-url-slot').forEach(el => { el.textContent = `${location.origin}/login.html`; });
-    document.body.classList.toggle('is-company-admin', AppSession.isAdmin);
+    applyRoleToUi();
     const trigger = document.getElementById('userMenuButton');
     if (trigger) trigger.title = `${name} · ${AppSession.company?.name || ''}`;
 }
@@ -90,6 +88,8 @@ function fillAccountForms() {
     document.getElementById('companyDocumentInput').disabled = readOnly;
     document.getElementById('companyReadonlyNote').hidden = !readOnly;
     document.getElementById('leaveCompanyCard').hidden = AppSession.isAdmin;
+    const roleCard = document.getElementById('myRoleDescription');
+    if (roleCard) roleCard.textContent = ROLE_DESCRIPTIONS[AppSession.role] || '';
     document.getElementById('prefTheme').value = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
     document.getElementById('prefMapType').value = prefs.mapType || 'roadmap';
     document.getElementById('prefReopenLastProject').checked = !!prefs.reopenLastProject;
@@ -136,6 +136,7 @@ async function changePassword(event) {
 
 function signOutEverywhere() {
     showConfirm('Sair de todos os dispositivos', 'Encerrar sua sessão em todos os computadores e celulares? Você precisará entrar de novo.', async () => {
+        await Promise.resolve(supabaseClient.rpc('go_offline')).catch(() => {});
         await supabaseClient.auth.signOut({ scope: 'global' });
         window.location.replace('login.html');
     });
@@ -224,7 +225,7 @@ function leaveCompany() {
 
 async function loadTeam() {
     const membersList = document.getElementById('teamMembersList');
-    membersList.innerHTML = '<li class="account-list__state">Carregando…</li>';
+    if (!membersList.children.length) membersList.innerHTML = '<li class="account-list__state">Carregando…</li>';
     const [membersResult, invitesResult] = await Promise.all([
         supabaseClient.rpc('list_company_members'),
         AppSession.isAdmin
@@ -235,29 +236,48 @@ async function loadTeam() {
         membersList.innerHTML = '<li class="account-list__state account-list__state--error">Não foi possível carregar a equipe.</li>';
         return;
     }
-    renderMembers(membersResult.data || []);
+    const members = membersResult.data || [];
+    renderMembers(members);
     renderInvites(invitesResult.data || []);
+    updateOnlineChip(members);
+}
+
+//Situação de presença exibida só para o administrador
+function describePresence(member, isSelf) {
+    if (isSelf || member.is_online) {
+        const where = isSelf ? getPresenceProjectName() : member.active_project;
+        return { online: true, text: `Online agora${where ? ` · ${where}` : ''}` };
+    }
+    if (member.last_seen_at) return { online: false, text: `Visto ${formatRelativeDate(member.last_seen_at)}` };
+    return { online: false, text: 'Ainda não acessou' };
 }
 
 function renderMembers(members) {
     const list = document.getElementById('teamMembersList');
     list.innerHTML = '';
+    const onlineCount = members.filter(m => m.user_id === AppSession.userId || m.is_online).length;
+    const summary = document.getElementById('teamOnlineSummary');
+    if (summary) {
+        summary.hidden = !AppSession.isAdmin;
+        summary.textContent = `${onlineCount} de ${members.length} online agora`;
+    }
     members.forEach(member => {
         const isSelf = member.user_id === AppSession.userId;
         const li = document.createElement('li');
         li.className = 'account-list__item';
         const canManage = AppSession.isAdmin && !isSelf;
+        const presence = AppSession.isAdmin ? describePresence(member, isSelf) : null;
+        const roleOptions = ['admin', 'projetista', 'member']
+            .map(role => `<option value="${role}" ${member.role === role ? 'selected' : ''}>${ROLE_LABELS[role]}</option>`).join('');
         li.innerHTML = `
-            <span class="user-avatar">${escapeHtml(getInitials(member.full_name || member.email))}</span>
+            <span class="user-avatar${presence ? ' user-avatar--presence' : ''}${presence?.online ? ' is-online' : ''}">${escapeHtml(getInitials(member.full_name || member.email))}</span>
             <div class="account-list__info">
                 <strong>${escapeHtml(member.full_name || member.email)}${isSelf ? ' <em>(você)</em>' : ''}</strong>
                 <span>${escapeHtml(member.email)}${member.job_title ? ` · ${escapeHtml(member.job_title)}` : ''}</span>
+                ${presence ? `<span class="presence-line${presence.online ? ' is-online' : ''}"><i></i>${escapeHtml(presence.text)}</span>` : ''}
             </div>
             ${canManage ? `
-                <select class="account-role-select" aria-label="Papel de ${escapeHtml(member.email)}">
-                    <option value="member" ${member.role === 'member' ? 'selected' : ''}>Membro</option>
-                    <option value="admin" ${member.role === 'admin' ? 'selected' : ''}>Administrador</option>
-                </select>
+                <select class="account-role-select" aria-label="Cargo de ${escapeHtml(member.email)}">${roleOptions}</select>
                 <button type="button" class="account-icon-btn" title="Remover da equipe" aria-label="Remover ${escapeHtml(member.email)}">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>
                 </button>`
@@ -325,14 +345,16 @@ async function sendInvite(event) {
 
 async function changeMemberRole(member, select) {
     const previous = member.role;
+    const next = select.value;
     select.disabled = true;
-    const { error } = await supabaseClient.rpc('set_member_role', { p_user: member.user_id, p_role: select.value });
+    const { error } = await supabaseClient.rpc('set_member_role', { p_user: member.user_id, p_role: next });
     select.disabled = false;
     if (error) {
         select.value = previous;
         return showAlert('Não foi possível alterar', error.message);
     }
-    member.role = select.value;
+    member.role = next;
+    showToast('Cargo alterado', `${member.full_name || member.email} agora é ${ROLE_LABELS[next]}.`);
 }
 
 function removeMember(member) {
@@ -346,6 +368,74 @@ function removeMember(member) {
 // ---------------------------------------------------------------
 // Inicialização
 // ---------------------------------------------------------------
+
+// ---------------------------------------------------------------
+// Presença online: cada usuário avisa que está conectado; só o administrador consulta
+// ---------------------------------------------------------------
+
+const PRESENCE_INTERVAL_MS = 45000;
+const ONLINE_CHIP_INTERVAL_MS = 30000;
+let presenceTimer = null;
+let onlineChipTimer = null;
+
+function getPresenceProjectName() {
+    try {
+        return getActiveProjectRoot()?.querySelector('.folder-title')?.dataset.folderName || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+async function sendHeartbeat() {
+    if (!AppSession.company || document.hidden) return;
+    const { error } = await supabaseClient.rpc('heartbeat', { p_project: getPresenceProjectName() || null });
+    if (error) console.warn('Presença indisponível:', error.message);
+}
+
+//Ao fechar a página avisa que saiu (fetch com keepalive sobrevive ao fechamento)
+function sendGoOffline() {
+    if (!AppSession.accessToken) return;
+    try {
+        fetch(`${SUPABASE_URL}/rest/v1/rpc/go_offline`, {
+            method: 'POST',
+            keepalive: true,
+            headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${AppSession.accessToken}`, 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+    } catch (e) { /* ignora */ }
+}
+
+function updateOnlineChip(members) {
+    const chip = document.getElementById('onlineChip');
+    if (!chip || !AppSession.isAdmin) return;
+    const online = (members || []).filter(m => m.user_id === AppSession.userId || m.is_online);
+    chip.querySelector('[data-online-count]').textContent = String(online.length);
+    chip.title = online.length
+        ? `Online agora: ${online.map(m => m.full_name || m.email).join(', ')}`
+        : 'Ninguém online';
+    chip.classList.toggle('has-others', online.some(m => m.user_id !== AppSession.userId));
+}
+
+async function refreshOnlineChip() {
+    if (!AppSession.isAdmin || document.hidden) return;
+    const { data, error } = await supabaseClient.rpc('list_company_members');
+    if (!error) updateOnlineChip(data || []);
+}
+
+function startPresence() {
+    if (!AppSession.company) return;
+    sendHeartbeat();
+    presenceTimer = setInterval(sendHeartbeat, PRESENCE_INTERVAL_MS);
+    if (AppSession.isAdmin) {
+        refreshOnlineChip();
+        onlineChipTimer = setInterval(refreshOnlineChip, ONLINE_CHIP_INTERVAL_MS);
+        document.getElementById('onlineChip')?.addEventListener('click', () => openAccountModal('team'));
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) { sendHeartbeat(); refreshOnlineChip(); }
+    });
+    window.addEventListener('pagehide', sendGoOffline);
+}
 
 function setupAccountMenu() {
     document.querySelectorAll('#userDropdown [data-account-tab]').forEach(link => {
@@ -367,8 +457,17 @@ function setupAccountMenu() {
     document.getElementById('inviteForm').addEventListener('submit', sendInvite);
     document.getElementById('signOutEverywhereButton').addEventListener('click', signOutEverywhere);
     document.getElementById('leaveCompanyButton').addEventListener('click', leaveCompany);
+    document.getElementById('inviteRole').addEventListener('change', updateInviteRoleHint);
+    updateInviteRoleHint();
+}
+
+//Explica o que o cargo escolhido no convite permite
+function updateInviteRoleHint() {
+    const hint = document.getElementById('inviteRoleHint');
+    if (hint) hint.textContent = ROLE_DESCRIPTIONS[document.getElementById('inviteRole').value] || '';
 }
 
 setupAccountMenu();
 appReady.then(renderUserIdentity);
+appReady.then(startPresence);
 Promise.all([appReady, mapReady]).then(applyStartupPreferences);
