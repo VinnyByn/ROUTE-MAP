@@ -4998,6 +4998,14 @@ function getDefaultKitDefinitions() {
 
 //Kit "Cabos e alças": qual alça preformada cada tipo de cabo usa (editável no catálogo, aba Kits)
 const CABLE_ALCA_KIT_NAME = 'KIT CABOS E ALÇAS';
+const CABLE_ALCA_VERSION = 2; //Tabela oficial da empresa (troca de versão descarta escolhas antigas)
+//Cabos usados pela empresa, na ordem exibida no kit (alça padrão em CABLE_HARDWARE_MAP)
+const CABLE_ALCA_KIT_TYPES = [
+    'Cabo AS 80 FO-06', 'Cabo AS 80 FO-12',
+    'Cabo AS 200 FO-12', 'Cabo AS 80 FO-24', 'Cabo AS 80 FO-36', 'Cabo AS 80 FO-48',
+    'Cabo AS 200 FO-36', 'Cabo AS 80 FO-72', 'Cabo AS 200 FO-24',
+    'Cabo AS 80 FO-144',
+];
 
 function getCableAlca(cableType) {
     const custom = materialCatalog.cableAlcas?.[cableType];
@@ -5062,7 +5070,7 @@ function buildSeedCatalog() {
 function loadMaterialCatalog(stored) {
     const seed = buildSeedCatalog();
     if (!stored || !Array.isArray(stored.materials)) {
-        materialCatalog = { ...seed, cableAlcas: {} };
+        materialCatalog = { ...seed, cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION };
         return;
     }
     //Normaliza itens salvos
@@ -5097,7 +5105,8 @@ function loadMaterialCatalog(stored) {
     materialCatalog = {
         materials,
         kits: kits.filter(k => !k.name.toUpperCase().startsWith('KIT LANÇAMENTO ')),
-        cableAlcas: stored.cableAlcas && typeof stored.cableAlcas === 'object' ? { ...stored.cableAlcas } : {},
+        cableAlcas: stored.cableAlcasVersion === CABLE_ALCA_VERSION && stored.cableAlcas && typeof stored.cableAlcas === 'object' ? { ...stored.cableAlcas } : {},
+        cableAlcasVersion: CABLE_ALCA_VERSION,
     };
 }
 
@@ -5517,8 +5526,7 @@ function renderCableAlcaKit(priceOf) {
     const alcaOptions = [...new Set(materialCatalog.materials
         .filter(m => /ALÇA PREFORMADA OPDE/i.test(m.name))
         .map(m => m.name))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
-    const cableTypes = Object.keys(CABLE_HARDWARE_MAP)
-        .sort((a, b) => resolveMaterialName(a).localeCompare(resolveMaterialName(b), 'pt-BR', { numeric: true }));
+    const cableTypes = CABLE_ALCA_KIT_TYPES;
     const color = getCatalogCategoryColor('Lançamento');
     const rows = cableTypes.map(type => {
         const alca = getCableAlca(type) || '';
