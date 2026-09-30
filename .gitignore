@@ -79,3 +79,8 @@ _inspect_xlsx.js
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# Python (API de materiais)
+__pycache__/
+.pytest_cache/
+.venv/

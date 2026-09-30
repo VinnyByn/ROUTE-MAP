@@ -5,6 +5,8 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
+      "api/**",
+      "supabase/**",
       "firebase-debug.log",
       "firebase-debug.*.log"
     ],

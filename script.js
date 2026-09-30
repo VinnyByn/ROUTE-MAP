@@ -5171,6 +5171,8 @@ function setCatalogTab(tab) {
     if (addBtn) addBtn.textContent = catalogActiveTab === 'kits' ? '+ Novo kit' : '+ Novo material';
     const importBtn = document.getElementById('catalogImportButton');
     if (importBtn) importBtn.hidden = catalogActiveTab === 'kits';
+    const apiBtn = document.getElementById('catalogApiSyncButton');
+    if (apiBtn) apiBtn.hidden = catalogActiveTab === 'kits';
     const filter = document.getElementById('catalogCategoryFilter');
     if (filter) filter.value = '';
     if (isConfig) renderLancamentoConfigForm();
@@ -5671,7 +5673,10 @@ function nameSimilarity(aNorm, bNorm) {
 }
 
 //Encontra o melhor material correspondente para um nome da planilha
-function findCatalogMatch(sheetName) {
+function findCatalogMatch(sheetName, code = '') {
+    //Código igual ao do catálogo tem prioridade sobre o nome
+    const byCode = code && materialCatalog.materials.find(m => m.code && String(m.code).trim().toLowerCase() === String(code).trim().toLowerCase());
+    if (byCode) return { material: byCode, score: 1 };
     const target = normalizeMaterialName(sheetName);
     let exact = null;
     let best = null;
@@ -5690,9 +5695,10 @@ function findCatalogMatch(sheetName) {
 //Constrói a prévia da importação
 function buildImportPreview(rows) {
     const entries = rows.map((row, idx) => {
-        const match = findCatalogMatch(row.name);
+        const match = findCatalogMatch(row.name, row.code);
         return {
             idx,
+            code: row.code || '',
             sheetName: row.name,
             unit: row.unit,
             price: row.price,
@@ -5850,6 +5856,53 @@ function handleCatalogImportFile(file) {
     reader.readAsArrayBuffer(file);
 }
 
+// ---------------------------------------------------------------
+// Preços pela API de materiais (FastAPI em api/, lê a planilha da empresa)
+// ---------------------------------------------------------------
+const MATERIALS_API_URL_KEY = 'routeMapMaterialsApiUrl';
+const DEFAULT_MATERIALS_API_URL = ''; //Preencher com a URL publicada da API (ex.: https://routemap-materiais.onrender.com)
+
+function getMaterialsApiUrl() {
+    let saved = '';
+    try { saved = localStorage.getItem(MATERIALS_API_URL_KEY) || ''; } catch (e) { /* sem armazenamento */ }
+    return (saved || DEFAULT_MATERIALS_API_URL).replace(/\/+$/, '');
+}
+
+async function syncCatalogFromApi() {
+    let baseUrl = getMaterialsApiUrl();
+    if (!baseUrl) {
+        baseUrl = (window.prompt('Endereço da API de materiais (ex.: https://routemap-materiais.onrender.com):') || '').trim().replace(/\/+$/, '');
+        if (!baseUrl) return;
+        try { localStorage.setItem(MATERIALS_API_URL_KEY, baseUrl); } catch (e) { /* sem armazenamento */ }
+    }
+    const button = document.getElementById('catalogApiSyncButton');
+    if (button) button.disabled = true;
+    showToast('Buscando preços', 'Lendo a planilha de materiais pela API…', 'progress');
+    try {
+        const response = await fetch(`${baseUrl}/materiais?atualizar=true`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || `Erro ${response.status}`);
+        const rows = (data.itens || [])
+            .filter(item => item.descricao && Number.isFinite(Number(item.valor_unitario)))
+            .map(item => ({ name: item.descricao, code: item.codigo || '', unit: normalizeImportUnit(item.unidade), price: Number(item.valor_unitario), block: 0 }));
+        if (!rows.length) {
+            showAlert('Planilha vazia', 'A API não retornou itens com preço válido.');
+            return;
+        }
+        currentImportPreview = buildImportPreview(rows);
+        document.getElementById('importFileName').textContent = `Fonte: API de materiais · ${rows.length} itens · ${new Date(data.atualizado_em || Date.now()).toLocaleString('pt-BR')}`;
+        renderImportPreview();
+        const toggleAll = document.getElementById('importToggleAll');
+        if (toggleAll) toggleAll.checked = false;
+        document.getElementById('materialImportModal').style.display = 'flex';
+    } catch (error) {
+        console.error('Erro na API de materiais:', error);
+        showAlert('Erro na API de materiais', `${error.message || 'Não foi possível buscar os preços.'} Endereço usado: ${baseUrl}. Segure Shift ao clicar no botão para trocar o endereço.`);
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
 function applyMaterialImportHandler() {
     let updated = 0, created = 0;
     document.querySelectorAll('#importPreviewBody tr').forEach(tr => {
@@ -5873,7 +5926,7 @@ function applyMaterialImportHandler() {
                     unit: entry.unit || 'un',
                     price: entry.price,
                     supplier: '',
-                    code: '',
+                    code: entry.code || '',
                     notes: 'Importado de planilha'
                 });
                 created++;
@@ -5882,6 +5935,7 @@ function applyMaterialImportHandler() {
             const material = materialCatalog.materials.find(m => m.id === value);
             if (material) {
                 material.price = entry.price;
+                if (entry.code && !material.code) material.code = entry.code;
                 updated++;
             }
         }
@@ -5976,6 +6030,11 @@ function setupMaterialCatalogUI() {
     const importBtn = document.getElementById('catalogImportButton');
     const importFile = document.getElementById('catalogImportFile');
     importBtn?.addEventListener('click', () => importFile?.click());
+    document.getElementById('catalogApiSyncButton')?.addEventListener('click', (e) => {
+        //Shift + clique troca o endereço da API
+        if (e.shiftKey) { try { localStorage.removeItem(MATERIALS_API_URL_KEY); } catch (err) { /* ignora */ } }
+        syncCatalogFromApi();
+    });
     importFile?.addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
         handleCatalogImportFile(file);
