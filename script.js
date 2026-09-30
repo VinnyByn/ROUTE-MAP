@@ -4986,6 +4986,50 @@ async function loadCompanySettings() {
     }
     applyCatalogPermissions();
     try { syncCatalogPricesIntoBoms(); } catch (e) { /* sem listas calculadas ainda */ }
+    addMissingSheetMaterials();
+}
+
+//Completa o catálogo com os itens da planilha de preços que ainda não existem no sistema
+//(código, unidade e valor da planilha; o que já existe não é alterado)
+async function addMissingSheetMaterials() {
+    let data;
+    try {
+        const response = await fetch(`materiais.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        data = await response.json();
+    } catch (e) {
+        return; //Sem o arquivo (ex.: rodando localmente): fica como está
+    }
+    const known = new Set(materialCatalog.materials.map(m => normalizeMaterialName(m.name)));
+    const knownCodes = new Set(materialCatalog.materials.map(m => String(m.code || '').trim()).filter(c => c && c !== '?'));
+    let added = 0;
+    (data?.itens || []).forEach(item => {
+        const name = String(item.descricao || '').trim();
+        const price = Number(item.valor_unitario);
+        const code = String(item.codigo || '').trim();
+        if (!name || !Number.isFinite(price)) return;
+        const norm = normalizeMaterialName(name);
+        const aliasTarget = SHEET_MATERIAL_ALIASES[norm];
+        if (known.has(norm) || (aliasTarget && known.has(normalizeMaterialName(resolveMaterialName(aliasTarget))))) return;
+        if (code && code !== '?' && knownCodes.has(code) && materialCatalog.materials.some(m => m.code === code && normalizeMaterialName(m.name) === norm)) return;
+        materialCatalog.materials.push({
+            id: generateCatalogId('mat'),
+            name,
+            category: inferCategoryFromName(name),
+            unit: normalizeImportUnit(item.unidade),
+            price,
+            supplier: '',
+            code: code === '?' ? '' : code,
+            notes: 'Da planilha de preços',
+        });
+        known.add(norm);
+        added++;
+    });
+    if (!added) return;
+    applyCatalogToMaterialPrices();
+    populateCatalogCategoryFilters?.();
+    if (document.getElementById('materialCatalogModal')?.style.display === 'flex') renderCatalog();
+    if (AppSession.isAdmin) persistMaterialCatalog();
 }
 
 //Esconde as ações de edição do catálogo para quem não é admin
