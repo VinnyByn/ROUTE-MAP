@@ -670,7 +670,10 @@ function addClientMaterialsToBom(projectMarkers, addMaterial) {
         //Ficam na parte de Data Center da lista de materiais
         (clientInfo.client?.equipments || []).forEach(e => {
             const name = getClientEquipmentMaterialName(e);
-            addMaterial(name, 1, 'unit', 'Data Center', `${clientInfo.name} (equipamento)`);
+            //Sem preço no catálogo: usa o valor informado no equipamento do cliente
+            const catalogPrice = Number(MATERIAL_PRICES[resolveMaterialName(name)]?.price) || 0;
+            const price = catalogPrice > 0 ? undefined : Number(e.price) || undefined;
+            addMaterial(name, 1, 'un', 'Data Center', `${clientInfo.name} (equipamento)`, price);
             const item = typeof bomState !== 'undefined' ? bomState[makeBomKey(name)] : null;
             if (item) {
                 item.category = 'Data Center';
@@ -943,6 +946,7 @@ function addClientEquipmentRow(equipment = {}) {
         <input type="text" class="client-equipment-model" maxlength="160" placeholder="Modelo" aria-label="Modelo" value="${escapeHtml(equipment.model || '')}"${equipment.material ? ` data-material="${escapeHtml(equipment.material)}" title="Material do catálogo: ${escapeHtml(equipment.material)}"` : ''} />
         <input type="text" class="client-equipment-serial" maxlength="40" placeholder="Nº de série" aria-label="Número de série" value="${escapeHtml(equipment.serial || '')}" />
         <input type="text" class="client-equipment-mac" maxlength="17" placeholder="MAC" aria-label="MAC" value="${escapeHtml(equipment.mac || '')}" />
+        <input type="number" class="client-equipment-price" min="0" step="0.01" placeholder="${escapeHtml(getClientEquipmentCatalogPriceHint(equipment))}" aria-label="Valor unitário (R$)" title="Valor unitário usado na lista de materiais quando o equipamento não tem preço no catálogo" value="${Number(equipment.price) > 0 ? Number(equipment.price) : ''}" />
         <button type="button" class="btn-icon client-equipment-remove" title="Remover equipamento" aria-label="Remover equipamento">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>
         </button>`;
@@ -953,6 +957,13 @@ function addClientEquipmentRow(equipment = {}) {
     list.appendChild(row);
     updateClientEquipmentEmptyState();
     return row;
+}
+
+//Preço do catálogo do equipamento (mostrado como dica no campo de valor)
+function getClientEquipmentCatalogPriceHint(equipment) {
+    const name = equipment.model || equipment.material ? getClientEquipmentMaterialName(equipment) : null;
+    const price = name ? Number(MATERIAL_PRICES[name]?.price) || 0 : 0;
+    return price > 0 ? formatCatalogPrice(price) : '0,00';
 }
 
 function getClientEquipmentMaterialName(equipment) {
@@ -1024,6 +1035,7 @@ function collectClientEquipments() {
             ? row.querySelector('.client-equipment-model').dataset.material : undefined,
         serial: row.querySelector('.client-equipment-serial').value.trim(),
         mac: row.querySelector('.client-equipment-mac').value.trim(),
+        price: Math.max(0, parseFloat(row.querySelector('.client-equipment-price').value) || 0) || undefined,
     })).filter(e => e.model || e.serial || e.mac);
 }
 
