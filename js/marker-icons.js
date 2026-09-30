@@ -1,6 +1,6 @@
 // Ícones dos marcadores em SVG: mesmo desenho no mapa, na barra lateral e nos painéis.
-// CEO = círculo, CTO = quadrado, cordoalha = +, reserva = espiral, casas = pin com a
-// quantidade, POP = casinha, cliente = pin com pessoa (residencial), maleta (B2B) ou prédio (predial).
+// Selos modernos com símbolos do Lucide: CEO = emenda, CTO = distribuição, cordoalha = derivação,
+// reserva = voltas de cabo, POP = servidor, casas = balão com a quantidade, cliente = pin com pessoa/maleta/prédio.
 
 const MARKER_ICON_OUTLINE = 'rgba(15, 23, 42, 0.55)';
 const markerIconCache = new Map();
@@ -24,58 +24,50 @@ function getContrastTextColor(hex) {
     return lum > 0.6 ? '#0f172a' : '#ffffff';
 }
 
-function buildSpiralPath(cx, cy, turns, maxRadius) {
-    const points = [];
-    const steps = Math.round(turns * 28);
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const angle = t * turns * Math.PI * 2;
-        const radius = 1.2 + t * (maxRadius - 1.2);
-        points.push(`${(cx + radius * Math.cos(angle)).toFixed(2)} ${(cy + radius * Math.sin(angle)).toFixed(2)}`);
-    }
-    return `M ${points.join(' L ')}`;
+//Símbolos (Lucide, 24×24) desenhados em branco dentro de cada marcador
+const MARKER_GLYPHS = {
+    CEO: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+    CTO: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+    CORDOALHA: '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
+    RESERVA: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+    POP: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/>',
+    residencial: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    b2b: '<path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a18.15 18.15 0 0 1-20 0"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
+    predial: '<path d="M10 12h4"/><path d="M10 8h4"/><path d="M14 21v-3a2 2 0 0 0-4 0v3"/><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/>',
+};
+
+//Símbolo centrado em (cx, cy) com lado `size`
+function markerGlyph(name, cx, cy, size, color = '#ffffff') {
+    const k = size / 24;
+    return `<g transform="translate(${cx - size / 2} ${cy - size / 2}) scale(${k})" fill="none" stroke="${color}" stroke-width="${(2.4 / k * 0.85).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round">${MARKER_GLYPHS[name]}</g>`;
 }
 
-//Desenho de cada tipo num quadro 32×32 (os pins usam 32×40)
+//Desenho de cada tipo num quadro 32×32 (os pins usam 32×40): selo colorido com símbolo branco
 function getMarkerShapeSvg(type, color, options = {}) {
     const fill = color || '#f59e0b';
-    const halo = `stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round"`;
-    const outline = `stroke="${MARKER_ICON_OUTLINE}" stroke-width="4.6" stroke-linejoin="round" fill="none"`;
+    const ring = `stroke="#ffffff" stroke-width="2"`;
+    const shadow = `stroke="${MARKER_ICON_OUTLINE}" stroke-width="4" fill="none"`;
+    const glyphColor = getContrastTextColor(fill) === '#0f172a' ? '#0f172a' : '#ffffff';
+    const badge = (shape) => `<g>${shape.replace('/>', ` ${shadow}/>`)}${shape.replace('/>', ` fill="${fill}" ${ring}/>`)}</g>`;
     switch (type) {
     case 'CEO':
-        return `<circle cx="16" cy="16" r="11.5" ${outline}/><circle cx="16" cy="16" r="11.5" fill="${fill}" ${halo}/>`;
+        return badge('<circle cx="16" cy="16" r="13"/>') + markerGlyph('CEO', 16, 16, 15, glyphColor);
     case 'CTO':
-        return `<rect x="4.5" y="4.5" width="23" height="23" rx="4" ${outline}/><rect x="4.5" y="4.5" width="23" height="23" rx="4" fill="${fill}" ${halo}/>`;
-    case 'CORDOALHA': {
-        const plus = 'M12.5 3.5h7v9h9v7h-9v9h-7v-9h-9v-7h9z';
-        return `<path d="${plus}" ${outline}/><path d="${plus}" fill="${fill}" ${halo}/>`;
-    }
-    case 'RESERVA': {
-        const spiral = buildSpiralPath(16, 16, 2.6, 12);
-        return `<circle cx="16" cy="16" r="14" fill="#ffffff" fill-opacity="0.92" stroke="${MARKER_ICON_OUTLINE}" stroke-width="1.2"/>` +
-            `<path d="${spiral}" fill="none" stroke="${fill}" stroke-width="3" stroke-linecap="round"/>`;
-    }
-    case 'POP': {
-        const house = 'M16 3.5 29 14.5h-3.6V28.5H6.6V14.5H3z';
-        return `<path d="${house}" ${outline}/><path d="${house}" fill="${fill}" ${halo}/>` +
-            `<rect x="13.2" y="19.5" width="5.6" height="9" rx="1" fill="#ffffff" fill-opacity="0.9"/>`;
-    }
+        return badge('<rect x="3" y="3" width="26" height="26" rx="7"/>') + markerGlyph('CTO', 16, 16, 16, glyphColor);
+    case 'CORDOALHA':
+        return badge('<rect x="5.5" y="5.5" width="21" height="21" rx="5" transform="rotate(45 16 16)"/>') + markerGlyph('CORDOALHA', 16, 16.5, 13, glyphColor);
+    case 'RESERVA':
+        return badge('<circle cx="16" cy="16" r="13"/>') + markerGlyph('RESERVA', 16, 16, 15, glyphColor);
+    case 'POP':
+        return badge('<rect x="3" y="3" width="26" height="26" rx="7"/>') + markerGlyph('POP', 16, 16, 15, glyphColor);
     case 'CLIENTE': {
-        const pin = 'M16 38.5s12-10.6 12-21A12 12 0 0 0 4 17.5c0 10.4 12 21 12 21z';
-        const glyphs = {
-            //Empresa: maleta
-            b2b: '<rect x="9.5" y="13" width="13" height="9.5" rx="1.6" fill="#ffffff"/><path d="M13.5 13v-1.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V13" fill="none" stroke="#ffffff" stroke-width="1.7"/><path d="M9.5 17h13" stroke="' + fill + '" stroke-width="1.3"/>',
-            //Predial: prédio de apartamentos com janelas
-            predial: '<rect x="10.5" y="8.5" width="11" height="15.5" rx="1" fill="#ffffff"/>' +
-                '<path d="M13 11.5h2M17 11.5h2M13 14.5h2M17 14.5h2M13 17.5h2M17 17.5h2" stroke="' + fill + '" stroke-width="1.5" stroke-linecap="round"/>' +
-                '<rect x="14.6" y="20.2" width="2.8" height="3.8" fill="' + fill + '"/>',
-        };
-        const glyph = glyphs[options.variant]
-            || '<circle cx="16" cy="14" r="3.6" fill="#ffffff"/><path d="M10.5 23.2c1-2.9 3-4.4 5.5-4.4s4.5 1.5 5.5 4.4" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>';
-        return `<path d="${pin}" ${outline}/><path d="${pin}" fill="${fill}" ${halo} opacity="${options.faded ? 0.6 : 1}"/>${glyph}`;
+        const pin = 'M16 38.5s12.5-10.3 12.5-22A12.5 12.5 0 0 0 3.5 16.5c0 11.7 12.5 22 12.5 22z';
+        const glyph = MARKER_GLYPHS[options.variant] ? options.variant : 'residencial';
+        return `<g opacity="${options.faded ? 0.6 : 1}"><path d="${pin}" ${shadow}/><path d="${pin}" fill="${fill}" ${ring}/></g>` +
+            markerGlyph(glyph, 16, 16.5, 13.5, glyphColor);
     }
     default:
-        return `<circle cx="16" cy="16" r="10" ${outline}/><circle cx="16" cy="16" r="10" fill="${fill}" ${halo}/>`;
+        return badge('<circle cx="16" cy="16" r="11"/>');
     }
 }
 
