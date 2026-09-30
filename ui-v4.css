@@ -1572,6 +1572,16 @@ html[data-theme="dark"] .olt-pop__icon { color: #a5b4fc; }
 .fx-savebar__actions { display: flex; align-items: center; gap: 8px; }
 
 #fusionModal .fx-savebar .btn { min-height: 40px; padding: 0 18px; }
+/* Zera as margens e o alinhamento do botão legado #saveFusionPlan para ficar na mesma linha do Cancelar */
+#fusionModal .fusion-modal-content .fx-savebar #saveFusionPlan,
+#fusionModal .fusion-modal-content .fx-savebar #cancelFusionPlan {
+  margin: 0;
+  align-self: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  transform: none;
+}
 #fusionModal .fx-savebar .fx-save { gap: 8px; }
 #fusionModal .fx-savebar .fx-save .ui-icon { width: 17px; height: 17px; }
 
