@@ -667,8 +667,15 @@ function addClientMaterialsToBom(projectMarkers, addMaterial) {
         kit.forEach(c => addMaterial(c.name, c.quantity, 'unit', 'Clientes', clientInfo.name));
         //Equipamentos do cliente: o escolhido no catálogo entra com o preço dele; o digitado procura
         //um material de mesmo nome no catálogo e, se não achar, entra pelo tipo e modelo (sem preço)
+        //Ficam na parte de Data Center da lista de materiais
         (clientInfo.client?.equipments || []).forEach(e => {
-            addMaterial(getClientEquipmentMaterialName(e), 1, 'unit', 'Clientes', clientInfo.name);
+            const name = getClientEquipmentMaterialName(e);
+            addMaterial(name, 1, 'unit', 'Data Center', `${clientInfo.name} (equipamento)`);
+            const item = typeof bomState !== 'undefined' ? bomState[makeBomKey(name)] : null;
+            if (item) {
+                item.category = 'Data Center';
+                item.clientQuantity = (Number(item.clientQuantity) || 0) + 1;
+            }
         });
     });
 }

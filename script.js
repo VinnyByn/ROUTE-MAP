@@ -7488,7 +7488,10 @@ function calculateBomState() {
     const currentProjectBom = normalizeBomState(JSON.parse(JSON.stringify(projectBoms[projectId] || {})));
     for (const materialName in currentProjectBom) {
         if (currentProjectBom[materialName].category === 'Data Center') {
-            preservedDatacenterItems[materialName] = currentProjectBom[materialName];
+            //Guarda só a parte manual/kits; os equipamentos dos clientes são recalculados abaixo
+            const item = currentProjectBom[materialName];
+            const manualQty = (Number(item.quantity) || 0) - (Number(item.clientQuantity) || 0);
+            if (manualQty > 0) preservedDatacenterItems[materialName] = { ...item, quantity: manualQty, clientQuantity: 0 };
         }
         if (currentProjectBom[materialName].category === 'Lançamento' && currentProjectBom[materialName].surchargePercent != null) {
             preservedCableSurcharges[materialName] = currentProjectBom[materialName].surchargePercent;
@@ -7701,7 +7704,11 @@ function calculateBomState() {
     for (const materialName in preservedDatacenterItems) {
         const preserved = preservedDatacenterItems[materialName];
         const preservedKey = makeBomKey(materialName);
-        if (!bomState[preservedKey]) {
+        if (bomState[preservedKey]) {
+            //Mesmo item nos kits/manual e nos equipamentos dos clientes: soma as quantidades
+            bomState[preservedKey].quantity += preserved.quantity || 0;
+            addUsageEntry(bomState[preservedKey], 'Data Center', preserved.quantity || 0, 'Data Center');
+        } else {
             bomState[preservedKey] = {
                 ...preserved,
                 materialName,
