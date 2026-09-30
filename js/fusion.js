@@ -1,10 +1,12 @@
-// Plano de fusão: três colunas (cabos que chegam | splitters | cabos que saem), linhas na cor da fibra,
-// ligação com dois cliques, fusão em sequência e reordenação arrastando os cartões.
+// Plano de fusão: duas colunas (esquerda e direita) com cabos e splitters; as portas ficam voltadas
+// para o corredor central, onde passam as linhas. Ligações entre cartões da mesma coluna seguem por
+// trilhas no corredor (sem atravessar outros cartões). Linhas na cor da fibra, ligação com dois
+// cliques, fusão em sequência e reordenação arrastando os cartões.
 // O formato salvo é o mesmo de antes (HTML dos cartões + SVG das linhas), então planos antigos abrem
 // normalmente e ganham o visual novo ao serem abertos. Depende de script.js.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const FX = { lane: 20, gap: 16, top: 18, cableWidth: 244, splitterWidth: 226, centerMin: 150 };
+const FX = { lane: 18, gap: 16, top: 16, cardWidth: 252, channelMin: 240, trackBase: 20, trackMax: 11 };
 const FX_TUBE_COLOR_NAMES = ['Verde', 'Amarelo', 'Branco', 'Azul', 'Vermelho', 'Violeta', 'Marrom', 'Rosa', 'Preto', 'Cinza', 'Laranja', 'Água'];
 
 let fusionArmed = null;       //{ port, editingLine } — origem escolhida, aguardando o destino
@@ -15,7 +17,22 @@ let fusionSplitterDraft = { type: 'Atendimento', ratio: 8, connector: 'APC', sta
 
 function getFusionStage() { return document.getElementById('fusionStage'); }
 function getFusionSvg() { return document.getElementById('fusion-svg-layer'); }
-function markFusionDirty() { fusionDirty = true; }
+function markFusionDirty() {
+    fusionDirty = true;
+    updateFusionSaveState();
+}
+
+//Situação do plano no rodapé (alterações não salvas / sem alterações)
+function updateFusionSaveState() {
+    const state = document.getElementById('fusionSaveState');
+    if (!state) return;
+    const viewer = AppSession.isViewer;
+    state.classList.toggle('is-dirty', fusionDirty && !viewer);
+    state.querySelector('.fx-status__text').textContent = viewer
+        ? 'Somente visualização'
+        : (fusionDirty ? 'Alterações não salvas' : 'Nenhuma alteração pendente');
+    document.getElementById('saveFusionPlan')?.classList.toggle('is-dirty', fusionDirty);
+}
 
 // ---------------------------------------------------------------
 // Utilidades de portas e cores
@@ -43,19 +60,29 @@ function getPortCard(port) {
     return port?.closest('.cable-element, .splitter-element') || null;
 }
 
+//Só existem as colunas da esquerda e da direita. Planos antigos com splitter no meio vão para a direita
+//(a entrada fica voltada para os cabos que chegam).
 function getCardLane(card) {
     if (!card) return 'left';
-    if (card.dataset.lane) return card.dataset.lane;
-    if (card.classList.contains('splitter-element')) return 'center';
-    return (card.style.right && card.style.right !== 'auto') ? 'right' : 'left';
+    const lane = card.dataset.lane;
+    if (lane === 'left' || lane === 'right') return lane;
+    if (card.classList.contains('cable-element')) {
+        const legacyRight = card.style.right && card.style.right !== 'auto';
+        return legacyRight || card.dataset.cableRole === 'saida' ? 'right' : 'left';
+    }
+    return 'right';
 }
 
-//Lado do cartão por onde a linha sai: cabos pela face interna, splitters entram à esquerda e saem à direita
+//Todas as portas saem pela face interna do cartão (voltada para o corredor central)
 function getPortExitSide(port) {
-    const card = getPortCard(port);
-    if (!card) return 'right';
-    if (card.classList.contains('splitter-element')) return port.closest('.splitter-input') ? 'left' : 'right';
-    return getCardLane(card) === 'right' ? 'left' : 'right';
+    return getCardLane(getPortCard(port)) === 'right' ? 'left' : 'right';
+}
+
+//Coluna mais curta: onde entra um splitter novo
+function getShorterFusionLane() {
+    const heights = { left: 0, right: 0 };
+    getFusionCards().forEach(card => { heights[getCardLane(card)] += card.offsetHeight + FX.gap; });
+    return heights.left < heights.right ? 'left' : 'right';
 }
 
 function getFusionLines() {
@@ -223,13 +250,13 @@ function buildFusionCableCard({ name, type, status, role, fiberCount, fiberIds =
     return card;
 }
 
-function buildFusionSplitterCard({ id, label, outputs, status, type, connector, olt = {} }) {
+function buildFusionSplitterCard({ id, label, outputs, status, type, connector, olt = {}, lane = 'right' }) {
     const card = document.createElement('div');
     const isAtendimento = type === 'Atendimento';
     card.className = `splitter-element fx-card fx-splitter ${isAtendimento ? 'splitter-atendimento' : 'splitter-fusao'}${isAtendimento && connector === 'UPC' ? ' splitter-upc' : ''}`;
     card.id = id;
     card.dataset.status = status || 'Novo';
-    card.dataset.lane = 'center';
+    card.dataset.lane = lane === 'left' ? 'left' : 'right';
     if (olt.olt) card.dataset.oltName = olt.olt;
     if (olt.placa) card.dataset.placaNumber = olt.placa;
     if (olt.pon) card.dataset.ponNumber = olt.pon;
@@ -241,7 +268,7 @@ function buildFusionSplitterCard({ id, label, outputs, status, type, connector, 
     labelRow.innerHTML = `<span class="fx-card__kind">Splitter</span><span class="splitter-label-text fx-card__title">${escapeHtml(label)}</span>`;
     header.appendChild(labelRow);
     const tools = buildCardTools('splitter');
-    tools.insertBefore(fxButton('splitter-move-side fx-tool', 'Trocar de coluna', '⇄'), tools.lastChild);
+    tools.insertBefore(fxButton('splitter-move-side fx-tool', 'Trocar de lado', '⇄'), tools.lastChild);
     header.appendChild(tools);
     const meta = document.createElement('div');
     meta.className = 'fx-card__meta';
@@ -250,12 +277,13 @@ function buildFusionSplitterCard({ id, label, outputs, status, type, connector, 
     typePill.textContent = isAtendimento ? 'Atendimento' : 'Fusão';
     meta.appendChild(typePill);
     meta.appendChild(buildStatusPill(status));
-    const oltButton = fxButton('splitter-olt-config-btn fx-olt', 'Configurar OLT, placa e PON', 'OLT');
-    meta.appendChild(oltButton);
     header.appendChild(meta);
-    const oltInfo = document.createElement('span');
-    oltInfo.className = 'splitter-olt-info hidden';
-    header.appendChild(oltInfo);
+    //Faixa da OLT: origem do sinal (OLT › placa › PON)
+    const oltStrip = document.createElement('div');
+    oltStrip.className = 'fx-olt-strip';
+    oltStrip.innerHTML = `${fxIcon('olt')}<span class="splitter-olt-info"></span>`;
+    oltStrip.appendChild(fxButton('splitter-olt-config-btn fx-olt', 'Vincular OLT, placa e PON', 'Vincular'));
+    header.appendChild(oltStrip);
     card.appendChild(header);
 
     const input = document.createElement('div');
@@ -310,8 +338,8 @@ function upgradeFusionCard(card) {
         type: card.classList.contains('splitter-atendimento') ? 'Atendimento' : 'Fusão',
         connector: /UPC/.test(label) ? 'UPC' : 'APC',
         olt: { olt: card.dataset.oltName, placa: card.dataset.placaNumber, pon: card.dataset.ponNumber },
+        lane: card.dataset.lane === 'left' ? 'left' : 'right',
     });
-    upgraded.dataset.lane = card.dataset.lane || 'center';
     return upgraded;
 }
 
@@ -328,39 +356,92 @@ function getFusionCards() {
     return Array.from(getFusionStage()?.querySelectorAll('.cable-element, .splitter-element') || []);
 }
 
+//Duas colunas encostadas nas bordas; o meio é o corredor das linhas
 function repackAllElements({ animate = true } = {}) {
     const stage = getFusionStage();
     const canvas = document.getElementById('fusionCanvas');
     if (!stage || !canvas) return;
     const cards = getFusionCards();
-    const minWidth = FX.lane * 2 + FX.cableWidth * 2 + FX.splitterWidth + FX.centerMin * 2;
-    const width = Math.max(canvas.clientWidth, minWidth);
+    const width = Math.max(canvas.clientWidth, FX.lane * 2 + FX.cardWidth * 2 + FX.channelMin);
     stage.style.width = `${width}px`;
-    const laneX = {
-        left: FX.lane,
-        right: width - FX.lane - FX.cableWidth,
-        center: Math.round((width - FX.splitterWidth) / 2),
-    };
-    const tops = { left: FX.top, center: FX.top, right: FX.top };
+    const laneX = { left: FX.lane, right: width - FX.lane - FX.cardWidth };
+    const tops = { left: FX.top, right: FX.top };
     cards.forEach(card => {
         const lane = getCardLane(card);
         card.dataset.lane = lane;
-        const cardWidth = card.classList.contains('splitter-element') ? FX.splitterWidth : FX.cableWidth;
-        let x = laneX[lane];
-        if (lane === 'right' && card.classList.contains('splitter-element')) x = width - FX.lane - cardWidth;
         card.style.transition = animate ? 'top .2s ease, left .2s ease' : '';
-        card.style.left = `${x}px`;
+        card.style.left = `${laneX[lane]}px`;
         card.style.right = 'auto';
         card.style.top = `${tops[lane]}px`;
         card.classList.toggle('fx-lane-left', lane === 'left');
         card.classList.toggle('fx-lane-right', lane === 'right');
-        card.classList.toggle('fx-lane-center', lane === 'center');
+        card.classList.remove('fx-lane-center');
         tops[lane] += card.offsetHeight + FX.gap;
     });
-    stage.style.height = `${Math.max(canvas.clientHeight - 2, ...Object.values(tops)) + 30}px`;
+    stage.style.height = `${Math.max(canvas.clientHeight - 2, tops.left, tops.right) + 30}px`;
+    stage.style.setProperty('--fx-channel-left', `${laneX.left + FX.cardWidth}px`);
+    stage.style.setProperty('--fx-channel-right', `${width - laneX.right}px`);
     updateFusionCanvasInteractionState();
     renderFusionConnections();
     if (animate) setTimeout(renderFusionConnections, 230);
+}
+
+function getFusionChannel() {
+    const width = getFusionStage().offsetWidth;
+    return { left: FX.lane + FX.cardWidth, right: width - FX.lane - FX.cardWidth };
+}
+
+//Trajeto em "colchete" pelo corredor: sai da porta, desce/sobe na trilha e volta, com cantos arredondados
+function buildFusionTrackPath(start, end, trackX) {
+    const dir = trackX >= start.x ? 1 : -1;
+    const dy = end.y - start.y;
+    const vdir = dy >= 0 ? 1 : -1;
+    const r = Math.max(0, Math.min(9, Math.abs(dy) / 2, Math.abs(trackX - start.x) - 1, Math.abs(trackX - end.x) - 1));
+    const f = (n) => n.toFixed(1);
+    return `M ${f(start.x)} ${f(start.y)} H ${f(trackX - dir * r)} Q ${f(trackX)} ${f(start.y)} ${f(trackX)} ${f(start.y + vdir * r)}`
+        + ` V ${f(end.y - vdir * r)} Q ${f(trackX)} ${f(end.y)} ${f(trackX - dir * r)} ${f(end.y)} H ${f(end.x)}`;
+}
+
+//Distribui as ligações de uma mesma coluna em trilhas: as mais curtas ficam mais perto dos cartões,
+//e duas ligações só dividem a trilha se não se sobrepõem na vertical
+function assignFusionTracks(routes) {
+    const tracks = [];
+    routes
+        .slice()
+        .sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top) || a.top - b.top)
+        .forEach(route => {
+            let k = 0;
+            while (tracks[k] && tracks[k].some(o => route.top < o.bottom + 6 && o.top < route.bottom + 6)) k++;
+            (tracks[k] = tracks[k] || []).push(route);
+            route.track = k;
+        });
+    return tracks.length;
+}
+
+//Calcula o "d" de cada linha: entre colunas, curva suave; na mesma coluna, trilha pelo corredor
+function computeFusionRoutes(lines) {
+    const channel = getFusionChannel();
+    const half = Math.max(40, (channel.right - channel.left) / 2);
+    const groups = { right: [], left: [] };
+    const routes = new Map();
+    lines.forEach(({ line, start, end }) => {
+        if (start.side !== end.side) {
+            routes.set(line, buildFusionCurve(start, end));
+            return;
+        }
+        groups[start.side].push({ line, start, end, top: Math.min(start.y, end.y), bottom: Math.max(start.y, end.y) });
+    });
+    Object.entries(groups).forEach(([side, items]) => {
+        if (!items.length) return;
+        const count = assignFusionTracks(items);
+        const spacing = Math.max(3, Math.min(FX.trackMax, (half - FX.trackBase - 14) / Math.max(1, count - 1)));
+        items.forEach(item => {
+            const offset = FX.trackBase + item.track * spacing;
+            const trackX = side === 'right' ? channel.left + offset : channel.right - offset;
+            routes.set(item.line, buildFusionTrackPath(item.start, item.end, trackX));
+        });
+    });
+    return routes;
 }
 
 function getElementCenter(port) {
@@ -406,8 +487,10 @@ function renderFusionConnections() {
     svg.setAttribute('width', stage.offsetWidth);
     svg.setAttribute('height', stage.offsetHeight);
     svg.querySelectorAll('.fx-line-hit').forEach(h => h.remove());
-    stage.querySelectorAll('.fx-port.is-connected').forEach(p => p.classList.remove('is-connected'));
     stage.querySelectorAll('.fx-port__dest').forEach(d => { d.textContent = ''; d.title = ''; });
+    //Marca as portas ligadas antes de medir (no modo "só fibras em uso" as livres ficam escondidas)
+    const visible = [];
+    const connected = new Set();
     getFusionLines().forEach(line => {
         const startEl = document.getElementById(line.dataset.startId);
         const endEl = document.getElementById(line.dataset.endId);
@@ -415,12 +498,31 @@ function renderFusionConnections() {
             line.style.display = 'none';
             return;
         }
+        connected.add(startEl);
+        connected.add(endEl);
+        visible.push({ line, startEl, endEl });
+    });
+    stage.querySelectorAll('.fx-port').forEach(p => p.classList.toggle('is-connected', connected.has(p)));
+    //Com "só fibras em uso", ligar/desligar muda a altura dos cartões: reorganiza as colunas
+    if (stage.classList.contains('fx-hide-free')) {
+        const signature = Array.from(connected).map(p => p.id).sort().join('|');
+        if (signature !== renderFusionConnections.hideFreeSignature) {
+            renderFusionConnections.hideFreeSignature = signature;
+            requestAnimationFrame(() => repackAllElements({ animate: false }));
+        }
+    }
+    visible.forEach(item => {
+        item.start = getElementCenter(item.startEl);
+        item.end = getElementCenter(item.endEl);
+    });
+    const routes = computeFusionRoutes(visible);
+    visible.forEach(({ line, startEl, endEl }) => {
         line.style.display = '';
         line.classList.remove('fusion-line-editing');
         const color = getPortColor(startEl) || getPortColor(endEl) || '#64748b';
         line.style.setProperty('--line-color', color);
         line.classList.toggle('fx-line--light', isLightColor(color));
-        line.setAttribute('d', buildFusionCurve(getElementCenter(startEl), getElementCenter(endEl)));
+        line.setAttribute('d', routes.get(line));
         line.dataset.points = '[]';
         const hit = document.createElementNS(SVG_NS, 'path');
         hit.setAttribute('class', 'fx-line-hit');
@@ -428,7 +530,6 @@ function renderFusionConnections() {
         hit.dataset.lineId = line.id;
         line.after(hit);
         [startEl, endEl].forEach((port, i) => {
-            port.classList.add('is-connected');
             const other = i === 0 ? endEl : startEl;
             const dest = port.querySelector('.fx-port__dest');
             if (dest) {
@@ -836,7 +937,7 @@ function addSplitterFromDraft() {
     const { type, ratio, connector, status } = fusionSplitterDraft;
     const label = `1:${ratio}${type === 'Atendimento' ? ` ${connector}` : ''}`;
     const id = `splitter-${label.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`;
-    const card = buildFusionSplitterCard({ id, label, outputs: ratio, status, type, connector });
+    const card = buildFusionSplitterCard({ id, label, outputs: ratio, status, type, connector, lane: getShorterFusionLane() });
     getFusionStage().appendChild(card);
     wireFusionCard(card);
     markFusionDirty();
@@ -891,8 +992,7 @@ function moveFusionElementVertical(card, direction) {
 }
 
 function cycleSplitterLane(card) {
-    const order = ['center', 'right', 'left'];
-    card.dataset.lane = order[(order.indexOf(getCardLane(card)) + 1) % order.length];
+    card.dataset.lane = getCardLane(card) === 'left' ? 'right' : 'left';
     markFusionDirty();
     repackAllElements();
 }
@@ -964,10 +1064,7 @@ function startFusionCardDrag(event, card) {
             const stageRect = stage.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2 - stageRect.left;
             const centerY = rect.top + rect.height / 2;
-            const third = stage.offsetWidth / 3;
-            const isSplitter = card.classList.contains('splitter-element');
-            let lane = centerX < third ? 'left' : (centerX > third * 2 ? 'right' : 'center');
-            if (!isSplitter && lane === 'center') lane = centerX < stage.offsetWidth / 2 ? 'left' : 'right';
+            const lane = centerX < stage.offsetWidth / 2 ? 'left' : 'right';
             card.dataset.lane = lane;
             card.style.transform = '';
             card.classList.remove('is-dragging');
@@ -988,20 +1085,27 @@ function startFusionCardDrag(event, card) {
     card.addEventListener('pointercancel', onUp);
 }
 
+function formatOltPath({ olt, placa, pon }) {
+    return [olt, placa ? `Placa ${placa}` : '', pon ? `PON ${pon}` : ''].filter(Boolean).join(' › ');
+}
+
 function updateSplitterOltDisplay(splitterElement) {
     if (!splitterElement) return;
     const info = splitterElement.querySelector('.splitter-olt-info');
     const button = splitterElement.querySelector('.splitter-olt-config-btn');
-    const { olt, placa, pon } = getSplitterOltValues(splitterElement);
-    const hasConfig = !!(olt || placa || pon);
+    const values = getSplitterOltValues(splitterElement);
+    const hasConfig = !!(values.olt || values.placa || values.pon);
     if (info) {
-        info.textContent = formatSplitterOltSummary(olt, placa, pon);
-        info.classList.toggle('hidden', !hasConfig);
+        info.textContent = hasConfig ? formatOltPath(values) : 'Sem OLT vinculada';
+        info.title = hasConfig ? formatSplitterOltSummary(values.olt, values.placa, values.pon) : '';
+        info.classList.remove('hidden');
     }
     if (button) {
+        button.textContent = hasConfig ? 'Editar' : 'Vincular';
         button.classList.toggle('is-configured', hasConfig);
-        button.title = hasConfig ? `Editar: ${formatSplitterOltSummary(olt, placa, pon)}` : 'Configurar OLT, placa e PON';
+        button.title = hasConfig ? `Editar origem: ${formatOltPath(values)}` : 'Vincular OLT, placa e PON';
     }
+    splitterElement.querySelector('.fx-olt-strip')?.classList.toggle('is-configured', hasConfig);
     splitterElement.classList.toggle('splitter-has-olt-config', hasConfig);
 }
 
@@ -1015,22 +1119,134 @@ function wireSplitterOltConfigButton(splitterElement) {
     updateSplitterOltDisplay(splitterElement);
 }
 
+//Splitters com OLT em todas as caixas do projeto (plano aberto + planos salvos)
+function collectProjectOltUsage() {
+    const usage = [];
+    const push = (card, boxName) => {
+        const values = { olt: card.dataset.oltName || '', placa: card.dataset.placaNumber || '', pon: card.dataset.ponNumber || '' };
+        if (values.olt || values.pon) usage.push({ ...values, box: boxName, label: getSplitterLabelText(card), id: card.id });
+    };
+    const folderIds = activeMarkerForFusion ? (getProjectFolderIdsForItem(activeMarkerForFusion.folderId) || []) : [];
+    markers.forEach(markerInfo => {
+        if (markerInfo === activeMarkerForFusion || !markerInfo.fusionPlan || !folderIds.includes(markerInfo.folderId)) return;
+        try {
+            const temp = document.createElement('div');
+            temp.innerHTML = JSON.parse(markerInfo.fusionPlan).elements || '';
+            temp.querySelectorAll('.splitter-element').forEach(card => push(card, markerInfo.name));
+        } catch (e) { /* plano ilegível: ignora */ }
+    });
+    getFusionCards().filter(c => c.classList.contains('splitter-element')).forEach(card => push(card, activeMarkerForFusion?.name || 'esta caixa'));
+    return usage;
+}
+
+function openSplitterOltConfigModal(splitterElement) {
+    if (!splitterElement || !AppSession.canEdit) return;
+    activeSplitterForOltConfig = splitterElement;
+    const pop = document.getElementById('fusionOltPopover');
+    const values = getSplitterOltValues(splitterElement);
+    document.getElementById('oltPopSubtitle').textContent = `Splitter ${getSplitterLabelText(splitterElement)} · ${activeMarkerForFusion?.name || ''}`;
+    document.getElementById('splitterConfigOlt').value = values.olt;
+    document.getElementById('splitterConfigPlaca').value = values.placa;
+    document.getElementById('splitterConfigPon').value = values.pon;
+    const names = [...new Set(collectProjectOltUsage().map(u => u.olt).filter(Boolean))].sort();
+    document.getElementById('oltNameOptions').innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+    document.getElementById('removeSplitterOlt').classList.toggle('hidden', !(values.olt || values.placa || values.pon));
+    updateOltPopoverPreview();
+    pop.classList.remove('hidden');
+    //Ao lado do cartão, dentro da janela do plano
+    const anchor = splitterElement.querySelector('.fx-olt-strip') || splitterElement;
+    const a = anchor.getBoundingClientRect();
+    const box = pop.getBoundingClientRect();
+    const lane = getCardLane(splitterElement);
+    let left = lane === 'left' ? a.right + 12 : a.left - box.width - 12;
+    left = Math.min(Math.max(12, left), window.innerWidth - box.width - 12);
+    const top = Math.min(Math.max(12, a.top - 20), window.innerHeight - box.height - 12);
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    splitterElement.classList.add('is-editing-olt');
+    setTimeout(() => document.getElementById('splitterConfigOlt').focus(), 30);
+}
+
+function closeOltPopover() {
+    document.getElementById('fusionOltPopover')?.classList.add('hidden');
+    activeSplitterForOltConfig?.classList.remove('is-editing-olt');
+    activeSplitterForOltConfig = null;
+}
+
+function readOltPopoverValues() {
+    return {
+        olt: document.getElementById('splitterConfigOlt').value.trim(),
+        placa: document.getElementById('splitterConfigPlaca').value.trim(),
+        pon: document.getElementById('splitterConfigPon').value.trim(),
+    };
+}
+
+function updateOltPopoverPreview() {
+    const values = readOltPopoverValues();
+    const preview = document.getElementById('oltPopPreview');
+    const has = !!(values.olt || values.placa || values.pon);
+    preview.textContent = has ? formatOltPath(values) : 'Preencha a OLT, a placa e a porta PON';
+    preview.classList.toggle('is-empty', !has);
+    //Mesma OLT/placa/PON em outro splitter do projeto
+    const warning = document.getElementById('oltPopWarning');
+    const clash = values.olt && values.pon ? collectProjectOltUsage().find(u =>
+        u.id !== activeSplitterForOltConfig?.id
+        && u.olt.toLowerCase() === values.olt.toLowerCase()
+        && String(u.placa) === String(values.placa)
+        && String(u.pon) === String(values.pon)) : null;
+    warning.hidden = !clash;
+    if (clash) warning.textContent = `Esta PON já atende o splitter ${clash.label} em ${clash.box}.`;
+}
+
 function applySplitterOltConfig() {
     if (!activeSplitterForOltConfig) return;
     const card = activeSplitterForOltConfig;
-    const values = {
-        oltName: document.getElementById('splitterConfigOlt').value.trim(),
-        placaNumber: document.getElementById('splitterConfigPlaca').value.trim(),
-        ponNumber: document.getElementById('splitterConfigPon').value.trim(),
-    };
-    Object.entries(values).forEach(([key, value]) => {
+    const values = readOltPopoverValues();
+    const map = { oltName: values.olt, placaNumber: values.placa, ponNumber: values.pon };
+    Object.entries(map).forEach(([key, value]) => {
         if (value) card.dataset[key] = value; else delete card.dataset[key];
     });
     updateSplitterOltDisplay(card);
-    document.getElementById('splitterOltConfigModal').style.display = 'none';
-    activeSplitterForOltConfig = null;
+    closeOltPopover();
     markFusionDirty();
     repackAllElements();
+}
+
+function removeSplitterOltConfig() {
+    ['splitterConfigOlt', 'splitterConfigPlaca', 'splitterConfigPon'].forEach(id => { document.getElementById(id).value = ''; });
+    applySplitterOltConfig();
+}
+
+function initSplitterOltConfigModal() {
+    const pop = document.getElementById('fusionOltPopover');
+    if (!pop) return;
+    document.getElementById('closeSplitterOltConfigModal').addEventListener('click', closeOltPopover);
+    document.getElementById('cancelSplitterOltConfig').addEventListener('click', closeOltPopover);
+    document.getElementById('confirmSplitterOltConfig').addEventListener('click', applySplitterOltConfig);
+    document.getElementById('removeSplitterOlt').addEventListener('click', removeSplitterOltConfig);
+    ['splitterConfigOlt', 'splitterConfigPlaca', 'splitterConfigPon'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateOltPopoverPreview);
+    });
+    pop.querySelectorAll('.olt-pop__num button[data-step]').forEach(button => button.addEventListener('click', () => {
+        const input = document.getElementById(button.dataset.target);
+        const next = Math.max(Number(input.min) || 0, (parseInt(input.value, 10) || 0) + Number(button.dataset.step));
+        input.value = Math.min(Number(input.max) || 999, next);
+        updateOltPopoverPreview();
+    }));
+    pop.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            applySplitterOltConfig();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            closeOltPopover();
+        }
+    });
+    document.addEventListener('mousedown', (event) => {
+        if (pop.classList.contains('hidden')) return;
+        if (!event.target.closest('#fusionOltPopover, .splitter-olt-config-btn')) closeOltPopover();
+    });
 }
 
 function handleDerivationKitToggle(checkbox) {
@@ -1099,6 +1315,9 @@ function populateFusionPlan(markerInfo) {
     trayInput.dataset.oldValue = trayInput.value;
     ensureFusionSvgDefs();
     fusionDirty = false;
+    renderFusionConnections.hideFreeSignature = null;
+    closeOltPopover();
+    updateFusionSaveState();
     document.getElementById('fusionModal').classList.toggle('is-readonly', AppSession.isViewer);
     document.getElementById('cancelFusionPlan').textContent = AppSession.isViewer ? 'Fechar' : 'Cancelar';
     const emptyHint = document.querySelector('#fusionEmptyState span');
@@ -1149,6 +1368,7 @@ function saveFusionPlan() {
 function closeFusionModal({ force = false } = {}) {
     const close = () => {
         cancelFusionArm();
+        closeOltPopover();
         document.getElementById('fusionModal').style.display = 'none';
         activeMarkerForFusion = null;
         fusionDirty = false;
@@ -1179,6 +1399,14 @@ function setupFusionModal() {
     document.getElementById('closeFusionModal').addEventListener('click', () => closeFusionModal());
     document.getElementById('cancelFusionPlan').addEventListener('click', () => closeFusionModal());
     document.getElementById('saveFusionPlan').addEventListener('click', saveFusionPlan);
+    //Ctrl+S com o plano aberto salva o plano (e não o projeto)
+    document.addEventListener('keydown', (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+        if (document.getElementById('fusionModal').style.display !== 'flex') return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (AppSession.canEdit) saveFusionPlan();
+    }, true);
     document.getElementById('addAllCablesButton').addEventListener('click', addAllCablesToFusionPlan);
     document.getElementById('addSplitterToFusion').addEventListener('click', addSplitterFromDraft);
     document.getElementById('fxSeqButton').addEventListener('click', runFusionSequence);
