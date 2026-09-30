@@ -1,55 +1,74 @@
 Esta seção destina-se aos desenvolvedores responsáveis pela manutenção e evolução do Route Map.
 
 1. Visão Geral da Arquitetura
-Tipo: Single Page Application (SPA).
-Frontend: HTML5, CSS3, Vanilla JavaScript (ES6+).
-Backend (BaaS): Google Firebase (Authentication & Firestore).
-Map Engine: Google Maps JavaScript API (Libraries: geometry, drawing).
-Dependências Externas:
-xlsx (SheetJS) para exportação de Excel.
-Firebase SDK (v8.10.1).
+Tipo: Single Page Application (SPA), sem etapa de build.
+Frontend: HTML5, CSS3, Vanilla JavaScript (ES2020+), scripts clássicos (sem módulos) que compartilham o escopo global.
+Backend (BaaS): Supabase (Auth + Postgres com RLS). Projeto "GeoVini", ref ipdpilzhlchcxijsmgsf.
+Hospedagem: Firebase Hosting (somente arquivos estáticos). O push na branch main publica pelo workflow .github/workflows/firebase-hosting.yml.
+Map Engine: Google Maps JavaScript API (biblioteca geometry). A Drawing Library foi removida pelo Google e não é mais usada.
+Dependências externas (CDN): supabase-js 2.117.2 (UMD), xlsx (SheetJS), jszip, html2pdf, html-docx-js.
 
 2. Estrutura de Arquivos
-login.html / login-style.css: Interface de autenticação isolada.
-index.html: Estrutura principal DOM, Modais e Templates (<template>).
-style.css: Estilização global, responsividade e layout Grid (Sidebar/Map).
-script.js: Núcleo lógico da aplicação (~2500 linhas).
+login.html / login-style.css: Entrar, criar conta, recuperar senha e primeiro acesso (criar empresa ou aceitar convite).
+index.html: Estrutura principal, modais, painéis laterais e templates (<template>).
+style.css: Estilos base. A camada "DESIGN SYSTEM v2" define tokens (claro/escuro), barra, menus, sidebar, modais, botões e notificações.
+ui-v3.css: Camada final (carregada depois de style.css): painéis de marcador e cabo, rótulos/ícones, plano de fusão, catálogo e cliente B2B.
+  Atenção: style.css tem a regra legada ".modal-content button:not([class*="btn-"])…" que pinta botões de azul-petróleo; botões novos usam classes com "btn-" ou definem as cores com !important via variáveis (--fx-btn-bg/--fx-btn-fg).
+js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession e loadAppContext().
+script.js: Núcleo (mapa, sidebar, cabos, materiais, relatórios, persistência de projetos).
+js/marker-icons.js: Ícones SVG dos marcadores (mapa, barra lateral, seletor de tipo) e rótulos com contorno.
+js/marker-panel.js: Painel lateral de criação/edição de marcadores e o posicionamento no mapa.
+js/fusion.js: Plano de fusão (três colunas, linhas por fibra, fusão em sequência, arrastar cartões).
+js/account.js: Menu do usuário e janela "Minha conta".
+js/clients.js: Marcador Cliente (residencial/B2B, status, CTO/porta, drop pela rede, equipamentos).
+migrar.html: Ferramenta temporária que copia projetos do Firestore antigo (users/{uid}/projects) para a tabela projects.
+supabase/migrations/: SQL do banco (tabelas, RLS e funções RPC).
+Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js (todos defer) → Google Maps (callback initMap).
 
-3. Módulos Principais (script.js)
-3.1. Gerenciamento de Estado
-O estado da aplicação é mantido em variáveis globais voláteis que são serializadas para salvar:
-markers: Array de objetos contendo instância do Google Marker e metadados.
-savedCables: Array de objetos contendo instância do Google Polyline e dados de metragem.
-projectBoms: Objeto cacheando a lista de materiais por ID de projeto.
-activeFolderId: Rastreia onde novos itens serão inseridos na árvore da sidebar.
-3.2. Integração Firebase
-Auth: Utiliza auth.signInWithEmailAndPassword. Observador onAuthStateChanged protege a rota index.html.
-Firestore:
-Coleção: users/{uid}/projects/{projectId}.
-Estrutura do Documento:
-sidebar: JSON aninhado representando a árvore de pastas.
-markers, cables, polygons: Arrays de objetos serializados.
-bom: Estado salvo da lista de materiais.
-3.3. Lógica de Mapa e Desenho
-Cabos: Utiliza google.maps.Polyline. A metragem é calculada via google.maps.geometry.spherical.computeLength, adicionando reservas técnicas hardcoded (CEO=25m, CTO=5m).
-Ancoragem: O sistema força (handleCableVertexDragEnd) que pontas de cabos se conectem magneticamente a marcadores válidos (snap-to-marker).
-3.4. Diagrama de Fusão (SVG + DOM)
-O modal de fusão é um mini-sistema gráfico dentro da aplicação:
-Utiliza elementos HTML (div) para representar Cabos e Splitters (permite Drag & Drop dentro do canvas).
-Utiliza uma camada SVG (#fusion-svg-layer) sobreposta para desenhar as linhas de conexão (fibras).
-Algoritmo de Repack: A função repackAllElements reorganiza verticalmente os elementos para evitar sobreposição visual.
-3.5. Motor de Cálculo de Materiais (calculateBomState)
-Esta função varre todos os objetos do mapa e gera a BOM baseada no dicionário MATERIAL_PRICES.
+3. Banco de Dados (Supabase)
+companies: empresas. company_members: vínculo usuário–empresa com papel admin/member (um usuário = uma empresa).
+profiles: nome, cargo, telefone e preferences (jsonb: theme, mapType, reopenLastProject). Criado por trigger no cadastro.
+company_invites: convites por e-mail. O convidado entra na equipe ao criar conta com o mesmo e-mail (accept_pending_invite).
+company_settings: material_catalog ({materials, kits}), lancamento_config (vão, ferragens por poste, dropSlack) e labor_config (custo/hora, horas/dia, produtividade). Somente admin grava.
+projects: id (text, também é o id da <ul> do projeto na sidebar), company_id, name, city, neighborhood, project_type e data (jsonb com sidebar, markers, cables, polygons, bom, observations).
+RLS: cada empresa só enxerga os próprios dados. Projetos: toda a equipe lê/edita; exclusão só pelo autor ou admin.
+RPCs: get_my_context, create_company, accept_pending_invite, list_company_members, set_member_role, remove_member.
+Para alterar o banco, crie um novo arquivo em supabase/migrations/ e rode no SQL Editor do Supabase.
 
-4. Manutenção e Extensão
-Adicionar Novo Material
-Para adicionar um novo material automático:
-Adicione a definição de preço e categoria na constante MATERIAL_PRICES.
-Atualize a função calculateBomState para incluir a lógica de quando esse material deve ser incrementado.
+4. Módulos Principais
+4.1. Sessão
+appReady (Promise) garante login e empresa antes de usar o banco. whenAppReady(fn) executa após a sessão. mapReady resolve quando o mapa é criado.
+4.2. Persistência de projetos
+buildProjectRecord / persistProject (upsert em projects), saveActiveProject (botão Salvar), saveProjectElement (salvamento silencioso), renderProjectPickerList / openProjectFromDatabase, deleteProject, closeProject.
+loadAndDisplayProject suspende o cálculo dos drops (clientDropsSuspended) até os cabos serem recriados e depois chama refreshClientDrops({ recompute: true }).
+4.3. Marcadores (marker-panel.js + marker-icons.js)
+Cada marcador tem uid permanente (ensureMarkerUid). O painel #markerModal é um floating-box (não é .modal): showMarkerPanel/hideMarkerPanel. Tipos e padrões em MARKER_TYPE_META; cor/tamanho usados por último ficam no localStorage (routeMapMarkerStyle_<tipo>).
+updateMarkerAppearance usa buildMarkerMapIcon (SVG) e buildMarkerMapLabel; o tamanho em pixels vem de getMarkerPixelSize(size).
+4.4. Cabos
+google.maps.Polyline. Metragem via computeLength, com reservas técnicas (CEO/Reserva/POP = 25 m, CTO = 5 m).
+Ancoragem: cada cabo grava startAnchorUid/endAnchorUid (uid do marcador) além do nome. resolveCableEndAnchor usa o uid; o nome só vale para projetos antigos e nunca "puxa" a ponta para um marcador a mais de 30 m. updateCablesForMovedMarker move apenas as pontas ancoradas no marcador movido.
+Durante o desenho: cableDrawAnchors guarda as caixas clicadas como ponta A/B; os demais cabos ficam não clicáveis (setAllCablesClickable(false)); pontas sem clique só encaixam numa caixa a até 8 m (CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M). O painel (#cableDrawingBox) usa selects ocultos (cableType, cableStatusSelect, cableASType) sincronizados com os botões.
+4.5. Polígono e régua
+startSketch/stopSketch implementam o desenho por cliques (vértices arrastáveis, linha-guia, desfazer). Polígonos salvam cor e opacidade.
+4.6. Plano de fusão (fusion.js)
+Cartões HTML dentro de #fusionStage (colunas: data-lane = left | center | right) e linhas SVG em #fusion-svg-layer.
+Formato salvo em markerInfo.fusionPlan (JSON): { version: 2, elements: HTML dos cartões, svg: <path class="fusion-line" data-start-id data-end-id>, trayQuantity }.
+Ids das portas: fibras "cable-<nome>-fiber-<n>", splitter "<id>-input-port" e "<id>-output-<n>". Planos antigos são convertidos por upgradeFusionCard mantendo os ids.
+Portas de atendimento da CTO: saídas de .splitter-atendimento, numeradas pela ordem de criação dos splitters (getAtendimentoOutputPorts).
+Elementos com a classe fusion-dynamic e caminhos .fx-line-hit são gerados na tela e removidos ao salvar (serializeFusionPlan).
+A lista de materiais é recalculada ao salvar o plano (refreshBomAfterProjectChange), a partir de splitters, kits de derivação, bandejas e linhas.
+4.7. Clientes e drop (clients.js)
+markerInfo.client: { kind: 'residencial'|'b2b', status, code, document, phone, plan, address, ctoUid, ctoPort, dropOverride, equipments: [{type, model, serial, mac}], b2b: {service, bandwidth, sla, vlan, ip, gateway, ipv6, contactName, contactPhone}, notes, dropPath: [{lat,lng}], dropRoute, dropKey }.
+Drop: buildDropNetwork monta um grafo com os vértices dos cabos do projeto; routeDropAlongNetwork faz Dijkstra da CTO até o ponto da rede mais perto do cliente (até 120 m) e segue reto até a casa.
+dropRoute: 'rede' (pelos cabos), 'rua' (Routes API do Google, se estiver liberada na chave), 'manual' (ajustado no mapa) ou 'reta'. dropKey guarda CTO + posições; ao mudar, a rota automática é refeita e a manual só ajusta as pontas.
+A Routes API não está liberada na chave atual: a tentativa falha uma vez e o sistema fica na linha reta quando não há rede próxima.
+4.8. Motor de Cálculo de Materiais (calculateBomState)
+Varre marcadores, cabos e planos de fusão e gera a BOM com base em MATERIAL_PRICES, que recebe os preços do catálogo da empresa (applyCatalogToMaterialPrices). Clientes entram por addClientMaterialsToBom (metragem do drop = traçado + sobra).
 
-Configuração de API Keys
-As chaves de API estão expostas no código cliente.
-Segurança: Certifique-se de restringir as chaves no console do Google Cloud para permitir apenas o domínio de produção.
-
-Personalização de Kits
-Os kits estão definidos em objetos constantes. Alterar estas constantes reflete imediatamente nos modais de "Data Center".
+5. Manutenção e Extensão
+Adicionar novo material automático: inclua-o em MATERIAL_PRICES e na lógica de calculateBomState. Ele aparece no catálogo das empresas como item padrão (mesclado no carregamento).
+Kits padrão: getDefaultKitDefinitions. Cada empresa pode editar os seus em Materiais → Kits.
+Novo tipo de marcador: MARKER_TYPE_META (marker-panel.js), getMarkerShapeSvg (marker-icons.js) e um cartão em #markerTypeModal.
+Chaves: a chave do Google Maps e a chave publicável do Supabase ficam no código cliente. Restrinja a chave do Google Maps ao domínio de produção no Google Cloud. Nunca coloque a chave secreta (service_role) do Supabase no frontend.
+Drop pelas ruas mesmo sem cabo próximo: habilite a "Routes API" no projeto do Google Cloud da chave (cobrança por requisição; a rota fica gravada no cliente e não é pedida de novo).
+E-mails: o SMTP padrão do Supabase só envia para membros do projeto. Para liberar a clientes, configure um SMTP próprio em Authentication → Emails.

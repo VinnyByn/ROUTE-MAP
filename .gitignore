@@ -75,3 +75,7 @@ _inspect_xlsx.js
 
 # dataconnect generated files
 .dataconnect
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/

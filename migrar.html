@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Migrar projetos — ROUTE MAP</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('routeMapTheme');
+          document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+        } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+      })();
+    </script>
+    <link rel="stylesheet" href="login-style.css?v=20260929b" />
+    <style>
+      .login-container { max-width: 640px; }
+      .migrate-step { margin-top: 18px; }
+      .migrate-step[hidden] { display: none; }
+      .migrate-list { list-style: none; margin: 0 0 16px; padding: 0; max-height: 46vh; overflow-y: auto; border: 1px solid #d2e3eb; border-radius: 12px; }
+      .migrate-list li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #e4eef3; font-size: 14px; }
+      .migrate-list li:last-child { border-bottom: none; }
+      .migrate-list label { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; }
+      .migrate-list input { width: 18px; height: 18px; accent-color: #1f9d4a; }
+      .migrate-list small { display: block; color: #7d94a0; }
+      .migrate-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #eef6fa; color: #3d7a92; white-space: nowrap; }
+      .migrate-tag--done { background: #e8f7ee; color: #17803b; }
+      .migrate-tag--error { background: #fdecee; color: #842029; }
+      .migrate-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; color: #5a7380; }
+      .migrate-note { font-size: 13px; line-height: 1.5; color: #5a7380; background: #f3f7fa; border-radius: 12px; padding: 12px 14px; margin: 0 0 18px; }
+      html[data-theme="dark"] .migrate-list { border-color: #334854; }
+      html[data-theme="dark"] .migrate-list li { border-color: #2b3d48; color: #e8f1f5; }
+      html[data-theme="dark"] .migrate-note { background: #16232c; color: #a8bbc4; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="card-header">
+                <h2>Migrar projetos</h2>
+                <p>Copia os projetos do sistema antigo (Firebase) para a empresa <strong id="targetCompany">…</strong>.</p>
+            </div>
+
+            <section id="stepSession" class="migrate-step">
+                <p class="migrate-note" id="sessionMessage">Verificando sua sessão no sistema novo…</p>
+            </section>
+
+            <section id="stepFirebase" class="migrate-step" hidden>
+                <p class="migrate-note">Entre com o e-mail e a senha que você usava no <strong>sistema antigo</strong>. Eles são usados só para ler os seus projetos antigos e não ficam salvos.</p>
+                <form id="firebaseForm" novalidate>
+                    <div class="input-group">
+                        <label for="fbEmail">E-mail do sistema antigo</label>
+                        <input type="email" id="fbEmail" class="plain" autocomplete="off" />
+                    </div>
+                    <div class="input-group">
+                        <label for="fbPassword">Senha do sistema antigo</label>
+                        <input type="password" id="fbPassword" class="plain" autocomplete="off" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Buscar projetos antigos</button>
+                </form>
+            </section>
+
+            <section id="stepProjects" class="migrate-step" hidden>
+                <div class="migrate-row">
+                    <span id="projectsCount"></span>
+                    <button type="button" class="link-button" id="toggleAllButton">Marcar todos</button>
+                </div>
+                <ul id="projectsList" class="migrate-list"></ul>
+                <p class="error-message" role="alert"></p>
+                <p class="info-message" role="status"></p>
+                <button type="button" class="login-button" id="migrateButton">Copiar selecionados</button>
+            </section>
+
+            <p class="auth-switch"><a class="link-button" href="index.html">Voltar para o sistema</a></p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+    <script src="js/supabase-client.js?v=20260929b"></script>
+    <script>
+        //Ferramenta temporária: lê users/{uid}/projects no Firestore e grava na tabela projects do Supabase
+        const legacyApp = firebase.initializeApp({
+            apiKey: "AIzaSyDj2QaP7aTsJTqD1J-ZgJwEjJgGhRZhArk",
+            authDomain: "routemap-21.firebaseapp.com",
+            projectId: "routemap-21",
+            storageBucket: "routemap-21.firebasestorage.app",
+            messagingSenderId: "855979634466",
+            appId: "1:855979634466:web:ded98c3c3680c9c7e0ff7b"
+        });
+        const legacyAuth = legacyApp.auth();
+        const legacyDb = legacyApp.firestore();
+        legacyAuth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+
+        let legacyProjects = []; //{ id, data, exists, selected, state }
+
+        const show = (id) => { ['stepSession', 'stepFirebase', 'stepProjects'].forEach(s => { document.getElementById(s).hidden = s !== id; }); };
+        const setMsg = (section, text, kind = 'error') => {
+            const el = section.querySelector(kind === 'error' ? '.error-message' : '.info-message');
+            el.textContent = text;
+            el.style.display = text ? 'block' : 'none';
+        };
+        const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        function toRecord(project) {
+            const d = project.data;
+            const sidebar = d.sidebar || {};
+            return {
+                id: project.id,
+                company_id: AppSession.company.id,
+                created_by: AppSession.userId,
+                name: d.projectName || sidebar.name || 'Projeto sem nome',
+                city: sidebar.city || null,
+                neighborhood: sidebar.neighborhood || null,
+                project_type: sidebar.type || null,
+                data: {
+                    sidebar,
+                    markers: d.markers || [],
+                    cables: d.cables || [],
+                    polygons: d.polygons || [],
+                    bom: d.bom || null,
+                    observations: d.observations || null
+                }
+            };
+        }
+
+        function renderProjects() {
+            const list = document.getElementById('projectsList');
+            list.innerHTML = '';
+            legacyProjects.forEach(project => {
+                const li = document.createElement('li');
+                const sidebar = project.data.sidebar || {};
+                const place = [sidebar.city, sidebar.neighborhood].filter(Boolean).join(' · ');
+                const counts = `${(project.data.markers || []).length} marcadores · ${(project.data.cables || []).length} cabos`;
+                const tag = project.state === 'done' ? '<span class="migrate-tag migrate-tag--done">Copiado</span>'
+                    : project.state === 'error' ? '<span class="migrate-tag migrate-tag--error">Erro</span>'
+                    : project.exists ? '<span class="migrate-tag">Já existe no novo</span>' : '';
+                li.innerHTML = `
+                    <label>
+                        <input type="checkbox" ${project.selected ? 'checked' : ''} ${project.state === 'done' ? 'disabled' : ''} />
+                        <span><strong>${escapeHtml(project.data.projectName || sidebar.name)}</strong><small>${escapeHtml(place || 'Sem localização')} · ${counts}</small></span>
+                    </label>${tag}`;
+                li.querySelector('input').addEventListener('change', (e) => { project.selected = e.target.checked; });
+                list.appendChild(li);
+            });
+            document.getElementById('projectsCount').textContent = `${legacyProjects.length} projeto(s) encontrado(s)`;
+        }
+
+        document.getElementById('firebaseForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const section = document.getElementById('stepFirebase');
+            const button = section.querySelector('.login-button');
+            const email = document.getElementById('fbEmail').value.trim();
+            const password = document.getElementById('fbPassword').value;
+            if (!email || !password) return setMsg(section, 'Informe e-mail e senha do sistema antigo.');
+            button.disabled = true;
+            button.textContent = 'Buscando…';
+            try {
+                const { user } = await legacyAuth.signInWithEmailAndPassword(email, password);
+                const snapshot = await legacyDb.collection('users').doc(user.uid).collection('projects').get();
+                const ids = snapshot.docs.map(doc => doc.id);
+                const existing = new Set();
+                for (let i = 0; i < ids.length; i += 100) {
+                    const { data } = await supabaseClient.from('projects').select('id').in('id', ids.slice(i, i + 100));
+                    (data || []).forEach(row => existing.add(row.id));
+                }
+                legacyProjects = snapshot.docs.map(doc => ({ id: doc.id, data: doc.data(), exists: existing.has(doc.id), selected: !existing.has(doc.id), state: null }));
+                renderProjects();
+                show('stepProjects');
+            } catch (error) {
+                console.error(error);
+                const text = /wrong-password|invalid-credential|user-not-found/.test(error.code || '')
+                    ? 'E-mail ou senha do sistema antigo incorretos.'
+                    : `Não foi possível ler os projetos antigos: ${error.message}`;
+                setMsg(section, text);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Buscar projetos antigos';
+            }
+        });
+
+        document.getElementById('toggleAllButton').addEventListener('click', () => {
+            const selectable = legacyProjects.filter(p => p.state !== 'done');
+            const allSelected = selectable.every(p => p.selected);
+            selectable.forEach(p => { p.selected = !allSelected; });
+            renderProjects();
+        });
+
+        document.getElementById('migrateButton').addEventListener('click', async (event) => {
+            const section = document.getElementById('stepProjects');
+            const button = event.currentTarget;
+            const selected = legacyProjects.filter(p => p.selected && p.state !== 'done');
+            setMsg(section, '');
+            setMsg(section, '', 'info');
+            if (!selected.length) return setMsg(section, 'Selecione pelo menos um projeto.');
+            const overwriting = selected.filter(p => p.exists).length;
+            if (overwriting && !confirm(`${overwriting} projeto(s) já existem no sistema novo e serão substituídos pela versão antiga. Continuar?`)) return;
+            button.disabled = true;
+            let ok = 0;
+            for (const project of selected) {
+                button.textContent = `Copiando ${ok + 1} de ${selected.length}…`;
+                const { error } = await supabaseClient.from('projects').upsert(toRecord(project), { onConflict: 'id' });
+                project.state = error ? 'error' : 'done';
+                if (error) console.error(project.id, error);
+                else { ok++; project.selected = false; project.exists = true; }
+                renderProjects();
+            }
+            button.disabled = false;
+            button.textContent = 'Copiar selecionados';
+            if (ok === selected.length) setMsg(section, `${ok} projeto(s) copiado(s). Eles já aparecem em Projeto → Carregar Projeto.`, 'info');
+            else setMsg(section, `${ok} de ${selected.length} copiados. Veja os marcados com "Erro" e tente de novo.`);
+        });
+
+        (async function init() {
+            const { data } = await supabaseClient.auth.getSession();
+            if (!data.session) {
+                document.getElementById('sessionMessage').innerHTML = 'Entre primeiro no sistema novo e depois volte para esta página. <a class="link-button" href="login.html">Ir para o login</a>';
+                return;
+            }
+            await loadAppContext();
+            if (!AppSession.company) {
+                document.getElementById('sessionMessage').innerHTML = 'Cadastre sua empresa no sistema novo antes de migrar. <a class="link-button" href="login.html">Continuar</a>';
+                return;
+            }
+            document.getElementById('targetCompany').textContent = AppSession.company.name;
+            show('stepFirebase');
+        })();
+    </script>
+</body>
+</html>

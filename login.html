@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Login - ROUTE MAP</title>
+    <title>Entrar — ROUTE MAP</title>
     <link rel="icon" type="image/png" href="img/logo.png">
     <script>
       (function () {
@@ -16,7 +16,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="login-style.css?v=20260928h" />
+    <link rel="stylesheet" href="login-style.css?v=20260929b" />
 </head>
 <body>
     <button id="loginThemeToggle" class="login-theme-toggle" type="button" title="Alternar tema claro ou escuro">
@@ -27,99 +27,324 @@
             <div class="login-logo">
                 <img class="brand-logo" src="img/logo.svg" width="56" height="56" alt="ROUTE MAP" />
             </div>
-            <div class="card-header">
-                <h2>ROUTE MAP</h2>
-                <p>Acesse sua conta para continuar</p>
+
+            <div id="authLoading" class="auth-view auth-loading">
+                <span class="auth-spinner" aria-hidden="true"></span>
+                <p>Verificando sua sessão…</p>
             </div>
 
-            <form class="login-form">
-                <div class="input-group">
-                    <label for="email">Email</label>
-                    <div class="input-with-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg>
-                        <input type="email" id="email" name="email" placeholder="seuemail@provedor.com" required autocomplete="off" />
-                    </div>
+            <!-- Entrar -->
+            <section id="viewLogin" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>ROUTE MAP</h2>
+                    <p>Acesse sua conta para continuar</p>
                 </div>
-
-                <div class="input-group">
-                    <label for="password">Senha</label>
-                    <div class="input-with-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM5 9h6v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V9z"/></svg>
-                        <input type="password" id="password" name="password" placeholder="Sua senha" required autocomplete="new-password"/>
+                <form id="loginForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="loginEmail">E-mail</label>
+                        <div class="input-with-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg>
+                            <input type="email" id="loginEmail" placeholder="seuemail@provedor.com" required autocomplete="email" />
+                        </div>
                     </div>
+                    <div class="input-group">
+                        <div class="label-row">
+                            <label for="loginPassword">Senha</label>
+                            <button type="button" class="link-button" data-go="forgot">Esqueci minha senha</button>
+                        </div>
+                        <div class="input-with-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM5 9h6v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V9z"/></svg>
+                            <input type="password" id="loginPassword" placeholder="Sua senha" required autocomplete="current-password" />
+                        </div>
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <p class="info-message" role="status"></p>
+                    <button type="submit" class="login-button">Entrar</button>
+                </form>
+                <p class="auth-switch">Ainda não tem conta? <button type="button" class="link-button" data-go="signup">Criar conta</button></p>
+            </section>
+
+            <!-- Criar conta -->
+            <section id="viewSignup" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Criar conta</h2>
+                    <p>Se você recebeu um convite, use o mesmo e-mail do convite.</p>
                 </div>
+                <form id="signupForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="signupName">Nome completo</label>
+                        <input type="text" id="signupName" class="plain" placeholder="Seu nome" required autocomplete="name" />
+                    </div>
+                    <div class="input-group">
+                        <label for="signupEmail">E-mail</label>
+                        <input type="email" id="signupEmail" class="plain" placeholder="seuemail@provedor.com" required autocomplete="email" />
+                    </div>
+                    <div class="input-group">
+                        <label for="signupPassword">Senha</label>
+                        <input type="password" id="signupPassword" class="plain" placeholder="Mínimo de 8 caracteres" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <div class="input-group">
+                        <label for="signupPasswordConfirm">Confirmar senha</label>
+                        <input type="password" id="signupPasswordConfirm" class="plain" placeholder="Repita a senha" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Criar conta</button>
+                </form>
+                <p class="auth-switch">Já tem conta? <button type="button" class="link-button" data-go="login">Entrar</button></p>
+            </section>
 
-                <p id="errorMessage" class="error-message"></p>
+            <!-- Confirme o e-mail -->
+            <section id="viewCheckEmail" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Confirme seu e-mail</h2>
+                    <p>Enviamos um link para <strong id="checkEmailAddress"></strong>. Abra o e-mail e clique no link para ativar sua conta.</p>
+                </div>
+                <button type="button" class="login-button login-button--secondary" data-go="login">Voltar para o login</button>
+            </section>
 
-                <button type="submit" class="login-button" id="loginSubmitBtn">Entrar</button>
-            </form>
+            <!-- Esqueci a senha -->
+            <section id="viewForgot" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Recuperar senha</h2>
+                    <p>Informe seu e-mail e enviaremos um link para criar uma nova senha.</p>
+                </div>
+                <form id="forgotForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="forgotEmail">E-mail</label>
+                        <input type="email" id="forgotEmail" class="plain" placeholder="seuemail@provedor.com" required autocomplete="email" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <p class="info-message" role="status"></p>
+                    <button type="submit" class="login-button">Enviar link</button>
+                </form>
+                <p class="auth-switch"><button type="button" class="link-button" data-go="login">Voltar para o login</button></p>
+            </section>
+
+            <!-- Nova senha (link de recuperação) -->
+            <section id="viewReset" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Nova senha</h2>
+                    <p>Escolha uma nova senha para sua conta.</p>
+                </div>
+                <form id="resetForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="resetPassword">Nova senha</label>
+                        <input type="password" id="resetPassword" class="plain" placeholder="Mínimo de 8 caracteres" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <div class="input-group">
+                        <label for="resetPasswordConfirm">Confirmar nova senha</label>
+                        <input type="password" id="resetPasswordConfirm" class="plain" placeholder="Repita a senha" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Salvar nova senha</button>
+                </form>
+            </section>
+
+            <!-- Primeiro acesso: empresa -->
+            <section id="viewCompany" class="auth-view" hidden>
+                <div id="companyInvite" hidden>
+                    <div class="card-header">
+                        <h2>Você foi convidado</h2>
+                        <p>Você recebeu um convite para entrar na equipe da empresa <strong id="inviteCompanyName"></strong>.</p>
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="button" id="acceptInviteButton" class="login-button">Entrar na equipe</button>
+                </div>
+                <div id="companyCreate" hidden>
+                    <div class="card-header">
+                        <h2>Cadastre sua empresa</h2>
+                        <p>Você será o administrador: define preços, kits, configurações e convida a equipe.</p>
+                    </div>
+                    <form id="companyForm" class="login-form" novalidate>
+                        <div class="input-group">
+                            <label for="companyName">Nome da empresa</label>
+                            <input type="text" id="companyName" class="plain" placeholder="Ex.: Fibra Telecom Ltda." required maxlength="120" />
+                        </div>
+                        <div class="input-group">
+                            <label for="companyDocument">CNPJ <span class="optional">(opcional)</span></label>
+                            <input type="text" id="companyDocument" class="plain" placeholder="00.000.000/0000-00" maxlength="18" inputmode="numeric" />
+                        </div>
+                        <p class="error-message" role="alert"></p>
+                        <button type="submit" class="login-button">Criar empresa</button>
+                    </form>
+                    <p class="auth-hint">Vai trabalhar na equipe de uma empresa que já usa o ROUTE MAP? Peça ao administrador para convidar <strong class="current-email"></strong> e entre novamente.</p>
+                </div>
+                <p class="auth-switch"><span class="current-email"></span> · <button type="button" class="link-button" id="companyLogoutButton">Sair</button></p>
+            </section>
+
             <p class="login-footer">Planejamento de redes · Materiais · Relatórios</p>
         </div>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+    <script src="js/supabase-client.js?v=20260929b"></script>
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyDj2QaP7aTsJTqD1J-ZgJwEjJgGhRZhArk",
-            authDomain: "routemap-21.firebaseapp.com",
-            projectId: "routemap-21",
-            storageBucket: "routemap-21.firebasestorage.app",
-            messagingSenderId: "855979634466",
-            appId: "1:855979634466:web:ded98c3c3680c9c7e0ff7b"
-        };
+        const views = ['authLoading', 'viewLogin', 'viewSignup', 'viewCheckEmail', 'viewForgot', 'viewReset', 'viewCompany'];
+        const goTargets = { login: 'viewLogin', signup: 'viewSignup', forgot: 'viewForgot' };
+        let recoveryMode = /type=recovery/.test(location.hash);
 
-        // Inicializa o Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
+        function showView(id) {
+            views.forEach(v => { document.getElementById(v).hidden = v !== id; });
+            document.querySelectorAll('.error-message, .info-message').forEach(el => { el.textContent = ''; el.style.display = 'none'; });
+            const firstInput = document.querySelector(`#${id} input`);
+            if (firstInput) setTimeout(() => firstInput.focus(), 30);
+        }
 
-        // Seleciona os elementos do HTML
-        const loginForm = document.querySelector('.login-form');
-        const emailInput = document.getElementById('email');
-        const passwordInput = document.getElementById('password');
-        const errorMessage = document.getElementById('errorMessage');
-        const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+        function setMessage(container, text, kind = 'error') {
+            const el = container.querySelector(kind === 'error' ? '.error-message' : '.info-message');
+            if (!el) return;
+            el.textContent = text;
+            el.style.display = text ? 'block' : 'none';
+        }
 
-        loginForm.addEventListener('submit', (event) => {
-            event.preventDefault();
-            errorMessage.style.display = 'none';
-            loginSubmitBtn.disabled = true;
-            loginSubmitBtn.textContent = 'Entrando...';
+        async function withBusy(button, busyText, task) {
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = busyText;
+            try { return await task(); } finally { button.disabled = false; button.textContent = original; }
+        }
 
-            const email = emailInput.value.trim();
-            const password = passwordInput.value;
+        //Depois do login: garante que o usuário tenha uma empresa antes de abrir o sistema
+        async function routeAfterLogin() {
+            showView('authLoading');
+            try {
+                await loadAppContext();
+            } catch (error) {
+                console.error(error);
+                showView('viewLogin');
+                setMessage(document.getElementById('viewLogin'), 'Não foi possível carregar sua conta. ' + translateAuthError(error));
+                return;
+            }
+            if (AppSession.company) {
+                window.location.replace('index.html');
+                return;
+            }
+            document.querySelectorAll('.current-email').forEach(el => { el.textContent = AppSession.email; });
+            const invite = AppSession.pendingInvite;
+            document.getElementById('companyInvite').hidden = !invite;
+            document.getElementById('companyCreate').hidden = !!invite;
+            if (invite) document.getElementById('inviteCompanyName').textContent = invite.company_name;
+            showView('viewCompany');
+        }
 
-            auth.signInWithEmailAndPassword(email, password)
-                .then((userCredential) => {
-                    // Login bem-sucedido, redireciona para a página principal
-                    console.log('Login bem-sucedido!', userCredential.user);
-                    window.location.href = 'index.html';
-                })
-                .catch((error) => {
-                    console.error('Erro no login:', error.code, error.message);
-                    let friendlyMessage = 'Ocorreu um erro ao tentar fazer login.';
-                    switch (error.code) {
-                        case 'auth/user-not-found':
-                            friendlyMessage = 'Nenhum usuário encontrado com este e-mail.';
-                            break;
-                        case 'auth/wrong-password':
-                        case 'auth/invalid-credential':
-                            friendlyMessage = 'E-mail ou senha incorretos. Tente novamente.';
-                            break;
-                        case 'auth/invalid-email':
-                            friendlyMessage = 'O formato do e-mail é inválido.';
-                            break;
-                        case 'auth/too-many-requests':
-                            friendlyMessage = 'Muitas tentativas. Aguarde um momento e tente de novo.';
-                            break;
-                    }
-                    errorMessage.textContent = friendlyMessage;
-                    errorMessage.style.display = 'block';
-                    loginSubmitBtn.disabled = false;
-                    loginSubmitBtn.textContent = 'Entrar';
-                });
+        document.querySelectorAll('[data-go]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const loginEmail = document.getElementById('loginEmail').value.trim();
+                if (btn.dataset.go === 'forgot' && loginEmail) document.getElementById('forgotEmail').value = loginEmail;
+                showView(goTargets[btn.dataset.go]);
+            });
         });
+
+        document.getElementById('loginForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const view = document.getElementById('viewLogin');
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!email || !password) return setMessage(view, 'Informe e-mail e senha.');
+            await withBusy(event.submitter || view.querySelector('.login-button'), 'Entrando…', async () => {
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) return setMessage(view, translateAuthError(error));
+                await routeAfterLogin();
+            });
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const view = document.getElementById('viewSignup');
+            const fullName = document.getElementById('signupName').value.trim();
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            const confirm = document.getElementById('signupPasswordConfirm').value;
+            if (!fullName || !email) return setMessage(view, 'Preencha nome e e-mail.');
+            if (password.length < 8) return setMessage(view, 'A senha precisa ter pelo menos 8 caracteres.');
+            if (password !== confirm) return setMessage(view, 'As senhas não conferem.');
+            await withBusy(view.querySelector('.login-button'), 'Criando…', async () => {
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: { full_name: fullName },
+                        emailRedirectTo: location.origin + location.pathname
+                    }
+                });
+                if (error) return setMessage(view, translateAuthError(error));
+                if (data.session) return routeAfterLogin();
+                document.getElementById('checkEmailAddress').textContent = email;
+                showView('viewCheckEmail');
+            });
+        });
+
+        document.getElementById('forgotForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const view = document.getElementById('viewForgot');
+            const email = document.getElementById('forgotEmail').value.trim();
+            if (!email) return setMessage(view, 'Informe seu e-mail.');
+            await withBusy(view.querySelector('.login-button'), 'Enviando…', async () => {
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                    redirectTo: location.origin + location.pathname
+                });
+                if (error) return setMessage(view, translateAuthError(error));
+                setMessage(view, '');
+                setMessage(view, 'Se houver uma conta com este e-mail, você receberá o link em instantes.', 'info');
+            });
+        });
+
+        document.getElementById('resetForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const view = document.getElementById('viewReset');
+            const password = document.getElementById('resetPassword').value;
+            const confirm = document.getElementById('resetPasswordConfirm').value;
+            if (password.length < 8) return setMessage(view, 'A senha precisa ter pelo menos 8 caracteres.');
+            if (password !== confirm) return setMessage(view, 'As senhas não conferem.');
+            await withBusy(view.querySelector('.login-button'), 'Salvando…', async () => {
+                const { error } = await supabaseClient.auth.updateUser({ password });
+                if (error) return setMessage(view, translateAuthError(error));
+                recoveryMode = false;
+                history.replaceState(null, '', location.pathname);
+                await routeAfterLogin();
+            });
+        });
+
+        document.getElementById('acceptInviteButton').addEventListener('click', async (event) => {
+            const view = document.getElementById('companyInvite');
+            await withBusy(event.currentTarget, 'Entrando…', async () => {
+                const { error } = await supabaseClient.rpc('accept_pending_invite');
+                if (error) return setMessage(view, translateAuthError(error));
+                await routeAfterLogin();
+            });
+        });
+
+        document.getElementById('companyForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const view = document.getElementById('companyCreate');
+            const name = document.getElementById('companyName').value.trim();
+            const documentNumber = document.getElementById('companyDocument').value.trim();
+            if (name.length < 2) return setMessage(view, 'Informe o nome da empresa.');
+            await withBusy(view.querySelector('.login-button'), 'Criando…', async () => {
+                const { error } = await supabaseClient.rpc('create_company', { p_name: name, p_document: documentNumber || null });
+                if (error) return setMessage(view, translateAuthError(error));
+                await routeAfterLogin();
+            });
+        });
+
+        document.getElementById('companyLogoutButton').addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
+            showView('viewLogin');
+        });
+
+        supabaseClient.auth.onAuthStateChange((event) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                recoveryMode = true;
+                showView('viewReset');
+            }
+        });
+
+        (async function init() {
+            const { data } = await supabaseClient.auth.getSession();
+            if (recoveryMode && data.session) return showView('viewReset');
+            if (data.session) return routeAfterLogin();
+            showView('viewLogin');
+        })();
 
         (function setupLoginTheme() {
             const button = document.getElementById('loginThemeToggle');
@@ -131,11 +356,9 @@
                 if (label) label.textContent = nextTheme === 'dark' ? 'Tema claro' : 'Tema escuro';
             }
             apply(document.documentElement.getAttribute('data-theme'));
-            if (button) {
-                button.addEventListener('click', function () {
-                    apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-                });
-            }
+            button.addEventListener('click', function () {
+                apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+            });
         })();
     </script>
 </body>

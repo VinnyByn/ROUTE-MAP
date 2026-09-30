@@ -22,7 +22,7 @@ body {
     align-items: center;
     background: linear-gradient(145deg, #1b4a5c 0%, #2d6f86 52%, #4a8fa8 100%);
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
 }
 
 body::before {
@@ -246,3 +246,110 @@ html[data-theme="dark"] .input-group input {
 html[data-theme="dark"] .input-group input:focus {
     background: #1a2831;
 }
+
+/* ---------------------------------------------------------------
+   Fluxos de conta (Supabase): cadastro, recuperação, empresa
+   --------------------------------------------------------------- */
+.auth-view[hidden] { display: none !important; }
+
+.auth-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 0 8px;
+    color: #5a7380;
+    font-size: 14px;
+}
+
+.auth-loading p { margin: 0; }
+
+.auth-spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid rgba(47, 122, 148, 0.2);
+    border-top-color: var(--color-coastal);
+    animation: authSpin 0.8s linear infinite;
+}
+
+@keyframes authSpin { to { transform: rotate(360deg); } }
+
+.label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.label-row label { margin-bottom: 0; }
+
+.link-button {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-coastal);
+    font: 600 13px var(--font-sans);
+    cursor: pointer;
+}
+
+.link-button:hover { text-decoration: underline; }
+
+.input-group input.plain { padding-left: 14px; }
+
+.input-group .optional {
+    font-weight: 400;
+    color: #7d94a0;
+}
+
+.info-message {
+    display: none;
+    margin: 0 0 18px;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    text-align: center;
+    color: #14532d;
+    background: #e8f7ee;
+    border: 1px solid #b9e4c8;
+}
+
+.auth-switch,
+.auth-hint {
+    margin: 20px 0 0;
+    text-align: center;
+    font-size: 14px;
+    color: #5a7380;
+}
+
+.auth-hint {
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #f3f7fa;
+    text-align: left;
+}
+
+.card-header p strong { color: #1f3d4d; }
+
+.login-button--secondary {
+    background: #eef6fa;
+    color: var(--color-coastal-dark);
+    box-shadow: none;
+}
+
+.login-button--secondary:hover:not(:disabled) {
+    background: #e2f1f7;
+    box-shadow: none;
+}
+
+html[data-theme="dark"] .auth-loading,
+html[data-theme="dark"] .auth-switch { color: #a8bbc4; }
+html[data-theme="dark"] .link-button { color: #8fd0e6; }
+html[data-theme="dark"] .card-header p strong { color: #e8f1f5; }
+html[data-theme="dark"] .auth-hint { background: #16232c; color: #a8bbc4; }
+html[data-theme="dark"] .info-message { background: #12301f; border-color: #1f5a36; color: #b9e4c8; }
+html[data-theme="dark"] .error-message { background: #3a1c1f; border-color: #6b2e33; color: #f3b4ba; }
+html[data-theme="dark"] .login-button--secondary { background: #22343e; color: #e8f1f5; }

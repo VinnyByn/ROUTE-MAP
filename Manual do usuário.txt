@@ -1,56 +1,100 @@
 Manual do Usuário - Route Map
 
-1. Acesso e Login
-Tela de Login: Acesse a aplicação. Digite seu e-mail e senha cadastrados.
-Segurança: O sistema utiliza autenticação segura via Google Firebase. Se não possuir conta, contate o administrador do sistema.
-Redirecionamento: Após o login bem-sucedido, você será direcionado para o mapa principal.
+1. Acesso, conta e empresa
+Login: Acesse a aplicação e entre com seu e-mail e senha.
+Criar conta: Na tela de login, clique em "Criar conta" e confirme o e-mail pelo link recebido.
+Primeiro acesso: Cadastre sua empresa (você vira o administrador) ou, se recebeu um convite, entre direto na equipe. Para receber convite, use no cadastro o mesmo e-mail informado pelo administrador.
+Esqueci minha senha: Na tela de login, clique em "Esqueci minha senha" e siga o link enviado por e-mail.
+Menu do usuário (avatar no canto superior direito):
+- Meu perfil: nome, cargo e telefone.
+- Senha e segurança: trocar a senha e sair de todos os dispositivos.
+- Empresa: nome e CNPJ (o administrador edita).
+- Equipe e convites: o administrador convida pessoas por e-mail, define quem é administrador ou membro e remove membros.
+- Preferências e atalhos: tema, tipo de mapa ao abrir, reabrir o último projeto e lista de atalhos do teclado.
+Administrador x membro: o administrador define preços, kits e regras de cálculo e gerencia a equipe. Membros criam e editam os projetos da equipe.
 --------------------------------------------------------------------------------------------------------------------------------------------
 2. Gerenciamento de Projetos
-No menu superior "Projeto", você encontra as opções fundamentais:
-Novo Projeto: Cria um ambiente limpo, em que deve informar Nome, Cidade, Bairro e Tipo (TCR, TCT, MDU).
-Salvar Projeto: Salva todo o progresso (mapa, fusões, materiais) na nuvem. Dica: Salve frequentemente.
-Carregar Projeto: Abre uma lista com seus projetos salvos anteriormente, ordenados por data.
-Importar/Exportar KML: Permite trazer traçados do Google Earth (.kml) ou exportar seu projeto atual para visualização externa.
+Os projetos são da equipe: todos da empresa veem e editam.
+No menu "Projeto":
+Novo projeto: Informe Nome, Cidade, Bairro e Tipo (TCR, TCT, MDU).
+Abrir projeto: Lista os projetos da empresa, do mais recente para o mais antigo, com busca por nome, cidade ou bairro.
+Salvar projeto: Salva mapa, fusões, materiais e observações. O botão verde "Salvar" na barra faz o mesmo.
+Nova pasta: Cria uma pasta dentro do projeto selecionado.
+Importar/Exportar KML: Traz traçados do Google Earth (.kml/.kmz) ou exporta o projeto.
+No menu de três pontos do projeto (barra lateral):
+Fechar projeto: Tira o projeto da tela. Ele continua salvo.
+Excluir do banco: Apaga o projeto para toda a equipe (somente quem criou ou um administrador).
 --------------------------------------------------------------------------------------------------------------------------------------------
 3. Desenhando a Rede no mapa
-A barra superior contém as ferramentas de desenho:
+Use o menu "Desenhar".
 3.1. Pastas e Organização
-Use o botão "Nova Pasta" para organizar sua rede, criando uma série de possibilidades
-Na barra lateral esquerda, você pode arrastar e soltar itens (Drag & Drop) para movê-los entre pastas.
+Na barra lateral esquerda, arraste e solte itens (Drag & Drop) para movê-los entre pastas.
 
-3.2. Adicionar Marcadores
-Clique em "Adicionar Marcador" e escolha o tipo e staus:
-CEO (Caixa de Emenda): Defina se é JUMBO (144f), se usa Raquete ou Suporte.
-CTO (Caixa de Atendimento): Defina se é Predial, se precisa de adesivos e o status (Nova/Existente).
-Cordoalha/Reserva: Para detalhamento de infraestrutura.
-Casas: Para contagem de clientes potenciais (HP).
+3.2. Marcadores
+Clique em "Desenhar → Marcador" e escolha o tipo. Um painel abre à direita do mapa (o mapa continua visível):
+- Situação (Nova, Existente ou Troca) e Instalação (Raquete ou Suporte, para CEO e reserva) ficam no próprio painel.
+- O nome já vem sugerido com o próximo número livre (ex.: CTO-03). Cor, cor do nome e tamanho mudam o ícone na hora.
+- Clique em "Posicionar no mapa" e depois no local do marcador. Esc cancela.
+Ícones: CEO = círculo, CTO = quadrado, Cordoalha = cruz (+), Reserva = espiral, Casas = pin com a quantidade, POP = casinha, Cliente = pin com pessoa (residencial) ou prédio (B2B).
+Para editar, clique no marcador. O painel mostra coordenadas (com botão Copiar), "Mover" (arrastar no mapa), "Plano de fusão" (CEO e CTO) e "Excluir".
+CTO: opções Predial e Adesivos; o painel lista os clientes atendidos e as portas em uso.
+CEO: opção Jumbo (144 fusões). Cordoalha: quantidade de derivações em T.
 
-3.3. Desenhar Cabos
-Clique em "Desenhar Cabo".
-Defina o status (Novo/Existente).
-Regra Importante: O cabo deve começar clicando em um marcador existente (CEO, CTO ou Reserva).
-Clique no mapa para criar a rota.
-Clique duas vezes ou selecione "Salvar Cabo" na caixa flutuante para finalizar. O sistema calcula automaticamente o Lançamento e a Reserva Técnica.
+3.3. Cliente
+Escolha Residencial ou Empresarial (B2B), preencha os dados (nome/razão social, código, CPF/CNPJ, telefone, plano, endereço), o status e clique em "Posicionar no mapa".
+Status: Viabilidade (laranja), A instalar (azul), Instalado (verde) e Cancelado (cinza).
+B2B: serviço (link dedicado, banda larga empresarial, L2L, trânsito IP, fibra apagada), banda contratada, SLA, IP/bloco (ex.: 200.160.10.8/29), gateway, VLAN, prefixo IPv6 e contato técnico.
+Equipamentos: lista com tipo (ONU/ONT, EDD, SFP, Switch, Roteador, Conversor de mídia, Rádio, Outro), modelo, número de série e MAC. Use "+ Equipamento" para adicionar.
+CTO "Automática": ao posicionar, o cliente é ligado à CTO mais próxima do projeto que tenha porta livre. Também é possível escolher a CTO e a porta.
+Portas: vêm dos splitters de atendimento do plano de fusão da CTO (na ordem em que foram criados). Sem splitter, o sistema permite até 16 portas.
+Drop: é traçado seguindo os cabos do projeto (pelos postes) até o ponto mais perto da casa, sem cortar por cima dos quarteirões. Se não houver cabo a até 120 m do cliente, o drop aparece em linha reta (pontilhado mais claro).
+- "Ajustar traçado": arraste os pontos do drop no mapa para seguir a rua; "Concluir" salva o traçado manual.
+- "Recalcular": refaz o traçado automático (útil depois de desenhar novos cabos).
+- A metragem é o comprimento do traçado mais a sobra configurada pela empresa, ou o valor informado manualmente.
+Lista de materiais: clientes em Viabilidade e A instalar somam o cabo drop e o "KIT ATENDIMENTO CLIENTE" (editável pelo administrador em Materiais).
 
-3.4. Ferramentas Auxiliares
-Polígono: Para demarcar áreas de cobertura ou bairros.
-Régua: Para medir distâncias rápidas sem desenhar cabos.
+3.4. Cabos
+Clique em "Desenhar → Cabo". O painel do cabo mostra a Ponta A e a Ponta B, o total, o lançamento, a reserva e a estimativa de postes.
+1) Clique numa CEO, CTO, Reserva ou POP para iniciar (Ponta A).
+2) Clique no mapa seguindo os postes. Clicar sobre outro cabo, cordoalha ou casa apenas cria um ponto da rota.
+3) Termine clicando na caixa de destino (Ponta B). As pontas ancoradas ficam verdes.
+Clique na linha para inserir um ponto; clique direito ou "Desfazer" remove o último ponto; arraste os pontos para ajustar.
+Situação (Novo/Existente), tipo de fibra (cores), vão (AS 80/AS 200) e espessura ficam no painel.
+Cada ponta fica ligada à caixa escolhida. Renomear ou mover a caixa leva o cabo junto; caixas com o mesmo nome não confundem mais o cabo.
+Enquanto um cabo está em desenho ou edição, os outros cabos não abrem ao clicar (salve ou cancele primeiro).
+
+3.5. Polígono
+Clique em "Desenhar → Polígono" e clique no mapa para marcar os vértices. Para fechar a forma, clique no primeiro ponto ou em "Fechar forma".
+Depois de fechada, arraste os vértices para ajustar. O painel mostra área e perímetro e permite escolher cor e opacidade.
+
+3.6. Régua de medição
+Clique em "Desenhar → Régua de medição" e escolha Distância ou Área.
+Clique no mapa ou em marcadores para adicionar pontos. Arraste os pontos para ajustar. Clique direito ou Ctrl+Z desfazem o último ponto.
+Em Distância, o painel mostra o total, o último trecho, a distância com o próximo ponto e a estimativa de postes.
+Em Área, o botão "Criar polígono" transforma a medição em um polígono do projeto.
 --------------------------------------------------------------------------------------------------------------------------------------------
-4. Plano de Fusão (Diagrama)
-Cada caixa (CEO ou CTO) possui um plano de fusão interativo.
-Abra a edição de um marcador (clique no nome na barra lateral ou no ícone).
-Clique em "Plano de Fusão".
-Adicionar Cabos: Selecione os cabos que chegam fisicamente na caixa.
-Adicionar Splitter: Insira splitters de Fusão ou Atendimento (1:8, 1:16, APC/UPC).
-Fazer a Fusão: Clique na fibra de um cabo (ex: Verde) e depois na entrada do Splitter ou em outra fibra. Uma linha será desenhada.
-O sistema contabiliza automaticamente os Tubetes e Bandejas necessários.
+4. Plano de Fusão
+Abra uma CEO ou CTO e clique em "Plano de fusão". O diagrama tem três colunas: cabos que chegam (esquerda), splitters (meio) e cabos que saem (direita).
+Coluna lateral:
+- Cabos da caixa: lista os cabos ancorados na caixa, com origem/destino. "Adicionar" ou "Adicionar todos".
+- Splitter: escolha tipo (Atendimento/Fusão), divisão (1:2 a 1:16), conector (APC/UPC) e situação, e clique em "Adicionar splitter".
+- Fusão em sequência: liga várias fibras de uma vez (ex.: fibras 1 a 12 de um cabo nas fibras 1 a 12 de outro, ou nas saídas de um splitter).
+- Kits de bandeja (CEO) e Resumo (fusões/tubetes, fibras em uso, splitters e portas com cliente).
+- "Mostrar só fibras em uso" esconde as fibras livres para diagramas grandes.
+Fazer uma fusão: clique na fibra ou porta de origem e depois no destino. As portas livres ficam destacadas; Esc ou clique direito cancela.
+As linhas têm a cor da fibra. Cada porta mostra para onde está ligada; nas CTOs, as saídas de atendimento mostram o número da porta e o cliente ligado.
+Clique numa linha (ou numa porta já ligada) para "Refazer ligação" ou "Desfazer fusão".
+Arraste um cartão pelo cabeçalho para mudar a ordem ou a coluna; as setas também movem, e ⇄ troca o splitter de coluna.
+Na CEO, marque "Kit derivação" no cartão do cabo quando houver derivação.
+Clique em "Salvar plano". Fechar sem salvar pede confirmação. Tubetes, splitters, adaptadores, kits e bandejas entram automaticamente na lista de materiais.
 --------------------------------------------------------------------------------------------------------------------------------------------
 5. Materiais e Relatórios
-O sistema calcula os materiais automaticamente baseando-se no desenho.
-Lista de Materiais: Exibe ferragens, cabos, caixas e ativos. Você pode editar quantidades manualmente ou "Recalcular do Mapa" para resetar conforme o desenho.
-Mão de Obra: Permite cadastrar custos de equipe própria (Regional) ou Terceirizada (por metro/unidade).
-Relatório do Projeto: Gera um resumo executivo com:
-Total de Portas (HC) e Casas (HP).
-Taxa de Penetração.
-Custo total (CAPEX) separado por material e mão de obra.
-Custo por Porta.
+No menu "Materiais":
+Lista de materiais do projeto: Exibe ferragens, cabos, caixas e ativos. Você pode editar quantidades manualmente ou "Recalcular do Mapa".
+Mão de obra do projeto: Custos de equipe própria (Regional) ou Terceirizada.
+Preços, kits e configurações (catálogo da empresa):
+- Materiais e preços: busca, filtro por categoria (chips), preço editável direto na tabela (clique no preço, Enter salva) e importação de planilha.
+- Kits: cartões com os itens, o custo de cada item e o custo total do kit.
+- Regras de cálculo: lançamento de cabos (vão, plaquetas, BAP, SUPAS, alças), clientes (sobra por drop) e mão de obra (custo/hora, jornada e produtividade), com exemplos do cálculo.
+O administrador altera; os membros apenas consultam.
+Relatório do Projeto: Gera um resumo executivo com total de portas (HC) e casas (HP), taxa de penetração, custo total (CAPEX) por material e mão de obra, e custo por porta.

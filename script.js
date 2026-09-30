@@ -1,17 +1,31 @@
-//Lógica de autenticação
-//Objeto de configuração do Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyDj2QaP7aTsJTqD1J-ZgJwEjJgGhRZhArk",
-    authDomain: "routemap-21.firebaseapp.com",
-    projectId: "routemap-21",
-    storageBucket: "routemap-21.firebasestorage.app",
-    messagingSenderId: "855979634466",
-    appId: "1:855979634466:web:ded98c3c3680c9c7e0ff7b"
-};
-//Inicializa o Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+//Sessão (Supabase): exige login e empresa antes de liberar o sistema.
+//supabaseClient, AppSession e loadAppContext vêm de js/supabase-client.js
+const appReady = (async () => {
+    const { data } = await supabaseClient.auth.getSession();
+    if (!data.session) {
+        window.location.replace('login.html');
+        return new Promise(() => {});
+    }
+    await loadAppContext();
+    if (!AppSession.company) {
+        window.location.replace('login.html');
+        return new Promise(() => {});
+    }
+    return AppSession;
+})();
+
+supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') window.location.replace('login.html');
+});
+
+//Aguarda a sessão; em caso de falha informa e volta para o login
+function whenAppReady(callback) {
+    appReady.then(callback).catch((error) => {
+        console.error('Falha ao carregar a sessão:', error);
+        showAlert('Erro', 'Não foi possível carregar sua conta. Entre novamente.');
+        setTimeout(() => supabaseClient.auth.signOut(), 2500);
+    });
+}
 
 const THEME_STORAGE_KEY = 'routeMapTheme';
 
@@ -33,6 +47,32 @@ function applyTheme(theme) {
     if (button) button.setAttribute('aria-pressed', nextTheme === 'dark' ? 'true' : 'false');
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.setAttribute('content', nextTheme === 'dark' ? '#152028' : '#2f7a94');
+    applyMapTheme();
+}
+
+//Estilo escuro do mapa (vale para "Mapa" e "Relevo"; satélite não muda)
+const DARK_MAP_STYLES = [
+    { elementType: 'geometry', stylers: [{ color: '#1d2a33' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#9fb3bf' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#14202a' }] },
+    { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#3b4f5c' }] },
+    { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#22323d' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#223540' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#7f98a6' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1f3a33' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#33485a' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1a2731' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#4a6376' }] },
+    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#b8c9d3' }] },
+    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2a3c48' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f2a3a' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#5d7f93' }] }
+];
+
+function applyMapTheme() {
+    if (typeof map === 'undefined' || !map) return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    map.setOptions({ styles: isDark ? DARK_MAP_STYLES : null });
 }
 
 function uiIcon(name, extraClass) {
@@ -47,34 +87,15 @@ function setupThemeToggle() {
     button.dataset.themeWired = '1';
     button.addEventListener('click', (event) => {
         event.preventDefault();
-        applyTheme(getStoredTheme() === 'dark' ? 'light' : 'dark');
+        const nextTheme = getStoredTheme() === 'dark' ? 'light' : 'dark';
+        applyTheme(nextTheme);
+        if (typeof saveUserPreferences === 'function') saveUserPreferences({ theme: nextTheme });
     });
 }
-//Verifica o estado de autenticação do usuário
-auth.onAuthStateChanged((user) => {
-    const userEmailDisplay = document.getElementById('userEmailDisplay');
-    if (user) {
-        //Se existe um 'user', significa que ele está logado e a página pode continuar carregando normalmente.
-        console.log('Usuário autenticado:', user.email);
-        if (userEmailDisplay) {
-            userEmailDisplay.textContent = user.email;
-            userEmailDisplay.title = `Conta: ${user.email}`;
-        }
-        const userMenuButton = document.getElementById('userMenuButton');
-        if (userMenuButton) {
-            userMenuButton.title = `Conta e configurações: ${user.email}`;
-        }
-    } else {
-        if (userEmailDisplay) {
-            userEmailDisplay.textContent = '';
-        }
-        //Se não existe um 'user', ele não está logado e a página é redirecionada imediatamente para a tela de login.
-        console.log('Nenhum usuário autenticado. Redirecionando para login...');
-        window.location.href = 'login.html';
-    }
-});
 
 let map; //Instância principal do Google Maps
+let resolveMapReady;
+const mapReady = new Promise(resolve => { resolveMapReady = resolve; }); //Resolvida quando o mapa é criado
 let isAddingMarker = false; //Indica que o usuário está no modo colocar marcador
 let pendingSplitterInfo = null; //Armazenamento dos dados dos splitter antes de colocar
 let selectedMarkerType = ""; //Tipo de marcador selecionado
@@ -146,10 +167,7 @@ let activeLineForAction = null; //Linha de fusão selecionada para edição - ex
 let isEditingLine = false;
 let cableInfoBox; //Informação do cabo
 let searchMarker = null; //Marcador com o resultado da busca
-let drawingManager; //Gerenciador de desenho do Google para os polígonos
 let isMeasuring = false; //Régua
-let rulerPolyline; //Linha visual da régua
-let rulerMarkers = []; //Array com os pontos da régua
 let savedPolygons = []; //Array com os polígonos salvos
 let isDrawingPolygon = false;
 let editingPolygonIndex = null;
@@ -207,7 +225,7 @@ function getAnchorMarkerCandidatesForFolder(folderId) {
 }
 
 function getMarkerSidebarIconClass(type) {
-    return type === 'POP' ? 'ge-icon-pop' : 'ge-icon-marker';
+    return 'ge-icon-marker';
 }
 
 function applyMarkerSidebarColorStyles(markerInfo) {
@@ -217,10 +235,13 @@ function applyMarkerSidebarColorStyles(markerInfo) {
     const markerColor = markerInfo.type === 'CASA'
         ? (markerInfo.color || '#ffffff')
         : (markerInfo.color || '#f9a825');
-
     listItem.classList.add('ge-pro-marker-item');
     if (sidebarIcon) {
         sidebarIcon.style.setProperty('--ge-item-color', markerColor);
+        applyMarkerIconToElement(sidebarIcon, markerInfo.type, markerColor, {
+            variant: markerInfo.client?.kind === 'b2b' ? 'b2b' : '',
+            faded: markerInfo.client?.status === 'cancelado',
+        });
     }
 }
 
@@ -236,88 +257,63 @@ function applyCableSidebarColorStyles(cable) {
     }
 }
 
-function buildCasaMarkerIcon(text, balloonColor, labelColor) {
-    const displayText = String(text || '0');
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const fontSize = 14;
-    const padX = 10;
-    const padY = 5;
-    ctx.font = `700 ${fontSize}px Inter, Arial, sans-serif`;
-    const textWidth = ctx.measureText(displayText).width;
-    const bubbleW = Math.max(30, Math.ceil(textWidth + padX * 2));
-    const bubbleH = fontSize + padY * 2;
-    const tailH = 7;
-    const sidePad = 2;
-    canvas.width = bubbleW + sidePad * 2;
-    canvas.height = bubbleH + tailH + sidePad * 2;
 
-    const bx = sidePad;
-    const by = sidePad;
-    const br = 7;
-    const cx = bx + bubbleW / 2;
-
-    ctx.beginPath();
-    ctx.moveTo(bx + br, by);
-    ctx.lineTo(bx + bubbleW - br, by);
-    ctx.quadraticCurveTo(bx + bubbleW, by, bx + bubbleW, by + br);
-    ctx.lineTo(bx + bubbleW, by + bubbleH - br);
-    ctx.quadraticCurveTo(bx + bubbleW, by + bubbleH, bx + bubbleW - br, by + bubbleH);
-    ctx.lineTo(cx + 5, by + bubbleH);
-    ctx.lineTo(cx, by + bubbleH + tailH);
-    ctx.lineTo(cx - 5, by + bubbleH);
-    ctx.lineTo(bx + br, by + bubbleH);
-    ctx.quadraticCurveTo(bx, by + bubbleH, bx, by + bubbleH - br);
-    ctx.lineTo(bx, by + br);
-    ctx.quadraticCurveTo(bx, by, bx + br, by);
-    ctx.closePath();
-
-    ctx.fillStyle = balloonColor || '#ffffff';
-    ctx.fill();
-    ctx.strokeStyle = '#444444';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = labelColor || '#000000';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `700 ${fontSize}px Inter, Arial, sans-serif`;
-    ctx.fillText(displayText, cx, by + bubbleH / 2);
-
-    const anchorY = by + bubbleH + tailH + sidePad;
-    return {
-        url: canvas.toDataURL('image/png'),
-        scaledSize: new google.maps.Size(canvas.width, canvas.height),
-        anchor: new google.maps.Point(cx, anchorY),
-    };
-}
-
-function buildPopMarkerIcon(size, color) {
-    const px = Math.max(20, Math.min(84, Math.round((size || DEFAULT_MARKER_SIZE) * 5)));
-    const canvas = document.createElement('canvas');
-    canvas.width = px;
-    canvas.height = px;
-    const ctx = canvas.getContext('2d');
-    const fontSize = Math.round(px * 0.72);
-    ctx.font = `700 ${fontSize}px Inter, Arial, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineWidth = Math.max(1.2, px / 14);
-    ctx.strokeStyle = '#000000';
-    ctx.fillStyle = color || '#f9a825';
-    const centerY = px / 2 + 1;
-    ctx.strokeText('P', px / 2, centerY);
-    ctx.fillText('P', px / 2, centerY);
-    return {
-        url: canvas.toDataURL('image/png'),
-        scaledSize: new google.maps.Size(px, px),
-        anchor: new google.maps.Point(px / 2, px / 2),
-        labelOrigin: new google.maps.Point(px / 2, -Math.round(px * 0.12)),
-    };
-}
 
 //Função para exibir um alerta personalizado com título e mensaggem
+//Agrupa título e "×" num cabeçalho fixo, para o fechar continuar visível ao rolar.
+//(O h2 fica intacto: vários fluxos trocam o título com textContent.)
+function normalizeModalHeaders() {
+  document.querySelectorAll('.modal > .modal-content').forEach(content => {
+    const close = content.querySelector(':scope > .close');
+    const title = content.querySelector(':scope > h2');
+    if (!close || !title || content.querySelector(':scope > .modal-header-v2')) return;
+    const header = document.createElement('div');
+    header.className = 'modal-header-v2';
+    title.before(header);
+    header.append(title, close);
+    close.setAttribute('role', 'button');
+    close.setAttribute('aria-label', 'Fechar');
+    close.tabIndex = 0;
+  });
+}
+normalizeModalHeaders();
+
+//Avisos de sucesso/andamento viram notificações discretas; erros e avisos continuam em janela
+const TOAST_TITLE_PATTERN = /^(sucesso|salvando|projeto salvo|projeto carregado|projeto excluído|material(is)? adicionado|configurações salvas|copiado|convite)/i;
+
+function showToast(title, message, kind = 'success') {
+  let stack = document.getElementById('toastStack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'toastStack';
+    stack.className = 'toast-stack';
+    stack.setAttribute('role', 'status');
+    stack.setAttribute('aria-live', 'polite');
+    document.body.appendChild(stack);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${kind}`;
+  const titleEl = document.createElement('strong');
+  titleEl.textContent = title;
+  const messageEl = document.createElement('span');
+  messageEl.textContent = message;
+  toast.append(titleEl, messageEl);
+  stack.appendChild(toast);
+  //"Salvando…" é substituído pela confirmação seguinte; no máximo 3 avisos na tela
+  stack.querySelectorAll('.toast--progress').forEach(el => { if (el !== toast) el.remove(); });
+  const visible = Array.from(stack.children);
+  visible.slice(0, Math.max(0, visible.length - 3)).forEach(el => el.remove());
+  setTimeout(() => {
+    toast.classList.add('toast--leaving');
+    setTimeout(() => toast.remove(), 250);
+  }, kind === 'progress' ? 6000 : 3200);
+}
+
 function showAlert(title, message) {
+  if (TOAST_TITLE_PATTERN.test(String(title || '').trim())) {
+    showToast(title, message, /salvando/i.test(title) ? 'progress' : 'success');
+    return;
+  }
   const alertModal = document.getElementById('alertModal');
   document.getElementById('alertModalTitle').textContent = title;
   document.getElementById('alertModalMessage').textContent = message;
@@ -333,6 +329,12 @@ function showConfirm(title, message, onConfirm) {
   const confirmButton = document.getElementById('confirmModalConfirmButton');
   const newConfirmButton = confirmButton.cloneNode(true);
   confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
+  //Ações destrutivas: botão vermelho com o verbo da ação ("Excluir", "Remover", "Sair"…)
+  const destructiveVerb = String(title || '').match(/^(excluir|remover|sair|apagar|fechar)/i)?.[1];
+  newConfirmButton.classList.toggle('btn-destructive', !!destructiveVerb && !/^fechar/i.test(destructiveVerb));
+  newConfirmButton.textContent = destructiveVerb
+    ? destructiveVerb.charAt(0).toUpperCase() + destructiveVerb.slice(1).toLowerCase()
+    : 'Confirmar';
   newConfirmButton.addEventListener('click', () => {
     confirmModal.style.display = 'none';
     onConfirm(); //Função executada se o usuário clicar em "Sim"
@@ -367,33 +369,19 @@ function updateSidebarEmptyState() {
     }
 }
 
-//Coleta todos os dados e salva no Firebase Firestore
-function saveProjectToFirestore() {
-    const currentUser = auth.currentUser;
-    //Verificação de segurança
-    if (!currentUser) {
-        showAlert("Erro", "Você precisa estar logado para salvar um projeto.");
-        return;
-    }
-    //Se existe um projeto selecionado na barra lateral
-    const activeElement = document.getElementById(activeFolderId);
-    if (!activeElement) {
-        showAlert("Atenção", "Por favor, selecione um projeto ou um item dentro de um projeto para salvar.");
-        return;
-    }
-    //Pega o elemento raiz do projeto - pasta principal
-    const projectRootElement = activeElement.closest('.folder');
-    if (!projectRootElement) {
-        showAlert("Erro", "Não foi possível encontrar o projeto principal. Selecione um item e tente novamente.");
-        return;
-    }
-    //Coleta dos dados do projeto
+//Persistência de projetos (Supabase, tabela projects)
+
+//Encontra o elemento raiz (.folder) do projeto que contém a pasta ativa
+function getActiveProjectRoot() {
+    const activeElement = activeFolderId ? document.getElementById(activeFolderId) : null;
+    return activeElement ? activeElement.closest('.folder') : null;
+}
+
+//Monta o registro do projeto para o banco a partir da sidebar e do mapa
+function buildProjectRecord(projectRootElement) {
     const projectTitleDiv = projectRootElement.querySelector('.folder-title');
-    const projectUl = projectRootElement.querySelector('ul');
+    const projectUl = projectRootElement.querySelector('ul.subfolders') || projectRootElement.querySelector('ul');
     const projectId = projectTitleDiv.dataset.folderId;
-    const projectName = projectTitleDiv.dataset.folderName;
-    showAlert("Salvando...", `O projeto "${projectName}" está sendo salvo no banco de dados.`);
-    //Serialização da barra lateral - Transforma o HTML em um objeto JSON
     const sidebarStructure = {
         id: projectUl.id,
         name: projectTitleDiv.dataset.folderName,
@@ -403,90 +391,163 @@ function saveProjectToFirestore() {
         isProject: true,
         children: getSidebarStructureAsJSON(projectUl)
     };
-    //Pega os marcadores, cabos e polígonos pertecentes ao projeto selecionado
     const allFolderIds = getAllDescendantFolderIds(projectId);
-    //Converte objetos do Google Maps em JSON para o banco de dados
-    const projectMarkers = markers.filter(m => allFolderIds.includes(m.folderId)).map(serializeMarker);
-    const projectCables = savedCables.filter(c => allFolderIds.includes(c.folderId)).map(serializeCable);
-    const projectPolygons = savedPolygons.filter(p => allFolderIds.includes(p.folderId)).map(serializePolygon);
-    //Objeto final
-    const projectData = {
-        userId: currentUser.uid, //Vincula ao usuário
-        projectName: projectName,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        sidebar: sidebarStructure, 
-        markers: projectMarkers,
-        cables: projectCables,
-        polygons: projectPolygons,
-        bom: projectBoms[projectId] || null,
-        observations: projectObservations[projectId] || null
+    return {
+        id: projectId,
+        company_id: AppSession.company.id,
+        created_by: AppSession.userId,
+        name: sidebarStructure.name,
+        city: sidebarStructure.city,
+        neighborhood: sidebarStructure.neighborhood,
+        project_type: sidebarStructure.type || null,
+        data: {
+            sidebar: sidebarStructure,
+            markers: markers.filter(m => allFolderIds.includes(m.folderId)).map(serializeMarker),
+            cables: savedCables.filter(c => allFolderIds.includes(c.folderId)).map(serializeCable),
+            polygons: savedPolygons.filter(p => allFolderIds.includes(p.folderId)).map(serializePolygon),
+            bom: projectBoms[projectId] || null,
+            observations: projectObservations[projectId] || null
+        }
     };
-    //Envi para o firestore
-    db.collection("users").doc(currentUser.uid).collection("projects").doc(projectId).set(projectData)
-        .then(() => {
-            showAlert("Sucesso!", `Projeto "${projectName}" salvo com sucesso.`);
-        })
-        .catch((error) => {
-            console.error("Erro ao salvar projeto: ", error);
-            showAlert("Erro", "Ocorreu um erro ao salvar o projeto. Verifique o console para mais detalhes.");
-        });
 }
 
-//Busca o projeto do usuário no firestore e exibe a janela de carregamento
-function loadProjectsFromFirestore() {
-     //verificação do usuário logado
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-        showAlert("Erro", "Você precisa estar logado para carregar projetos.");
+//Grava (cria ou atualiza) o projeto no banco
+async function persistProject(projectRootElement) {
+    await appReady;
+    const record = buildProjectRecord(projectRootElement);
+    const { error } = await supabaseClient.from('projects').upsert(record, { onConflict: 'id' });
+    if (error) throw error;
+    return record;
+}
+
+//Botão "Salvar Projeto"
+async function saveActiveProject() {
+    const projectRootElement = getActiveProjectRoot();
+    if (!projectRootElement) {
+        showAlert("Atenção", "Selecione um projeto ou um item dentro de um projeto para salvar.");
         return;
     }
-    //Preparação da interface, com a jenela de carregamento e a lista de projetos salvos
-    const modal = document.getElementById('loadProjectModal');
-    const listElement = document.getElementById('saved-projects-list');
-    //Mensagem de carregando enquanto busca o projeto no banco de dados
-    listElement.innerHTML = '<li>Carregando...</li>';
-    modal.style.display = 'flex';
-    //Consulta no banco de dados
-    //Busca na coleção projects dentro do documento do usuário, ordenado por de criação - mais recente primeiro
-    db.collection("users").doc(currentUser.uid).collection("projects").orderBy("createdAt", "desc").get().then((querySnapshot) => {
-        listElement.innerHTML = '';
-        if (querySnapshot.empty) {
-            listElement.innerHTML = '<li>Nenhum projeto salvo encontrado.</li>';
-            return;
-        }
-        //Para cada projeto encontrado
-        querySnapshot.forEach((doc) => {
-            //Dados do projeto
-            const project = doc.data();
-            const projectId = doc.id;
-            const li = document.createElement('li');
-            //Preenchimento da janela com o projeto buscado
-            li.innerHTML = `
-                <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <span><strong>${project.projectName}</strong> <br><small>Salvo em: ${project.createdAt ? project.createdAt.toDate().toLocaleString() : 'Data indisponível'}</small></span>
-                    <button class="load-project-btn" style="padding: 8px 12px;">Carregar</button>
-                </div>`;
-            listElement.appendChild(li);
-            //Configuração do botão carregar
-            const loadButton = li.querySelector('.load-project-btn');
-            loadButton.addEventListener('click', () => {
-                console.log(`Botão 'Carregar' clicado para o projeto: ${project.projectName} (ID: ${projectId})`);
-                //Verificação se o projeto já está aberto na barra lateral
-                if (document.getElementById(projectId)) {showAlert("Aviso", `O projeto "${project.projectName}" já está carregado.`);
-                    modal.style.display = 'none';
-                    return;
-                }
-                //Se não estiver, fecha a janela e chama a função que controi o projeto na barra lateral
-                modal.style.display = 'none';
-                loadAndDisplayProject(projectId, project);
-            });
-        });
-    })
-    //Tratamento de erros
-    .catch((error) => {
-        console.error("Erro ao carregar lista de projetos: ", error);
-        listElement.innerHTML = '<li>Ocorreu um erro ao buscar os projetos.</li>';
+    const projectName = projectRootElement.querySelector('.folder-title')?.dataset.folderName || 'Projeto';
+    showAlert("Salvando…", `Salvando o projeto "${projectName}".`);
+    try {
+        await persistProject(projectRootElement);
+        showAlert("Projeto salvo", `O projeto "${projectName}" foi salvo.`);
+    } catch (error) {
+        console.error("Erro ao salvar projeto:", error);
+        showAlert("Erro", `Não foi possível salvar o projeto. ${error.message || ''}`);
+    }
+}
+
+//Salvamento silencioso após reorganizar itens na sidebar
+function saveProjectElement(projectRootElement) {
+    if (!projectRootElement) return;
+    const projectName = projectRootElement.querySelector('.folder-title')?.dataset.folderName || 'Projeto';
+    persistProject(projectRootElement).catch((error) => {
+        console.error(`Erro ao salvar projeto "${projectName}":`, error);
+        showAlert("Erro ao salvar", `Não foi possível salvar a reorganização do projeto "${projectName}".`);
     });
+}
+
+function formatRelativeDate(isoDate) {
+    if (!isoDate) return '';
+    const date = new Date(isoDate);
+    const diffMin = Math.round((Date.now() - date.getTime()) / 60000);
+    if (diffMin < 1) return 'agora';
+    if (diffMin < 60) return `há ${diffMin} min`;
+    const diffHours = Math.round(diffMin / 60);
+    if (diffHours < 24) return `há ${diffHours} h`;
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays < 7) return `há ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}`;
+    return date.toLocaleDateString('pt-BR');
+}
+
+let projectSearchTimer = null;
+let projectSearchSeq = 0;
+
+//Lista os projetos da empresa (com filtro opcional por nome, cidade ou bairro)
+async function renderProjectPickerList() {
+    const listElement = document.getElementById('saved-projects-list');
+    const term = (document.getElementById('projectSearchInput')?.value || '').trim();
+    const seq = ++projectSearchSeq;
+    listElement.innerHTML = '<li class="project-picker__state">Carregando…</li>';
+    await appReady;
+    let query = supabaseClient
+        .from('projects')
+        .select('id, name, city, neighborhood, project_type, updated_at, updated_by')
+        .order('updated_at', { ascending: false })
+        .limit(100);
+    if (term) {
+        const safe = term.replace(/[%,()*]/g, ' ').trim();
+        query = query.or(`name.ilike.%${safe}%,city.ilike.%${safe}%,neighborhood.ilike.%${safe}%`);
+    }
+    const { data, error } = await query;
+    if (seq !== projectSearchSeq) return; //Uma busca mais nova já está em andamento
+    if (error) {
+        console.error("Erro ao listar projetos:", error);
+        listElement.innerHTML = '<li class="project-picker__state project-picker__state--error">Não foi possível carregar os projetos.</li>';
+        return;
+    }
+    if (!data.length) {
+        listElement.innerHTML = term
+            ? '<li class="project-picker__state">Nenhum projeto encontrado para essa busca.</li>'
+            : '<li class="project-picker__state">Nenhum projeto salvo ainda. Crie um em Projeto → Novo Projeto.</li>';
+        return;
+    }
+    listElement.innerHTML = '';
+    data.forEach((project) => {
+        const isOpen = !!document.getElementById(project.id);
+        const place = [project.city, project.neighborhood].filter(Boolean).join(' · ');
+        const li = document.createElement('li');
+        li.className = 'project-picker__item';
+        li.innerHTML = `
+            <div class="project-picker__info">
+                <strong>${escapeHtml(project.name)}</strong>
+                <span>${escapeHtml(place || 'Sem localização')}${project.project_type ? ` · ${escapeHtml(project.project_type)}` : ''}</span>
+                <small>Atualizado ${escapeHtml(formatRelativeDate(project.updated_at))}</small>
+            </div>
+            <button type="button" class="btn ${isOpen ? 'btn-secondary' : 'btn-success'} load-project-btn" ${isOpen ? 'disabled' : ''}>${isOpen ? 'Aberto' : 'Abrir'}</button>`;
+        li.querySelector('.load-project-btn').addEventListener('click', (event) => openProjectFromDatabase(project.id, event.currentTarget));
+        listElement.appendChild(li);
+    });
+}
+
+function openProjectPicker() {
+    document.getElementById('projectDropdown').classList.remove('show');
+    const input = document.getElementById('projectSearchInput');
+    input.value = '';
+    document.getElementById('loadProjectModal').style.display = 'flex';
+    renderProjectPickerList();
+    setTimeout(() => input.focus(), 50);
+}
+
+function handleProjectSearchInput() {
+    clearTimeout(projectSearchTimer);
+    projectSearchTimer = setTimeout(renderProjectPickerList, 250);
+}
+
+//Busca os dados completos do projeto e monta na sidebar/mapa
+async function openProjectFromDatabase(projectId, button) {
+    if (document.getElementById(projectId)) {
+        document.getElementById('loadProjectModal').style.display = 'none';
+        return;
+    }
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Abrindo…';
+    }
+    const { data, error } = await supabaseClient.from('projects').select('id, name, data').eq('id', projectId).single();
+    if (error) {
+        console.error("Erro ao abrir projeto:", error);
+        showAlert("Erro", "Não foi possível abrir o projeto.");
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Abrir';
+        }
+        return;
+    }
+    document.getElementById('loadProjectModal').style.display = 'none';
+    loadAndDisplayProject(data.id, { ...(data.data || {}), projectName: data.name });
+    if (typeof rememberLastProject === 'function') rememberLastProject(data.id);
 }
 
 /*Limpa a barra lateral e o mapa, removendo todos os elementos visuais*/
@@ -523,6 +584,7 @@ function loadAndDisplayProject(projectId, projectData) {
     }
     //Recontrói toda a árvore das pastas na barra lateral
     const sidebar = document.getElementById("sidebar");
+    clientDropsSuspended = true;
     rebuildSidebarFromJSON([projectData.sidebar], sidebar);
     updateSidebarEmptyState();
     //Recria os polígonos
@@ -538,6 +600,8 @@ function loadAndDisplayProject(projectId, projectData) {
         projectData.cables.forEach(cableData => rebuildCable(cableData));
         syncProjectCableMeasurements(savedCables);
     }
+    clientDropsSuspended = false;
+    refreshClientDrops({ recompute: true });
     //Recria a lista de material
     if (projectData.bom) {
         projectBoms[projectId] = projectData.bom;
@@ -549,7 +613,7 @@ function loadAndDisplayProject(projectId, projectData) {
     showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
 }
 
-//Converte o objeto de marcador para o formato JSON, salvando os dados no banco de dados Firestore
+//Converte o objeto de marcador para o formato JSON, salvando os dados no banco de dados
 function serializeMarker(markerInfo) {
     //Extrai o visual do Google Maps
     const marker = markerInfo.marker;
@@ -557,6 +621,7 @@ function serializeMarker(markerInfo) {
     const position = marker.getPosition();
     //Retorna com os dados essenciais a serem salvos
     return {
+        uid: markerInfo.uid || null,
         folderId: markerInfo.folderId,
         type: markerInfo.type,
         name: markerInfo.name,
@@ -575,13 +640,25 @@ function serializeMarker(markerInfo) {
         derivationTCount: markerInfo.derivationTCount,
         reservaStatus: markerInfo.reservaStatus,
         reservaAccessory: markerInfo.reservaAccessory,
+        client: markerInfo.type === 'CLIENTE' ? (markerInfo.client || {}) : undefined,
         position: { lat: position.lat(), lng: position.lng() }
     };
 }
 
-//Converte o objeto de cabo para o formato JSON, salvando os dados no banco de dados Firestore
+//Identificador permanente do marcador (usado para ligar cliente → CTO)
+function generateMarkerUid() {
+    return `mk_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+}
+
+function ensureMarkerUid(markerInfo) {
+    if (!markerInfo.uid || markers.some(m => m !== markerInfo && m.uid === markerInfo.uid)) {
+        markerInfo.uid = generateMarkerUid();
+    }
+    return markerInfo.uid;
+}
+
+//Converte o objeto de cabo para o formato JSON, salvando os dados no banco de dados
 function serializeCable(cableInfo) {
-    //Retorna com os dados essenciais a serem salvos
     return {
         folderId: cableInfo.folderId,
         name: cableInfo.name,
@@ -594,6 +671,8 @@ function serializeCable(cableInfo) {
         totalLength: cableInfo.totalLength,
         path: cableInfo.path.map(latLng => ({ lat: latLng.lat(), lng: latLng.lng() })),
         surchargePercent: cableInfo.surchargePercent || 0,
+        startAnchorUid: cableInfo.startAnchorUid || null,
+        endAnchorUid: cableInfo.endAnchorUid || null,
         startAnchorMarkerName: cableInfo.startAnchorMarkerName || null,
         endAnchorMarkerName: cableInfo.endAnchorMarkerName || null,
         startAnchorMarkerFolderId: cableInfo.startAnchorMarkerFolderId || null,
@@ -601,7 +680,7 @@ function serializeCable(cableInfo) {
     };
 }
 
-//Converte o objeto de polígono para o formato JSON, salvando os dados no banco de dados Firestore
+//Converte o objeto de polígono para o formato JSON, salvando os dados no banco de dados
 function serializePolygon(polygonInfo) {
     //Obtem o arry de coordenadas atual
     const currentPath = polygonInfo.polygonObject.getPath().getArray();
@@ -610,6 +689,7 @@ function serializePolygon(polygonInfo) {
         folderId: polygonInfo.folderId,
         name: polygonInfo.name,
         color: polygonInfo.color,
+        opacity: polygonInfo.opacity ?? 0.5,
         path: currentPath.map(p => ({ lat: p.lat(), lng: p.lng() }))
     };
 }
@@ -739,10 +819,12 @@ function rebuildMarker(data) {
     }
     //Salva a referência na memória global
     const markerInfo = { ...data, position: position, marker: marker, listItem: li };
+    ensureMarkerUid(markerInfo);
     markers.push(markerInfo);
     updateMarkerAppearance(markerInfo);
     //Define o comportamento do clique no marcador, com o modo desenho
     marker.addListener("click", () => {
+        if (handleSketchMarkerClick(markerInfo)) return;
         if (isDrawingCable) {
             handleAnchorMarkerClickDuringCableDraw(markerInfo);
         } else {
@@ -801,7 +883,7 @@ function rebuildPolygon(data) {
         map: map,
         fillColor: data.color,
         strokeColor: data.color,
-        fillOpacity: 0.5,
+        fillOpacity: data.opacity ?? 0.5,
         strokeWeight: 2,
         clickable: true,
         editable: false
@@ -821,13 +903,9 @@ function rebuildPolygon(data) {
     } else {
       console.error(`Elemento pai com ID "${data.folderId}" não encontrado para o polígono "${data.name}"`);
     }
-    const index = savedPolygons.length;
     const polygonInfo = { ...data, path: googleMapsPath, polygonObject: polygon, listItem: li };
     savedPolygons.push(polygonInfo);
-    polygon.addListener('click', () => openPolygonEditor(index));
-    nameEl.addEventListener('click', () => openPolygonEditor(index));
-    const visCb = li.querySelector('.ge-vis-checkbox');
-    if (visCb) wireItemVisibilityCheckbox(visCb, polygon);
+    wirePolygonInteractions(polygonInfo);
 }
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'routeMapSidebarWidth';
@@ -975,6 +1053,14 @@ function setupDropdownInteractions() {
     dropdownInteractionsReady = true;
 
     document.addEventListener('click', (event) => {
+        //Item de menu escolhido: fecha o menu e evita a navegação para "#"
+        const menuItem = event.target.closest('.dropdown-content a');
+        if (menuItem) {
+            if (menuItem.getAttribute('href') === '#') event.preventDefault();
+            document.querySelectorAll('.dropdown-content.show').forEach(openDropdown => openDropdown.classList.remove('show'));
+            updateDropdownOpenState();
+            return;
+        }
         if (!event.target.closest('.dropdown')) {
             document.querySelectorAll('.dropdown-content.show').forEach(openDropdown => {
                 openDropdown.classList.remove('show');
@@ -1034,6 +1120,7 @@ function suppressCableDrawBrowserMenu(event) {
 }
 
 function shouldSuppressCableDrawBrowserMenu(event) {
+    if (isSketchToolActive()) return isPointerEventOnMap(event);
     if (!isDrawingCable) return false;
     if (cableMarkers.length <= 2) return true;
     return isPointerEventOnMap(event);
@@ -1093,6 +1180,8 @@ function initMap() {
             }
         });
         disableMapRightDoubleClickZoomOut(map, mapElement);
+        applyMapTheme();
+        resolveMapReady(map);
         scheduleMapResize();
         window.addEventListener('load', scheduleMapResize);
     } else {
@@ -1100,19 +1189,18 @@ function initMap() {
     }
 
     cableInfoBox = document.getElementById('cableInfoBox');
-    //Persistência de dados - Firestore
-    document.getElementById('saveProjectButton').addEventListener('click', saveProjectToFirestore);
+    //Persistência de dados - Supabase
+    document.getElementById('saveProjectButton').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('projectDropdown').classList.remove('show');
+        saveActiveProject();
+    });
+    document.getElementById('quickSaveButton').addEventListener('click', saveActiveProject);
     document.getElementById('loadProjectButton').addEventListener('click', (e) => {
         e.preventDefault();
-        //Limpa campos e abre modal de carregar
-        document.getElementById('searchProjectName').value = '';
-        document.getElementById('searchProjectCity').value = '';
-        document.getElementById('searchProjectNeighborhood').value = '';
-        document.getElementById('saved-projects-list').innerHTML = '';
-        document.getElementById('projectDropdown').classList.remove('show');
-        document.getElementById('loadProjectModal').style.display = 'flex';
+        openProjectPicker();
     });
-    document.getElementById('searchProjectsButton').addEventListener('click', searchProjectsInFirestore);
+    document.getElementById('projectSearchInput').addEventListener('input', handleProjectSearchInput);
     document.getElementById('closeLoadProjectModal').addEventListener('click', () => {
         document.getElementById('loadProjectModal').style.display = 'none';
     });
@@ -1312,76 +1400,11 @@ function initMap() {
         addOutsourcedCustomServiceRow();
         updateOutsourcedCost();
     });
-    //Ação nos cabos
-    const lineActionModal = document.getElementById('lineActionModal');
-    const closeLineActionModal = document.getElementById('closeLineActionModal');
-    const cancelLineActionButton = document.getElementById('cancelLineActionButton');
-    const editLineButton = document.getElementById('editLineButton');
-    const deleteLineConfirmButton = document.getElementById('deleteLineConfirmButton');
-    const closeActionModal = () => {
-        lineActionModal.style.display = 'none';
-        activeLineForAction = null;
-    };
-    closeLineActionModal.addEventListener('click', closeActionModal);
-    cancelLineActionButton.addEventListener('click', closeActionModal);
-    deleteLineConfirmButton.addEventListener('click', () => {
-    if (activeLineForAction) {
-        const lineId = activeLineForAction.id;
-        activeLineForAction.remove();
-        document.querySelectorAll(`.line-handle[data-line-id="${lineId}"]`).forEach(h => h.remove());
-        const materialName = "TUBETE PROTETOR DE EMENDA OPTICA";
-        if (activeFolderId) {
-            const projectId = document.getElementById(activeFolderId).closest('.folder')?.querySelector('.folder-title').dataset.folderId;
-            if (projectId && projectBoms[projectId] && projectBoms[projectId][materialName]) {
-                if (projectBoms[projectId][materialName].quantity > 0) {
-                    projectBoms[projectId][materialName].quantity -= 1;
-                }
-              }
-          }
-        }
-        closeActionModal();
-    });
-    editLineButton.addEventListener('click', () => {
-        if (!activeLineForAction) return;
-        const lineToEdit = activeLineForAction;
-        lineActionModal.style.display = 'none';
-        startLineEdit(lineToEdit);
-    });
     //Modais de seleção de status e tipos
     const markerTypeModal = document.getElementById("markerTypeModal");
     const closeTypeModalButton = document.getElementById("closeTypeModal");
     closeTypeModalButton.addEventListener("click", () => {
         markerTypeModal.style.display = "none";
-    });
-    const cableStatusSelectionModal = document.getElementById("cableStatusSelectionModal");
-    const closeCableStatusModal = document.getElementById("closeCableStatusModal");
-    closeCableStatusModal.addEventListener("click", () => {
-        cableStatusSelectionModal.style.display = "none";
-    });
-    const ctoStatusSelectionModal = document.getElementById("ctoStatusSelectionModal");
-    const closeCtoStatusModal = document.getElementById("closeCtoStatusModal");
-    closeCtoStatusModal.addEventListener("click", () => {
-        ctoStatusSelectionModal.style.display = "none";
-    });
-    const ceoStatusSelectionModal = document.getElementById("ceoStatusSelectionModal");
-    const closeCeoStatusModal = document.getElementById("closeCeoStatusModal");
-    closeCeoStatusModal.addEventListener("click", () => {
-        ceoStatusSelectionModal.style.display = "none";
-    });
-    const ceoAccessorySelectionModal = document.getElementById("ceoAccessorySelectionModal");
-    const closeCeoAccessoryModal = document.getElementById("closeCeoAccessoryModal");
-    closeCeoAccessoryModal.addEventListener("click", () => {
-        ceoAccessorySelectionModal.style.display = "none";
-    });
-    const cordoalhaStatusSelectionModal = document.getElementById("cordoalhaStatusSelectionModal");
-    const closeCordoalhaStatusModal = document.getElementById("closeCordoalhaStatusModal");
-    closeCordoalhaStatusModal.addEventListener("click", () => {
-        cordoalhaStatusSelectionModal.style.display = "none";
-    });
-    const reservaStatusSelectionModal = document.getElementById("reservaStatusSelectionModal");
-    const closeReservaStatusModal = document.getElementById("closeReservaStatusModal");
-    closeReservaStatusModal.addEventListener("click", () => {
-        reservaStatusSelectionModal.style.display = "none";
     });
     //Datacenter e kits de equipamento
     const datacenterChoiceModal = document.getElementById("datacenterChoiceModal");
@@ -1510,153 +1533,9 @@ function initMap() {
         popKitModal.style.display = 'none';
         datacenterChoiceModal.style.display = 'none';
     });
-    //Modal genérico de marcador
-    document.getElementById("closeModal").addEventListener("click", () => {
-        resetMarkerModal();
-    });
-    //Modal e canvas de fusão
-    const fusionModal = document.getElementById("fusionModal");
-    const closeFusionModal = document.getElementById("closeFusionModal");
-    const saveFusionPlanButton = document.getElementById("saveFusionPlan");
-    const fusionCanvas = document.getElementById("fusionCanvas");
-    fusionCanvas.addEventListener('dragstart', (e) => {
-        e.preventDefault();
-    });
-    fusionCanvas.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.fusion-line')) {
-            e.preventDefault();
-        }
-    });
-    closeFusionModal.addEventListener("click", () => {
-        fusionModal.style.display = "none";
-        resetFusionDrawingState();
-        activeMarkerForFusion = null;
-        updateFusionModalTitle(null);
-    });
-    //Salvar o plano de fusão
-    saveFusionPlanButton.addEventListener("click", () => {
-        if (activeMarkerForFusion) {
-            const canvas = document.getElementById("fusionCanvas");
-            const svgLayer = document.getElementById("fusion-svg-layer");
-            const elementsContainer = document.createElement('div');
-            canvas.querySelectorAll('.cable-element, .splitter-element').forEach(el => {
-                elementsContainer.appendChild(el.cloneNode(true));
-            });
-            const elementsHTML = elementsContainer.innerHTML;
-            const svgHTML = svgLayer.innerHTML;
-            const planData = {
-                elements: elementsHTML, 
-                svg: svgHTML,           
-            };
-            //Quantidade de bandeja
-            if (activeMarkerForFusion.type === 'CEO') {
-                planData.trayQuantity = document.getElementById('trayKitQuantity').value || 0;
-            }
-            activeMarkerForFusion.fusionPlan = JSON.stringify(planData);
-            showAlert("Sucesso", "Plano de fusão salvo com sucesso!");
-        }
-        resetFusionDrawingState();
-        fusionModal.style.display = "none";
-        activeMarkerForFusion = null;
-        updateFusionModalTitle(null);
-    });
-    //Adição de elementos na fusão
-    document.getElementById("addCableToFusion").addEventListener("click", () => {
-        openCableSelectionModal();
-    });
-    document.getElementById("deriveAllCablesButton").addEventListener("click", () => {
-        addAllCablesToFusionPlan();
-    });
-    const splitterModal = document.getElementById("splitterSelectionModal");
-    const closeSplitterModal = document.getElementById("closeSplitterModal");
-    document.getElementById("addSplitterToFusion").addEventListener("click", () => {
-        selectedSplitterInfo = { type: "", connector: "" };
-        document.getElementById("splitterTypeModal").style.display = "flex";
-    });
-    closeSplitterModal.addEventListener("click", () => {
-        splitterModal.style.display = "none";
-    });
-    //Modais de subtipos de splitter
-    const splitterTypeModal = document.getElementById("splitterTypeModal");
-    const splitterConnectorModal = document.getElementById("splitterConnectorModal");
-    document.getElementById("closeSplitterTypeModal").addEventListener('click', () => splitterTypeModal.style.display = 'none');
-    document.getElementById("closeSplitterConnectorModal").addEventListener('click', () => splitterConnectorModal.style.display = 'none');
-    //Fluxo de seleção de splitter
-    function showFinalSplitterModal(categoryToShow) {
-        const finalModal = document.getElementById("splitterSelectionModal");
-        const categories = finalModal.querySelectorAll(".splitter-category");
-        categories.forEach(cat => {
-            if (cat.dataset.category === categoryToShow) {
-                cat.classList.remove('hidden');
-            } else {
-                cat.classList.add('hidden');
-            }
-        });
-        finalModal.style.display = "flex";
-    }
-    //Listeners para tipo de splitter
-    splitterTypeModal.querySelectorAll(".datacenter-option").forEach(option => {
-        option.addEventListener("click", () => {
-            const type = option.getAttribute("data-type");
-            selectedSplitterInfo.type = type;
-            splitterTypeModal.style.display = "none";
-            if (type === "Atendimento") {
-                splitterConnectorModal.style.display = "flex";
-            } else {
-                showFinalSplitterModal('fusao');
-            }
-        });
-    });
-    //Listeners apra conctor de splitter
-    splitterConnectorModal.querySelectorAll(".datacenter-option").forEach(option => {
-        option.addEventListener("click", () => {
-            const connector = option.getAttribute("data-connector");
-            selectedSplitterInfo.connector = connector;
-            splitterConnectorModal.style.display = "none";
-            showFinalSplitterModal('atendimento');
-        });
-    });
-    //Seleção final do modelo de splitter
-    document.querySelectorAll(".splitter-option").forEach((option) => {
-        option.addEventListener("click", () => {
-            const type = option.getAttribute("data-type");
-            const ratio = option.getAttribute("data-ratio");
-            let label = ratio.replace("/", ":");
-            if (selectedSplitterInfo.type === "Atendimento") {
-                  label += ` ${selectedSplitterInfo.connector}`;
-            }
-            const outputCount = parseInt(ratio.split("/")[1], 10);
-            pendingSplitterInfo = {
-                label,
-                outputCount,
-                type: selectedSplitterInfo.type,
-                connector: selectedSplitterInfo.connector
-            };
-            const splitterSelectionModal = document.getElementById("splitterSelectionModal");
-            splitterSelectionModal.style.display = "none";
-            document.getElementById("splitterStatusSelectionModal").style.display = "flex";
-        });
-    });
-    //Seleção de status do splitter e adição ao canvas
-    const splitterStatusSelectionModal = document.getElementById("splitterStatusSelectionModal");
-    document.getElementById("closeSplitterStatusModal").addEventListener("click", () => {
-        splitterStatusSelectionModal.style.display = "none";
-    });
-    document.querySelectorAll(".splitter-status-option").forEach(option => {
-        option.addEventListener("click", () => {
-            const status = option.getAttribute("data-status");
-            splitterStatusSelectionModal.style.display = "none";
-            addSplitterToCanvas(status);
-        });
-    });
-
-    //Modal de seleção de cabo
-    const cableSelectionModal = document.getElementById("cableSelectionModal");
-    const closeCableSelectionModal = document.getElementById("closeCableSelectionModal");
-    closeCableSelectionModal.addEventListener("click", () => {
-        cableSelectionModal.style.display = "none";
-    });
-    //Modal de Relatório 
+    //Plano de fusão (js/fusion.js)
+    setupFusionModal();
+    //Modal de Relatório
     const projectReportButton = document.getElementById("projectReportButton");
     const reportModal = document.getElementById("reportModal");
     const closeReportModal = document.getElementById("closeReportModal");
@@ -1690,6 +1569,7 @@ function initMap() {
             return;
         }
         if (handleEnterConfirmation(e)) return;
+        if (handleSketchKeyboard(e)) return;
         if (handleMapKeyboardPan(e)) return;
         if (!(e.ctrlKey || e.metaKey) || isEditableKeyboardTarget(e.target)) return;
         const key = e.key.toLowerCase();
@@ -1699,7 +1579,6 @@ function initMap() {
             e.preventDefault();
         }
     }, true);
-    document.getElementById("deleteMarkerButton").addEventListener("click", deleteEditingMarker);
     //Eventos de menu, visibilidade, edição e exclusão
     document.getElementById("sidebar").addEventListener('click', (e) => {
         if (e.target.closest('#sidebar-empty-create-btn')) {
@@ -1728,6 +1607,7 @@ function initMap() {
         const editButton = e.target.closest('.edit-folder-btn');
         const folderStyleButton = e.target.closest('.folder-style-btn');
         const deleteProjectButton = e.target.closest('.delete-project-btn');
+        const closeProjectButton = e.target.closest('.close-project-btn');
         const deleteFolderButton = e.target.closest('.delete-folder-btn');
         const menuLink = e.target.closest('.item-actions-menu a');
         if (menuLink) {
@@ -1748,6 +1628,11 @@ function initMap() {
         if (folderStyleButton) {
             const titleElement = folderStyleButton.closest('.folder-title');
             openFolderMarkerStyleModal(titleElement);
+            return;
+        }
+        if (closeProjectButton) {
+            const titleElement = closeProjectButton.closest('.folder-title');
+            closeProject(titleElement.dataset.folderId, titleElement.closest('.folder'), titleElement.dataset.folderName);
             return;
         }
         if (deleteProjectButton) {
@@ -1780,19 +1665,16 @@ function initMap() {
         searchModal.style.display = 'none';
     });
     structuredSearchButton.addEventListener('click', performStructuredSearch);
-    //Ferramentas: Polígono, régua e Logout
-    document.getElementById('drawPolygonButton').addEventListener('click', startPolygonTool);
-    document.getElementById('savePolygonButton').addEventListener('click', savePolygon);
-    document.getElementById('cancelPolygonButton').addEventListener('click', cancelPolygonDrawing);
-    document.getElementById('deletePolygonButton').addEventListener('click', deletePolygon);
-    document.getElementById('rulerButton').addEventListener('click', startRuler);
-    document.getElementById('cancelRulerButton').addEventListener('click', stopRuler);
+    //Ferramentas: Polígono, régua, painel do cabo e Logout
+    setupMapSketchTools();
+    setupCablePanelControls();
     const logoutButton = document.getElementById('logoutButton');
     if (logoutButton) {
         logoutButton.addEventListener('click', (event) => {
             event.preventDefault();
-            auth.signOut().then(() => {
-                window.location.href = 'login.html';
+            supabaseClient.auth.signOut().then(({ error }) => {
+                if (error) throw error;
+                window.location.replace('login.html');
             }).catch((error) => {
                 console.error('Erro ao fazer logout:', error);
                 showAlert('Erro', 'Não foi possível sair. Tente novamente.');
@@ -1904,417 +1786,65 @@ function initMap() {
     });
 }
 
-//Adiciona o splitter no canvas
-function addSplitterToCanvas(status) {
-    if (!pendingSplitterInfo) return;
-    const { label, outputCount, type, connector } = pendingSplitterInfo;
-    //Verifica se é um item novo e se há um projeto ativo/selecionado para contabilizar os materiais
-    if (status === "Novo" && activeFolderId) {
-        const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
-        if (projectRootElement) {
-            const projectId = projectRootElement.querySelector('.folder-title').dataset.folderId;
-            //Inicializa a BOM do projeto se não existir
-            if (!projectBoms[projectId]) {
-                calculateBomState();
-                projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
-            }
-            //Adiciona o próprio splitter à lista
-            const splitterMaterialName = `Splitter ${label.replace(':', '/')}`;
-            const splitterPriceInfo = MATERIAL_PRICES[splitterMaterialName] || { price: 0, category: 'Fusão' };
-            if (!projectBoms[projectId][splitterMaterialName]) {
-                projectBoms[projectId][splitterMaterialName] = { quantity: 0, type: 'un', unitPrice: splitterPriceInfo.price, category: 'Fusão', removed: false };
-            }
-            projectBoms[projectId][splitterMaterialName].quantity += 1;
-            let adapterMaterialName = '';
-            //Se for de Atendimento, adiciona também os adaptadores
-            if (type === "Atendimento" && activeMarkerForFusion) {
-                const isPredial = activeMarkerForFusion.isPredial || false;
-                if (isPredial) { // Caixa Predial -> Adaptador SEM abas
-                    adapterMaterialName = (connector === 'APC')
-                        ? "ADAPTADOR SC/APC SEM ABAS (PASSANTE)"
-                        : "ADAPTADOR SC/UPC SEM ABAS (PASSANTE)";
-                } else { // Caixa Comum -> Adaptador COM abas
-                    adapterMaterialName = (connector === 'APC')
-                        ? "ADAPTADOR SC/APC COM ABAS (PASSANTE)"
-                        : "ADAPTADOR SC/UPC COM ABAS (PASSANTE)";
-                }
-                const adapterPriceInfo = MATERIAL_PRICES[adapterMaterialName] || { price: 0, category: 'Fusão' };
-                if (!projectBoms[projectId][adapterMaterialName]) {
-                    projectBoms[projectId][adapterMaterialName] = { quantity: 0, type: 'un', unitPrice: adapterPriceInfo.price, category: 'Fusão', removed: false };
-                }
-                projectBoms[projectId][adapterMaterialName].quantity += outputCount;
-            }
-            //Mostra um alerta final e claro para o usuário
-            if (adapterMaterialName) {
-                showAlert("Materiais Adicionados", `"${splitterMaterialName}" e ${outputCount}x "${adapterMaterialName}" foram adicionados à lista.`);
-            } else {
-                showAlert("Material Adicionado", `"${splitterMaterialName}" foi adicionado à Lista de Materiais.`);
-            }
-        }
-    }
-    //Renderização visual do canvas
-    const canvas = document.getElementById("fusionCanvas");
-    const placeholder = canvas.querySelector(".canvas-placeholder");
-    if (placeholder) {
-        placeholder.remove();
-    }
-    //Cria um elemento DOM e aplica classes de estilo
-    const splitterElement = createInteractiveSplitter(label, outputCount, status);
-    splitterElement.classList.add(
-        type === "Fusão" ? "splitter-fusao" : "splitter-atendimento"
-    );
-    if (type === "Atendimento" && connector === "UPC") {
-        splitterElement.classList.add("splitter-upc");
-    }
-    //Reorganiza o layout e limpa os pendentes
-    repackAllElements();
-    pendingSplitterInfo = null;
-}
 
-//Verifica se dois elementos DOM estão se sobrepondo
-function checkCollision(el1, el2) {
-    //Obtem as dimensões e posição relativa à viewport
-    const rect1 = el1.getBoundingClientRect();
-    const rect2 = el2.getBoundingClientRect();
-    //Retorna true se houver colisão e inverte a lógica
-    return !(
-        rect1.right < rect2.left ||
-        rect1.left > rect2.right ||
-        rect1.bottom < rect2.top ||
-        rect1.top > rect2.bottom
-    );
-}
 
-//Utilitários de layout do plano de fusão
-function isFusionElementOnRightSide(element) {
-    return !!(element?.style?.right && element.style.right !== 'auto');
-}
 
-function getFusionColumnElements(canvas, side) {
-    return Array.from(canvas.querySelectorAll('.splitter-element, .cable-element')).filter((el) => {
-        const isRight = isFusionElementOnRightSide(el);
-        return side === 'right' ? isRight : !isRight;
-    });
-}
 
-function getFusionColumnSortedElements(element) {
-    const canvas = document.getElementById('fusionCanvas');
-    if (!canvas || !element) return [];
-    const side = isFusionElementOnRightSide(element) ? 'right' : 'left';
-    return getFusionColumnElements(canvas, side).sort(
-        (a, b) => (parseFloat(a.style.top) || 0) - (parseFloat(b.style.top) || 0)
-    );
-}
 
-function moveFusionElementVertical(element, direction) {
-    if (!element || (direction !== 'up' && direction !== 'down')) return;
-    const columnElements = getFusionColumnSortedElements(element);
-    const index = columnElements.indexOf(element);
-    if (index === -1) return;
 
-    const neighborIndex = direction === 'up' ? index - 1 : index + 1;
-    if (neighborIndex < 0 || neighborIndex >= columnElements.length) return;
 
-    const neighbor = columnElements[neighborIndex];
-    const canvas = element.parentNode;
-    if (!canvas) return;
 
-    if (direction === 'up') {
-        canvas.insertBefore(element, neighbor);
-    } else {
-        canvas.insertBefore(neighbor, element);
-    }
-    repackAllElements();
-}
 
-function ensureFusionCanvasWidth() {
-    const canvas = document.getElementById('fusionCanvas');
-    if (canvas) {
-        canvas.style.minWidth = `${FUSION_LAYOUT.minCanvasWidth}px`;
-    }
-}
 
-function buildFusionLinePoints(startPos, endPos, intermediatePoints = [], lineEl = null) {
-    if (intermediatePoints && intermediatePoints.length > 0) {
-        return [startPos, ...intermediatePoints, endPos];
-    }
-    const canvas = document.getElementById('fusionCanvas');
-    const baseMidX = canvas
-        ? canvas.offsetWidth * (FUSION_LAYOUT.centerChannelRatio ?? 0.5)
-        : (startPos.x + endPos.x) / 2;
 
-    let midX = baseMidX;
-    if (canvas && lineEl) {
-        const lines = Array.from(canvas.querySelectorAll('#fusion-svg-layer .fusion-line, #fusion-svg-layer .fusion-line-editing'));
-        const idx = lines.indexOf(lineEl);
-        if (idx >= 0 && lines.length > 1) {
-            midX += (idx - (lines.length - 1) / 2) * 14;
-        }
-    }
 
-    return [
-        startPos,
-        { x: midX, y: startPos.y },
-        { x: midX, y: endPos.y },
-        endPos,
-    ];
-}
 
-function nudgeFusionColumnOverlaps(columnElements) {
-    if (!columnElements.length) return;
-    const sorted = [...columnElements].sort(
-        (a, b) => (parseFloat(a.style.top) || 0) - (parseFloat(b.style.top) || 0)
-    );
-    let currentTop = FUSION_LAYOUT.topStart;
-    sorted.forEach((el) => {
-        const desiredTop = Math.max(currentTop, parseFloat(el.style.top) || FUSION_LAYOUT.topStart);
-        el.style.top = `${desiredTop}px`;
-        currentTop = desiredTop + el.offsetHeight + FUSION_LAYOUT.verticalGap;
-    });
-}
 
-function repackAllElements() {
-    const canvas = document.getElementById('fusionCanvas');
-    if (!canvas) return;
-
-    ensureFusionCanvasWidth();
-    const verticalMargin = FUSION_LAYOUT.verticalGap;
-    const leftColumnElements = getFusionColumnElements(canvas, 'left');
-    const rightColumnElements = getFusionColumnElements(canvas, 'right');
-
-    const repackColumn = (elements) => {
-        let currentTop = FUSION_LAYOUT.topStart;
-        elements.forEach((el) => {
-            el.style.transition = 'top 0.32s cubic-bezier(0.22, 1, 0.36, 1)';
-            el.style.top = `${currentTop}px`;
-            currentTop += el.offsetHeight + verticalMargin;
-        });
-    };
-
-    repackColumn(leftColumnElements);
-    repackColumn(rightColumnElements);
-
-    setTimeout(() => {
-        nudgeFusionColumnOverlaps(leftColumnElements);
-        nudgeFusionColumnOverlaps(rightColumnElements);
-        updateAllConnections();
-        updateSvgLayerSize();
-        canvas.querySelectorAll('.splitter-element, .cable-element').forEach((el) => {
-            el.style.transition = '';
-        });
-        updateFusionCanvasInteractionState();
-    }, 340);
-}
-
-function fusionCanvasHasComponents(canvas = document.getElementById('fusionCanvas')) {
-    if (!canvas) return false;
-    return !!(canvas.querySelector('.cable-element') || canvas.querySelector('.splitter-element'));
-}
-
-function updateFusionCanvasInteractionState() {
-    const canvas = document.getElementById('fusionCanvas');
-    if (!canvas) return;
-
-    const hasComponents = fusionCanvasHasComponents(canvas);
-    canvas.classList.toggle('fusion-canvas-empty', !hasComponents);
-
-    if (!hasComponents) {
-        resetFusionDrawingState();
-        isEditingLine = false;
-        activeLineForAction = null;
-
-        const svgLayer = document.getElementById('fusion-svg-layer');
-        if (svgLayer) {
-            svgLayer.querySelectorAll('.connecting-line, .line-handle-temp').forEach((el) => el.remove());
-        }
-    }
-
-    let placeholder = canvas.querySelector('.canvas-placeholder');
-    if (!hasComponents) {
-        if (!placeholder) {
-            placeholder = document.createElement('p');
-            placeholder.className = 'canvas-placeholder';
-            canvas.appendChild(placeholder);
-        }
-        placeholder.textContent = 'Adicione cabos ou splitters para montar o plano de fusão.';
-    } else if (placeholder) {
-        placeholder.remove();
-    }
-}
-
-//Eclusão de splitter e atualização de materiais
-function handleDeleteSplitter(deleteButton) {
-    //Identificação do elemento
-    const splitterElement = deleteButton.closest('.splitter-element');
-    if (!splitterElement) return;
-    const status = splitterElement.dataset.status;
-    const type = splitterElement.classList.contains('splitter-fusao') ? 'Fusão' : 'Atendimento';
-    //Atualização da lista de material
-    //Remove materiais da lista apenas se o splitter for novo e houver projeto ativo
-    if (status === 'Novo' && activeFolderId) {
-        const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
-        if (projectRootElement) {
-            const projectId = projectRootElement.querySelector('.folder-title').dataset.folderId;
-            const label = getSplitterLabelText(splitterElement);
-            if (label && projectBoms[projectId]) {
-                //Decrementa a quantidade do próprio splitter
-                const splitterMaterialName = `Splitter ${label.replace(':', '/')}`;
-                if (projectBoms[projectId][splitterMaterialName] && projectBoms[projectId][splitterMaterialName].quantity > 0) {
-                    projectBoms[projectId][splitterMaterialName].quantity -= 1;
-                }
-                //Decrementa adaptadores - atendimento
-                let adapterMaterialName = '';
-                if (type === 'Atendimento' && activeMarkerForFusion) {
-                    const isPredial = activeMarkerForFusion.isPredial || false;
-                    const connector = label.includes('APC') ? 'APC' : 'UPC';
-                    const ratioMatch = label.match(/1:(\d+)/);
-                    const outputCount = ratioMatch ? parseInt(ratioMatch[1], 10) : 0;
-                    //Seleciona o adaptados correto
-                    if (isPredial) {
-                        adapterMaterialName = (connector === 'APC') ? "ADAPTADOR SC/APC SEM ABAS (PASSANTE)" : "ADAPTADOR SC/UPC SEM ABAS (PASSANTE)";
-                    } else {
-                        adapterMaterialName = (connector === 'APC') ? "ADAPTADOR SC/APC COM ABAS (PASSANTE)" : "ADAPTADOR SC/UPC COM ABAS (PASSANTE)";
-                    }
-                    //Remove a quantidade igual ao número de saídas
-                    if (outputCount > 0 && projectBoms[projectId][adapterMaterialName] && projectBoms[projectId][adapterMaterialName].quantity > 0) {
-                        projectBoms[projectId][adapterMaterialName].quantity -= outputCount;
-                    }
-                }
-                //Feedback visual ao usuário
-                if (adapterMaterialName) {
-                    showAlert("Materiais Removidos", `"${splitterMaterialName}" e seus adaptadores correspondentes foram removidos.`);
-                } else {
-                    showAlert("Material Removido", `"${splitterMaterialName}" foi removido da lista.`);
-                }
-            }
-        }
-    }
-    //Remoção do DOM e reorganização
-    splitterElement.remove();
-    repackAllElements();
-}
-
-//Remoção de cabos no plano de fusão
-function handleDeleteCableFromFusion(deleteButton) {
-    //Identifica o cabo e coleta o IDs de suas fibras
-    const cableElement = deleteButton.closest('.cable-element');
-    if (!cableElement) return;
-    const fiberIdsToRemove = Array.from(cableElement.querySelectorAll('.fiber-row.connectable')).map(fiber => fiber.id);
-    //Limpeza de fusões
-    const svgLayer = document.getElementById('fusion-svg-layer');
-    if (svgLayer && fiberIdsToRemove.length > 0) {
-        const allFusionLines = svgLayer.querySelectorAll('.fusion-line');
-        allFusionLines.forEach(line => {
-            const startId = line.dataset.startId;
-            const endId = line.dataset.endId;
-            //Se a linha conecta a este cabo, remove a linha visual e baixa o material
-            if (fiberIdsToRemove.includes(startId) || fiberIdsToRemove.includes(endId)) {
-                const lineId = line.id;
-                line.remove();
-                if (lineId) {
-                    svgLayer.querySelectorAll(`.line-handle[data-line-id="${lineId}"]`).forEach(handle => handle.remove());
-                }
-                removeMaterialFromBom("TUBETE PROTETOR DE EMENDA OPTICA", 1);
-            }
-        });
-    }
-    //Remove o elemento do DOM e reoganiza o layout vertical
-    cableElement.remove();
-    repackAllElements();
-    showAlert("Cabo Removido", "O cabo e suas fusões associadas foram removidos do plano.");
-}
-
-//Verificação de uso de fusão do cabo
+//Diz se o cabo está em algum plano de fusão salvo e se tem fusões
 function checkCableUsageInFusionPlans(cableInfo) {
-    //Inicialização e validação
     const usage = { isInPlan: false, hasFusions: false, locations: [] };
-    if (!cableInfo) {
-        console.log("checkCableUsageInFusionPlans: cableInfo é nulo.");
-        return usage;
-    }
-    const cableNameToFind = cableInfo.name.trim();
-    console.log(`checkCableUsageInFusionPlans: Verificando uso do cabo "${cableNameToFind}"`);
-    //Interação sobre as caixas
-    const projectMarkers = markers.filter(m => m.type === 'CEO' || m.type === 'CTO');
-    for (const markerInfo of projectMarkers) {
-        if (markerInfo.fusionPlan) {
-            console.log(` -> Verificando plano da caixa "${markerInfo.name}"`);
-            try {
-                //Plano salvo
-                const planData = JSON.parse(markerInfo.fusionPlan);
-                if (!planData.elements || !planData.svg) {
-                    console.log(`    Plano da caixa "${markerInfo.name}" inválido. Pulando.`);
-                    continue;
-                }
-                //Busca do cabo no plano
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = planData.elements;
-                let cableElementInPlan = null;
-                const savedCableElements = tempDiv.querySelectorAll('.cable-element');
-                console.log(`    Procurando por "${cableNameToFind}" entre ${savedCableElements.length} cabos salvos no plano.`);
-                for (const savedEl of savedCableElements) {
-                    const savedName = savedEl.dataset.cableName;
-                    if (savedName && savedName.trim() === cableNameToFind) {
-                        cableElementInPlan = savedEl;
-                        console.log(`    !!!! CABO "${cableNameToFind}" ENCONTRADO (comparando nomes) no plano da caixa "${markerInfo.name}" !!!!`);
-                        break;
-                    } else {
-                         console.log(`       -> Comparando com: "${savedName ? savedName.trim() : 'NOME INDEFINIDO'}" - Não corresponde.`);
-                    }
-                }
-                //Verifica as fusões
-                if (cableElementInPlan) {
-                    usage.isInPlan = true;
-                    if (!usage.locations.includes(markerInfo.name)) {
-                        usage.locations.push(markerInfo.name);
-                    }
-                    //Analisa o SVG para ser se há linha conectadas as fibras desse cabo
-                    const svgContainer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    svgContainer.innerHTML = planData.svg;
-                    if (svgContainer) {
-                        const fiberIds = Array.from(cableElementInPlan.querySelectorAll('.fiber-row')).map(f => f.id);
-                        const fusionLines = svgContainer.querySelectorAll('.fusion-line');
-                        for (const line of fusionLines) {
-                            //Se encontrar qualquer fusão envonveldo este cabo retorna true
-                            if (fiberIds.includes(line.dataset.startId) || fiberIds.includes(line.dataset.endId)) {
-                                console.log(`    !!!! Fusão ENCONTRADA para o cabo "${cableNameToFind}" na caixa "${markerInfo.name}" !!!!`);
-                                usage.hasFusions = true;
-                                return usage;
-                            }
-                        }
-                         console.log(`    Nenhuma fusão encontrada para "${cableNameToFind}" nesta caixa.`);
-                    }
-                } else {
-                     console.log(`    Cabo "${cableNameToFind}" NÃO encontrado (após iteração) no plano da caixa "${markerInfo.name}".`);
-                }
-            } catch (e) {
-                console.error(`Erro ao verificar o plano de fusão da caixa "${markerInfo.name}":`, e);
-            }
+    if (!cableInfo?.name) return usage;
+    const cableName = cableInfo.name.trim();
+    markers.filter(m => (m.type === 'CEO' || m.type === 'CTO') && m.fusionPlan).forEach(markerInfo => {
+        try {
+            const planData = JSON.parse(markerInfo.fusionPlan);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = planData.elements || planData.canvas || '';
+            const cableEl = Array.from(tempDiv.querySelectorAll('.cable-element')).find(el => (el.dataset.cableName || '').trim() === cableName);
+            if (!cableEl) return;
+            usage.isInPlan = true;
+            if (!usage.locations.includes(markerInfo.name)) usage.locations.push(markerInfo.name);
+            if (!planData.svg) return;
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.innerHTML = planData.svg;
+            const fiberIds = Array.from(cableEl.querySelectorAll('.fiber-row')).map(f => f.id);
+            const fused = Array.from(svg.querySelectorAll('.fusion-line')).some(line => fiberIds.includes(line.dataset.startId) || fiberIds.includes(line.dataset.endId));
+            if (fused) usage.hasFusions = true;
+        } catch (e) {
+            console.error(`Erro ao verificar o plano de fusão da caixa "${markerInfo.name}":`, e);
         }
-    }
-    console.log(`checkCableUsageInFusionPlans: Finalizando verificação para "${cableNameToFind}". Resultado:`, usage);
+    });
     return usage;
 }
 
-//Remoção de cabos no plano de fusão
+//Remove o cabo (sem fusões) dos planos de fusão salvos
 function removeCableFromSavedFusionPlans(cableName, markerNames) {
     markers.forEach(markerInfo => {
-        if (markerNames.includes(markerInfo.name) && markerInfo.fusionPlan) {
-            try {
-                const planData = JSON.parse(markerInfo.fusionPlan);
-                if (!planData.canvas) return;
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = planData.canvas;
-                const cableElementToRemove = tempDiv.querySelector(`.cable-element[data-cable-name="${cableName}"]`);
-                //Se encontrar o cabo remove-o e atualiza o JSON do plano
-                if (cableElementToRemove) {
-                    cableElementToRemove.remove();
-                    markerInfo.fusionPlan = JSON.stringify({ canvas: tempDiv.innerHTML });
-                    console.log(`Cabo "${cableName}" removido do plano de fusão da caixa "${markerInfo.name}".`);
-                }
-            } catch(e) {
-                console.error(`Erro ao remover o cabo do plano de fusão da caixa "${markerInfo.name}":`, e);
-            }
+        if (!markerNames.includes(markerInfo.name) || !markerInfo.fusionPlan) return;
+        try {
+            const planData = JSON.parse(markerInfo.fusionPlan);
+            const html = planData.elements || planData.canvas;
+            if (!html) return;
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const cableElement = Array.from(tempDiv.querySelectorAll('.cable-element')).find(el => el.dataset.cableName === cableName);
+            if (!cableElement) return;
+            cableElement.remove();
+            if (planData.elements !== undefined) planData.elements = tempDiv.innerHTML;
+            else planData.canvas = tempDiv.innerHTML;
+            markerInfo.fusionPlan = JSON.stringify(planData);
+        } catch (e) {
+            console.error(`Erro ao remover o cabo do plano de fusão da caixa "${markerInfo.name}":`, e);
         }
     });
 }
@@ -2337,8 +1867,39 @@ function removeMaterialFromBom(materialName, quantity) {
 
 //Exclusão completa de um projeto
 function deleteProject(projectId, projectElement, projectName) {
-    const message = `Tem certeza que deseja excluir o projeto "${projectName}" e TODOS os seus conteúdos? Esta ação não pode ser desfeita.`;
-    showConfirm('Excluir Projeto', message, () => {
+    const message = `Excluir o projeto "${projectName}" e todo o seu conteúdo do banco de dados? Ele deixará de aparecer para toda a equipe. Esta ação não pode ser desfeita.`;
+    showConfirm('Excluir projeto', message, async () => {
+        const { data, error } = await supabaseClient.from('projects').delete().eq('id', projectId).select('id');
+        if (error) {
+            console.error('Erro ao excluir projeto:', error);
+            showAlert('Erro', 'Não foi possível excluir o projeto do banco de dados.');
+            return;
+        }
+        //Nada apagado: projeto nunca salvo, ou o usuário não é o autor nem admin
+        if (!data.length && await projectExistsInDatabase(projectId)) {
+            showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
+            return;
+        }
+        removeProjectFromWorkspace(projectId, projectElement);
+        showAlert('Projeto excluído', `O projeto "${projectName}" foi excluído.`);
+    });
+}
+
+async function projectExistsInDatabase(projectId) {
+    const { data } = await supabaseClient.from('projects').select('id').eq('id', projectId).maybeSingle();
+    return !!data;
+}
+
+//Fecha o projeto na tela (continua salvo no banco)
+function closeProject(projectId, projectElement, projectName) {
+    showConfirm('Fechar projeto', `Fechar "${projectName}"? Alterações não salvas serão perdidas. O projeto continua disponível em Projeto → Carregar Projeto.`, () => {
+        removeProjectFromWorkspace(projectId, projectElement);
+    });
+}
+
+//Remove marcadores, cabos, polígonos e a árvore do projeto da tela
+function removeProjectFromWorkspace(projectId, projectElement) {
+    {
         //Identifica todas as subpastas vinculadas ao projeto
         const folderIdsToDelete = getAllDescendantFolderIds(projectId);
         //Remoção marcadores
@@ -2359,8 +1920,9 @@ function deleteProject(projectId, projectElement, projectName) {
             activeFolderId = null;
         }
         delete projectObservations[projectId];
-        showAlert("Sucesso", `Projeto "${projectName}" excluído com sucesso.`);
-    });
+        delete projectBoms[projectId];
+        updateSidebarEmptyState();
+    }
 }
 
 //Exclusão de pasta e conteúdo
@@ -2390,14 +1952,14 @@ function deleteFolder(folderId, folderElement, folderName) {
     });
 }
 
-function makeDraggable(element) {
-    
-}
 
-//Seleção de cabos conectados para fusão
 function getCableRoleAtMarker(cable, markerPosition, markerInfo = null) {
     if (!cable?.path?.length || !markerPosition) return null;
-    if (markerInfo?.name) {
+    if (markerInfo?.uid) {
+        if (cable.startAnchorUid === markerInfo.uid) return 'saida';
+        if (cable.endAnchorUid === markerInfo.uid) return 'entrada';
+    }
+    if (markerInfo?.name && !cable.startAnchorUid && !cable.endAnchorUid) {
         if (cable.startAnchorMarkerName === markerInfo.name) return 'saida';
         if (cable.endAnchorMarkerName === markerInfo.name) return 'entrada';
     }
@@ -2406,407 +1968,24 @@ function getCableRoleAtMarker(cable, markerPosition, markerInfo = null) {
     return atStart ? 'saida' : 'entrada';
 }
 
-function getCableRoleLabel(role) {
-    if (role === 'entrada') return 'Entrada (Ponta A)';
-    if (role === 'saida') return 'Saída (Ponta B)';
-    return '';
-}
 
-function getCableStatusDisplay(status) {
-    const value = String(status || 'Novo').trim();
-    if (value === 'Existente') return { label: 'Existente', modifier: 'status-pill--existente' };
-    if (value === 'Troca') return { label: 'Troca', modifier: 'status-pill--troca' };
-    return { label: 'Novo', modifier: 'status-pill--nova' };
-}
 
-function createCableStatusPillElement(status) {
-    const display = getCableStatusDisplay(status);
-    const pill = document.createElement('span');
-    pill.className = `cable-status-pill status-pill ${display.modifier}`;
-    pill.textContent = display.label;
-    return pill;
-}
 
-function syncFusionCableStatusPill(cableEl, status) {
-    if (!cableEl) return;
-    cableEl.dataset.cableStatus = String(status || 'Novo');
-    const display = getCableStatusDisplay(status);
-    let pill = cableEl.querySelector('.cable-status-pill');
-    if (!pill) {
-        pill = createCableStatusPillElement(status);
-        const titleRow = cableEl.querySelector('.cable-header-title-row');
-        if (titleRow) {
-            titleRow.appendChild(pill);
-        } else {
-            const headerContent = cableEl.querySelector('.cable-header div') || cableEl.querySelector('.cable-header');
-            const titleSpan = headerContent?.querySelector('.cable-header-name')
-                || headerContent?.querySelector('span:not(.cable-status-pill)');
-            if (titleSpan) {
-                titleSpan.after(pill);
-            } else if (headerContent) {
-                headerContent.prepend(pill);
-            }
-        }
-    } else {
-        pill.className = `cable-status-pill status-pill ${display.modifier}`;
-        pill.textContent = display.label;
-    }
-}
 
-function ensureFusionCableStatusPills(canvas) {
-    if (!canvas) return;
-    canvas.querySelectorAll('.cable-element').forEach((cableEl) => {
-        const cableName = cableEl.dataset.cableName;
-        const savedCable = cableName ? savedCables.find((c) => c.name === cableName) : null;
-        const status = savedCable?.status || cableEl.dataset.cableStatus || 'Novo';
-        syncFusionCableStatusPill(cableEl, status);
-    });
-}
 
-function getCableRoleFromElement(cableEl) {
-    if (!cableEl) return null;
-    if (cableEl.dataset.cableRole) return cableEl.dataset.cableRole;
-    if (cableEl.classList.contains('cable-entrada')) return 'entrada';
-    if (cableEl.classList.contains('cable-saida')) return 'saida';
-    return null;
-}
 
-function getAvailableCablesForFusion(markerInfo = activeMarkerForFusion) {
-    if (!markerInfo) return [];
-    const canvas = document.getElementById("fusionCanvas");
-    const existingCableNames = Array.from(canvas.querySelectorAll(".cable-element"))
-        .map((el) => el.dataset.cableName)
-        .filter(Boolean);
-    return savedCables.filter((cable) => {
-        if (!cable.name || existingCableNames.includes(cable.name)) return false;
-        if (!cable.path || cable.path.length < 1) return false;
-        if (!isCableConnectedToMarker(cable, markerInfo)) return false;
-        return true;
-    });
-}
 
-function appendCableToFusionCanvas(cable, markerInfo = activeMarkerForFusion) {
-    if (!markerInfo || !cable) return null;
-    const canvas = document.getElementById("fusionCanvas");
-    const placeholder = canvas.querySelector(".canvas-placeholder");
-    if (placeholder) placeholder.remove();
-    const markerPosition = markerInfo.marker.getPosition();
-    const role = getCableRoleAtMarker(cable, markerPosition, markerInfo);
-    const cableElement = createInteractiveCable(cable, role);
-    canvas.appendChild(cableElement);
-    return cableElement;
-}
 
-function addAllCablesToFusionPlan(options = {}) {
-    const { closeModal = true, showSuccessAlert = true } = options;
-    if (!activeMarkerForFusion) {
-        showAlert("Erro", "Nenhum marcador ativo para o plano de fusão.");
-        return 0;
-    }
-    const available = getAvailableCablesForFusion(activeMarkerForFusion);
-    if (available.length === 0) {
-        showAlert("Aviso", "Nenhum cabo disponível para adicionar.");
-        return 0;
-    }
-    available.forEach((cable) => appendCableToFusionCanvas(cable, activeMarkerForFusion));
-    const canvas = document.getElementById("fusionCanvas");
-    ensureFusionCableStatusPills(canvas);
-    ensureDerivationKitCheckboxesForCeo(canvas);
-    repackAllElements();
-    if (closeModal) {
-        document.getElementById("cableSelectionModal").style.display = "none";
-    }
-    if (showSuccessAlert) {
-        const message = available.length === 1
-            ? "1 cabo foi adicionado ao plano de fusão."
-            : `${available.length} cabos foram adicionados ao plano de fusão.`;
-        showAlert("Sucesso", message);
-    }
-    return available.length;
-}
 
-function openCableSelectionModal() {
-        if (!activeMarkerForFusion) {
-        showAlert("Erro", "Nenhum marcador ativo para o plano de fusão.");
-        return;
-    }
-    const markerPosition = activeMarkerForFusion.marker.getPosition();
-    const listContainer = document.getElementById("connected-cables-list");
-    const deriveAllBtn = document.getElementById("deriveAllCablesButton");
-    listContainer.innerHTML = "";
-    const availableCables = getAvailableCablesForFusion(activeMarkerForFusion);
-    const canvas = document.getElementById("fusionCanvas");
-    availableCables.forEach((cable) => {
-        const fiberType = getFiberType(cable.type);
-        const fiberCount = fiberType ? parseInt(fiberType.split("-")[1], 10) : 0;
-        const role = getCableRoleAtMarker(cable, markerPosition, activeMarkerForFusion);
-        const roleLabel = getCableRoleLabel(role);
-        const roleClass = role === 'entrada' ? 'cable-role-entrada' : 'cable-role-saida';
-        const statusDisplay = getCableStatusDisplay(cable.status);
-        const cableOptionDiv = document.createElement("div");
-        cableOptionDiv.className = "cable-option";
-        cableOptionDiv.innerHTML = `
-                <div class="cable-option-main">
-                    <div class="cable-option-title-row">
-                        <span class="cable-name">${cable.name}</span>
-                        <span class="cable-status-pill status-pill ${statusDisplay.modifier}">${statusDisplay.label}</span>
-                    </div>
-                    <span class="cable-role ${roleClass}">${roleLabel}</span>
-                </div>
-                <span class="cable-fibers">${fiberCount} Fibras</span>
-            `;
-        cableOptionDiv.addEventListener("click", () => {
-            appendCableToFusionCanvas(cable, activeMarkerForFusion);
-            repackAllElements();
-            document.getElementById("cableSelectionModal").style.display = "none";
-        });
-        listContainer.appendChild(cableOptionDiv);
-    });
-    if (availableCables.length === 0) {
-        listContainer.innerHTML =
-        '<p class="no-cables-message">Nenhum cabo disponível para adicionar.</p>';
-    }
-    if (deriveAllBtn) {
-        deriveAllBtn.classList.toggle("hidden", availableCables.length === 0);
-        deriveAllBtn.disabled = availableCables.length === 0;
-    }
-    document.getElementById("cableSelectionModal").style.display = "flex";
-}
 
-//Criação visual de cabos no canvas de fusão
-function appendDerivationKitCheckbox(headerContent, cableObject, role) {
-    if (!activeMarkerForFusion || activeMarkerForFusion.type !== 'CEO') return;
-    const roleLabel = getCableRoleLabel(role);
 
-    let kitContainer = headerContent.querySelector('.derivation-kit-container');
-    if (kitContainer) {
-        const kitLabel = kitContainer.querySelector('label');
-        if (kitLabel) {
-            kitLabel.textContent = roleLabel ? `Kit Derivação — ${roleLabel}` : 'Kit Derivação';
-        }
-        return;
-    }
 
-    kitContainer = document.createElement('div');
-    kitContainer.className = 'derivation-kit-container';
-    const cableId = (cableObject?.name || 'cable').replace(/\s+/g, '-');
-    const checkboxId = `kit-${cableId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = checkboxId;
-    checkbox.className = 'derivation-kit-checkbox';
-    checkbox.onclick = () => handleDerivationKitToggle(checkbox);
-    const kitLabel = document.createElement('label');
-    kitLabel.htmlFor = checkboxId;
-    kitLabel.textContent = roleLabel ? `Kit Derivação — ${roleLabel}` : 'Kit Derivação';
-    kitContainer.appendChild(checkbox);
-    kitContainer.appendChild(kitLabel);
-    headerContent.insertBefore(kitContainer, headerContent.firstChild);
-}
 
-function ensureDerivationKitCheckboxesForCeo(canvas) {
-    if (!activeMarkerForFusion || activeMarkerForFusion.type !== 'CEO') return;
-    canvas.querySelectorAll('.cable-element').forEach((cableEl) => {
-        const header = cableEl.querySelector('.cable-header');
-        if (!header) return;
-        const headerContent = header.querySelector('div') || header;
-        const role = getCableRoleFromElement(cableEl);
-        if (role) cableEl.dataset.cableRole = role;
-        appendDerivationKitCheckbox(headerContent, { name: cableEl.dataset.cableName || 'cable' }, role);
-        const checkbox = headerContent.querySelector('.derivation-kit-checkbox');
-        if (checkbox) {
-            checkbox.onclick = () => handleDerivationKitToggle(checkbox);
-            if (checkbox.dataset.checked === 'true') checkbox.checked = true;
-        }
-    });
-}
 
-function normalizeFusionCablePointLabels(root = document) {
-    root.querySelectorAll('.cable-element .cable-header-name').forEach((span) => {
-        span.textContent = span.textContent
-            .replace('(Ponta B - Entrada)', '(Ponta A - Entrada)')
-            .replace('(Ponta A - Saída)', '(Ponta B - Saída)');
-    });
-}
 
-function createInteractiveCable(cableObject, role) {
-    //Cálculo de fibras e grupos
-    const fiberType = getFiberType(cableObject.type);
-    const fiberCount = fiberType ? parseInt(fiberType.split("-")[1], 10) : 0;
-    const numGroups = Math.ceil(fiberCount / 12);
-    //Elemento container principal
-    const cableContainer = document.createElement("div");
-    cableContainer.className = "cable-element";
-    cableContainer.dataset.cableName = cableObject.name;
-    cableContainer.dataset.cableRole = role;
-    cableContainer.dataset.cableStatus = cableObject.status || 'Novo';
-    //Configuração visual entrada saída
-    const sideClass = role === 'entrada' ? 'cable-entrada' : 'cable-saida';
-    const label = role === 'entrada' ? '(Ponta A - Entrada)' : '(Ponta B - Saída)';
-    cableContainer.classList.add(sideClass);
-    if (role === 'entrada') {
-        cableContainer.style.left = FUSION_LAYOUT.laneInset;
-    } else {
-        cableContainer.style.right = FUSION_LAYOUT.laneInset;
-    }
-    //Cabeçãlho do cabo
-    const header = document.createElement("div");
-    header.className = "cable-header";
-    const headerContent = document.createElement('div');
-    headerContent.style.cssText = 'display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; width: 100%;';
-    const titleRow = document.createElement('div');
-    titleRow.className = 'cable-header-title-row';
-    const titleSpan = document.createElement('span');
-    titleSpan.className = 'cable-header-name';
-    titleSpan.textContent = `${cableObject.name} ${label}`;
-    titleSpan.style.whiteSpace = 'normal';
-    titleSpan.style.wordBreak = 'break-word';
-    titleRow.appendChild(titleSpan);
-    titleRow.appendChild(createCableStatusPillElement(cableObject.status));
-    appendDerivationKitCheckbox(headerContent, cableObject, role);
-    //Botão de movimentação
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.flexShrink = '0'; 
-    const upButton = document.createElement('button');
-    upButton.type = 'button';
-    upButton.className = 'cable-move-up';
-    upButton.innerHTML = '&#9650;';
-    upButton.title = 'Mover para cima';
-    upButton.style.cssText = 'padding: 1px 5px; margin-left: 8px; cursor: pointer; font-size: 10px;';
-    const downButton = document.createElement('button');
-    downButton.type = 'button';
-    downButton.className = 'cable-move-down';
-    downButton.innerHTML = '&#9660;';
-    downButton.title = 'Mover para baixo';
-    downButton.style.cssText = 'padding: 1px 5px; margin-left: 4px; cursor: pointer; font-size: 10px;';
-    buttonContainer.appendChild(upButton);
-    buttonContainer.appendChild(downButton);
-    headerContent.appendChild(titleRow);
-    headerContent.appendChild(buttonContainer);
-    header.appendChild(headerContent);
-    cableContainer.appendChild(header);
-    const fibersContainer = document.createElement("div");
-    //Renderização das fibras
-    fibersContainer.className = "cable-fibers-container";
-    for (let groupIndex = 0; groupIndex < numGroups; groupIndex++) {
-        const groupNum = groupIndex + 1;
-        const groupColor = ABNT_GROUP_COLORS.colors[groupIndex] || ABNT_GROUP_COLORS.colors[2];
-        const groupName = ABNT_GROUP_COLORS.names[groupIndex] || ABNT_GROUP_COLORS.names[2];
-        const groupHeader = document.createElement('div');
-        groupHeader.className = 'group-header';
-        groupHeader.textContent = `Grupo ${groupNum} - ${groupName}`;
-        groupHeader.style.backgroundColor = groupColor;
-        if (groupColor === '#ffffff') {
-            groupHeader.style.color = '#333';
-            groupHeader.style.border = '1px solid #ddd';
-        }
-        fibersContainer.appendChild(groupHeader);
-        //Fibras individuais
-        for (let fiberIndex = 0; fiberIndex < 12; fiberIndex++) {
-            const absoluteFiberNumber = groupIndex * 12 + fiberIndex + 1;
-            if (absoluteFiberNumber > fiberCount) break;
-            const fiberRow = document.createElement("div");
-            fiberRow.className = "fiber-row connectable";
-            fiberRow.id = `cable-${cableObject.name.replace(/\s+/g, '-')}-fiber-${absoluteFiberNumber}`;
-            fiberRow.textContent = `Fibra ${absoluteFiberNumber}`;
-            const color = ABNT_FIBER_COLORS[fiberIndex];
-            fiberRow.style.backgroundColor = color;
-            if (color === '#ffffff' || color === '#ffc107') {
-                fiberRow.style.color = '#333';
-                fiberRow.style.textShadow = 'none'; 
-            }
 
-            fibersContainer.appendChild(fiberRow);
-        }
-    }
-    cableContainer.appendChild(fibersContainer);
-    //Botão de excluir cabo
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'delete-component-btn';
-    deleteBtn.innerHTML = '&times;';
-    deleteBtn.title = 'Excluir cabo';
-    deleteBtn.setAttribute('aria-label', 'Excluir cabo');
-    deleteBtn.onclick = () => handleDeleteCableFromFusion(deleteBtn);
-    cableContainer.appendChild(deleteBtn);
-    wireCableMoveControls(cableContainer);
-    makeDraggable(cableContainer);
-    return cableContainer;
-}
 
-//Movimentação vertical de cabos
-function moveCable(cableElement, direction) {
-    moveFusionElementVertical(cableElement, direction);
-}
 
-//Movimentação vertical dos Splitters
-function moveSplitterVertical(splitterElement, direction) {
-    moveFusionElementVertical(splitterElement, direction);
-}
-
-function wireCableMoveControls(cableElement) {
-    const header = cableElement?.querySelector('.cable-header');
-    if (!header) return;
-    let upButton = header.querySelector('.cable-move-up');
-    let downButton = header.querySelector('.cable-move-down');
-    if (!upButton || !downButton) {
-        const buttons = header.querySelectorAll('button');
-        upButton = buttons[0] || null;
-        downButton = buttons[1] || null;
-        if (upButton) upButton.classList.add('cable-move-up');
-        if (downButton) downButton.classList.add('cable-move-down');
-    }
-    if (upButton) {
-        upButton.type = 'button';
-        upButton.onclick = (e) => { e.stopPropagation(); moveCable(cableElement, 'up'); };
-    }
-    if (downButton) {
-        downButton.type = 'button';
-        downButton.onclick = (e) => { e.stopPropagation(); moveCable(cableElement, 'down'); };
-    }
-}
-
-function moveSplitterSide(splitterElement, side) {
-    if (!splitterElement || (side !== 'left' && side !== 'right')) return;
-    setSplitterSide(splitterElement, side);
-}
-
-//Posicionamento lateral de splitter
-function setSplitterSide(splitterElement, side) {
-    const canvas = document.getElementById('fusionCanvas');
-    if (!canvas) return;
-    const lanePosition = FUSION_LAYOUT.laneInset;
-    //Reseta posiçãoes para evitar conflito
-    splitterElement.style.right = 'auto';
-    splitterElement.style.left = 'auto';
-    splitterElement.style.transform = '';
-    if (side === 'left') {
-        splitterElement.style.left = lanePosition;
-    } else if (side === 'right') {
-        splitterElement.style.right = lanePosition;
-    }
-    //Tenta posicionar o splitter no topo e desce até encontrar um espaço livre, anti colisão
-    const verticalMargin = FUSION_LAYOUT.verticalGap;
-    let topPosition = FUSION_LAYOUT.topStart;
-    while (true) {
-        let collisionDetected = false;
-        splitterElement.style.top = `${topPosition}px`;
-        //Compara com todos os outros elementos do canvas
-        const existingElements = Array.from(canvas.querySelectorAll('.splitter-element, .cable-element')).filter(el => el !== splitterElement);
-        for (const existingEl of existingElements) {
-            if (checkCollision(splitterElement, existingEl)) {
-                //Se colidir, move o topo para baixo do elemento obstrutor
-                topPosition = existingEl.offsetTop + existingEl.offsetHeight + verticalMargin;
-                collisionDetected = true;
-                break;
-            }
-        }
-        if (!collisionDetected) {
-            break;
-        }
-    }
-    repackAllElements();
-}
 
 //Criação visual de splitter no canvas de fusão
 function getSplitterLabelText(splitterElement) {
@@ -2831,25 +2010,6 @@ function getSplitterOltValues(splitterElement) {
     };
 }
 
-function updateSplitterOltDisplay(splitterElement) {
-    if (!splitterElement) return;
-    const info = splitterElement.querySelector('.splitter-olt-info');
-    const button = splitterElement.querySelector('.splitter-olt-config-btn');
-    const { olt, placa, pon } = getSplitterOltValues(splitterElement);
-    const hasConfig = !!(olt || placa || pon);
-    const compactSummary = formatSplitterOltSummary(olt, placa, pon, { compact: true });
-    const fullSummary = formatSplitterOltSummary(olt, placa, pon);
-    if (info) {
-        info.textContent = compactSummary;
-        info.title = fullSummary;
-        info.classList.toggle('hidden', !hasConfig);
-    }
-    if (button) {
-        button.classList.toggle('is-configured', hasConfig);
-        button.title = hasConfig ? `Editar: ${fullSummary}` : 'Configurar OLT, Placa e PON';
-    }
-    splitterElement.classList.toggle('splitter-has-olt-config', hasConfig);
-}
 
 function openSplitterOltConfigModal(splitterElement) {
     if (!splitterElement) return;
@@ -2864,95 +2024,10 @@ function openSplitterOltConfigModal(splitterElement) {
     document.getElementById('splitterOltConfigModal').style.display = 'flex';
 }
 
-function applySplitterOltConfig() {
-    if (!activeSplitterForOltConfig) return;
-    const olt = document.getElementById('splitterConfigOlt').value.trim();
-    const placa = document.getElementById('splitterConfigPlaca').value.trim();
-    const pon = document.getElementById('splitterConfigPon').value.trim();
-    if (!olt && !placa && !pon) {
-        delete activeSplitterForOltConfig.dataset.oltName;
-        delete activeSplitterForOltConfig.dataset.placaNumber;
-        delete activeSplitterForOltConfig.dataset.ponNumber;
-    } else {
-        if (olt) activeSplitterForOltConfig.dataset.oltName = olt;
-        else delete activeSplitterForOltConfig.dataset.oltName;
-        if (placa) activeSplitterForOltConfig.dataset.placaNumber = placa;
-        else delete activeSplitterForOltConfig.dataset.placaNumber;
-        if (pon) activeSplitterForOltConfig.dataset.ponNumber = pon;
-        else delete activeSplitterForOltConfig.dataset.ponNumber;
-    }
-    updateSplitterOltDisplay(activeSplitterForOltConfig);
-    document.getElementById('splitterOltConfigModal').style.display = 'none';
-    const summary = formatSplitterOltSummary(olt, placa, pon);
-    showAlert('Sucesso', summary ? `Configuração salva: ${summary}` : 'Configuração de OLT/Placa/PON removida.');
-    activeSplitterForOltConfig = null;
-    repackAllElements();
-}
 
-function ensureSplitterMoveControlsWrapper(body) {
-    if (!body || body.querySelector('.splitter-move-controls')) return;
-    const moveButtons = body.querySelectorAll('.splitter-move-up, .splitter-move-down, .splitter-move-left, .splitter-move-right');
-    if (!moveButtons.length) return;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'splitter-move-controls';
-    moveButtons.forEach((button) => wrapper.appendChild(button));
-    body.appendChild(wrapper);
-}
 
-function ensureSplitterOltConfigUi(splitterElement) {
-    if (!splitterElement) return;
-    const body = splitterElement.querySelector('.splitter-body');
-    if (!body) return;
-    ensureSplitterMoveControlsWrapper(body);
-    if (!splitterElement.querySelector('.splitter-olt-config-btn')) {
-        const oldLabel = body.querySelector('.splitter-label-text')
-            || body.querySelector('span:not(.splitter-olt-info)');
-        if (!oldLabel) return;
-        oldLabel.classList.add('splitter-label-text');
-        const labelRow = document.createElement('div');
-        labelRow.className = 'splitter-label-row';
-        const oltConfigBtn = document.createElement('button');
-        oltConfigBtn.type = 'button';
-        oltConfigBtn.className = 'splitter-olt-config-btn';
-        oltConfigBtn.textContent = 'OLT';
-        oltConfigBtn.title = 'Configurar OLT, Placa e PON';
-        labelRow.appendChild(oldLabel);
-        labelRow.appendChild(oltConfigBtn);
-        let oltInfo = body.querySelector('.splitter-olt-info');
-        if (!oltInfo) {
-            oltInfo = document.createElement('span');
-            oltInfo.className = 'splitter-olt-info hidden';
-            const moveControls = body.querySelector('.splitter-move-controls');
-            if (moveControls) body.insertBefore(oltInfo, moveControls);
-            else body.appendChild(oltInfo);
-        }
-        body.insertBefore(labelRow, body.firstChild);
-    }
-    wireSplitterOltConfigButton(splitterElement);
-}
 
-function wireSplitterOltConfigButton(splitterElement) {
-    const button = splitterElement?.querySelector('.splitter-olt-config-btn');
-    if (!button) return;
-    button.onclick = (event) => {
-        event.stopPropagation();
-        openSplitterOltConfigModal(splitterElement);
-    };
-    updateSplitterOltDisplay(splitterElement);
-}
 
-function wireSplitterMoveControls(splitterElement) {
-    const body = splitterElement?.querySelector('.splitter-body');
-    if (!body) return;
-    const upButton = body.querySelector('.splitter-move-up');
-    const downButton = body.querySelector('.splitter-move-down');
-    const leftButton = body.querySelector('.splitter-move-left');
-    const rightButton = body.querySelector('.splitter-move-right');
-    if (upButton) upButton.onclick = (e) => { e.stopPropagation(); moveSplitterVertical(splitterElement, 'up'); };
-    if (downButton) downButton.onclick = (e) => { e.stopPropagation(); moveSplitterVertical(splitterElement, 'down'); };
-    if (leftButton) leftButton.onclick = (e) => { e.stopPropagation(); moveSplitterSide(splitterElement, 'left'); };
-    if (rightButton) rightButton.onclick = (e) => { e.stopPropagation(); moveSplitterSide(splitterElement, 'right'); };
-}
 
 function initSplitterOltConfigModal() {
     const modal = document.getElementById('splitterOltConfigModal');
@@ -2966,127 +2041,6 @@ function initSplitterOltConfigModal() {
     document.getElementById('confirmSplitterOltConfig')?.addEventListener('click', applySplitterOltConfig);
 }
 
-function createInteractiveSplitter(label, outputCount, status) {
-    //Container principal e id
-    const splitterContainer = document.createElement("div");
-    splitterContainer.className = "splitter-element";
-    const uniqueSplitterId = `splitter-${label.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`;
-    splitterContainer.id = uniqueSplitterId;
-    if (status) {
-        splitterContainer.dataset.status = status;
-    }
-    //Porta de entrada
-    const inputSide = document.createElement("div");
-    inputSide.className = "splitter-input";
-    const inputPort = document.createElement("div");
-    inputPort.className = "splitter-port-row connectable";
-    inputPort.id = `${uniqueSplitterId}-input-port`;
-    inputPort.innerHTML = `<span class="splitter-port-number">Entrada</span>`;
-    inputSide.appendChild(inputPort);
-    //Corpo central e botões de controle
-    const body = document.createElement("div");
-    body.className = "splitter-body";
-    body.style.cssText = "display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; box-sizing: border-box;";
-    const labelRow = document.createElement('div');
-    labelRow.className = 'splitter-label-row';
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'splitter-label-text';
-    labelSpan.textContent = label;
-    const oltConfigBtn = document.createElement('button');
-    oltConfigBtn.type = 'button';
-    oltConfigBtn.className = 'splitter-olt-config-btn';
-    oltConfigBtn.textContent = 'OLT';
-    oltConfigBtn.title = 'Configurar OLT, Placa e PON';
-    labelRow.appendChild(labelSpan);
-    labelRow.appendChild(oltConfigBtn);
-    const oltInfo = document.createElement('span');
-    oltInfo.className = 'splitter-olt-info hidden';
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'splitter-move-controls';
-    const upButton = document.createElement('button');
-    upButton.type = 'button';
-    upButton.className = 'splitter-move-up';
-    upButton.innerHTML = '&#9650;';
-    upButton.title = 'Mover para cima';
-    upButton.style.cssText = 'padding: 1px 5px; cursor: pointer; font-size: 10px;';
-    const downButton = document.createElement('button');
-    downButton.type = 'button';
-    downButton.className = 'splitter-move-down';
-    downButton.innerHTML = '&#9660;';
-    downButton.title = 'Mover para baixo';
-    downButton.style.cssText = 'padding: 1px 5px; margin-left: 4px; cursor: pointer; font-size: 10px;';
-    const leftButton = document.createElement('button');
-    leftButton.type = 'button';
-    leftButton.className = 'splitter-move-left';
-    leftButton.innerHTML = '&#9664;';
-    leftButton.title = 'Mover para a esquerda';
-    leftButton.style.cssText = 'padding: 1px 5px; margin-left: 4px; cursor: pointer; font-size: 10px;';
-    const rightButton = document.createElement('button');
-    rightButton.type = 'button';
-    rightButton.className = 'splitter-move-right';
-    rightButton.innerHTML = '&#9654;';
-    rightButton.title = 'Mover para a direita';
-    rightButton.style.cssText = 'padding: 1px 5px; margin-left: 4px; cursor: pointer; font-size: 10px;';
-    buttonContainer.appendChild(upButton);
-    buttonContainer.appendChild(downButton);
-    buttonContainer.appendChild(leftButton);
-    buttonContainer.appendChild(rightButton);
-    body.appendChild(labelRow);
-    body.appendChild(oltInfo);
-    body.appendChild(buttonContainer);
-    //Geração dinâmica de portas de saída
-    const outputSide = document.createElement("div");
-    outputSide.className = "splitter-outputs";
-    for (let i = 1; i <= outputCount; i++) {
-        const outputPort = document.createElement("div");
-        outputPort.className = "splitter-port-row connectable";
-        outputPort.id = `${uniqueSplitterId}-output-${i}`;
-        outputPort.innerHTML = `<span class="splitter-port-number">Porta ${i}</span>`;
-        outputSide.appendChild(outputPort);
-    }
-    //Montagem e botão de exclusão
-    splitterContainer.appendChild(inputSide);
-    splitterContainer.appendChild(body);
-    splitterContainer.appendChild(outputSide);
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'delete-component-btn';
-    deleteBtn.innerHTML = '&times;';
-    deleteBtn.title = 'Excluir splitter';
-    deleteBtn.setAttribute('aria-label', 'Excluir splitter');
-    deleteBtn.onclick = () => handleDeleteSplitter(deleteBtn);
-    splitterContainer.appendChild(deleteBtn);
-    wireSplitterMoveControls(splitterContainer);
-    wireSplitterOltConfigButton(splitterContainer);
-    //Lógica de posicionamento anti colisão
-    const canvas = document.getElementById('fusionCanvas');
-    const lanePosition = FUSION_LAYOUT.laneInset;
-    splitterContainer.style.left = lanePosition;
-    splitterContainer.style.transform = 'none';
-    splitterContainer.style.visibility = 'hidden'; 
-    canvas.appendChild(splitterContainer); 
-    const verticalMargin = FUSION_LAYOUT.verticalGap; 
-    let topPosition = FUSION_LAYOUT.topStart;
-    //Encontrar espaços livre verticalmente
-    while (true) {
-        let collisionDetected = false;
-        splitterContainer.style.top = `${topPosition}px`;
-        const existingElements = Array.from(canvas.querySelectorAll('.splitter-element, .cable-element')).filter(el => el !== splitterContainer);
-        for (const existingEl of existingElements) {
-            if (checkCollision(splitterContainer, existingEl)) {
-                topPosition = existingEl.offsetTop + existingEl.offsetHeight + verticalMargin;
-                collisionDetected = true;
-                break; 
-            }
-        }
-        if (!collisionDetected) {
-            break; 
-        }
-    }
-    splitterContainer.style.visibility = 'visible';
-    makeDraggable(splitterContainer);
-    return splitterContainer;
-}
 
 // Controle de cursor do mapa
 function setMapCursor(cursor) {
@@ -3153,19 +2107,15 @@ function getMapFocusPadding() {
 }
 
 function getMarkerHighlightRingIcon(markerInfo, emphasized = false) {
-    const baseSize = markerInfo.type === 'CASA'
-        ? DEFAULT_MARKER_SIZE
-        : (markerInfo.size || DEFAULT_MARKER_SIZE);
-    const typeScale = markerInfo.type === 'RESERVA' ? baseSize * 1.25 : baseSize;
-    const scaleFactor = emphasized ? 4 : 3.2;
+    const px = (markerInfo.type === 'CASA' || markerInfo.type === 'CLIENTE') ? 30 : getMarkerPixelSize(markerInfo.size);
     return {
         path: google.maps.SymbolPath.CIRCLE,
-        scale: Math.max(emphasized ? 12 : 10, typeScale * scaleFactor),
-        fillColor: '#93C572',
-        fillOpacity: emphasized ? 0.42 : 0.35,
-        strokeColor: '#82C8E5',
-        strokeWeight: emphasized ? 3.5 : 2.5,
-        strokeOpacity: 0.95,
+        scale: px / 2 + (emphasized ? 10 : 7),
+        fillColor: '#2dd4bf',
+        fillOpacity: emphasized ? 0.26 : 0.2,
+        strokeColor: '#0f766e',
+        strokeWeight: emphasized ? 3 : 2,
+        strokeOpacity: 0.9,
     };
 }
 
@@ -3275,6 +2225,10 @@ function isUnrecognizedImportedMarker(markerInfo) {
 
 function openMarkerFromUserAction(markerInfo) {
     if (!markerInfo) return;
+    if (markerInfo.type === 'CLIENTE') {
+        openClientModal(markerInfo);
+        return;
+    }
     if (isUnrecognizedImportedMarker(markerInfo)) {
         startMarkerAdjustment(markerInfo);
         return;
@@ -3308,7 +2262,6 @@ const MODAL_ENTER_PRIMARY_SELECTORS = {
     confirmModal: '#confirmModalConfirmButton',
     projectModal: '#confirmProjectButton',
     folderModal: '#confirmFolderButton',
-    markerModal: '#confirmMarker',
     searchModal: '#structuredSearchButton',
     addMaterialModal: '#confirmAddMaterial',
     editMaterialModal: '#confirmEditMaterial',
@@ -3320,7 +2273,6 @@ const MODAL_ENTER_PRIMARY_SELECTORS = {
     fusionModal: '#saveFusionPlan',
     splitterOltConfigModal: '#confirmSplitterOltConfig',
     reportPreviewModal: '#confirmReportPdfExportButton',
-    loadProjectModal: '#searchProjectsButton',
     observationsModal: '#saveObservationButton',
     lineActionModal: '#editLineButton',
     materialModal: '#saveMaterialChangesButton',
@@ -3330,12 +2282,14 @@ const MODAL_ENTER_PRIMARY_SELECTORS = {
 };
 
 const FLOATING_BOX_ENTER_ACTIONS = [
+    { boxId: 'markerModal', buttonSelector: '#confirmMarker' },
     { boxId: 'cableDrawingBox', buttonSelector: '#saveCableButton' },
     { boxId: 'polygonDrawingBox', buttonSelector: '#savePolygonButton' },
     { boxId: 'rulerBox', buttonSelector: '#cancelRulerButton' },
 ];
 
 const FLOATING_BOX_ESCAPE_ACTIONS = [
+    { boxId: 'markerModal', buttonSelector: '#closeModal' },
     { boxId: 'cableDrawingBox', buttonSelector: '#cancelCableButton' },
     { boxId: 'polygonDrawingBox', buttonSelector: '#cancelPolygonButton' },
     { boxId: 'rulerBox', buttonSelector: '#cancelRulerButton' },
@@ -3395,125 +2349,12 @@ function cloneMapLatLng(latLng) {
     return new google.maps.LatLng(latLng.lat(), latLng.lng());
 }
 
-function getMarkerEditorUiContext(markerType = editingMarkerInfo?.type) {
-    const isCasa = markerType === 'CASA';
-    return {
-        isCasa,
-        coordinatesText: document.getElementById(isCasa ? 'markerCoordinatesText' : 'infraMarkerCoordinatesText'),
-        positionRow: document.getElementById(isCasa ? 'casaPositionRow' : 'markerPositionRow'),
-        editPositionButton: document.getElementById('editPositionButton'),
-        balloonColorInput: document.getElementById('casaMarkerBalloonColor'),
-        labelColorInput: document.getElementById(isCasa ? 'casaMarkerLabelColor' : 'markerLabelColor'),
-    };
-}
 
-function setMarkerEditorCoordinatesText(markerType, lat, lng) {
-    const { coordinatesText } = getMarkerEditorUiContext(markerType);
-    if (coordinatesText) coordinatesText.textContent = `${lat}, ${lng}`;
-}
 
-function wireMarkerPositionEditButton(button) {
-    if (!button) return null;
-    const newButton = button.cloneNode(true);
-    button.parentNode.replaceChild(newButton, button);
-    newButton.addEventListener('click', startMarkerPositionEditSession);
-    return newButton;
-}
 
-function startMarkerPositionEditSession() {
-    if (!editingMarkerInfo) return;
-    const marker = editingMarkerInfo.marker;
-    const oldPosition = cloneMapLatLng(marker.getPosition());
-    if (oldPosition) {
-        map.panTo(oldPosition);
-        const z = map.getZoom();
-        if (!z || z < 15) map.setZoom(15);
-    }
-    highlightMapMarker(editingMarkerInfo, { persistent: true, emphasized: true });
-    document.getElementById("markerModal").style.display = "none";
-    marker.setDraggable(true);
-    markerPositionEditSession = {
-        originalPosition: oldPosition,
-        dragListener: null,
-        dragendListener: null,
-    };
-    const dragListener = marker.addListener('drag', () => {
-        const pos = marker.getPosition();
-        if (focusedMapMarkerInfo === editingMarkerInfo && focusedMapMarkerRing && pos) {
-            focusedMapMarkerRing.setPosition(pos);
-        }
-    });
-    const dragendListener = google.maps.event.addListenerOnce(marker, "dragend", () => {
-        if (markerPositionEditSession?.dragListener) {
-            google.maps.event.removeListener(markerPositionEditSession.dragListener);
-        }
-        markerPositionEditSession = null;
-        marker.setDraggable(false);
-        const newPosition = marker.getPosition();
-        if (focusedMapMarkerInfo === editingMarkerInfo && focusedMapMarkerRing && newPosition) {
-            focusedMapMarkerRing.setPosition(newPosition);
-        }
-        if (oldPosition && newPosition) {
-            updateCablesForMovedMarker(oldPosition, newPosition, editingMarkerInfo);
-        }
-        const newLat = newPosition.lat().toFixed(6);
-        const newLng = newPosition.lng().toFixed(6);
-        setMarkerEditorCoordinatesText(editingMarkerInfo.type, newLat, newLng);
-        document.getElementById("markerModal").style.display = "flex";
-    });
-    markerPositionEditSession.dragListener = dragListener;
-    markerPositionEditSession.dragendListener = dragendListener;
-}
 
-function restoreMarkerEditOriginPosition() {
-    if (!editingMarkerInfo || !markerEditOriginPosition) return;
-    const marker = editingMarkerInfo.marker;
-    const currentPosition = marker.getPosition();
-    if (!currentPosition) return;
 
-    const samePosition = Math.abs(currentPosition.lat() - markerEditOriginPosition.lat()) < 1e-9
-        && Math.abs(currentPosition.lng() - markerEditOriginPosition.lng()) < 1e-9;
-    if (samePosition) return;
 
-    updateCablesForMovedMarker(currentPosition, markerEditOriginPosition, editingMarkerInfo);
-    marker.setPosition(markerEditOriginPosition);
-    if (focusedMapMarkerInfo === editingMarkerInfo && focusedMapMarkerRing) {
-        focusedMapMarkerRing.setPosition(markerEditOriginPosition);
-    }
-}
-
-function finishMarkerPositionEditSession({ reopenModal = true } = {}) {
-    if (!editingMarkerInfo?.marker?.getDraggable?.()) return false;
-
-    const marker = editingMarkerInfo.marker;
-    const session = markerPositionEditSession;
-
-    if (session?.dragListener) google.maps.event.removeListener(session.dragListener);
-    if (session?.dragendListener) google.maps.event.removeListener(session.dragendListener);
-
-    const restorePosition = session?.originalPosition;
-    if (restorePosition) {
-        marker.setPosition(restorePosition);
-        if (focusedMapMarkerInfo === editingMarkerInfo && focusedMapMarkerRing) {
-            focusedMapMarkerRing.setPosition(restorePosition);
-        }
-        const lat = restorePosition.lat().toFixed(6);
-        const lng = restorePosition.lng().toFixed(6);
-        setMarkerEditorCoordinatesText(editingMarkerInfo.type, lat, lng);
-    }
-
-    marker.setDraggable(false);
-    markerPositionEditSession = null;
-    clearMapMarkerHighlight();
-    if (reopenModal) {
-        document.getElementById('markerModal').style.display = 'flex';
-    }
-    return true;
-}
-
-function cancelMarkerPositionEdit() {
-    return finishMarkerPositionEditSession({ reopenModal: true });
-}
 
 function cancelCableDrawingSession() {
     if (editingCableIndex !== null) {
@@ -3523,20 +2364,7 @@ function cancelCableDrawingSession() {
             originalCable.polyline.setVisible(true);
         }
     }
-    if (cablePolyline) cablePolyline.setMap(null);
-    cableMarkers.forEach((marker) => marker.setMap(null));
-    cableMarkers = [];
-    cablePath = [];
-    cableDistance = { lancamento: 0, reserva: 0, total: 0 };
-    suppressNextCableMapClick = false;
-    cableNameAutoFill = { endMarkerName: null, lastValue: null };
-    isDrawingCable = false;
-    setAllPolygonsClickable(true);
-    editingCableIndex = null;
-    document.getElementById("invertCableButton").classList.add("hidden");
-    document.getElementById("cableDrawingBox").classList.add("hidden");
-    document.getElementById("map").classList.remove("cursor-draw");
-    setMapCursor("");
+    finishCableDrawingUi();
 }
 
 function closeTopmostFloatingBox() {
@@ -3556,6 +2384,13 @@ function handleEscapeKey(event) {
     if (event.key !== 'Escape') return false;
 
     if (cancelMarkerPositionEdit()) return true;
+    if (typeof cancelClientDropEdit === 'function' && cancelClientDropEdit()) return true;
+    if (typeof cancelFusionArmFromEscape === 'function' && cancelFusionArmFromEscape()) return true;
+    if (isAddingMarker) {
+        resetMarkerModal();
+        adjustingKmlMarkerInfo = null;
+        return true;
+    }
 
     const topModal = getTopmostVisibleModal();
     if (topModal) {
@@ -3639,6 +2474,8 @@ function shouldIgnoreEnterForTarget(target, topModal) {
     if (!target) return true;
     if (target.isContentEditable) return true;
     if (target.tagName === 'TEXTAREA') return true;
+    //Formulários tratam o Enter com o próprio submit
+    if (target.closest?.('form')) return true;
     if (target.tagName === 'BUTTON') {
         if (!topModal) return true;
         const primaryButton = findPrimaryActionButton(topModal);
@@ -4135,62 +2972,6 @@ function addFolderWrapperDropListeners(wrapperLi) {
     });
 }
 
-//Salva o estado do projeto após o arraste
-function saveProjectElement(projectRootElement) {
-    if (!projectRootElement) {
-        console.warn("saveProjectElement foi chamada com um elemento nulo.");
-        return;
-    }
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-        console.error("Usuário não logado, não é possível salvar o projeto.");
-        return;
-    }
-    //Extração dos metadados DOM
-    const projectTitleDiv = projectRootElement.querySelector('.folder-title');
-    const projectUl = projectRootElement.querySelector('ul.subfolders'); // Garante que é o UL principal
-    if (!projectTitleDiv || !projectUl) {
-        console.error("Elemento de projeto inválido. Faltando .folder-title or ul.subfolders.", projectRootElement);
-        return;
-    }
-    const projectId = projectTitleDiv.dataset.folderId;
-    const projectName = projectTitleDiv.dataset.folderName;
-    console.log(`Salvando projeto (via D&D): ${projectName} (ID: ${projectId})`);
-    //Reconstrução da estrutura da sidebar JSOn
-    const sidebarStructure = {
-        id: projectUl.id,
-        name: projectTitleDiv.dataset.folderName,
-        city: projectTitleDiv.dataset.folderCity || null,
-        neighborhood: projectTitleDiv.dataset.folderNeighborhood || null,
-        type: projectTitleDiv.dataset.folderType,
-        isProject: true,
-        children: getSidebarStructureAsJSON(projectUl)
-    };
-    //Filtra e serializa apenas os elementos que pertencem ao projeto
-    const allFolderIds = getAllDescendantFolderIds(projectId);
-    const projectMarkers = markers.filter(m => allFolderIds.includes(m.folderId)).map(serializeMarker);
-    const projectCables = savedCables.filter(c => allFolderIds.includes(c.folderId)).map(serializeCable);
-    const projectPolygons = savedPolygons.filter(p => allFolderIds.includes(p.folderId)).map(serializePolygon);
-    //Monta o objeto final
-    const projectData = {
-        userId: currentUser.uid,
-        projectName: projectName,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(), // Recria o timestamp, como na sua função original
-        sidebar: sidebarStructure,
-        markers: projectMarkers,
-        cables: projectCables,
-        polygons: projectPolygons,
-        bom: projectBoms[projectId] || null
-    };
-    db.collection("users").doc(currentUser.uid).collection("projects").doc(projectId).set(projectData).then(() => {
-        console.log(`Projeto "${projectName}" salvo com sucesso (via D&D).`);
-    })
-    .catch((error) => {
-        console.error(`Erro ao salvar projeto "${projectName}": `, error);
-        showAlert("Erro de D&D", `Ocorreu um erro ao salvar o projeto "${projectName}".`);
-    });
-}
-
 //Evento drop em pastas
 function handleDropOnFolder(e, destinationUl) {
     //Recupera referências globais do item arrastado
@@ -4342,12 +3123,6 @@ function enableDropOnFolder(ul) {
 
 //Criação e edição de projetos
 function createProject() {
-    //Verifica a autenticação
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-        showAlert("Erro", "Você precisa estar logado para criar um projeto.");
-        return;
-    }
     //Captura do formulário
     const projectNameInput = document.getElementById("projectName");
     const projectCityInput = document.getElementById("projectCity");
@@ -4368,9 +3143,10 @@ function createProject() {
         editingFolderElement.dataset.folderNeighborhood = projectNeighborhood;
         editingFolderElement.dataset.folderType = projectType;
         editingFolderElement.querySelector('.folder-name-text').textContent = projectName;
+        const editedProjectRoot = editingFolderElement.closest('.folder');
         editingFolderElement = null;
         document.getElementById("projectModal").style.display = "none";
-        saveProjectToFirestore(); 
+        saveProjectElement(editedProjectRoot);
         return;
     }
     //Modo criação
@@ -4378,9 +3154,8 @@ function createProject() {
         showAlert("Erro", "Por favor, digite o nome do projeto.");
         return;
     }
-    //Cria referências e ID no firestore
-    const newProjectRef = db.collection("users").doc(currentUser.uid).collection("projects").doc();
-    const projectId = newProjectRef.id;
+    //ID do projeto (também usado como id da lista na sidebar)
+    const projectId = `proj_${crypto.randomUUID().replace(/-/g, '')}`;
     //Cria elemento visual na sidebar
     const template = document.getElementById('project-template');
     const clone = template.content.cloneNode(true);
@@ -4428,26 +3203,17 @@ function createProject() {
     //Adiciona ao DOM
     document.getElementById("sidebar").appendChild(clone);
     updateSidebarEmptyState();
-    //Persistência inicial no firestore
-    const minimalProjectData = {
-        userId: currentUser.uid,
-        projectName: projectName,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        sidebar: {
-                id: projectId, name: projectName, city: projectCity, neighborhood: projectNeighborhood,
-                type: projectType, isProject: true, children: []
-        },
-        markers: [], cables: [], polygons: []
-    };
-
-    newProjectRef.set(minimalProjectData).then(() => {
-        console.log("Documento do projeto criado com sucesso no Firestore com o ID:", projectId);
+    //Persistência inicial no banco
+    const projectRoot = document.getElementById(projectId).closest('.folder');
+    persistProject(projectRoot).then(() => {
         setActiveFolder(projectId);
         document.getElementById("projectModal").style.display = "none";
+        if (typeof rememberLastProject === 'function') rememberLastProject(projectId);
     }).catch(error => {
-        console.error("Erro ao criar documento inicial do projeto: ", error);
+        console.error("Erro ao criar o projeto no banco:", error);
         showAlert("Erro de Banco de Dados", "Não foi possível criar o projeto. Tente novamente.");
-        document.getElementById(projectId)?.closest('.folder')?.remove();
+        projectRoot?.remove();
+        updateSidebarEmptyState();
     });
 }
 
@@ -4463,9 +3229,10 @@ function createFolder() {
         }
         editingFolderElement.querySelector('.folder-name-text').textContent = folderName;
         editingFolderElement.dataset.folderName = folderName;
+        const editedProjectRoot = editingFolderElement.closest('.folder');
         editingFolderElement = null;
         document.getElementById("folderModal").style.display = "none";
-        saveProjectToFirestore();
+        saveProjectElement(editedProjectRoot);
         return;
     }
     //Modo criação
@@ -4594,7 +3361,6 @@ function setActiveFolder(id) {
     bomState = {};
 }
 
-//Gerenciamento de cliques no mapa - desenho de cabos
 function handleMapClick(event) {
     if (!isDrawingCable) return;
     if (suppressNextCableMapClick) {
@@ -4603,46 +3369,37 @@ function handleMapClick(event) {
     }
     //Impede criar pontos soltos no mapa
     if (cableMarkers.length === 0) {
-        showAlert("Aviso", "Para iniciar um cabo, clique em um marcador do tipo CEO, CTO, Reserva ou POP.");
+        showToast('Comece numa caixa', 'Clique em uma CEO, CTO, reserva ou POP para iniciar o cabo (ponta A).', 'progress');
         return;
     }
     const location = event.latLng;
     const lastMarker = cableMarkers[cableMarkers.length - 1];
-    const distanceToLast = google.maps.geometry.spherical.computeDistanceBetween(
-        location,
-        lastMarker.getPosition()
-    );
+    const distanceToLast = google.maps.geometry.spherical.computeDistanceBetween(location, lastMarker.getPosition());
     if (distanceToLast < 3) return;
-
     const marker = createCableDrawVertexMarker(location);
     cableMarkers.push(marker);
     wireCableVertexMarker(marker);
+    //A ponta B passa a ser este novo ponto
+    cableDrawAnchors.end = null;
     updatePolylineFromMarkers();
 }
 
-//Atualiza rótulos A/B e tamanho dos ícones após inserir ou remover vértices
+//Rótulos A/B e ícones dos vértices (pontas ancoradas ficam verdes)
 function updateCableVertexLabels() {
+    const lastIndex = cableMarkers.length - 1;
     cableMarkers.forEach((marker, i) => {
         const isFirst = i === 0;
-        const isLast = i === cableMarkers.length - 1;
-        let labelConfig = null;
-        let scale = 5;
-        if (isFirst) {
-            labelConfig = { text: "A", color: "black", fontWeight: "bold", fontSize: "12px" };
-            scale = 7;
-        } else if (isLast) {
-            labelConfig = { text: "B", color: "black", fontWeight: "bold", fontSize: "12px" };
-            scale = 7;
+        const isLast = i === lastIndex && lastIndex > 0;
+        if (!isFirst && !isLast) {
+            marker.setLabel(null);
+            marker.setIcon(getCableVertexIcon(false, false));
+            marker.setZIndex(1000);
+            return;
         }
-        marker.setLabel(labelConfig);
-        marker.setIcon({
-            path: google.maps.SymbolPath.CIRCLE,
-            scale,
-            fillColor: "#ffffff",
-            fillOpacity: 1,
-            strokeColor: "#000000",
-            strokeWeight: 1.5,
-        });
+        const anchored = !!resolveCableDrawEndpointForIndex(i, { snap: false });
+        marker.setLabel({ text: isFirst ? 'A' : 'B', color: anchored ? '#ffffff' : '#0f172a', fontWeight: '700', fontSize: '11px' });
+        marker.setIcon(getCableVertexIcon(true, anchored));
+        marker.setZIndex(1001);
     });
 }
 
@@ -4671,37 +3428,40 @@ function findCableVertexIndexNearPoint(clickLatLng, maxDistanceM = 14) {
 
 function removeCableVertexAtIndex(indexToDelete, options = {}) {
     if (indexToDelete < 0 || indexToDelete >= cableMarkers.length) return false;
-    if (cableMarkers.length <= 2) {
+    const minPoints = options.allowShort ? 0 : 2;
+    if (cableMarkers.length <= minPoints) {
         if (options.showAlert !== false) {
-            setTimeout(() => {
-                showAlert("Aviso", "O cabo precisa ter pelo menos dois pontos.");
-            }, 0);
+            showToast('Não foi possível remover', 'O cabo precisa ter pelo menos dois pontos.', 'progress');
         }
         return false;
     }
+    const wasLast = indexToDelete === cableMarkers.length - 1;
     cableMarkers[indexToDelete].setMap(null);
     cableMarkers.splice(indexToDelete, 1);
+    if (indexToDelete === 0) cableDrawAnchors.start = null;
+    if (wasLast) cableDrawAnchors.end = null;
+    if (cableMarkers.length === 0) cableNameAutoFill = { endMarkerName: null, lastValue: null };
     updatePolylineFromMarkers();
-    if (editingCableIndex !== null && options.showSaveHint) {
-        showAlert("Ponto removido", "O ponto foi removido. Salve o cabo para confirmar.");
-    }
     return true;
 }
 
 function handleMapRightClick(event) {
+    if (isSketchToolActive()) {
+        if (event.domEvent) suppressCableDrawBrowserMenu(event.domEvent);
+        undoSketchPoint();
+        return;
+    }
     if (!isDrawingCable) return;
     if (event.domEvent) {
         suppressCableDrawBrowserMenu(event.domEvent);
     }
     if (cableMarkers.length === 0) return;
-
     const vertexIndex = findCableVertexIndexNearPoint(event.latLng);
     if (vertexIndex !== -1) {
         removeCableVertexAtIndex(vertexIndex);
         return;
     }
-
-    removeCableVertexAtIndex(cableMarkers.length - 1);
+    undoCableVertex();
 }
 
 //Encontra o segmento mais próximo do clique e a posição interpolada para inserir um vértice
@@ -4735,19 +3495,7 @@ function findCablePolylineInsertInfo(clickLatLng) {
 }
 
 function insertCableVertexAtIndex(insertAtIndex, position) {
-    const marker = new google.maps.Marker({
-        position,
-        map,
-        draggable: true,
-        icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 5,
-            fillColor: "#ffffff",
-            fillOpacity: 1,
-            strokeColor: "#000000",
-            strokeWeight: 1.5,
-        },
-    });
+    const marker = createCableDrawVertexMarker(position);
     cableMarkers.splice(insertAtIndex, 0, marker);
     wireCableVertexMarker(marker);
 }
@@ -4765,7 +3513,7 @@ function setupCablePolylineClickInsert() {
 
 //Reserva técnica no ponto de ancoragem do cabo
 const KML_CABLE_ANCHOR_SNAP_DISTANCE_M = 30;
-const CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M = 20;
+const CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M = 8; //Ponta sem clique na caixa só encaixa se estiver a poucos metros
 
 function getCableDrawEndpointAnchorCandidates(folderId = activeFolderId) {
     const candidates = folderId
@@ -4774,17 +3522,13 @@ function getCableDrawEndpointAnchorCandidates(folderId = activeFolderId) {
     return candidates.filter((markerInfo) => isCableAnchorMarkerType(markerInfo.type));
 }
 
-function resolveCableDrawEndpointAnchor(point, folderId = activeFolderId, excludeMarker = null) {
+function resolveCableDrawEndpointAnchor(point, folderId = activeFolderId, excludeMarker = null, maxDistanceM = CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M) {
     if (!point) return null;
     let candidates = getCableDrawEndpointAnchorCandidates(folderId);
     if (excludeMarker) {
         candidates = candidates.filter((markerInfo) => markerInfo.marker !== excludeMarker.marker);
     }
-    return getAnchorMarkerAtPoint(
-        point,
-        CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M,
-        candidates
-    );
+    return getAnchorMarkerAtPoint(point, maxDistanceM, candidates);
 }
 
 function scheduleSuppressNextCableMapClick() {
@@ -4802,9 +3546,8 @@ function isSameCableAnchorMarker(markerA, markerB) {
     return markerA === markerB;
 }
 
-function getCableDrawStartAnchorMarker(folderId = activeFolderId) {
-    if (cableMarkers.length === 0) return null;
-    return resolveCableDrawEndpointAnchor(cableMarkers[0].getPosition(), folderId);
+function getCableDrawStartAnchorMarker() {
+    return resolveCableDrawEndpointForIndex(0, { snap: false });
 }
 
 //Preenche o nome do cabo com "tipo de fibra-nome do marcador da ponta B" (ex.: FO-12-Marcador)
@@ -4836,15 +3579,10 @@ function snapCableDrawVertexToNearestAnchor(vertexIndex, folderId = activeFolder
     return anchor;
 }
 
-function snapCableDrawEndpointsToAnchors(folderId = activeFolderId) {
-    let startAnchor = null;
-    let endAnchor = null;
-    if (cableMarkers.length >= 1) {
-        startAnchor = snapCableDrawVertexToNearestAnchor(0, folderId);
-    }
-    if (cableMarkers.length >= 2) {
-        endAnchor = snapCableDrawVertexToNearestAnchor(cableMarkers.length - 1, folderId, startAnchor);
-    }
+//Resolve as pontas: vale o marcador clicado; sem clique, só encaixa se estiver a poucos metros
+function snapCableDrawEndpointsToAnchors() {
+    const startAnchor = cableMarkers.length >= 1 ? resolveCableDrawEndpointForIndex(0, { snap: true }) : null;
+    const endAnchor = cableMarkers.length >= 2 ? resolveCableDrawEndpointForIndex(cableMarkers.length - 1, { snap: true, exclude: startAnchor }) : null;
     syncCablePathFromDrawMarkers();
     return { startAnchor, endAnchor };
 }
@@ -4854,59 +3592,56 @@ function createCableDrawVertexMarker(position) {
         position,
         map: map,
         draggable: true,
-        icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 5,
-            fillColor: "#ffffff",
-            fillOpacity: 1,
-            strokeColor: "#000000",
-            strokeWeight: 1,
-        },
+        zIndex: 1000,
+        icon: getCableVertexIcon(false, false),
     });
 }
 
 function handleAnchorMarkerClickDuringCableDraw(markerInfo) {
     scheduleSuppressNextCableMapClick();
-    if (!isCableAnchorMarkerType(markerInfo.type)) {
-        const message = cableMarkers.length === 0
-            ? "Cabos devem ser iniciados em um marcador do tipo CEO, CTO, Reserva ou POP."
-            : "O cabo deve finalizar em um marcador do tipo CEO, CTO, Reserva ou POP.";
-        showAlert("Aviso", message);
-        return;
-    }
     const markerPosition = markerInfo.marker.getPosition();
+    const isAnchor = isCableAnchorMarkerType(markerInfo.type);
+    const addVertexAt = (position) => {
+        const vertex = createCableDrawVertexMarker(position);
+        cableMarkers.push(vertex);
+        wireCableVertexMarker(vertex);
+    };
+    //Ponta A
     if (cableMarkers.length === 0) {
-        const cablePointMarker = createCableDrawVertexMarker(markerPosition);
-        cableMarkers.push(cablePointMarker);
-        wireCableVertexMarker(cablePointMarker);
+        if (!isAnchor) {
+            showToast('Comece numa caixa', 'O cabo começa em uma CEO, CTO, reserva ou POP.', 'progress');
+            return;
+        }
+        addVertexAt(markerPosition);
+        cableDrawAnchors.start = markerInfo;
         updatePolylineFromMarkers();
         return;
     }
-
-    const startAnchor = getCableDrawStartAnchorMarker(activeFolderId);
-    if (isSameCableAnchorMarker(startAnchor, markerInfo)) {
-        if (cableMarkers.length === 1) {
-            showAlert("Aviso", "Desenhe a rota no mapa antes de finalizar o cabo.");
-        } else {
-            showAlert("Aviso", "O cabo não pode iniciar e terminar no mesmo marcador.");
-        }
+    //Marcadores que não são ponta (cordoalha, casas, cliente) viram um ponto da rota
+    if (!isAnchor) {
+        addVertexAt(markerPosition);
+        cableDrawAnchors.end = null;
+        updatePolylineFromMarkers();
         return;
     }
-
+    const startAnchor = cableDrawAnchors.start || getCableDrawStartAnchorMarker();
+    if (isSameCableAnchorMarker(startAnchor, markerInfo)) {
+        showToast('Escolha outra caixa', cableMarkers.length === 1
+            ? 'Desenhe a rota no mapa antes de escolher a ponta B.'
+            : 'O cabo não pode começar e terminar na mesma caixa.', 'progress');
+        return;
+    }
+    //Só junta com o último ponto se ele já estiver praticamente sobre a caixa
     const lastMarker = cableMarkers[cableMarkers.length - 1];
-    const distanceToMarker = google.maps.geometry.spherical.computeDistanceBetween(
-        lastMarker.getPosition(),
-        markerPosition
-    );
-    if (distanceToMarker <= CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M) {
+    const distanceToMarker = google.maps.geometry.spherical.computeDistanceBetween(lastMarker.getPosition(), markerPosition);
+    if (distanceToMarker <= 2 && cableMarkers.length > 1) {
         lastMarker.setPosition(markerPosition);
     } else {
-        const cablePointMarker = createCableDrawVertexMarker(markerPosition);
-        cableMarkers.push(cablePointMarker);
-        wireCableVertexMarker(cablePointMarker);
+        addVertexAt(markerPosition);
     }
+    cableDrawAnchors.end = markerInfo;
     applyCableNameAutoFill(markerInfo.name);
-    showAlert("Ancorado!", `A ponta do cabo foi vinculada ao marcador "${markerInfo.name}".`);
+    showToast('Ponta B definida', `Cabo ancorado em "${markerInfo.name}". Confira o nome e salve.`);
     updatePolylineFromMarkers();
 }
 
@@ -4936,6 +3671,8 @@ function snapPointToNearestAnchorMarker(point, maxDistanceM = KML_CABLE_ANCHOR_S
 
 function assignCableAnchorMarkers(cable, startMarker, endMarker) {
     if (!cable) return;
+    cable.startAnchorUid = startMarker ? ensureMarkerUid(startMarker) : null;
+    cable.endAnchorUid = endMarker ? ensureMarkerUid(endMarker) : null;
     cable.startAnchorMarkerName = startMarker?.name || null;
     cable.endAnchorMarkerName = endMarker?.name || null;
     cable.startAnchorMarkerFolderId = startMarker?.folderId || null;
@@ -4973,27 +3710,26 @@ function resolveCableAnchorMarker(markerName, folderId, nearPoint = null) {
     return pickClosest(all);
 }
 
+//Encosta as pontas do cabo nos marcadores de ancoragem (pelo identificador; nome só em projetos antigos)
 function applyCableAnchorsToPath(cable) {
     if (!cable?.path?.length) return false;
+    const startMarker = resolveCableEndAnchor(cable, true);
+    const endMarker = cable.path.length > 1 ? resolveCableEndAnchor(cable, false) : null;
+    if (startMarker && endMarker && startMarker.marker === endMarker.marker) return false;
     let changed = false;
-    const startPoint = cable.path[0];
-    const endPoint = cable.path[cable.path.length - 1];
-    const startMarker = resolveCableAnchorMarker(cable.startAnchorMarkerName, cable.startAnchorMarkerFolderId, startPoint);
-    const endMarker = resolveCableAnchorMarker(cable.endAnchorMarkerName, cable.endAnchorMarkerFolderId, endPoint);
-    if (startMarker && endMarker && startMarker.marker === endMarker.marker) {
-        return false;
-    }
     if (startMarker) {
         cable.path[0] = startMarker.marker.getPosition();
         changed = true;
     }
-    if (endMarker && cable.path.length > 1) {
+    if (endMarker) {
         cable.path[cable.path.length - 1] = endMarker.marker.getPosition();
         changed = true;
     }
-    if (changed && cable.polyline) {
-        cable.polyline.setPath(cable.path);
+    //Projetos antigos: grava o identificador para não depender mais do nome
+    if (startMarker || endMarker) {
+        assignCableAnchorMarkers(cable, startMarker || null, endMarker || null);
     }
+    if (changed && cable.polyline) cable.polyline.setPath(cable.path);
     return changed;
 }
 
@@ -5025,6 +3761,8 @@ function captureCableAnchorsFromPath(cable) {
 
 function isCableConnectedToMarker(cable, markerInfo) {
     if (!cable?.path?.length || !markerInfo) return false;
+    if (markerInfo.uid && (cable.startAnchorUid === markerInfo.uid || cable.endAnchorUid === markerInfo.uid)) return true;
+    if (cable.startAnchorUid && cable.endAnchorUid) return false;
     const markerName = markerInfo.name;
     if (cable.startAnchorMarkerName === markerName || cable.endAnchorMarkerName === markerName) {
         return true;
@@ -5071,10 +3809,8 @@ function getReserveForMarker(markerInfo) {
 
 function getReserveForCableEndpoint(cable, isStart) {
     if (!cable?.path?.length) return 0;
-    const markerName = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
-    const folderId = isStart ? cable.startAnchorMarkerFolderId : cable.endAnchorMarkerFolderId;
     const point = isStart ? cable.path[0] : cable.path[cable.path.length - 1];
-    const markerInfo = resolveCableAnchorMarker(markerName, folderId, point)
+    const markerInfo = resolveCableEndAnchor(cable, isStart)
         || getAnchorMarkerAtPoint(point, 1, getAnchorMarkerCandidatesForFolder(cable.folderId));
     return getReserveForMarker(markerInfo);
 }
@@ -5215,19 +3951,17 @@ function getActiveProjectId() {
 
 //Atualização visual e cálculo de metragem do cabo
 function updatePolylineFromMarkers() {
-    //Atualiza o array de coordenadas e recria a polilinha
     cablePath = cableMarkers.map((marker) => marker.getPosition());
     if (cablePolyline) cablePolyline.setMap(null);
     const fiberType = document.getElementById("cableType").value;
-    const cor = getCableColor(fiberType);
-    const largura = parseInt(document.getElementById("cableWidth").value);
     cablePolyline = new google.maps.Polyline({
         path: cablePath,
         geodesic: true,
-        strokeColor: cor,
+        strokeColor: getCableColor(fiberType),
         strokeOpacity: 1.0,
-        strokeWeight: largura,
+        strokeWeight: parseInt(document.getElementById("cableWidth").value, 10) || 4,
         clickable: true,
+        zIndex: 50,
         map: map,
     });
     setupCablePolylineClickInsert();
@@ -5237,33 +3971,180 @@ function updatePolylineFromMarkers() {
         reserva: measurement.reserva,
         total: measurement.total
     };
-    document.getElementById("cableDrawnDistance").textContent = `Lançamento: ${measurement.lancamento} m`;
-    document.getElementById("cableReserveDistance").textContent = `Reserva: ${measurement.reserva} m`;
-    document.getElementById("cableTotalDistance").textContent = `Total: ${measurement.total} m`;
     if (isDrawingCable && cableMarkers.length > 0) {
         updateCableVertexLabels();
     }
+    updateCableDrawReadout();
+}
+
+let cableDrawAnchors = { start: null, end: null }; //Marcadores clicados como ponta A e ponta B
+
+//Ícone dos vértices do cabo em desenho
+function getCableVertexIcon(isEndpoint, anchored) {
+    return {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: isEndpoint ? 8 : 4.5,
+        fillColor: anchored ? '#16a34a' : '#ffffff',
+        fillOpacity: 1,
+        strokeColor: anchored ? '#ffffff' : '#0f172a',
+        strokeWeight: isEndpoint ? 2 : 1.5,
+    };
+}
+
+//Marcador de ancoragem de uma ponta: o clicado (se o ponto ainda estiver nele) ou o mais próximo a poucos metros
+function resolveCableDrawEndpointForIndex(index, { snap = false, exclude = null } = {}) {
+    const vertex = cableMarkers[index];
+    if (!vertex) return null;
+    const isStart = index === 0;
+    const explicit = isStart ? cableDrawAnchors.start : cableDrawAnchors.end;
+    const position = vertex.getPosition();
+    if (explicit?.marker?.getMap() && markers.includes(explicit)) {
+        const distance = google.maps.geometry.spherical.computeDistanceBetween(position, explicit.marker.getPosition());
+        if (distance < 1.5) {
+            if (snap) vertex.setPosition(explicit.marker.getPosition());
+            return explicit;
+        }
+    }
+    const nearby = resolveCableDrawEndpointAnchor(position, activeFolderId, exclude);
+    if (nearby && snap) vertex.setPosition(nearby.marker.getPosition());
+    return nearby;
+}
+
+//Marcador de ancoragem salvo de uma ponta do cabo
+function resolveCableEndAnchor(cable, isStart) {
+    const uid = isStart ? cable.startAnchorUid : cable.endAnchorUid;
+    if (uid) {
+        const byUid = markers.find(m => m.uid === uid && m.marker);
+        if (byUid) return byUid;
+    }
+    const name = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
+    if (!name || !cable.path?.length) return null;
+    const point = isStart ? cable.path[0] : cable.path[cable.path.length - 1];
+    const folderId = isStart ? cable.startAnchorMarkerFolderId : cable.endAnchorMarkerFolderId;
+    const byName = resolveCableAnchorMarker(name, folderId || cable.folderId, point);
+    if (!byName) return null;
+    //Nunca "puxa" a ponta para um marcador distante só porque o nome é igual
+    const distance = google.maps.geometry.spherical.computeDistanceBetween(point, byName.marker.getPosition());
+    return distance <= KML_CABLE_ANCHOR_SNAP_DISTANCE_M ? byName : null;
+}
+
+//Mantém o nome gravado nos cabos quando o marcador é renomeado
+function syncCableAnchorNamesForMarker(markerInfo) {
+    if (!markerInfo?.uid) return;
+    savedCables.forEach(cable => {
+        if (cable.startAnchorUid === markerInfo.uid) cable.startAnchorMarkerName = markerInfo.name;
+        if (cable.endAnchorUid === markerInfo.uid) cable.endAnchorMarkerName = markerInfo.name;
+    });
+}
+
+function undoCableVertex() {
+    if (!isDrawingCable || cableMarkers.length === 0) return;
+    const allowShort = editingCableIndex === null;
+    removeCableVertexAtIndex(cableMarkers.length - 1, { allowShort, showAlert: !allowShort });
+}
+
+//Painel do cabo: leituras, pontas e controles
+function updateCableDrawReadout() {
+    const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const hasPoints = cableMarkers.length > 0;
+    const startAnchor = hasPoints ? resolveCableDrawEndpointForIndex(0) : null;
+    const endAnchor = cableMarkers.length > 1 ? resolveCableDrawEndpointForIndex(cableMarkers.length - 1, { exclude: startAnchor }) : null;
+    setText('cableTotalDistance', `${cableDistance.total || 0} m`);
+    setText('cableDrawnDistance', `${cableDistance.lancamento || 0} m`);
+    setText('cableReserveDistance', `${cableDistance.reserva || 0} m`);
+    setText('cablePoleEstimate', String(cableDistance.lancamento ? Math.ceil(cableDistance.lancamento / getPoleSpanDistance()) + 1 : 0));
+    setText('cableVertexCount', `${cableMarkers.length} ponto${cableMarkers.length === 1 ? '' : 's'}`);
+    setText('cableEndAName', startAnchor ? startAnchor.name : 'Clique em uma caixa');
+    setText('cableEndBName', endAnchor ? endAnchor.name : (cableMarkers.length > 1 ? 'Clique na caixa de destino' : '—'));
+    document.getElementById('cableEndA')?.classList.toggle('is-anchored', !!startAnchor);
+    document.getElementById('cableEndB')?.classList.toggle('is-anchored', !!endAnchor);
+    const help = document.getElementById('cableHelp');
+    if (help) {
+        help.innerHTML = !hasPoints
+            ? 'Clique em uma <strong>CEO, CTO, reserva ou POP</strong> para iniciar o cabo (ponta A).'
+            : (!endAnchor
+                ? 'Clique no mapa seguindo os postes e termine clicando na <strong>caixa de destino</strong> (ponta B). Clique na linha para inserir um ponto; clique direito desfaz.'
+                : 'Rota pronta. Arraste os pontos para ajustar ou clique em <strong>Salvar cabo</strong>.');
+    }
+    const saveButton = document.getElementById('saveCableButton');
+    if (saveButton) saveButton.disabled = !(startAnchor && endAnchor);
+    const undoButton = document.getElementById('undoCableVertexButton');
+    if (undoButton) undoButton.disabled = !hasPoints;
+    syncCablePanelControls();
+}
+
+function syncCablePanelControls() {
+    const type = document.getElementById('cableType').value;
+    const color = getCableColor(type);
+    document.getElementById('cableTypeLabel').textContent = type;
+    document.querySelectorAll('#cableTypeSwatches button').forEach(b => b.classList.toggle('is-active', b.dataset.value === type));
+    document.querySelectorAll('#cableStatusSegmented button').forEach(b => b.classList.toggle('is-active', b.dataset.value === document.getElementById('cableStatusSelect').value));
+    document.querySelectorAll('#cableASSegmented button').forEach(b => b.classList.toggle('is-active', b.dataset.value === document.getElementById('cableASType').value));
+    document.getElementById('cableWidthValue').textContent = document.getElementById('cableWidth').value;
+    const icon = document.getElementById('cablePanelIcon');
+    if (icon) icon.style.setProperty('--cable-color', color);
+}
+
+function setupCablePanelControls() {
+    const swatches = document.getElementById('cableTypeSwatches');
+    if (swatches && !swatches.children.length) {
+        Array.from(document.getElementById('cableType').options).forEach(option => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.value = option.value;
+            button.title = option.textContent;
+            button.style.setProperty('--swatch', getCableColor(option.value));
+            button.innerHTML = `<span class="fiber-swatches__dot"></span>${option.value.replace('FO-', '')}`;
+            swatches.appendChild(button);
+        });
+    }
+    const bindSegmented = (groupId, selectId) => {
+        document.querySelectorAll(`#${groupId} button`).forEach(button => {
+            button.addEventListener('click', () => {
+                const select = document.getElementById(selectId);
+                select.value = button.dataset.value;
+                select.dispatchEvent(new Event('change'));
+                syncCablePanelControls();
+            });
+        });
+    };
+    bindSegmented('cableTypeSwatches', 'cableType');
+    bindSegmented('cableStatusSegmented', 'cableStatusSelect');
+    bindSegmented('cableASSegmented', 'cableASType');
+    document.getElementById('cableWidth').addEventListener('input', () => {
+        if (cablePolyline && isDrawingCable) cablePolyline.setOptions({ strokeWeight: parseInt(document.getElementById('cableWidth').value, 10) });
+        syncCablePanelControls();
+    });
+    document.getElementById('undoCableVertexButton').addEventListener('click', undoCableVertex);
+    document.getElementById('closeCablePanelButton').addEventListener('click', cancelCableDrawingSession);
+}
+
+function openCablePanel({ title, subtitle }) {
+    document.getElementById('cablePanelTitle').textContent = title;
+    document.getElementById('cablePanelSubtitle').textContent = subtitle;
+    document.getElementById("cableDrawingBox").classList.remove("hidden");
+    updateCableDrawReadout();
 }
 
 //Ferramenta de desenho do cabo
 function startDrawingCable() {
-    //Inicialização do modo desenho
     isDrawingCable = true;
-    setAllPolygonsClickable(false); // Bloqueia clicques em polígonos
+    setAllPolygonsClickable(false);
+    setAllCablesClickable(false);
     cablePath = [];
+    cableMarkers.forEach((marker) => marker.setMap(null));
+    cableMarkers = [];
+    cableDrawAnchors = { start: null, end: null };
     cableDistance = { lancamento: 0, reserva: 0, total: 0 };
-    //Limpa linha temporária anteriror e exibe painel de desenho
     if (cablePolyline) cablePolyline.setMap(null);
-    const cableBox = document.getElementById("cableDrawingBox");
-    cableBox.classList.remove("hidden");
+    cablePolyline = null;
     document.getElementById("cableStatusSelect").value = currentCableStatus;
-    document.getElementById("cableDrawnDistance").textContent = "Lançamento: 0 m";
-    document.getElementById("cableReserveDistance").textContent = "Reserva: 0 m";
-    document.getElementById("cableTotalDistance").textContent = "Total: 0 m";
     document.getElementById("cableName").value = "";
     cableNameAutoFill = { endMarkerName: null, lastValue: null };
     document.getElementById("cableWidth").value = getDefaultCableWidthForStatus(currentCableStatus);
-    //Altera cursor para mira
+    document.getElementById("deleteCableButton").classList.add("hidden");
+    document.getElementById("invertCableButton").classList.add("hidden");
+    openCablePanel({ title: 'Novo cabo', subtitle: 'Da ponta A até a ponta B' });
     document.getElementById("map").classList.add("cursor-draw");
     setMapCursor("crosshair");
 }
@@ -5282,111 +4163,117 @@ document.getElementById("drawCableButton").addEventListener("click", () => {
         showAlert("Atenção", "Finalize a ação atual antes de adicionar outro marcador ou cabo.");
         return;
     }
-    //Exige uma pasta
     if (!activeFolderId) {
         showAlert("Atenção", "Selecione uma pasta para salvar o cabo.");
         return;
     }
-    document.getElementById("cableStatusSelectionModal").style.display = "flex";
+    if (isMeasuring) stopRuler();
+    if (isDrawingPolygon) cancelPolygonDrawing();
+    if (isMarkerPanelOpen()) resetMarkerModal();
+    currentCableStatus = 'Novo';
+    startDrawingCable();
 });
+
+function finishCableDrawingUi() {
+    cableMarkers.forEach((marker) => marker.setMap(null));
+    cableMarkers = [];
+    cablePath = [];
+    cableDistance = { lancamento: 0, reserva: 0, total: 0 };
+    cableDrawAnchors = { start: null, end: null };
+    cableNameAutoFill = { endMarkerName: null, lastValue: null };
+    suppressNextCableMapClick = false;
+    editingCableIndex = null;
+    isDrawingCable = false;
+    if (cablePolyline) cablePolyline.setMap(null);
+    cablePolyline = null;
+    setAllPolygonsClickable(true);
+    setAllCablesClickable(true);
+    document.getElementById("invertCableButton").classList.add("hidden");
+    document.getElementById("deleteCableButton").classList.add("hidden");
+    document.getElementById("cableDrawingBox").classList.add("hidden");
+    document.getElementById("map").classList.remove("cursor-draw");
+    setMapCursor("");
+}
 
 //Salvar cabo
 document.getElementById("saveCableButton").addEventListener("click", () => {
-    //Captura dos dados
     const name = document.getElementById("cableName").value.trim();
     const asType = document.getElementById("cableASType").value;
     const newFiberTypeSelection = document.getElementById("cableType").value;
     const fullCableType = `Cabo ${asType} ${newFiberTypeSelection}`;
     const cor = getCableColor(newFiberTypeSelection);
-    const largura = parseInt(document.getElementById("cableWidth").value);
+    const largura = parseInt(document.getElementById("cableWidth").value, 10) || 4;
     const cableStatus = document.getElementById("cableStatusSelect").value || "Novo";
-    //Validação de integridade para edição
+    //Não troca o tipo de fibra de um cabo que já tem fusões
     if (editingCableIndex !== null) {
         const originalCable = savedCables[editingCableIndex];
-        const originalFiberType = getFiberType(originalCable.type);
-        const newFiberType = getFiberType(fullCableType);
-        if (originalFiberType !== newFiberType) {
+        if (getFiberType(originalCable.type) !== getFiberType(fullCableType)) {
             const usage = checkCableUsageInFusionPlans(originalCable);
             if (usage.hasFusions) {
-                showAlert("Ação Bloqueada",`Não é possível alterar o tipo do cabo "${originalCable.name}" porque ele possui fusões ativas na(s) caixa(s): ${usage.locations.join(', ')}. Por favor, remova as fusões deste cabo antes de alterar seu tipo.`);
+                showAlert("Ação bloqueada", `Não é possível alterar o tipo do cabo "${originalCable.name}" porque ele tem fusões na(s) caixa(s): ${usage.locations.join(', ')}. Remova as fusões deste cabo antes de alterar o tipo.`);
                 return;
             }
         }
     }
-    //Validações básicas
     if (!name) {
-        showAlert("Erro", "Digite um nome para o cabo.");
+        showToast('Falta o nome', 'Digite um nome para o cabo.', 'progress');
+        document.getElementById("cableName").focus();
         return;
     }
     if (cablePath.length < 2) {
-        showAlert("Erro", "Desenhe pelo menos dois pontos.");
+        showToast('Rota incompleta', 'Desenhe pelo menos dois pontos.', 'progress');
         return;
     }
-    const { startAnchor, endAnchor } = snapCableDrawEndpointsToAnchors(activeFolderId);
+    const { startAnchor, endAnchor } = snapCableDrawEndpointsToAnchors();
     updatePolylineFromMarkers();
     if (!startAnchor) {
-        showAlert("Erro", "O cabo deve iniciar em um marcador do tipo CEO, CTO, Reserva ou POP.");
+        showAlert("Ponta A sem caixa", "O cabo deve começar em uma CEO, CTO, reserva ou POP.");
         return;
     }
     if (!endAnchor) {
-        showAlert("Erro", "O cabo deve finalizar em um marcador do tipo CEO, CTO, Reserva ou POP. Clique em um marcador válido para terminar o desenho antes de salvar.");
+        showAlert("Ponta B sem caixa", "Termine o cabo clicando em uma CEO, CTO, reserva ou POP antes de salvar.");
         return;
     }
     if (isSameCableAnchorMarker(startAnchor, endAnchor)) {
-        showAlert("Erro", "O cabo não pode iniciar e terminar no mesmo marcador.");
+        showAlert("Pontas iguais", "O cabo não pode começar e terminar na mesma caixa.");
         return;
     }
-    const routeLength = google.maps.geometry.spherical.computeLength(cablePath);
-    if (routeLength < 1) {
-        showAlert("Erro", "Desenhe a rota do cabo com pontos intermediários antes de salvar.");
+    if (google.maps.geometry.spherical.computeLength(cablePath) < 1) {
+        showToast('Rota incompleta', 'Desenhe a rota do cabo antes de salvar.', 'progress');
         return;
     }
-    //Processamento - edição/criação
     if (editingCableIndex !== null) {
-        //Atualiza cabos existentes
         const cabo = savedCables[editingCableIndex];
         const oldName = cabo.name;
-        const newName = name;
-        //Atualiza propriedades
-        cabo.name = newName; 
+        cabo.name = name;
         cabo.type = fullCableType;
         cabo.color = cor;
         cabo.width = largura;
         cabo.path = [...cablePath];
-        cabo.lancamento = cableDistance.lancamento;
-        cabo.reserva = cableDistance.reserva;
-        cabo.totalLength = cableDistance.total;
         cabo.status = cableStatus;
-        cabo.polyline.setOptions({
-        strokeColor: cor,
-        strokeWeight: largura,
-        });
-        cabo.polyline.setPath(cablePath);
-        captureCableAnchorsFromPath(cabo);
-        //Atualiza a sidebar
+        assignCableAnchorMarkers(cabo, startAnchor, endAnchor);
+        const measurement = calculateCableMeasurement(cabo);
+        cabo.lancamento = measurement.lancamento;
+        cabo.reserva = measurement.reserva;
+        cabo.totalLength = measurement.total;
+        cabo.polyline.setOptions({ strokeColor: cor, strokeWeight: largura });
+        cabo.polyline.setPath(cabo.path);
         updateCableSidebarLabel(cabo);
-        //Remove status de importado
         if (cabo.isImported) {
-            const adjustBtn = cabo.item.querySelector('.adjust-kml-btn');
-            if (adjustBtn) {
-                adjustBtn.remove();
-            }
+            cabo.item.querySelector('.adjust-kml-btn')?.remove();
             cabo.item.querySelector('.kml-status-btn')?.remove();
             cabo.isImported = false;
             wireCableSidebarClick(cabo);
         }
-        cabo.polyline.setVisible(true); 
-        if (cablePolyline) cablePolyline.setMap(null);
-        //Propaga mudança de nome para as fusões
-        if (oldName !== newName) {
-            updateCableNameInAllFusionPlans(oldName, newName);
-        }
+        cabo.polyline.setVisible(true);
+        if (oldName !== name) updateCableNameInAllFusionPlans(oldName, name);
+        finishCableDrawingUi();
         refreshBomAfterProjectChange();
-        showAlert("Sucesso", "Cabo atualizado com sucesso!");
+        refreshClientDrops({ recompute: true });
+        showToast('Cabo atualizado', `"${name}" · ${cabo.totalLength} m`);
+        return;
     }
-    else {
-        //Criação de um novo cabo
-        const polyline = new google.maps.Polyline({
+    const polyline = new google.maps.Polyline({
         path: cablePath,
         geodesic: true,
         strokeColor: cor,
@@ -5394,130 +4281,84 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
         strokeWeight: largura,
         clickable: true,
         map: map,
-        });
-        //Cria elemento DOM para a sidebar
-        const nameSpan = document.createElement("span");
-        nameSpan.className = 'item-name';
-        nameSpan.textContent = `${name} (${currentCableStatus}) - ${cableDistance.total}m`;
-        nameSpan.style.cursor = "pointer";
-        const item = buildGeProMapItemRow(nameSpan, polyline, 'ge-icon-path', cor);
-        const parentUl = document.getElementById(activeFolderId);
-        enableDropOnFolder(parentUl);
-        parentUl.appendChild(item);
-        const newCableInfo = {
-            folderId: activeFolderId,
-            name,
-            type: fullCableType,
-            width: largura,
-            color: cor,
-            path: [...cablePath],
-            polyline,
-            item,
-            status: cableStatus,
-            lancamento: cableDistance.lancamento,
-            reserva: cableDistance.reserva,
-            totalLength: cableDistance.total,
-            surchargePercent: 0,
-        };
-        captureCableAnchorsFromPath(newCableInfo);
-        applyCableSidebarColorStyles(newCableInfo);
-        savedCables.push(newCableInfo);
-        //Listeners para edição
-        nameSpan.addEventListener("click", () => openCableEditor(newCableInfo));
-        polyline.addListener("click", () => openCableEditor(newCableInfo));
-        const newCableIndex = savedCables.length - 1;
-        addCableEventListeners(polyline);
-        if (cablePolyline) cablePolyline.setMap(null);
-        refreshBomAfterProjectChange();
-        showAlert("Sucesso", "Cabo salvo com sucesso!");
-    }
-    //Limpesa e reset de estado
-    cableMarkers.forEach((marker) => marker.setMap(null));
-    cableMarkers = [];
-    cablePath = [];
-    cableDistance = { lancamento: 0, reserva: 0, total: 0 };
-    suppressNextCableMapClick = false;
-    editingCableIndex = null;
-    isDrawingCable = false;
-    //Ajuste na interface
-    setAllPolygonsClickable(true);
-    document.getElementById("invertCableButton").classList.add("hidden");
-    document.getElementById("cableDrawingBox").classList.add("hidden");
-    document.getElementById("map").classList.remove("cursor-draw");
-    setMapCursor("");
+    });
+    const nameSpan = document.createElement("span");
+    nameSpan.className = 'item-name';
+    nameSpan.style.cursor = "pointer";
+    const item = buildGeProMapItemRow(nameSpan, polyline, 'ge-icon-path', cor);
+    const parentUl = document.getElementById(activeFolderId);
+    enableDropOnFolder(parentUl);
+    parentUl.appendChild(item);
+    const newCableInfo = {
+        folderId: activeFolderId,
+        name,
+        type: fullCableType,
+        width: largura,
+        color: cor,
+        path: [...cablePath],
+        polyline,
+        item,
+        status: cableStatus,
+        surchargePercent: 0,
+    };
+    assignCableAnchorMarkers(newCableInfo, startAnchor, endAnchor);
+    const measurement = calculateCableMeasurement(newCableInfo);
+    newCableInfo.lancamento = measurement.lancamento;
+    newCableInfo.reserva = measurement.reserva;
+    newCableInfo.totalLength = measurement.total;
+    updateCableSidebarLabel(newCableInfo);
+    savedCables.push(newCableInfo);
+    wireCableSidebarClick(newCableInfo);
+    addCableEventListeners(polyline);
+    finishCableDrawingUi();
+    refreshBomAfterProjectChange();
+    refreshClientDrops({ recompute: true });
+    showToast('Cabo salvo', `"${name}" · ${newCableInfo.totalLength} m`);
 });
 
-//Editor de cabos
 function openCableEditor(cabo) {
-    //Validação e controle visual
     const index = savedCables.indexOf(cabo);
     if (index === -1) {
         showAlert("Erro", "Não foi possível encontrar o cabo para edição.");
         return;
     }
-    //Restaura visibilidade de cabo anterior se houver troca de edição
-    if (editingCableIndex !== null && editingCableIndex !== index) {
-        const originalCable = savedCables[editingCableIndex];
-        if (originalCable && originalCable.polyline) {
-            originalCable.polyline.setVisible(true);
-        }
+    //Não troca de cabo no meio de um desenho: isso fazia o cabo em edição sumir
+    if (isDrawingCable) {
+        if (editingCableIndex === index) return;
+        showToast('Cabo em edição', 'Salve ou cancele o cabo atual antes de abrir outro.', 'progress');
+        return;
     }
-    if (cabo && cabo.polyline) {
-        cabo.polyline.setVisible(false);
-    }
-    //Preenchimento do formulário
+    if (isAddingMarker || isSketchToolActive()) return;
+    if (isMarkerPanelOpen()) resetMarkerModal();
+    cabo.polyline?.setVisible(false);
     document.getElementById("cableName").value = cabo.name;
-    //Separação por AS
     const typeParts = cabo.type.split(' ');
     if (typeParts.length >= 4) {
         document.getElementById("cableASType").value = `${typeParts[1]} ${typeParts[2]}`;
         document.getElementById("cableType").value = typeParts[3];
-    } else {
-        document.getElementById("cableType").value = cabo.type;
+    } else if (getFiberType(cabo.type)) {
+        document.getElementById("cableType").value = getFiberType(cabo.type);
     }
-    //Exibir botões de ação
-    document.getElementById("cableWidth").value = cabo.width;
+    document.getElementById("cableWidth").value = cabo.width || getDefaultCableWidthForStatus(cabo.status);
+    document.getElementById("cableStatusSelect").value = cabo.status || "Novo";
     document.getElementById("deleteCableButton").classList.remove("hidden");
     document.getElementById("invertCableButton").classList.remove("hidden");
-    document.getElementById("cableStatusSelect").value = cabo.status || "Novo";
-    //Recriação dos vértices no mapa
-    cablePath = [...cabo.path];
+    applyCableAnchorsToPath(cabo);
+    cableDrawAnchors = { start: resolveCableEndAnchor(cabo, true), end: resolveCableEndAnchor(cabo, false) };
+    cableNameAutoFill = { endMarkerName: null, lastValue: null };
     cableMarkers.forEach((marker) => marker.setMap(null));
     cableMarkers = [];
-    cablePath.forEach((position, i) => {
-        let markerLabel = null;
-        let markerIconScale = 5;
-        if (i === 0) {
-            markerLabel = "A";
-            markerIconScale = 7;
-        } else if (i === cablePath.length - 1) {
-            markerLabel = "B";
-            markerIconScale = 7;
-        }
-        const marker = new google.maps.Marker({
-            position,
-            map,
-            draggable: true,
-            label: markerLabel
-                ? { text: markerLabel, color: "black", fontWeight: "bold", fontSize: "12px" }
-                : null,
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: markerIconScale,
-                fillColor: "#ffffff",
-                fillOpacity: 1,
-                strokeColor: "#000000",
-                strokeWeight: 1.5,
-            },
-        });
+    cabo.path.forEach((position) => {
+        const marker = createCableDrawVertexMarker(position);
         cableMarkers.push(marker);
         wireCableVertexMarker(marker);
     });
-    //Configuração do estado global
     isDrawingCable = true;
     editingCableIndex = index;
+    setAllPolygonsClickable(false);
+    setAllCablesClickable(false);
     updatePolylineFromMarkers();
-    document.getElementById("cableDrawingBox").classList.remove("hidden");
+    openCablePanel({ title: 'Editar cabo', subtitle: `${cabo.type} · ${cabo.status || 'Novo'}` });
     document.getElementById("map").classList.add("cursor-draw");
     setMapCursor("crosshair");
 }
@@ -5539,230 +4380,14 @@ document.getElementById("addMarkerButton").addEventListener("click", () => {
         showAlert("Atenção", "Selecione uma pasta para salvar o marcador.");
         return;
     }
+    if (isMeasuring) stopRuler();
+    if (isDrawingPolygon) cancelPolygonDrawing();
     //Reseta formulários, seleções anteriores e abre o modal
     resetMarkerModal();
     document.querySelectorAll("#markerTypeModal .marker-option.selected").forEach(o => o.classList.remove("selected"));
     document.getElementById("markerTypeModal").style.display = "flex";
 });
 
-//Posicionamento de um marcador
-function startPlacingMarker() {
-    //Preparação da interface
-    isAddingMarker = true;
-    setAllPolygonsClickable(false);
-    setMapCursor("crosshair");
-    document.getElementById("markerModal").style.display = "none";
-    document.getElementById("markerTypeModal").style.display = "none";
-    //Conversão de marcador importado
-    if (adjustingKmlMarkerInfo) {
-        //Pega a posição exata do marcador antigo
-        const originalPosition = adjustingKmlMarkerInfo.marker.getPosition();
-        //Apaga o marcador "Importado" antigo
-        adjustingKmlMarkerInfo.marker.setMap(null);
-        adjustingKmlMarkerInfo.listItem.remove();
-        markers = markers.filter((m) => m !== adjustingKmlMarkerInfo);
-        selectedMarkerData.isImported = false;
-        selectedMarkerData.fromKmlImport = adjustingKmlMarkerInfo.fromKmlImport || false;
-        delete selectedMarkerData.pendingImportStatus;
-        //Cria imediatamente o novo marcador na mesma posição
-        addCustomMarker(originalPosition);
-        const projectFolderIds = getProjectFolderIdsForItem(activeFolderId);
-        if (projectFolderIds) {
-            syncProjectCableMeasurements(savedCables.filter((c) => projectFolderIds.includes(c.folderId)));
-        }
-        //Limpa o estado
-        isAddingMarker = false;
-        setMapCursor("");
-        resetMarkerModal();
-        adjustingKmlMarkerInfo = null;
-
-    } else {
-        //Criação de novo marcador
-        placeMarkerListener = map.addListener("click", function placeMarker(event) {
-            if (!isAddingMarker) return;
-            addCustomMarker(event.latLng);
-            //Finaliza fluxo e limpa listerners
-            isAddingMarker = false;
-            setMapCursor("");
-            resetMarkerModal();
-        });
-    }
-}
-
-//Listeners de seleção de tipo de marcador
-document.querySelectorAll("#markerTypeModal .marker-option").forEach((opt) => {
-    opt.addEventListener("click", () => {
-        const markerType = opt.getAttribute("data-type");
-        selectedMarkerData.type = markerType;
-        document.getElementById("markerTypeModal").style.display = "none";
-        //Redireciona para modais de status específicos conforme a escolha
-        if (markerType === "CTO") {
-            document.getElementById("ctoStatusSelectionModal").style.display = "flex";
-            return;
-        }
-        if (markerType === "CEO") {
-            document.getElementById("ceoStatusSelectionModal").style.display = "flex";
-            return;
-        }
-        if (markerType === "CORDOALHA") {
-            document.getElementById("cordoalhaStatusSelectionModal").style.display = "flex";
-            return;
-        }
-        if (markerType === "RESERVA") {
-            document.getElementById("reservaStatusSelectionModal").style.display = "flex";
-            return;
-        }
-        if (markerType === "CASA") {
-            document.getElementById("markerModalTitle").textContent = "Adicionar Casas";
-            document.getElementById("nameGroup").classList.add("hidden");
-            document.getElementById("descGroup").classList.add("hidden");
-            document.getElementById("markerStyleSection").classList.add("hidden");
-            document.getElementById("casaEditorPanel").classList.remove("hidden");
-            document.getElementById("casaPositionRow").classList.add("hidden");
-        }
-        if (markerType === "POP") {
-            document.getElementById("markerModalTitle").textContent = "Adicionar POP";
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            document.getElementById("colorGroup").classList.remove("hidden");
-            document.getElementById("sizeGroup").classList.remove("hidden");
-            document.getElementById("markerSize").value = DEFAULT_MARKER_SIZE;
-        }
-        //Preenche dados se estiver editando KML importado
-        if (adjustingKmlMarkerInfo) {
-            document.getElementById('markerNumber').value = adjustingKmlMarkerInfo.name; 
-        }
-        document.getElementById("markerModal").style.display = "flex";
-    });
-});
-
-//Seleção de status do cabo e início do desenho
-document.querySelectorAll(".cable-status-option").forEach(option => {
-    option.addEventListener("click", () => {
-        currentCableStatus = option.getAttribute("data-status");
-        document.getElementById("cableStatusSelectionModal").style.display = "none";
-        startDrawingCable();
-    });
-});
-
-//Configuração final de CTO
-document.querySelectorAll(".cto-status-option").forEach(option => {
-    option.addEventListener("click", () => {
-        const status = adjustingKmlMarkerInfo?.pendingImportStatus || option.getAttribute("data-status");
-        document.getElementById("ctoStatusSelectionModal").style.display = "none";
-        //Configura dados da CTO
-        selectedMarkerData.type = "CTO";
-        selectedMarkerData.ctoStatus = status;
-        selectedMarkerData.needsStickers = shouldDefaultCtoStickers(status);
-        //Ajusta interface do modal principal
-        document.getElementById("markerModalTitle").textContent = "Adicionar Caixa de Atrendimento (CTO)";
-        const ctoInfoDisplay = document.getElementById("ctoInfoDisplay");
-        setStatusPill(document.getElementById("ctoStatusInfo"), 'Status', selectedMarkerData.ctoStatus);
-        ctoInfoDisplay.classList.remove("hidden");
-        syncMarkerSummaryPanelVisibility();
-        //Exibe campos específicos de CTO
-        document.getElementById("labelColorGroup").classList.remove("hidden");
-        document.getElementById("ctoOptionsPanel").classList.remove("hidden");
-        document.getElementById("ctoStickerCheckbox").checked = shouldDefaultCtoStickers(status);
-        //Adiciona botão plano de fusão inicialmente desabilitado
-        setFusionPlanButtonState({
-            visible: true,
-            enabled: false,
-            title: 'Salve o marcador para definir o plano de fusão'
-        });
-        if (adjustingKmlMarkerInfo) {
-            document.getElementById('markerName').value = adjustingKmlMarkerInfo.name;
-            document.getElementById('markerDescription').value = adjustingKmlMarkerInfo.description;
-        }
-        document.getElementById("markerModal").style.display = "flex";
-    });
-});
-
-//Configuração de CEO - acessórios - status
-document.querySelectorAll(".ceo-status-option").forEach(option => {
-    option.addEventListener("click", () => {
-        const status = adjustingKmlMarkerInfo?.pendingImportStatus || option.getAttribute("data-status");
-        selectedMarkerData.ceoStatus = status;
-        document.getElementById("ceoStatusSelectionModal").style.display = "none";
-        document.getElementById("ceoAccessorySelectionModal").style.display = "flex";
-    });
-});
-
-//Seleção de acessórios - CEO reserva e configuração
-document.querySelectorAll(".ceo-accessory-option").forEach(option => {
-    option.addEventListener("click", () => {
-        const accessory = option.getAttribute("data-accessory");
-        document.getElementById("ceoAccessorySelectionModal").style.display = "none";
-        //Lógica para CEO - Status/acessórios e habilita o botão de fusão
-        if (selectedMarkerData.type === 'CEO') {
-            const chosenStatus = selectedMarkerData.ceoStatus;
-            selectedMarkerData.ceoAccessory = accessory;
-            document.getElementById("markerModalTitle").textContent = "Adicionar Caixa de Emenda (CEO)";
-            document.getElementById("ceoInfoDisplay").classList.add("hidden");
-            showCeoAccessoryEditor(accessory);
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            setFusionPlanButtonState({
-                visible: true,
-                enabled: false,
-                title: 'Salve o marcador para definir o plano de fusão'
-            });
-            document.getElementById("ceo144Group").classList.remove("hidden");
-        //Lógica para Reserva - Status/acessórios
-        } else if (selectedMarkerData.type === 'RESERVA') {
-            const chosenStatus = selectedMarkerData.reservaStatus;
-            selectedMarkerData.reservaAccessory = accessory;
-            document.getElementById("markerModalTitle").textContent = "Adicionar Reserva Técnica";
-            const infoDisplay = document.getElementById("reservaInfoDisplay");
-            setStatusPill(document.getElementById("reservaStatusInfo"), 'Status', chosenStatus);
-            const accessoryPill = document.getElementById("reservaAccessoryInfo");
-            accessoryPill.textContent = `Instalação: ${accessory}`;
-            accessoryPill.className = 'status-pill status-pill--accessory';
-            infoDisplay.classList.remove("hidden");
-            syncMarkerSummaryPanelVisibility();
-            document.getElementById("labelColorGroup").classList.remove("hidden"); //
-        }
-        //Preenche dados se for ajuste de KML
-        if (adjustingKmlMarkerInfo) {
-            document.getElementById('markerName').value = adjustingKmlMarkerInfo.name;
-            document.getElementById('markerDescription').value = adjustingKmlMarkerInfo.description;
-        }
-        document.getElementById("markerModal").style.display = "flex";
-    });
-});
-
-//Configuração final de cordoalha
-document.querySelectorAll(".cordoalha-status-option").forEach(option => {
-    option.addEventListener("click", () => {
-        const status = adjustingKmlMarkerInfo?.pendingImportStatus || option.getAttribute("data-status");
-        document.getElementById("cordoalhaStatusSelectionModal").style.display = "none";
-        selectedMarkerData.type = "CORDOALHA";
-        selectedMarkerData.cordoalhaStatus = status;
-        document.getElementById("markerModalTitle").textContent = "Adicionar Cordoalha";
-        const infoDisplay = document.getElementById("cordoalhaInfoDisplay");
-        setStatusPill(document.getElementById("cordoalhaStatusInfo"), 'Status', selectedMarkerData.cordoalhaStatus);
-        infoDisplay.classList.remove("hidden");
-        syncMarkerSummaryPanelVisibility();
-        //Campos específicos
-        document.getElementById("labelColorGroup").classList.remove("hidden");
-        document.getElementById("derivationTGroup").classList.remove("hidden");
-        if (adjustingKmlMarkerInfo) {
-            document.getElementById('markerName').value = adjustingKmlMarkerInfo.name;
-            document.getElementById('markerDescription').value = adjustingKmlMarkerInfo.description;
-        }
-        document.getElementById("markerSize").value = DEFAULT_MARKER_SIZE;
-        document.getElementById("markerModal").style.display = "flex";
-    });
-});
-
-//Seleção intermediária de reserva
-document.querySelectorAll(".reserva-status-option").forEach(option => {
-    option.addEventListener("click", () => {
-        const status = adjustingKmlMarkerInfo?.pendingImportStatus || option.getAttribute("data-status");
-        selectedMarkerData.reservaStatus = status;
-        document.getElementById("reservaStatusSelectionModal").style.display = "none";
-        //Avança para modal de acessórios
-        document.getElementById("ceoAccessorySelectionModal").style.display = "flex";
-    });
-});
 
 //Seleção de kits de datacenter
 document.querySelectorAll(".datacenter-option").forEach(option => {
@@ -5844,48 +4469,8 @@ function removeMaterialFromBom(materialName, quantity) {
     }
 }
 
-//Acição do Kit derivação - CEO
-function handleDerivationKitToggle(checkboxElement) {
-    if (!activeFolderId) {
-        showAlert("Atenção", "Selecione um projeto para gerenciar os materiais.");
-        checkboxElement.checked = !checkboxElement.checked;
-        return;
-    }
-    const cableEl = checkboxElement.closest('.cable-element');
-    const cableName = cableEl?.dataset.cableName || 'Cabo';
-    const roleLabel = getCableRoleLabel(getCableRoleFromElement(cableEl));
-    const materialName = "KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA";
-    const roleInfo = roleLabel ? `\nCabo "${cableName}" — ${roleLabel}.` : `\nCabo "${cableName}".`;
-    if (checkboxElement.checked) {
-        addMaterialToBom(materialName, 1);
-        showAlert("Material Adicionado", `"${materialName}" foi adicionado à lista.${roleInfo}`);
-    } else {
-        removeMaterialFromBom(materialName, 1);
-        showAlert("Material Removido", `"${materialName}" foi removido da lista.${roleInfo}`);
-    }
-    checkboxElement.dataset.checked = checkboxElement.checked;
-}
 
-//Quantidade de bandejas - CEO
-function handleTrayQuantityChange(inputElement) {
-    const materialName = "KIT DE BANDEJA PARA CAIXA DE EMENDA";
-    //Calcula a diferença entre o valor autal e o armazenado
-    const newQuantity = parseInt(inputElement.value, 10) || 0;
-    const oldQuantity = parseInt(inputElement.dataset.oldValue, 10) || 0;
-    const difference = newQuantity - oldQuantity;
-    if (difference > 0) {
-        addMaterialToBom(materialName, difference);
-    } else if (difference < 0) {
-        removeMaterialFromBom(materialName, Math.abs(difference));
-    }
-    //Atualiza o valor de referência
-    inputElement.dataset.oldValue = newQuantity;
-}
 
-//Fecha o modal de marcador
-document.getElementById("closeModal").addEventListener("click", () => {
-    resetMarkerModal();
-});
 
 //Mapeamento de cores por tipo de fibras
 function getCableColor(fiberType) {
@@ -5941,42 +4526,25 @@ document.getElementById("cableStatusSelect").addEventListener("change", () => {
 document.getElementById("deleteCableButton").addEventListener("click", () => {
     if (editingCableIndex === null) return;
     const cableToDelete = savedCables[editingCableIndex];
-    //Verificação de integridade
     const usage = checkCableUsageInFusionPlans(cableToDelete);
     if (usage.hasFusions) {
-        showAlert(
-            "Ação Bloqueada",
-            `O cabo "${cableToDelete.name}" possui fusões ativas nas caixas: ${usage.locations.join(', ')}. Por favor, acesse o plano de fusão destas caixas e remova as conexões antes de excluir o cabo.`
-        );
+        showAlert("Ação bloqueada", `O cabo "${cableToDelete.name}" tem fusões nas caixas: ${usage.locations.join(', ')}. Remova as fusões no plano de fusão destas caixas antes de excluir o cabo.`);
         return;
     }
-    //Confirmação e aviso de cascata
-    let confirmMessage = `Tem certeza que deseja excluir o cabo "${cableToDelete.name}"?`;
+    let confirmMessage = `Excluir o cabo "${cableToDelete.name}"?`;
     if (usage.isInPlan) {
-        confirmMessage += `\n\nEste cabo será removido automaticamente dos planos de fusão das caixas: ${usage.locations.join(', ')}.`;
+        confirmMessage += ` Ele também sai do plano de fusão de: ${usage.locations.join(', ')}.`;
     }
-    showConfirm('Excluir Cabo', confirmMessage, () => {
-        //Remove referências do cabo em caixas onde ele está presente e sem fusão
-        if (usage.isInPlan) {
-            removeCableFromSavedFusionPlans(cableToDelete.name, usage.locations);
-        }
-        //Remoção visual e dados
+    showConfirm('Excluir cabo', confirmMessage, () => {
+        if (usage.isInPlan) removeCableFromSavedFusionPlans(cableToDelete.name, usage.locations);
         const cabo = savedCables[editingCableIndex];
-        if (cabo.polyline) cabo.polyline.setMap(null);
-        if (cablePolyline) cablePolyline.setMap(null);
-        if (cabo.item) cabo.item.remove();
+        cabo.polyline?.setMap(null);
+        cabo.item?.remove();
         savedCables.splice(editingCableIndex, 1);
-        //Limpeza de estado e reset de interface
-        cableMarkers.forEach((marker) => marker.setMap(null));
-        cableMarkers = [];
-        cablePath = [];
-        cableDistance = { lancamento: 0, reserva: 0, total: 0 };
-        editingCableIndex = null;
-        isDrawingCable = false;
-        document.getElementById("invertCableButton").classList.add("hidden"); // Esconde o botão Inverter
-        document.getElementById("cableDrawingBox").classList.add("hidden");
-        document.getElementById("deleteCableButton").classList.add("hidden");  
-        showAlert("Sucesso", "Cabo excluído com sucesso.");
+        finishCableDrawingUi();
+        refreshBomAfterProjectChange();
+        refreshClientDrops({ recompute: true });
+        showToast('Cabo excluído', `"${cableToDelete.name}" foi removido.`);
     });
 });
 
@@ -6019,85 +4587,6 @@ document.querySelectorAll('.modal-option-chip').forEach((chip) => {
         const checkbox = chip.querySelector('input[type="checkbox"]');
         if (checkbox) checkbox.checked = !checkbox.checked;
     });
-});
-
-//Confirmação do modal de marcador - salvar edição ou iniciar criação
-document.getElementById("confirmMarker").addEventListener("click", () => {
-    //Verifica se é uma edição de marcador existente ou uma nova criação
-    if (editingMarkerInfo) {
-        //Modo edição - Atualiza objeto existente
-        if (editingMarkerInfo.type === "CASA") {
-            editingMarkerInfo.name = document.getElementById("markerNumber").value || "0";
-            editingMarkerInfo.color = document.getElementById("casaMarkerBalloonColor").value || "#ffffff";
-            editingMarkerInfo.labelColor = document.getElementById("casaMarkerLabelColor").value || "#000000";
-        } else {
-            //Atualiza propriedades gerais
-            editingMarkerInfo.name = document.getElementById("markerName").value || "Marcador";
-            editingMarkerInfo.color = document.getElementById("markerColor").value;
-            editingMarkerInfo.labelColor = document.getElementById("markerLabelColor").value;
-            editingMarkerInfo.size = parseInt(document.getElementById("markerSize").value, 10) || DEFAULT_MARKER_SIZE;
-            editingMarkerInfo.description = document.getElementById("markerDescription").value;
-            //Atualiza propriedades específicas por tipo
-            if (editingMarkerInfo.type === "CORDOALHA") {
-                editingMarkerInfo.derivationTCount = parseInt(document.getElementById("markerDerivationT").value) || 0;
-            }
-            if (editingMarkerInfo.type === "CTO") {
-                editingMarkerInfo.isPredial = document.getElementById("ctoPredialCheckbox").checked;
-                editingMarkerInfo.needsStickers = document.getElementById("ctoStickerCheckbox").checked;
-            }
-            if (editingMarkerInfo.type === "CEO") {
-                editingMarkerInfo.is144F = document.getElementById("ceo144Checkbox").checked;
-                const ceoAccessoryGroup = document.getElementById("ceoAccessoryEditGroup");
-                if (ceoAccessoryGroup && !ceoAccessoryGroup.classList.contains("hidden")) {
-                    editingMarkerInfo.ceoAccessory = document.getElementById("ceoAccessorySelect").value;
-                }
-            }
-        }
-        const statusGroup = document.getElementById("markerInfraStatusGroup");
-        if (!statusGroup.classList.contains("hidden")) {
-            applyMarkerInfrastructureStatus(
-                editingMarkerInfo,
-                document.getElementById("markerInfraStatus").value
-            );
-        }
-        //Aplica mudanças visuais no mapa e reativa botão de fusão no modal
-        updateMarkerAppearance(editingMarkerInfo);
-        refreshBomAfterProjectChange();
-        document.getElementById("markerModal").style.display = "none";
-        resetMarkerModal({ discardPositionChanges: false });
-    } else {
-        //Modo criação - prepara dados para novo marcador
-        if (selectedMarkerData.type === "CASA") {
-            selectedMarkerData.name = document.getElementById("markerNumber").value || "0";
-            selectedMarkerData.color = document.getElementById("casaMarkerBalloonColor").value || "#ffffff";
-            selectedMarkerData.labelColor = document.getElementById("casaMarkerLabelColor").value || "#000000";
-        } else {
-            //Captura dados do formulário para o objeto temporário de criação
-            selectedMarkerData.name = document.getElementById("markerName").value || "Marcador";
-            selectedMarkerData.color = document.getElementById("markerColor").value;
-            selectedMarkerData.labelColor = document.getElementById("markerLabelColor").value;
-            selectedMarkerData.size = parseInt(document.getElementById("markerSize").value, 10) || DEFAULT_MARKER_SIZE;
-            selectedMarkerData.description = document.getElementById("markerDescription").value;
-        }
-        //Captura dados específicos para criação
-        if (selectedMarkerData.type === "CORDOALHA") {
-            selectedMarkerData.derivationTCount = parseInt(document.getElementById("markerDerivationT").value) || 0;
-        }
-        if (selectedMarkerData.type === "CTO") {
-            selectedMarkerData.isPredial = document.getElementById("ctoPredialCheckbox").checked;
-            selectedMarkerData.needsStickers = document.getElementById("ctoStickerCheckbox").checked;
-        }
-        if (selectedMarkerData.type === "CEO") {
-            selectedMarkerData.is144F = document.getElementById("ceo144Checkbox").checked;
-            const ceoAccessoryGroup = document.getElementById("ceoAccessoryEditGroup");
-            if (ceoAccessoryGroup && !ceoAccessoryGroup.classList.contains("hidden")) {
-                selectedMarkerData.ceoAccessory = document.getElementById("ceoAccessorySelect").value;
-            }
-        }
-        if (!selectedMarkerData.type) return;
-        //Inicia ferramenta de posicionamento no mapa
-        startPlacingMarker();
-    }
 });
 
 //Criação e gerencimento de marcador personalizado
@@ -6148,7 +4637,11 @@ function addCustomMarker(location, importedData = null) {
         derivationTCount: data.type === "CORDOALHA" ? data.derivationTCount : null,
         reservaStatus: data.type === "RESERVA" ? data.reservaStatus : null,
         reservaAccessory: data.type === "RESERVA" ? data.reservaAccessory : null,
+        client: data.type === "CLIENTE" ? { ...(data.client || {}) } : undefined,
+        uid: data.uid || null,
     };
+    ensureMarkerUid(markerInfo);
+    if (markerInfo.type === "CLIENTE") resolveAutomaticClientCto(markerInfo);
     const parentUl = document.getElementById(activeFolderId);
     if (parentUl) {
         parentUl.appendChild(li);
@@ -6165,8 +4658,10 @@ function addCustomMarker(location, importedData = null) {
     }
     markers.push(markerInfo);
     updateMarkerAppearance(markerInfo);
+    if (markerInfo.type === "CLIENTE") refreshBomAfterProjectChange();
     //Evento de clique no marcador
     marker.addListener("click", () => {
+        if (handleSketchMarkerClick(markerInfo)) return;
         if (!isDrawingCable) {
             openMarkerFromUserAction(markerInfo);
             return;
@@ -6177,279 +4672,63 @@ function addCustomMarker(location, importedData = null) {
     wireMarkerSidebarSelection(markerInfo);
 }
 
-//Atualização visual do marcador
+//Atualização visual do marcador (ícones em js/marker-icons.js)
 function updateMarkerAppearance(markerInfo) {
-    const isCasa = markerInfo.type === "CASA";
-    const nameSpan = markerInfo.listItem.querySelector('.item-name');
-    if (!nameSpan) return;
-    //Estilo específico para casas
-    if (isCasa) {
-        markerInfo.marker.setLabel(null);
-        markerInfo.marker.setIcon(buildCasaMarkerIcon(
-            markerInfo.name,
-            markerInfo.color || '#ffffff',
-            markerInfo.labelColor || '#000000'
-        ));
-        markerInfo.marker.setTitle(`Casas: ${markerInfo.name}`);
-        nameSpan.textContent = `Casas (${markerInfo.name})`;
-        markerInfo.listItem.classList.add('ge-pro-marker-item');
-        applyMarkerSidebarColorStyles(markerInfo);
-    } else {
-        //Estilos para infraestrutura
-        let icon;
-        //Configura rótulo com contorno
-        markerInfo.marker.setLabel({
-            text: markerInfo.name,
-            color: markerInfo.labelColor || "#000000",
-            fontWeight: "bold",
-            className: 'marker-label-with-outline'
-        });
-        const originalLabelOrigin = new google.maps.Point(0, -3.0);
-        //Define geometria do icone baseada no tipo
-        switch (markerInfo.type) {
-        case "CEO":
-            icon = {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: markerInfo.size,
-                fillColor: markerInfo.color,
-                fillOpacity: 1,
-                strokeColor: "#000",
-                strokeWeight: 1,
-                labelOrigin: originalLabelOrigin,
-            };
-            break;
-        case "CTO":
-            icon = {
-                path: "M -1 -1 L 1 -1 L 1 1 L -1 1 Z",
-                scale: markerInfo.size,
-                fillColor: markerInfo.color,
-                fillOpacity: 1,
-                strokeColor: "#000",
-                strokeWeight: 1,
-                labelOrigin: originalLabelOrigin,
-            };
-            break;
-        case "CORDOALHA":
-            const plusShapePath = "M -1 -0.2 L -0.2 -0.2 L -0.2 -1 L 0.2 -1 L 0.2 -0.2 L 1 -0.2 L 1 0.2 L 0.2 0.2 L 0.2 1 L -0.2 1 L -0.2 0.2 L -1 0.2 Z";
-            icon = {
-                path: plusShapePath,
-                scale: markerInfo.size,
-                fillColor: markerInfo.color,
-                fillOpacity: 1,
-                strokeColor: "#000",
-                strokeWeight: 1,
-                labelOrigin: originalLabelOrigin,
-            };
-            break;
-        case "RESERVA":
-            icon = {
-                path: "M 0 -1 L 1 1 L -1 1 Z",
-                scale: markerInfo.size * 1.25,
-                fillColor: markerInfo.color,
-                fillOpacity: 1,
-                strokeColor: "#000",
-                strokeWeight: 1,
-                labelOrigin: originalLabelOrigin,
-            };
-            break;
-        case "POP":
-            icon = buildPopMarkerIcon(markerInfo.size, markerInfo.color);
-            break;
-        default:
-            icon = {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: markerInfo.size,
-                fillColor: markerInfo.color,
-                fillOpacity: 1,
-                strokeColor: "#000",
-                strokeWeight: 1,
-                labelOrigin: originalLabelOrigin,
-            };
-        }
-        //Construção dinâmica de texto
-        let title = markerInfo.name;
-        let listItemText = `${markerInfo.name} (${markerInfo.type})`;
-        //Adiciona sufixos baseados em propriedades específicas
-        if (markerInfo.type === "CTO") {
-            title += ` - ${markerInfo.ctoStatus}`;
-                listItemText += ` - ${markerInfo.ctoStatus}`;
-            if (markerInfo.isPredial) {
-                title += " (Predial)";
-                listItemText += " (Predial)";
-            }
-            if (markerInfo.needsStickers) {
-                title += " (Adesivos)";
-                listItemText += " (Adesivos)";
-            }
-        }
-        if (markerInfo.type === "CEO") {
-            let details = `${markerInfo.ceoStatus}, ${markerInfo.ceoAccessory}`;
-            if (markerInfo.is144F) {
-                details += " (144F)";
-            }
-            title += ` - ${details}`;
-            listItemText += ` - ${details}`;
-        }
-        if (markerInfo.type === "CORDOALHA") {
-            title += ` - ${markerInfo.cordoalhaStatus}`;
-            listItemText += ` - ${markerInfo.cordoalhaStatus}`;
-        }
-        if (markerInfo.type === "RESERVA") {
-            let details = `${markerInfo.reservaStatus}, ${markerInfo.reservaAccessory}`;
-            title += ` - ${details}`;
-            listItemText += ` - ${details}`;
-        }
-        if (markerInfo.type === "Importado") {
-            const pending = markerInfo.pendingImportStatus || 'Nova';
-            const pendingLabel = pending === 'Existente' ? 'Existente' : 'Novo';
-            listItemText = `${markerInfo.name} (Importado · ${pendingLabel})`;
-            title = listItemText;
-        }
-        //Aplica as alterações fianis ao marcador e ao DOM
-        markerInfo.marker.setTitle(title);
-        nameSpan.textContent = listItemText;
-        markerInfo.listItem.title = markerInfo.description;
-        applyMarkerSidebarColorStyles(markerInfo);
-        markerInfo.marker.setIcon(icon);
-    }
-}
-
-//Abre o modal de ações para uma linha de fusão (com texto De/Para).
-function openFusionLineActionModal(line) {
-    if (!line) return;
-    const startId = line.dataset.startId;
-    const endId = line.dataset.endId;
-    const infoElement = document.getElementById('lineConnectionInfo');
-    if (infoElement && startId && endId) {
-        const startDescription = getConnectionDescription(startId);
-        const endDescription = getConnectionDescription(endId);
-        infoElement.innerHTML = `<strong>De:</strong> ${startDescription}<br><strong>Para:</strong> ${endDescription}`;
-    }
-    activeLineForAction = line;
-    document.getElementById('lineActionModal').style.display = 'flex';
-}
-
-//Associa clique à linha (sem revelar vértices ao passar o mouse na linha).
-function attachFusionLineInteractionListeners(line) {
-    if (!line) return;
-    line.style.pointerEvents = 'auto';
-    line.addEventListener('click', (e) => {
-        if (fusionDrawingState.isActive) return;
-        openFusionLineActionModal(line);
-    });
-}
-
-function updateFusionModalTitle(markerInfo) {
-    const titleEl = document.getElementById('fusionModalTitle');
-    if (!titleEl) return;
-    if (!markerInfo) {
-        titleEl.textContent = 'Plano de Fusão';
+    if (markerInfo.type === "CLIENTE") {
+        applyClientAppearance(markerInfo);
+        refreshClientDrops();
         return;
     }
-    const displayName = (markerInfo.name || '').trim() || 'Sem nome';
-    const typeLabel = markerInfo.type === 'CEO'
-        ? 'CEO'
-        : markerInfo.type === 'CTO'
-            ? 'CTO'
-            : markerInfo.type || '';
-    titleEl.textContent = typeLabel
-        ? `Plano de Fusão — ${typeLabel}: ${displayName}`
-        : `Plano de Fusão — ${displayName}`;
+    if (markerInfo.type === "CTO") refreshClientDrops();
+    const isCasa = markerInfo.type === "CASA";
+    const nameSpan = markerInfo.listItem?.querySelector('.item-name');
+    const color = markerInfo.color || (isCasa ? '#ffffff' : '#f59e0b');
+    markerInfo.marker.setIcon(buildMarkerMapIcon(markerInfo.type, {
+        color,
+        size: markerInfo.size,
+        text: isCasa ? markerInfo.name : '',
+        labelColor: markerInfo.labelColor,
+    }));
+    markerInfo.marker.setLabel(isCasa ? null : buildMarkerMapLabel(markerInfo.name, markerInfo.labelColor));
+    let title = markerInfo.name;
+    let listItemText = `${markerInfo.name} (${markerInfo.type})`;
+    if (isCasa) {
+        title = `Casas: ${markerInfo.name}`;
+        listItemText = `Casas (${markerInfo.name})`;
+    }
+    if (markerInfo.type === "CTO") {
+        const extras = [markerInfo.ctoStatus, markerInfo.isPredial ? 'Predial' : null, markerInfo.needsStickers ? 'Adesivos' : null].filter(Boolean).join(' · ');
+        title += ` - ${extras}`;
+        listItemText += ` - ${extras}`;
+    }
+    if (markerInfo.type === "CEO") {
+        const details = [markerInfo.ceoStatus, markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null].filter(Boolean).join(' · ');
+        title += ` - ${details}`;
+        listItemText += ` - ${details}`;
+    }
+    if (markerInfo.type === "CORDOALHA") {
+        title += ` - ${markerInfo.cordoalhaStatus}`;
+        listItemText += ` - ${markerInfo.cordoalhaStatus}`;
+    }
+    if (markerInfo.type === "RESERVA") {
+        const details = [markerInfo.reservaStatus, markerInfo.reservaAccessory].filter(Boolean).join(' · ');
+        title += ` - ${details}`;
+        listItemText += ` - ${details}`;
+    }
+    if (markerInfo.type === "Importado") {
+        const pending = markerInfo.pendingImportStatus || 'Nova';
+        listItemText = `${markerInfo.name} (Importado · ${pending === 'Existente' ? 'Existente' : 'Novo'})`;
+        title = listItemText;
+    }
+    markerInfo.marker.setTitle(title);
+    if (nameSpan) nameSpan.textContent = listItemText;
+    if (markerInfo.listItem) markerInfo.listItem.title = markerInfo.description || '';
+    applyMarkerSidebarColorStyles(markerInfo);
 }
 
-//Carregamento e renderização do plano de fusão
-function populateFusionPlan(markerInfo) {
-    //Inicialização e limpeza    
-    activeMarkerForFusion = markerInfo;
-    resetFusionDrawingState();
-    isEditingLine = false;
-    activeLineForAction = null;
-    updateFusionModalTitle(markerInfo);
-    const canvas = document.getElementById("fusionCanvas");
-    const svgLayer = document.getElementById("fusion-svg-layer");
-    //Limpa elementos anteriores e reseta container de bandejas
-    canvas.querySelectorAll(".cable-element, .splitter-element").forEach(el => el.remove());
-    if (svgLayer) svgLayer.innerHTML = '';
-    const trayContainer = document.getElementById('trayKitContainer');
-    const trayInput = document.getElementById('trayKitQuantity');
-    trayContainer.classList.add('hidden');
-    //Carregamento de plano salvo
-    if (markerInfo.fusionPlan) {
-        try {
-        const planData = JSON.parse(markerInfo.fusionPlan);
-        if (planData.elements) {
-            canvas.insertAdjacentHTML('beforeend', planData.elements);
-            normalizeFusionCablePointLabels(canvas);
-        }
-        if (planData.svg && svgLayer) {
-            svgLayer.innerHTML = planData.svg;
-            svgLayer.querySelectorAll('.line-handle').forEach(h => h.remove());
-        }
-        //Botão de exclusão
-        canvas.querySelectorAll('.splitter-element .delete-component-btn').forEach(button => {
-            button.type = 'button';
-            button.title = 'Excluir splitter';
-            button.setAttribute('aria-label', 'Excluir splitter');
-            button.onclick = () => handleDeleteSplitter(button);
-        });
-        canvas.querySelectorAll('.cable-element .delete-component-btn').forEach(button => {
-            button.type = 'button';
-            button.title = 'Excluir cabo';
-            button.setAttribute('aria-label', 'Excluir cabo');
-            button.onclick = () => handleDeleteCableFromFusion(button);
-        });
-        ensureDerivationKitCheckboxesForCeo(canvas);
-        ensureFusionCableStatusPills(canvas);
-        //Checkbox kit derivação
-        canvas.querySelectorAll('.derivation-kit-checkbox').forEach(checkbox => {
-            checkbox.onclick = () => handleDerivationKitToggle(checkbox);
-            if (checkbox.dataset.checked === 'true') checkbox.checked = true;
-        });
-        //Controles de splitters
-        canvas.querySelectorAll('.splitter-element').forEach((splitter) => {
-            wireSplitterMoveControls(splitter);
-            ensureSplitterOltConfigUi(splitter);
-        });
-        //Controles de movimentação de cabos
-        canvas.querySelectorAll('.cable-element').forEach((cable) => {
-            wireCableMoveControls(cable);
-        });
-        //Reatribuição de listeners
-        if (svgLayer) {
-            svgLayer.querySelectorAll('.fusion-line').forEach(line => attachFusionLineInteractionListeners(line));
-        }
-        //Lógica específica para CEO
-        if (markerInfo.type === 'CEO') {
-            trayContainer.classList.remove('hidden');
-            const savedQuantity = (planData && planData.trayQuantity) ? parseInt(planData.trayQuantity, 10) : 0;
-            trayInput.value = savedQuantity;
-            trayInput.dataset.oldValue = savedQuantity;
-            trayInput.onchange = () => handleTrayQuantityChange(trayInput);
-        }
-        } catch (e) {
-            console.error("Erro ao carregar plano de fusão:", e);
-            canvas.innerHTML = '<svg id="fusion-svg-layer" class="fusion-svg-layer"></svg><p class="canvas-placeholder">Ocorreu um erro ao carregar o plano.</p>';
-        }
-    //Caso especial com novo marcador
-    } else if (markerInfo.type === 'CEO') {
-        trayContainer.classList.remove('hidden');
-        trayInput.value = 0;
-        trayInput.dataset.oldValue = 0;
-        trayInput.onchange = () => handleTrayQuantityChange(trayInput);
-    }
-    //Finalização e renderização
-    updateFusionCanvasInteractionState();
-    //Listeners globais de criação de conexão
-    canvas.removeEventListener('click', handleConnectionClick);
-    canvas.removeEventListener('contextmenu', handleFusionCanvasRightClick);
-    canvas.addEventListener('click', handleConnectionClick);
-    canvas.addEventListener('contextmenu', handleFusionCanvasRightClick);
-    setTimeout(() => {
-        repackAllElements();
-        updateAllConnections();
-        updateSvgLayerSize();
-    }, 100);
-}
+
+
+
 
 //Controle do botão Plano de Fusão no modal de marcador
 function setFusionPlanButtonState({ visible = false, enabled = false, title = '', onClick = null } = {}) {
@@ -6461,122 +4740,27 @@ function setFusionPlanButtonState({ visible = false, enabled = false, title = ''
     btn.onclick = enabled && onClick ? onClick : null;
 }
 
-//Editor de marcador
-function openMarkerEditor(markerInfo) {
-    //Inicialização e reset
-    resetMarkerModal(); 
-    editingMarkerInfo = markerInfo;
-    const editorOpenPosition = markerInfo.marker?.getPosition();
-    markerEditOriginPosition = cloneMapLatLng(editorOpenPosition);
-    markerPositionEditSession = null;
-    //Configura botões de ação - salvar/exluir
-    document.getElementById("confirmMarker").textContent = "Salvar Alterações";
-    document.getElementById("deleteMarkerButton").classList.remove("hidden");
-    wireMarkerPositionEditButton(document.getElementById("editPositionButton"));
-    document.getElementById("editPositionButton").classList.remove("hidden");
-    //Preenchimento do formulário - Baseado no tipo
-    //Tipo casa
-    if (markerInfo.type === "CASA") {
-        document.getElementById("markerModalTitle").textContent = "Editar Casas";
-        document.getElementById("nameGroup").classList.add("hidden");
-        document.getElementById("descGroup").classList.add("hidden");
-        document.getElementById("markerStyleSection").classList.add("hidden");
-        document.getElementById("casaEditorPanel").classList.remove("hidden");
-        document.getElementById("casaPositionRow").classList.remove("hidden");
-        document.getElementById("markerNumber").value = markerInfo.name;
-        document.getElementById("casaMarkerBalloonColor").value = markerInfo.color || "#ffffff";
-        document.getElementById("casaMarkerLabelColor").value = markerInfo.labelColor || "#000000";
-        const position = markerInfo.marker.getPosition();
-        setMarkerEditorCoordinatesText("CASA", position.lat().toFixed(6), position.lng().toFixed(6));
-    //Outros tipos 
-    } else {
-        document.getElementById("casaEditorPanel").classList.add("hidden");
-        document.getElementById("markerStyleSection").classList.remove("hidden");
-        document.getElementById("markerPositionRow").classList.remove("hidden");
-        document.getElementById("nameGroup").classList.remove("hidden");
-        document.getElementById("descGroup").classList.remove("hidden");
-        document.getElementById("markerName").value = markerInfo.name;
-        document.getElementById("markerColor").value = markerInfo.color;
-        document.getElementById("markerSize").value = markerInfo.size;
-        document.getElementById("markerDescription").value = markerInfo.description;
-        const position = markerInfo.marker.getPosition();
-        setMarkerEditorCoordinatesText(markerInfo.type, position.lat().toFixed(6), position.lng().toFixed(6));
-        if (markerInfo.type === "CEO") {
-            document.getElementById("markerModalTitle").textContent = "Editar Caixa de Emenda (CEO)";
-            document.getElementById("ceoInfoDisplay").classList.add("hidden");
-            showCeoAccessoryEditor(markerInfo.ceoAccessory);
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            document.getElementById("markerLabelColor").value = markerInfo.labelColor || "#000000";
-            document.getElementById("ceo144Group").classList.remove("hidden");
-            document.getElementById("ceo144Checkbox").checked = markerInfo.is144F || false;
-        } else if (markerInfo.type === "CTO") {
-            document.getElementById("markerModalTitle").textContent = "Editar CTO";
-            hideMarkerSummaryBadges();
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            document.getElementById("markerLabelColor").value = markerInfo.labelColor || "#000000";
-            document.getElementById("ctoOptionsPanel").classList.remove("hidden");
-            document.getElementById("ctoPredialCheckbox").checked = markerInfo.isPredial || false;
-            document.getElementById("ctoStickerCheckbox").checked =
-                markerInfo.needsStickers ?? shouldDefaultCtoStickers(markerInfo.ctoStatus);
-        } else if (markerInfo.type === "CORDOALHA") {
-            document.getElementById("markerModalTitle").textContent = "Editar Cordoalha";
-            hideMarkerSummaryBadges();
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            document.getElementById("markerLabelColor").value = markerInfo.labelColor || "#000000";
-            document.getElementById("derivationTGroup").classList.remove("hidden");
-            document.getElementById("markerDerivationT").value = markerInfo.derivationTCount || 0;
-        } else if (markerInfo.type === "RESERVA") {
-            document.getElementById("markerModalTitle").textContent = "Editar Reserva Técnica";
-            hideMarkerSummaryBadges();
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            document.getElementById("markerLabelColor").value = markerInfo.labelColor || "#000000";
-        } else if (markerInfo.type === "POP") {
-            document.getElementById("markerModalTitle").textContent = "Editar POP";
-            document.getElementById("labelColorGroup").classList.remove("hidden");
-            document.getElementById("colorGroup").classList.remove("hidden");
-            document.getElementById("sizeGroup").classList.remove("hidden");
-            document.getElementById("markerLabelColor").value = markerInfo.labelColor || "#000000";
-        } else {
-            document.getElementById("markerModalTitle").textContent = "Editar Marcador";
-        }
-        populateMarkerInfraStatusSelect(markerInfo);
-    }
-    //Botão de plano de fusão
-    if (markerInfo.type === 'CEO' || markerInfo.type === 'CTO') {
-        setFusionPlanButtonState({
-            visible: true,
-            enabled: true,
-            title: 'Editar o plano de fusão',
-            onClick: () => {
-                populateFusionPlan(markerInfo);
-                document.getElementById('fusionModal').style.display = 'flex';
-                resetMarkerModal({ discardPositionChanges: false });
-            }
-        });
-    } else {
-        setFusionPlanButtonState({ visible: false });
-    }
-    document.getElementById("markerModal").style.display = "flex";
-}
 
-//Sincronização de cabos com movimento de marcador
+//Leva junto as pontas dos cabos ancorados no marcador que foi movido
 function updateCablesForMovedMarker(oldPosition, newPosition, movedMarkerInfo = null) {
+    const isAnchoredEnd = (cable, isStart, point) => {
+        const uid = isStart ? cable.startAnchorUid : cable.endAnchorUid;
+        if (uid) return !!movedMarkerInfo && uid === movedMarkerInfo.uid;
+        const name = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
+        const near = google.maps.geometry.spherical.computeDistanceBetween(point, oldPosition) < 1.5;
+        return near && (!name || !movedMarkerInfo || name === movedMarkerInfo.name);
+    };
     savedCables.forEach((cable) => {
+        if (!cable.path?.length) return;
         let pathUpdated = false;
+        const lastIndex = cable.path.length - 1;
         const newPath = cable.path.map((point, index) => {
-            const isStart = index === 0;
-            const isEnd = index === cable.path.length - 1;
-            if (movedMarkerInfo) {
-                if (isStart && cable.startAnchorMarkerName === movedMarkerInfo.name) {
-                    pathUpdated = true;
-                    return newPosition;
-                }
-                if (isEnd && cable.endAnchorMarkerName === movedMarkerInfo.name) {
-                    pathUpdated = true;
-                    return newPosition;
-                }
+            if ((index === 0 && isAnchoredEnd(cable, true, point)) || (index === lastIndex && index > 0 && isAnchoredEnd(cable, false, point))) {
+                pathUpdated = true;
+                return newPosition;
             }
-            if (point.equals(oldPosition)) {
+            //Pontos intermediários colocados exatamente sobre o marcador acompanham
+            if (index > 0 && index < lastIndex && google.maps.geometry.spherical.computeDistanceBetween(point, oldPosition) < 0.3) {
                 pathUpdated = true;
                 return newPosition;
             }
@@ -6606,96 +4790,12 @@ function deleteEditingMarker() {
         editingMarkerInfo.marker.setMap(null);
         editingMarkerInfo.listItem.remove();
         markers = markers.filter((m) => m !== editingMarkerInfo);
+        refreshClientDrops();
         showAlert("Sucesso", "Marcador excluído com sucesso.");
         resetMarkerModal();
     });
 }
 
-//Reset completo do modal e estado de marcadores
-function resetMarkerModal({ discardPositionChanges = true } = {}) {
-    const modal = document.getElementById("markerModal");
-    modal.style.display = "none";
-    //Limpeza de listeners e estados de mapa
-    if (placeMarkerListener) {
-        google.maps.event.removeListener(placeMarkerListener);
-        placeMarkerListener = null;
-    }
-    if (isAddingMarker) {
-        isAddingMarker = false;
-        setMapCursor("");
-    }
-    if (editingMarkerInfo) {
-        if (editingMarkerInfo.marker?.getDraggable?.()) {
-            finishMarkerPositionEditSession({ reopenModal: false });
-        } else if (discardPositionChanges) {
-            restoreMarkerEditOriginPosition();
-        }
-        editingMarkerInfo.marker.setDraggable(false);
-        editingMarkerInfo = null;
-    }
-    markerEditOriginPosition = null;
-    markerPositionEditSession = null;
-    clearMapMarkerHighlight();
-    //Reset de campos de texto e estilos padrão
-    document.getElementById("markerModalTitle").textContent = "Adicionar Marcador";
-    document.getElementById("confirmMarker").textContent = "Confirmar";
-    document.getElementById("markerName").value = "";
-    document.getElementById("markerColor").value = "#ff0000";
-    document.getElementById("markerLabelColor").value = "#ff0000";
-    document.getElementById("markerSize").value = DEFAULT_MARKER_SIZE;
-    document.getElementById("markerDescription").value = "";
-    document.getElementById("markerNumber").value = "";
-    document.getElementById("casaMarkerBalloonColor").value = "#ffffff";
-    document.getElementById("casaMarkerLabelColor").value = "#000000";
-    document.getElementById("markerCoordinatesText").textContent = "";
-    document.getElementById("infraMarkerCoordinatesText").textContent = "";
-    document.getElementById("markerDerivationT").value = "0";
-    //Controle de visibilidade de grupos
-    document.getElementById("nameGroup").classList.remove("hidden");
-    document.getElementById("markerStyleSection").classList.remove("hidden");
-    document.getElementById("casaEditorPanel").classList.add("hidden");
-    document.getElementById("casaPositionRow").classList.add("hidden");
-    document.getElementById("markerPositionRow").classList.add("hidden");
-    document.getElementById("descGroup").classList.remove("hidden");
-    document.getElementById("colorGroup").classList.remove("hidden");
-    document.getElementById("sizeGroup").classList.remove("hidden");
-    //Oculta campos específicos
-    document.getElementById("labelColorGroup").classList.add("hidden");
-    hideMarkerSummaryBadges();
-    document.getElementById("markerInfraStatusGroup").classList.add("hidden");
-    hideCeoAccessoryEditor();
-    document.getElementById("derivationTGroup").classList.add("hidden");
-    //Reseta checkboxes
-    document.getElementById("ctoPredialCheckbox").checked = false;
-    document.getElementById("ctoStickerCheckbox").checked = false;
-    document.getElementById("ctoOptionsPanel").classList.add("hidden");
-    document.getElementById("ceo144Checkbox").checked = false;
-    document.getElementById("ceo144Group").classList.add("hidden");
-    //Oculta botões de ação e remove botão dinâmico de fusão
-    document.getElementById("deleteMarkerButton").classList.add("hidden");
-    document.getElementById("editPositionButton").classList.add("hidden");
-    setFusionPlanButtonState({ visible: false, enabled: false, title: '', onClick: null });
-    //Reset do objeto de dados temporário
-    selectedMarkerData = {
-        type: "",
-        name: "",
-        color: "#ff0000",
-        labelColor: "#000000",
-        size: DEFAULT_MARKER_SIZE,
-        description: "",
-        ctoStatus: "Nova",
-        isPredial: false,
-        needsStickers: false,
-        ceoStatus: "Nova",
-        ceoAccessory: "Raquete",
-        is144F: false,
-        cordoalhaStatus: "Nova",
-        reservaStatus: "Nova",
-        reservaAccessory: "Raquete",
-        derivationTCount: 0,
-    };
-    setAllPolygonsClickable(true);
-}
 
 //Utilitário para gerar caminho
 function generatePolylinePath(points) {
@@ -6707,295 +4807,13 @@ function generatePolylinePath(points) {
     return pathParts.join(' ');
 }
 
-//Reset do estado de desenho
-function resetFusionDrawingState() {
-    //Remove elementos visuais temporários
-    if (fusionDrawingState.tempLine) {
-        fusionDrawingState.tempLine.remove();
-    }
-    fusionDrawingState.tempHandles.forEach(h => h.remove());
-    //Reseta variáveis de controle e remove lesteners de movimento
-    fusionDrawingState.isActive = false;
-    fusionDrawingState.startElement = null;
-    fusionDrawingState.points = [];
-    fusionDrawingState.tempLine = null;
-    fusionDrawingState.tempHandles = [];
-    document.getElementById('fusionCanvas').removeEventListener('mousemove', handleFusionCanvasMouseMove);
-}
 
-//Iniciar edição de linha existente
-function startLineEdit(lineElement) {
-    //Valida se o elemento existe e se não há outro desenho em andamento
-    if (!lineElement || fusionDrawingState.isActive) return;
-    //Recupera dados da conexão original (só a origem é mantida; o traçado é refeito)
-    const startId = lineElement.dataset.startId;
-    const startElement = document.getElementById(startId);
-    if (!startElement) {
-        showAlert("Erro", "Não foi possível encontrar o ponto de início da conexão para editar.");
-        return;
-    }
-    //Configura flags de edição e altera estilo visual da linha
-    isEditingLine = true;
-    activeLineForAction = lineElement;
-    lineElement.classList.remove('fusion-line');
-    lineElement.classList.add('fusion-line-editing');
-    lineElement.style.display = 'none';
-    //Inicia o desenho só a partir da origem; vértices antigos são descartados para o usuário refazer a ligação
-    fusionDrawingState.isActive = true;
-    fusionDrawingState.startElement = startElement;
-    const startPos = getElementCenter(startElement);
-    fusionDrawingState.points = [startPos];
-    //Cria linha temporária no SVG para acompanhar o mouse
-    const svgLayer = document.getElementById('fusion-svg-layer');
-    fusionDrawingState.tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    fusionDrawingState.tempLine.setAttribute('fill', 'none');
-    fusionDrawingState.tempLine.setAttribute('class', 'connecting-line');
-    svgLayer.appendChild(fusionDrawingState.tempLine);
-    //Ativa listener de movimento e instrui o usuário
-    document.getElementById('fusionCanvas').addEventListener('mousemove', handleFusionCanvasMouseMove);
-    showAlert("Editar fusão", "Mantida apenas a porta de origem. Clique no canvas para definir o novo traçado e clique na porta de destino para concluir. Botão direito cancela.");
-}
 
-//Gerenciamento de cliques no canvas
-function handleConnectionClick(event) {
-    const canvas = document.getElementById('fusionCanvas');
-    if (!fusionCanvasHasComponents(canvas)) {
-        if (fusionDrawingState.isActive) {
-            resetFusionDrawingState();
-        }
-        return;
-    }
 
-    const target = event.target;
-    const isConnectable = target.closest('.connectable');
-    const isLine = target.closest('.fusion-line');
-    //Abertura do menu de ação da linha (delegação no canvas)
-    if (isLine && !fusionDrawingState.isActive) {
-        openFusionLineActionModal(isLine);
-        return;
-    }
-    //Início do Desenho
-    if (!fusionDrawingState.isActive && isConnectable) {
-        if (isPortConnected(isConnectable.id)) {
-            showAlert("Porta Ocupada", "Esta porta já possui uma conexão.");
-            return;
-        }
-        //Inicializa estado, define origem e cria linha guia temporária
-        fusionDrawingState.isActive = true;
-        fusionDrawingState.startElement = isConnectable;
-        const startPos = getElementCenter(isConnectable);
-        fusionDrawingState.points.push(startPos);
-        const svgLayer = document.getElementById('fusion-svg-layer');
-        fusionDrawingState.tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        fusionDrawingState.tempLine.setAttribute('fill', 'none');
-        fusionDrawingState.tempLine.setAttribute('class', 'connecting-line');
-        svgLayer.appendChild(fusionDrawingState.tempLine);
-        document.getElementById('fusionCanvas').addEventListener('mousemove', handleFusionCanvasMouseMove);
-        return;
-    }
-    //Finalização da conexão
-    if (fusionDrawingState.isActive && isConnectable && (isConnectable !== fusionDrawingState.startElement || isEditingLine)) {
-        //Verifica se a porta de destino está ocupada
-        const portIsOccupied = isEditingLine && activeLineForAction
-            ? isPortConnected(isConnectable.id, activeLineForAction)
-            : isPortConnected(isConnectable.id);
-        if (portIsOccupied) {
-            showAlert("Porta Ocupada", "Esta porta já possui uma conexão com outra fibra. A conexão foi cancelada.");
-            handleFusionCanvasRightClick(new MouseEvent('contextmenu'));
-            return;
-        }
-        //Se estiver editando, remove a linha antiga antes de criar a nova
-        if (isEditingLine && activeLineForAction) {
-            const oldLineId = activeLineForAction.id;
-            activeLineForAction.remove();
-            document.querySelectorAll(`.line-handle[data-line-id="${oldLineId}"]`).forEach(h => h.remove());
-            isEditingLine = false;
-            activeLineForAction = null;
-        }
-        //Renderiza a linha final no SVG
-        const endPos = getElementCenter(isConnectable);
-        const intermediatePoints = fusionDrawingState.points.slice(1);
-        const allPoints = buildFusionLinePoints(fusionDrawingState.points[0], endPos, intermediatePoints);
-        const finalPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        finalPath.setAttribute('fill', 'none');
-        finalPath.setAttribute('class', 'fusion-line');
-        finalPath.id = `line-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        finalPath.style.pointerEvents = 'auto';
-        finalPath.setAttribute('d', generatePolylinePath(allPoints));
-        //Salva metadados da conexão no elemento DOM
-        finalPath.dataset.startId = fusionDrawingState.startElement.id;
-        finalPath.dataset.endId = isConnectable.id;
-        finalPath.dataset.points = JSON.stringify(intermediatePoints);
-        const svgLayer = document.getElementById('fusion-svg-layer');
-        svgLayer.appendChild(finalPath);
-        attachFusionLineInteractionListeners(finalPath);
-        updateAllConnections();
-        //Atualiza estoque (BOM)
-        const materialName = "TUBETE PROTETOR DE EMENDA OPTICA";
-        if (activeFolderId) {
-            const projectId = document.getElementById(activeFolderId).closest('.folder')?.querySelector('.folder-title').dataset.folderId;
-            if(projectId) {
-                if (!projectBoms[projectId]) {
-                    calculateBomState();
-                    projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
-                }
-                if (!projectBoms[projectId][materialName]) {
-                    projectBoms[projectId][materialName] = { quantity: 0, type: 'un', unitPrice: 0.08, category: 'Fusão', removed: false };
-                }
-                projectBoms[projectId][materialName].quantity += 1;
-            }
-        }
-        resetFusionDrawingState();
-        return;
-    }
-    //Adicionar Ponto Intermediário
-    if (fusionDrawingState.isActive) {
-        const canvas = document.getElementById('fusionCanvas');
-        const canvasRect = canvas.getBoundingClientRect();
-        const newPoint = {
-            x: event.clientX - canvasRect.left + canvas.scrollLeft,
-            y: event.clientY - canvasRect.top + canvas.scrollTop
-        };
-        fusionDrawingState.points.push(newPoint);
-        const tempHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        tempHandle.setAttribute('class', 'line-handle-temp');
-        tempHandle.setAttribute('cx', newPoint.x);
-        tempHandle.setAttribute('cy', newPoint.y);
-        tempHandle.setAttribute('r', 4);
-        document.getElementById('fusion-svg-layer').appendChild(tempHandle);
-        fusionDrawingState.tempHandles.push(tempHandle);
-    }
-}
 
-//Finalização da conexão
-function endConnection(element) {
-    //Validação, analisando a porta ocupada
-    if (element === fusionDrawingState.startElement) {
-        handleFusionCanvasRightClick(new MouseEvent('contextmenu'));
-        return;
-    }
-    if (isPortConnected(element.id)) {
-        showAlert("Porta Ocupada", "A porta de destino já possui uma conexão. A conexão foi cancelada.");
-        handleFusionCanvasRightClick(new MouseEvent('contextmenu'));
-        return;
-    }
-    //Construção do elemento SVG
-    const finalPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    finalPath.setAttribute('class', 'fusion-line');
-    finalPath.id = `line-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    finalPath.style.pointerEvents = 'auto';
-    //Geometria e metadados
-    const endPos = getElementCenter(element);
-    const intermediatePoints = fusionDrawingState.points.slice(1);
-    const allPoints = buildFusionLinePoints(fusionDrawingState.points[0], endPos, intermediatePoints);
-    finalPath.setAttribute('d', generatePolylinePath(allPoints));
-    finalPath.dataset.startId = fusionDrawingState.startElement.id;
-    finalPath.dataset.endId = element.id;
-    finalPath.dataset.points = JSON.stringify(intermediatePoints);
-    //Renderização e interatividade
-    const svgLayer = document.getElementById('fusion-svg-layer');
-    svgLayer.appendChild(finalPath);
-    attachFusionLineInteractionListeners(finalPath);
-    updateAllConnections();
-    resetFusionDrawingState();
-}
 
-//Atualização visual da linha
-function handleFusionCanvasMouseMove(event) {
-    if (!fusionDrawingState.isActive) return;
-    if (!fusionCanvasHasComponents()) {
-        resetFusionDrawingState();
-        return;
-    }
-    //Calcula posição relativa ao canvas considerando scroll
-    const canvas = document.getElementById('fusionCanvas');
-    const canvasRect = canvas.getBoundingClientRect();
-    const mousePos = {
-        x: event.clientX - canvasRect.left + canvas.scrollLeft,
-        y: event.clientY - canvasRect.top + canvas.scrollTop
-    };
-    fusionDrawingState.tempLine.setAttribute('d', generatePolylinePath(
-        buildFusionLinePoints(fusionDrawingState.points[0], mousePos, fusionDrawingState.points.slice(1))
-    ));
-}
 
-//Cancelamento de ação
-function handleFusionCanvasRightClick(event) {
-    event.preventDefault();
-    if (fusionDrawingState.isActive) {
-        //Se estava editando uma linha existente
-        if (isEditingLine && activeLineForAction) {
-            activeLineForAction.classList.add('fusion-line');
-            activeLineForAction.classList.remove('fusion-line-editing');
-            activeLineForAction.style.display = '';
-            updateAllConnections();
-            isEditingLine = false;
-            activeLineForAction = null;
-        }
-        resetFusionDrawingState();
-    }
-}
 
-//Cálculo do ponto de ancoragem
-function getElementCenter(element) {
-    const parentComponent = element.closest('.splitter-element, .cable-element');
-    const canvas = document.getElementById('fusionCanvas');
-    //Fallback de segurança
-    if (!parentComponent || !canvas) {
-        console.error("Componente pai ou canvas não encontrado para o elemento:", element);
-        const rect = element.getBoundingClientRect();
-        const canvasRect = element.closest('.fusion-canvas').getBoundingClientRect();
-        return {
-            x: rect.left - canvasRect.left + rect.width / 2,
-            y: rect.top - canvasRect.top + rect.height / 2
-        };
-    }
-    //Cálculo da coordenada Y
-    const y = parentComponent.offsetTop + element.offsetTop + (element.offsetHeight / 2);
-    //Cálculo da coordenada X
-    let x;
-    const canvasMidpoint = canvas.offsetWidth / 2;
-    const isComponentOnLeft = parentComponent.offsetLeft < canvasMidpoint;
-    //Lógica para cabos
-    if (parentComponent.classList.contains('cable-element')) {
-        const colorShape = element.querySelector('.fiber-color-shape');
-        if (colorShape) {
-            const shapeLeftEdge = parentComponent.offsetLeft + element.offsetLeft + colorShape.offsetLeft;
-            const shapeRightEdge = shapeLeftEdge + colorShape.offsetWidth;
-            //Define o ponto de conexão na borda interna
-            x = isComponentOnLeft ? shapeRightEdge : shapeLeftEdge;
-        } else {
-            const portLeftEdge = parentComponent.offsetLeft + element.offsetLeft;
-            const portRightEdge = portLeftEdge + element.offsetWidth;
-            x = isComponentOnLeft ? portRightEdge : portLeftEdge;
-        }
-    } else {
-        //Lógica para splitters
-        const portLeftEdge = parentComponent.offsetLeft + element.offsetLeft;
-        const portRightEdge = portLeftEdge + element.offsetWidth;
-        x = isComponentOnLeft ? portRightEdge : portLeftEdge;
-    }
-    return { x, y };
-}
-
-//Atualização visual das conexões
-function updateAllConnections() {
-    const svgLayer = document.getElementById('fusion-svg-layer');
-    if (!svgLayer) return;
-    //Itera sobre todas as linhas existentes para recalcular coordenadas
-    const lines = svgLayer.querySelectorAll('.fusion-line, .fusion-line-editing');
-    lines.forEach(line => {
-        const startEl = document.getElementById(line.dataset.startId);
-        const endEl = document.getElementById(line.dataset.endId);
-        if (startEl && endEl) {
-            const startPos = getElementCenter(startEl);
-            const endPos = getElementCenter(endEl);
-            const allPoints = buildFusionLinePoints(startPos, endPos, [], line);
-            line.setAttribute('d', generatePolylinePath(allPoints));
-            line.dataset.points = '[]';
-        }
-    });
-}
 
 //Editor de pastas e projetos
 function openFolderEditor(titleElement) {
@@ -7351,6 +5169,11 @@ const MATERIAL_PRICES = {
     //Marcadores lógicos
     "RESERVA": { price: 0, unit: 'un', category: 'Ferragem' },
     "CASA": { price: 0.00, unit: 'un', category: 'Atendimento' },
+    //Atendimento ao cliente (drop e acessórios do kit de instalação)
+    "CABO DROP FLAT LOW FRICTION 1F": { price: 0.55, unit: 'm', category: 'Lançamento' },
+    "CONECTOR DE CAMPO SC/APC": { price: 3.90, unit: 'un', category: 'Fusão' },
+    "ESTICADOR PARA CABO DROP": { price: 1.20, unit: 'un', category: 'Ferragem' },
+    "PTO - PONTO DE TERMINAÇÃO ÓPTICA": { price: 6.50, unit: 'un', category: 'Fusão' },
     //Equipamentos ativos
     "PLACA": { price: 0, unit: 'un', category: 'Data Center'},
     "CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m": { price: 6.90, unit: 'un', category: 'Data Center'},
@@ -7422,49 +5245,151 @@ const MATERIAL_PRICES = {
    CADASTRO DE MATERIAIS E KITS
    - Catálogo editável pela interface (nome, categoria, unidade, preço
      unitário e fornecedor) com kits (conjuntos de materiais).
-   - Persistido em localStorage (global, por navegador) e semeado a
-     partir do MATERIAL_PRICES. Camada isolada para facilitar migrar
-     para Firestore futuramente.
+   - Salvo por empresa no Supabase (tabela company_settings) e semeado a
+     partir do MATERIAL_PRICES. Só o administrador pode alterar.
    ===================================================================== */
-const MATERIAL_CATALOG_STORAGE_KEY = 'routeMapMaterialCatalog_v1';
-const LANCAMENTO_CONFIG_STORAGE_KEY = 'routeMapLancamentoConfig_v1';
+//Chaves antigas: o catálogo ficava só no navegador. Usadas uma vez para
+//levar os preços existentes para a empresa (ver loadCompanySettings).
+const LEGACY_CATALOG_STORAGE_KEY = 'routeMapMaterialCatalog_v1';
+const LEGACY_LANCAMENTO_STORAGE_KEY = 'routeMapLancamentoConfig_v1';
 
 //Estado em memória do catálogo
 let materialCatalog = { materials: [], kits: [] };
 
-//Configuração do lançamento (vão entre postes e ferragens por poste)
-let lancamentoConfig = {
+const DEFAULT_LANCAMENTO_CONFIG = {
     poleSpan: 35,        //Distância padrão entre postes (m)
     plaquetaPerPole: 1,  //Plaquetas por poste
     bapPerPole: 1,       //Abraçadeiras BAP por poste
     supaPerPole: 2,      //Suportes de ancoragem (SUPAS) por poste
-    alcaPerSupa: 1       //Alças preformadas por SUPA
+    alcaPerSupa: 1,      //Alças preformadas por SUPA
+    dropSlack: 15        //Metros somados a cada drop de cliente (subida, reserva e acomodação)
 };
 
-function loadLancamentoConfig() {
+const DEFAULT_LABOR_CONFIG = {
+    hourlyRate: 40,      //Custo por técnico/hora (R$)
+    hoursPerDay: 8,
+    cablePerDay: 2000,   //Metros de cabo lançados por dia
+    ctoPerDay: 10,
+    ceoPerDay: 1
+};
+
+//Configuração do lançamento (vão entre postes e ferragens por poste)
+let lancamentoConfig = { ...DEFAULT_LANCAMENTO_CONFIG };
+//Custo e produtividade da mão de obra regional
+let laborConfig = { ...DEFAULT_LABOR_CONFIG };
+
+function normalizeLancamentoConfig(stored) {
+    const src = stored || {};
+    const n = (value, fallback) => (value != null && Number.isFinite(Number(value)) ? Number(value) : fallback);
+    return {
+        poleSpan: Number(src.poleSpan) > 0 ? Number(src.poleSpan) : DEFAULT_LANCAMENTO_CONFIG.poleSpan,
+        plaquetaPerPole: n(src.plaquetaPerPole, DEFAULT_LANCAMENTO_CONFIG.plaquetaPerPole),
+        bapPerPole: n(src.bapPerPole, DEFAULT_LANCAMENTO_CONFIG.bapPerPole),
+        supaPerPole: n(src.supaPerPole, DEFAULT_LANCAMENTO_CONFIG.supaPerPole),
+        alcaPerSupa: n(src.alcaPerSupa, DEFAULT_LANCAMENTO_CONFIG.alcaPerSupa),
+        dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack)
+    };
+}
+
+function normalizeLaborConfig(stored) {
+    const src = stored || {};
+    const positive = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
+    return {
+        hourlyRate: Number(src.hourlyRate) >= 0 && src.hourlyRate != null ? Number(src.hourlyRate) : DEFAULT_LABOR_CONFIG.hourlyRate,
+        hoursPerDay: positive(src.hoursPerDay, DEFAULT_LABOR_CONFIG.hoursPerDay),
+        cablePerDay: positive(src.cablePerDay, DEFAULT_LABOR_CONFIG.cablePerDay),
+        ctoPerDay: positive(src.ctoPerDay, DEFAULT_LABOR_CONFIG.ctoPerDay),
+        ceoPerDay: positive(src.ceoPerDay, DEFAULT_LABOR_CONFIG.ceoPerDay)
+    };
+}
+
+//Dias estimados de obra a partir dos quantitativos do projeto
+function estimateLaborDays(quantities) {
+    return Math.ceil(
+        (quantities.cableLength / laborConfig.cablePerDay)
+        + (quantities.ctoCount / laborConfig.ctoPerDay)
+        + (quantities.ceoCount / laborConfig.ceoPerDay)
+    );
+}
+
+function readLegacyLocalSetting(key) {
     try {
-        const raw = localStorage.getItem(LANCAMENTO_CONFIG_STORAGE_KEY);
-        if (raw) {
-            const stored = JSON.parse(raw);
-            lancamentoConfig = {
-                poleSpan: Number(stored.poleSpan) > 0 ? Number(stored.poleSpan) : 35,
-                plaquetaPerPole: stored.plaquetaPerPole != null ? Number(stored.plaquetaPerPole) : 1,
-                bapPerPole: stored.bapPerPole != null ? Number(stored.bapPerPole) : 1,
-                supaPerPole: stored.supaPerPole != null ? Number(stored.supaPerPole) : 2,
-                alcaPerSupa: stored.alcaPerSupa != null ? Number(stored.alcaPerSupa) : 1
-            };
-        }
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
     } catch (e) {
-        //Mantém os valores padrão em caso de erro
+        return null;
     }
 }
 
+//Grava campos em company_settings (somente administrador)
+let companySettingsSaveChain = Promise.resolve();
+function saveCompanySettings(patch) {
+    if (!AppSession.isAdmin) return Promise.resolve(false);
+    companySettingsSaveChain = companySettingsSaveChain.then(async () => {
+        const { error } = await supabaseClient
+            .from('company_settings')
+            .upsert({ company_id: AppSession.company.id, ...patch }, { onConflict: 'company_id' });
+        if (error) {
+            console.error('Erro ao salvar configurações da empresa:', error);
+            showAlert('Erro', 'Não foi possível salvar as alterações da empresa no banco de dados.');
+            return false;
+        }
+        return true;
+    });
+    return companySettingsSaveChain;
+}
+
 function persistLancamentoConfig() {
-    try {
-        localStorage.setItem(LANCAMENTO_CONFIG_STORAGE_KEY, JSON.stringify(lancamentoConfig));
-    } catch (e) {
-        console.error('Não foi possível salvar a configuração de lançamento:', e);
+    return saveCompanySettings({ lancamento_config: lancamentoConfig, labor_config: laborConfig });
+}
+
+//Carrega catálogo e configurações da empresa após o login
+async function loadCompanySettings() {
+    const { data, error } = await supabaseClient
+        .from('company_settings')
+        .select('material_catalog, lancamento_config, labor_config')
+        .eq('company_id', AppSession.company.id)
+        .maybeSingle();
+    if (error) {
+        console.error('Erro ao carregar configurações da empresa:', error);
+        showAlert('Aviso', 'Não foi possível carregar os preços da empresa. Os valores padrão estão sendo usados.');
+        return;
     }
+    let storedCatalog = data?.material_catalog || null;
+    let storedLancamento = data?.lancamento_config || null;
+    const storedLabor = data?.labor_config || null;
+    //Primeiro acesso do admin: aproveita o catálogo que estava salvo neste navegador
+    let importedLegacy = false;
+    if (!storedCatalog && AppSession.isAdmin) {
+        const legacyCatalog = readLegacyLocalSetting(LEGACY_CATALOG_STORAGE_KEY);
+        if (legacyCatalog && Array.isArray(legacyCatalog.materials)) {
+            storedCatalog = legacyCatalog;
+            storedLancamento = storedLancamento || readLegacyLocalSetting(LEGACY_LANCAMENTO_STORAGE_KEY);
+            importedLegacy = true;
+        }
+    }
+    loadMaterialCatalog(storedCatalog);
+    lancamentoConfig = normalizeLancamentoConfig(storedLancamento);
+    laborConfig = normalizeLaborConfig(storedLabor);
+    applyCatalogToMaterialPrices();
+    if (AppSession.isAdmin && (!data?.material_catalog || importedLegacy)) {
+        await saveCompanySettings({
+            material_catalog: materialCatalog,
+            lancamento_config: lancamentoConfig,
+            labor_config: laborConfig
+        });
+    }
+    applyCatalogPermissions();
+    try { syncCatalogPricesIntoBoms(); } catch (e) { /* sem listas calculadas ainda */ }
+}
+
+//Esconde as ações de edição do catálogo para quem não é admin
+function applyCatalogPermissions() {
+    const readOnly = !AppSession.isAdmin;
+    document.body.classList.toggle('catalog-readonly', readOnly);
+    const note = document.getElementById('catalogReadonlyNote');
+    if (note) note.hidden = !readOnly;
+    document.querySelectorAll('#catalogConfigView input').forEach(input => { input.disabled = readOnly; });
 }
 
 function getPoleSpanDistance() {
@@ -7489,6 +5414,11 @@ function getDefaultKitDefinitions() {
             { name: "SUPORTE PARA CEO", quantity: 1 },
             { name: "ABRAÇADEIRA DE NYLON", quantity: 4 },
             { name: "ABRAÇADEIRA BAP 3", quantity: 2 }
+        ]},
+        "KIT ATENDIMENTO CLIENTE": { category: 'Fusão', components: [
+            { name: "CONECTOR DE CAMPO SC/APC", quantity: 2 },
+            { name: "ESTICADOR PARA CABO DROP", quantity: 2 },
+            { name: "PTO - PONTO DE TERMINAÇÃO ÓPTICA", quantity: 1 }
         ]},
         "KIT CORDOALHA": { category: 'Ferragem', components: [
             { name: "SUPORTE PRESBOW (REX)", quantity: 4 },
@@ -7563,16 +5493,9 @@ function buildSeedCatalog() {
     return { materials, kits };
 }
 
-//Carrega o catálogo do localStorage, mesclando novos itens do seed
-function loadMaterialCatalog() {
+//Carrega o catálogo salvo da empresa, mesclando novos itens do seed
+function loadMaterialCatalog(stored) {
     const seed = buildSeedCatalog();
-    let stored = null;
-    try {
-        const raw = localStorage.getItem(MATERIAL_CATALOG_STORAGE_KEY);
-        if (raw) stored = JSON.parse(raw);
-    } catch (e) {
-        stored = null;
-    }
     if (!stored || !Array.isArray(stored.materials)) {
         materialCatalog = seed;
         return;
@@ -7608,13 +5531,9 @@ function loadMaterialCatalog() {
     materialCatalog = { materials, kits };
 }
 
-//Salva o catálogo no localStorage
+//Salva o catálogo da empresa no banco
 function persistMaterialCatalog() {
-    try {
-        localStorage.setItem(MATERIAL_CATALOG_STORAGE_KEY, JSON.stringify(materialCatalog));
-    } catch (e) {
-        console.error('Não foi possível salvar o catálogo de materiais:', e);
-    }
+    return saveCompanySettings({ material_catalog: materialCatalog });
 }
 
 //Aplica os preços/itens do catálogo ao MATERIAL_PRICES (reflete na BOM)
@@ -7641,11 +5560,11 @@ function applyCatalogToMaterialPrices() {
     });
 }
 
-//Inicializa o catálogo (carrega + aplica)
+//Inicializa o catálogo com os valores padrão; os da empresa chegam após o login
 function initMaterialCatalog() {
-    loadLancamentoConfig();
-    loadMaterialCatalog();
+    loadMaterialCatalog(null);
     applyCatalogToMaterialPrices();
+    whenAppReady(loadCompanySettings);
 }
 
 //Sincroniza os preços do catálogo em TODAS as listas de materiais já calculadas
@@ -7690,7 +5609,7 @@ function getCatalogCategories() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
-//Preenche o filtro de categorias e os datalists
+//Preenche o filtro de categorias (chips), os datalists e o seletor oculto
 function populateCatalogCategoryFilters() {
     const categories = getCatalogCategories();
     const filter = document.getElementById('catalogCategoryFilter');
@@ -7700,6 +5619,7 @@ function populateCatalogCategoryFilters() {
             categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
         filter.value = categories.includes(current) ? current : '';
     }
+    renderCatalogCategoryChips();
     const datalist = document.getElementById('catalogCategoryOptions');
     if (datalist) {
         datalist.innerHTML = categories.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
@@ -7709,6 +5629,29 @@ function populateCatalogCategoryFilters() {
         matOptions.innerHTML = materialCatalog.materials
             .map(m => `<option value="${escapeHtml(m.name)}"></option>`).join('');
     }
+}
+
+//Cor fixa por categoria (mesma cor nos chips e nos grupos da tabela)
+function getCatalogCategoryColor(category) {
+    const palette = ['#0f766e', '#2563eb', '#b45309', '#7c3aed', '#be185d', '#15803d', '#0369a1', '#a16207'];
+    const fixed = { 'Ferragem': '#b45309', 'Lançamento': '#2563eb', 'Fusão': '#7c3aed', 'Data Center': '#0f766e', 'Clientes': '#15803d' };
+    if (fixed[category]) return fixed[category];
+    let hash = 0;
+    String(category || '').split('').forEach(ch => { hash = (hash * 31 + ch.charCodeAt(0)) >>> 0; });
+    return palette[hash % palette.length];
+}
+
+function renderCatalogCategoryChips() {
+    const wrap = document.getElementById('catalogCategoryChips');
+    const filter = document.getElementById('catalogCategoryFilter');
+    if (!wrap || !filter) return;
+    const source = catalogActiveTab === 'kits' ? materialCatalog.kits : materialCatalog.materials;
+    const counts = {};
+    source.forEach(item => { const c = item.category || 'Outros'; counts[c] = (counts[c] || 0) + 1; });
+    const categories = Object.keys(counts).sort((a, b) => getCatalogCategoryRank(a) - getCatalogCategoryRank(b) || a.localeCompare(b, 'pt-BR'));
+    const current = filter.value;
+    const chip = (value, label, count, color) => `<button type="button" class="cat3-chip${value === current ? ' is-active' : ''}" data-category="${escapeHtml(value)}" role="tab" style="--chip:${color}"><span class="cat3-chip__dot"></span>${escapeHtml(label)}<small>${count}</small></button>`;
+    wrap.innerHTML = chip('', 'Todas', source.length, '#64748b') + categories.map(c => chip(c, c, counts[c], getCatalogCategoryColor(c))).join('');
 }
 
 //Escapa texto para uso seguro em HTML
@@ -7732,18 +5675,25 @@ function setCatalogTab(tab) {
     document.querySelectorAll('.catalog-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.catalogTab === catalogActiveTab);
     });
-    const matView = document.getElementById('catalogMaterialsView');
-    const kitView = document.getElementById('catalogKitsView');
-    const configView = document.getElementById('catalogConfigView');
-    if (matView) matView.style.display = catalogActiveTab === 'materials' ? '' : 'none';
-    if (kitView) kitView.style.display = catalogActiveTab === 'kits' ? '' : 'none';
-    if (configView) configView.style.display = catalogActiveTab === 'config' ? '' : 'none';
-    const toolbar = document.getElementById('catalogToolbar');
-    if (toolbar) toolbar.style.display = catalogActiveTab === 'config' ? 'none' : '';
+    const views = { materials: 'catalogMaterialsView', kits: 'catalogKitsView', config: 'catalogConfigView' };
+    Object.entries(views).forEach(([key, id]) => {
+        const view = document.getElementById(id);
+        if (view) view.style.display = catalogActiveTab === key ? '' : 'none';
+    });
+    const isConfig = catalogActiveTab === 'config';
+    document.getElementById('catalogToolbar').style.display = isConfig ? 'none' : '';
+    document.getElementById('catalogCategoryChips').style.display = isConfig ? 'none' : '';
     const addBtn = document.getElementById('catalogAddButton');
-    if (addBtn) addBtn.textContent = catalogActiveTab === 'kits' ? '+ Adicionar kit' : '+ Adicionar material';
-    if (catalogActiveTab === 'config') renderLancamentoConfigForm();
-    else renderCatalog();
+    if (addBtn) addBtn.textContent = catalogActiveTab === 'kits' ? '+ Novo kit' : '+ Novo material';
+    const importBtn = document.getElementById('catalogImportButton');
+    if (importBtn) importBtn.hidden = catalogActiveTab === 'kits';
+    const filter = document.getElementById('catalogCategoryFilter');
+    if (filter) filter.value = '';
+    if (isConfig) renderLancamentoConfigForm();
+    else {
+        renderCatalogCategoryChips();
+        renderCatalog();
+    }
 }
 
 function renderLancamentoConfigForm() {
@@ -7753,7 +5703,43 @@ function renderLancamentoConfigForm() {
     set('configBapPerPole', lancamentoConfig.bapPerPole);
     set('configSupaPerPole', lancamentoConfig.supaPerPole);
     set('configAlcaPerSupa', lancamentoConfig.alcaPerSupa);
+    set('configDropSlack', lancamentoConfig.dropSlack);
+    set('configLaborHourlyRate', laborConfig.hourlyRate);
+    set('configLaborHoursPerDay', laborConfig.hoursPerDay);
+    set('configCablePerDay', laborConfig.cablePerDay);
+    set('configCtoPerDay', laborConfig.ctoPerDay);
+    set('configCeoPerDay', laborConfig.ceoPerDay);
     updateLancamentoPreview();
+    updateLaborPreview();
+    applyCatalogPermissions();
+}
+
+function readLaborConfigForm() {
+    const num = (id) => parseFloat(document.getElementById(id)?.value);
+    return normalizeLaborConfig({
+        hourlyRate: num('configLaborHourlyRate'),
+        hoursPerDay: num('configLaborHoursPerDay'),
+        cablePerDay: num('configCablePerDay'),
+        ctoPerDay: num('configCtoPerDay'),
+        ceoPerDay: num('configCeoPerDay')
+    });
+}
+
+function updateLaborPreview() {
+    const preview = document.getElementById('configLaborPreview');
+    if (!preview) return;
+    const cfg = readLaborConfigForm();
+    const dayCost = cfg.hourlyRate * cfg.hoursPerDay;
+    const money = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const days = Math.ceil(5000 / cfg.cablePerDay + 20 / cfg.ctoPerDay + 2 / cfg.ceoPerDay);
+    preview.innerHTML = `<span class="cat3-example__label">Exemplo</span>
+        <span class="cat3-example__flow">
+            <span class="cat3-token">5.000 m de cabo</span><span class="cat3-token">20 CTOs</span><span class="cat3-token">2 CEOs</span>
+            <span class="cat3-arrow">→</span>
+            <span class="cat3-token cat3-token--strong">${days} dias</span>
+            <span class="cat3-token cat3-token--strong">${money(dayCost)} / dia por técnico</span>
+            <span class="cat3-token cat3-token--strong">${money(days * dayCost)} por técnico</span>
+        </span>`;
 }
 
 //Mostra um exemplo de cálculo com os valores atuais do formulário
@@ -7771,11 +5757,26 @@ function updateLancamentoPreview() {
     const alca = num('configAlcaPerSupa', 1);
     const exemplo = 1000;
     const postes = Math.ceil(exemplo / span);
-    preview.innerHTML = `<strong>Exemplo:</strong> um cabo de ${exemplo} m gera <strong>${postes} postes</strong> ` +
-        `(${exemplo} ÷ ${span} m) → ${postes * plaq} plaquetas, ${postes * bap} BAP, ${postes * supa} SUPAS e ${postes * supa * alca} alças.`;
+    const poles = Array.from({ length: 7 }, () => '<i class="cat3-pole"></i>').join('<i class="cat3-span"></i>');
+    preview.innerHTML = `<span class="cat3-example__label">Exemplo</span>
+        <div class="cat3-poles" aria-hidden="true">${poles}<em>${span} m</em></div>
+        <span class="cat3-example__flow">
+            <span class="cat3-token">Cabo de ${exemplo} m</span>
+            <span class="cat3-arrow">→</span>
+            <span class="cat3-token cat3-token--strong">${postes} postes</span>
+            <span class="cat3-token">${postes * plaq} plaquetas</span>
+            <span class="cat3-token">${postes * bap} BAP</span>
+            <span class="cat3-token">${postes * supa} SUPAS</span>
+            <span class="cat3-token">${postes * supa * alca} alças</span>
+        </span>`;
 }
 
-function saveLancamentoConfigHandler() {
+async function saveLancamentoConfigHandler() {
+    if (!AppSession.isAdmin) {
+        showAlert('Sem permissão', 'Somente o administrador da empresa pode alterar as configurações.');
+        return;
+    }
+    laborConfig = readLaborConfigForm();
     const num = (id, fallback) => {
         const v = parseFloat(document.getElementById(id)?.value);
         return Number.isFinite(v) && v >= 0 ? v : fallback;
@@ -7786,15 +5787,17 @@ function saveLancamentoConfigHandler() {
         plaquetaPerPole: num('configPlaquetaPerPole', 1),
         bapPerPole: num('configBapPerPole', 1),
         supaPerPole: num('configSupaPerPole', 2),
-        alcaPerSupa: num('configAlcaPerSupa', 1)
+        alcaPerSupa: num('configAlcaPerSupa', 1),
+        dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack)
     };
-    persistLancamentoConfig();
+    const saved = await persistLancamentoConfig();
+    if (typeof refreshClientDrops === 'function') refreshClientDrops();
     renderLancamentoConfigForm();
     //Recalcula a lista de materiais do projeto ativo, se houver
     if (typeof refreshBomAfterProjectChange === 'function') {
         try { refreshBomAfterProjectChange(); } catch (e) { /* ignora se não houver projeto */ }
     }
-    showAlert('Sucesso', 'Configurações de lançamento salvas. A lista de materiais usará a nova distância entre postes.');
+    if (saved) showAlert('Configurações salvas', 'As novas configurações valem para toda a equipe da empresa.');
 }
 
 function getCatalogFilters() {
@@ -7818,17 +5821,17 @@ function getCatalogCategoryRank(cat) {
 }
 
 function buildCatalogMaterialRowHtml(m) {
+    const meta = [m.code ? `Cód. ${escapeHtml(m.code)}` : '', m.notes ? escapeHtml(m.notes) : ''].filter(Boolean).join(' · ');
     return `
-        <tr>
-            <td><span class="catalog-item-name">${escapeHtml(m.name)}</span>${m.code ? `<br><small style="color:#8a98a0">${escapeHtml(m.code)}</small>` : ''}</td>
-            <td><span class="catalog-cat-pill">${escapeHtml(m.category || 'Outros')}</span></td>
-            <td>${escapeHtml(m.unit || 'un')}</td>
-            <td class="catalog-price">R$ ${formatCatalogPrice(m.price)}</td>
+        <tr data-material-id="${m.id}">
+            <td><span class="catalog-item-name">${escapeHtml(m.name)}</span>${meta ? `<small class="cat3-meta">${meta}</small>` : ''}</td>
+            <td><span class="cat3-unit">${escapeHtml(m.unit || 'un')}</span></td>
+            <td class="cat3-num"><button type="button" class="cat3-price" data-price-material="${m.id}" title="${AppSession.isAdmin ? 'Clique para editar o preço' : ''}">R$ ${formatCatalogPrice(m.price)}</button></td>
             <td>${m.supplier ? escapeHtml(m.supplier) : '<span class="catalog-supplier-empty">—</span>'}</td>
             <td>
                 <div class="catalog-row-actions">
-                    <button type="button" class="catalog-icon-btn" data-edit-material="${m.id}">${uiIcon('edit')} Editar</button>
-                    <button type="button" class="catalog-icon-btn danger" data-delete-material="${m.id}">${uiIcon('trash')} Excluir</button>
+                    <button type="button" class="catalog-icon-btn" data-edit-material="${m.id}" title="Editar material" aria-label="Editar material">${uiIcon('edit')}</button>
+                    <button type="button" class="catalog-icon-btn danger" data-delete-material="${m.id}" title="Excluir material" aria-label="Excluir material">${uiIcon('trash')}</button>
                 </div>
             </td>
         </tr>`;
@@ -7840,19 +5843,17 @@ function renderCatalogMaterials() {
     if (!body) return;
     const { term, category } = getCatalogFilters();
     const rows = materialCatalog.materials
-        .filter(m => !category || m.category === category)
+        .filter(m => !category || (m.category || 'Outros') === category)
         .filter(m => !term ||
             m.name.toLowerCase().includes(term) ||
             (m.category || '').toLowerCase().includes(term) ||
             (m.supplier || '').toLowerCase().includes(term) ||
             (m.code || '').toLowerCase().includes(term));
-    //Agrupa por categoria/tipo
     const groups = {};
     rows.forEach(m => {
         const cat = m.category || 'Outros';
         (groups[cat] = groups[cat] || []).push(m);
     });
-    //Ordena as categorias: Ferragem, Lançamento, Fusão, Data Center, depois o resto
     const orderedCats = Object.keys(groups).sort((a, b) => {
         const ra = getCatalogCategoryRank(a);
         const rb = getCatalogCategoryRank(b);
@@ -7860,10 +5861,46 @@ function renderCatalogMaterials() {
     });
     body.innerHTML = orderedCats.map(cat => {
         const items = groups[cat].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-        const rowsHtml = items.map(buildCatalogMaterialRowHtml).join('');
-        return `<tr class="catalog-group-row"><td colspan="6">${escapeHtml(cat)} <span class="catalog-group-count">(${items.length})</span></td></tr>${rowsHtml}`;
+        const total = items.reduce((sum, m) => sum + (Number(m.price) || 0), 0);
+        return `<tr class="catalog-group-row" style="--chip:${getCatalogCategoryColor(cat)}"><td colspan="5"><span class="cat3-chip__dot"></span>${escapeHtml(cat)} <span class="catalog-group-count">${items.length} ite${items.length === 1 ? 'm' : 'ns'} · média R$ ${formatCatalogPrice(total / items.length)}</span></td></tr>`
+            + items.map(buildCatalogMaterialRowHtml).join('');
     }).join('');
     if (empty) empty.style.display = rows.length ? 'none' : 'flex';
+}
+
+//Edição do preço direto na tabela (administrador)
+function startInlinePriceEdit(button) {
+    if (!AppSession.isAdmin) return;
+    const material = materialCatalog.materials.find(m => m.id === button.dataset.priceMaterial);
+    if (!material) return;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.step = '0.01';
+    input.className = 'cat3-price-input';
+    input.value = Number(material.price) || 0;
+    button.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (save) => {
+        if (done) return;
+        done = true;
+        const value = parseFloat(input.value);
+        if (save && Number.isFinite(value) && value >= 0 && value !== Number(material.price)) {
+            material.price = Math.round(value * 100) / 100;
+            persistMaterialCatalog();
+            applyCatalogToMaterialPrices();
+            syncCatalogPricesIntoBoms();
+            showToast('Preço atualizado', `${material.name}: R$ ${formatCatalogPrice(material.price)}`);
+        }
+        renderCatalogMaterials();
+    };
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(true); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
 }
 
 function renderCatalogKits() {
@@ -7871,32 +5908,42 @@ function renderCatalogKits() {
     const empty = document.getElementById('catalogKitsEmpty');
     if (!list) return;
     const { term, category } = getCatalogFilters();
+    const priceOf = (name) => Number(materialCatalog.materials.find(m => m.name.toUpperCase() === String(name).toUpperCase())?.price) || 0;
     const kits = materialCatalog.kits
-        .filter(k => !category || k.category === category)
+        .filter(k => !category || (k.category || 'Outros') === category)
         .filter(k => !term ||
             k.name.toLowerCase().includes(term) ||
             (k.category || '').toLowerCase().includes(term) ||
             k.components.some(c => c.name.toLowerCase().includes(term)))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    list.innerHTML = kits.map(k => `
-        <div class="catalog-kit-card">
-            <h4>${escapeHtml(k.name)}</h4>
-            <span class="kit-card-meta"><span class="catalog-cat-pill">${escapeHtml(k.category || 'Outros')}</span> ${k.components.length} item(ns)</span>
-            <ul>${k.components.map(c => `<li><span>${escapeHtml(c.name)}</span><span class="kit-li-qty">${c.quantity}</span></li>`).join('') || '<li style="color:#9aa7af">Sem itens</li>'}</ul>
+    list.innerHTML = kits.map(k => {
+        const total = k.components.reduce((sum, c) => sum + priceOf(c.name) * (Number(c.quantity) || 0), 0);
+        const color = getCatalogCategoryColor(k.category || 'Outros');
+        return `
+        <article class="catalog-kit-card cat3-kit" style="--chip:${color}">
+            <header>
+                <div>
+                    <h4>${escapeHtml(k.name)}</h4>
+                    <span class="kit-card-meta"><span class="cat3-chip__dot"></span>${escapeHtml(k.category || 'Outros')} · ${k.components.length} ite${k.components.length === 1 ? 'm' : 'ns'}</span>
+                </div>
+                <strong class="cat3-kit__total">R$ ${formatCatalogPrice(total)}</strong>
+            </header>
+            <ul>${k.components.map(c => `<li><span class="kit-li-qty">${c.quantity}×</span><span class="cat3-kit__name">${escapeHtml(c.name)}</span><span class="cat3-kit__price">R$ ${formatCatalogPrice(priceOf(c.name) * (Number(c.quantity) || 0))}</span></li>`).join('') || '<li class="cat3-kit__empty">Sem itens</li>'}</ul>
             <div class="catalog-row-actions">
                 <button type="button" class="catalog-icon-btn" data-edit-kit="${k.id}">${uiIcon('edit')} Editar</button>
-                <button type="button" class="catalog-icon-btn danger" data-delete-kit="${k.id}">${uiIcon('trash')} Excluir</button>
+                <button type="button" class="catalog-icon-btn danger" data-delete-kit="${k.id}" title="Excluir kit" aria-label="Excluir kit">${uiIcon('trash')}</button>
             </div>
-        </div>`).join('');
+        </article>`;
+    }).join('');
     if (empty) empty.style.display = kits.length ? 'none' : 'flex';
 }
 
 //Atualiza os contadores do cabeçalho
 function updateCatalogStats() {
-    const matCount = document.getElementById('catalogMaterialsCount');
-    const kitCount = document.getElementById('catalogKitsCount');
-    if (matCount) matCount.textContent = materialCatalog.materials.length;
-    if (kitCount) kitCount.textContent = materialCatalog.kits.length;
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    set('catalogMaterialsCount', materialCatalog.materials.length);
+    set('catalogKitsCount', materialCatalog.kits.length);
+    set('catalogCategoriesCount', getCatalogCategories().length);
 }
 
 /* ------------------ Formulário de material ------------------ */
@@ -8392,8 +6439,18 @@ function setupMaterialCatalogUI() {
     document.getElementById('catalogMaterialsBody')?.addEventListener('click', (e) => {
         const editBtn = e.target.closest('[data-edit-material]');
         const delBtn = e.target.closest('[data-delete-material]');
+        const priceBtn = e.target.closest('[data-price-material]');
         if (editBtn) openMaterialForm(editBtn.dataset.editMaterial);
         else if (delBtn) deleteCatalogMaterial(delBtn.dataset.deleteMaterial);
+        else if (priceBtn) startInlinePriceEdit(priceBtn);
+    });
+    //Chips de categoria
+    document.getElementById('catalogCategoryChips')?.addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-category]');
+        if (!chip) return;
+        document.getElementById('catalogCategoryFilter').value = chip.dataset.category;
+        renderCatalogCategoryChips();
+        renderCatalog();
     });
     //Delegação de ações nos cards de kit
     document.getElementById('catalogKitsList')?.addEventListener('click', (e) => {
@@ -8426,6 +6483,9 @@ function setupMaterialCatalogUI() {
     document.getElementById('saveLancamentoConfig')?.addEventListener('click', saveLancamentoConfigHandler);
     ['configPoleSpan', 'configPlaquetaPerPole', 'configBapPerPole', 'configSupaPerPole', 'configAlcaPerSupa'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', updateLancamentoPreview);
+    });
+    ['configLaborHourlyRate', 'configLaborHoursPerDay', 'configCablePerDay', 'configCtoPerDay', 'configCeoPerDay'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updateLaborPreview);
     });
 
     //Importação de planilha de preços
@@ -9238,19 +7298,7 @@ function setStatusPill(element, prefix, statusValue) {
     element.className = `status-pill ${getStatusPillModifier(statusValue)}`;
 }
 
-function syncMarkerSummaryPanelVisibility() {
-    const panel = document.getElementById('markerSummaryPanel');
-    if (!panel) return;
-    const hasVisibleBadge = panel.querySelector('.marker-summary-badges:not(.hidden)');
-    panel.classList.toggle('hidden', !hasVisibleBadge);
-}
 
-function hideMarkerSummaryBadges() {
-    ['ceoInfoDisplay', 'ctoInfoDisplay', 'cordoalhaInfoDisplay', 'reservaInfoDisplay'].forEach((id) => {
-        document.getElementById(id)?.classList.add('hidden');
-    });
-    document.getElementById('markerSummaryPanel')?.classList.add('hidden');
-}
 
 function applyMarkerInfrastructureStatus(markerInfo, statusValue) {
     if (!markerInfo || !statusValue) return;
@@ -9278,52 +7326,8 @@ function setMarkerInfrastructureStatus(markerInfo, statusValue) {
     refreshBomAfterProjectChange();
 }
 
-function populateMarkerInfraStatusSelect(markerInfo) {
-    const group = document.getElementById('markerInfraStatusGroup');
-    const select = document.getElementById('markerInfraStatus');
-    if (!group || !select || !MARKER_TYPES_WITH_INFRA_STATUS.includes(markerInfo.type)) {
-        group?.classList.add('hidden');
-        return;
-    }
-    hideMarkerSummaryBadges();
-    select.innerHTML = '';
-    [
-        { value: 'Nova', label: 'Novo' },
-        { value: 'Existente', label: 'Existente' },
-    ].forEach(({ value, label }) => {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = label;
-        select.appendChild(opt);
-    });
-    if (markerInfo.type === 'CEO' || markerInfo.type === 'CTO') {
-        const opt = document.createElement('option');
-        opt.value = 'Troca';
-        opt.textContent = 'Troca';
-        select.appendChild(opt);
-    }
-    select.value = getMarkerInfrastructureStatus(markerInfo) || 'Nova';
-    select.onchange = () => {
-        if (markerInfo.type !== 'CTO') return;
-        if (shouldDefaultCtoStickers(select.value)) {
-            const stickerCheckbox = document.getElementById('ctoStickerCheckbox');
-            if (stickerCheckbox) stickerCheckbox.checked = true;
-        }
-    };
-    group.classList.remove('hidden');
-}
 
-function showCeoAccessoryEditor(accessory) {
-    const group = document.getElementById('ceoAccessoryEditGroup');
-    const select = document.getElementById('ceoAccessorySelect');
-    if (!group || !select) return;
-    select.value = accessory === 'Suporte' ? 'Suporte' : 'Raquete';
-    group.classList.remove('hidden');
-}
 
-function hideCeoAccessoryEditor() {
-    document.getElementById('ceoAccessoryEditGroup')?.classList.add('hidden');
-}
 
 function updateCableSidebarLabel(cable) {
     if (!cable?.item) return;
@@ -9416,6 +7420,7 @@ function calculateBomState() {
     projectMarkers.forEach(markerInfo => {
         if (markerInfo.type === 'Importado') return;
         const type = markerInfo.type;
+        if (type === 'CLIENTE') return; //Tratado em addClientMaterialsToBom
         if (type === 'CASA' || type === 'POP' || isMarkerStatusExistente(markerInfo)) return;
         if (type === 'CTO') {
             if (markerInfo.isPredial) {
@@ -9481,6 +7486,8 @@ function calculateBomState() {
         const fitaName = "FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M";
         addOrUpdateMaterial(fitaName, Math.ceil((3 * ctoCount) / 25), 'unit', 'CTO', `${ctoCount} CTO(s)`);
     }
+    //Drops e kits de instalação dos clientes
+    addClientMaterialsToBom(projectMarkers, addOrUpdateMaterial);
     //Plano de fusão
     projectMarkers.forEach(markerInfo => {
         if ((markerInfo.type === 'CTO' || markerInfo.type === 'CEO') && markerInfo.fusionPlan) {
@@ -9973,7 +7980,7 @@ function openRegionalLaborModal(itemNameForEdit = null) {
         }
         //Calcula os dias (Estimativa)
         const quantities = getProjectQuantities();
-        const calculatedDays = Math.ceil((quantities.cableLength / 2000) + (quantities.ctoCount / 10) + (quantities.ceoCount / 1));
+        const calculatedDays = estimateLaborDays(quantities);
         //Exibe a estimativa
         document.getElementById('regionalDaysDisplay').textContent = calculatedDays;
         //Pega o campo de input de dias manuais
@@ -10051,7 +8058,7 @@ function updateRegionalCost() {
     const tollQty = parseFloat(document.getElementById('regionalTollQty').value) || 0;
     const tollPrice = parseFloat(document.getElementById('regionalTollPrice').value) || 0;
     //Calculo base
-    const baseCost = techs * days * 8 * 40;
+    const baseCost = techs * days * laborConfig.hoursPerDay * laborConfig.hourlyRate;
     const totalFuel = fuelQty * fuelPrice;
     const totalFood = foodQty * foodPrice;
     const totalLodging = lodgingQty * lodgingPrice;
@@ -10085,7 +8092,7 @@ function handleRegionalLaborConfirm() {
     const tollQty = parseFloat(document.getElementById('regionalTollQty').value) || 0;
     const tollPrice = parseFloat(document.getElementById('regionalTollPrice').value) || 0;
     //Calcula os custos
-    const baseCost = techs * manualDays * 8 * 40;
+    const baseCost = techs * manualDays * laborConfig.hoursPerDay * laborConfig.hourlyRate;
     const totalFuel = fuelQty * fuelPrice;
     const totalFood = foodQty * foodPrice;
     const totalLodging = lodgingQty * lodgingPrice;
@@ -10488,6 +8495,7 @@ function calculateProjectCost(projectMarkers, projectCables) {
     if (ctoCount > 0) {
         addOrUpdate("FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M", Math.ceil((3 * ctoCount) / 25));
     }
+    addClientMaterialsToBom(projectMarkers, addOrUpdate);
     //Processamento de fusões
     projectMarkers.forEach(markerInfo => {
         if ((markerInfo.type === 'CTO' || markerInfo.type === 'CEO') && markerInfo.fusionPlan) {
@@ -10864,7 +8872,7 @@ function getRegionalLaborInformedDays(details) {
 }
 
 function calculateProjectDurationDays(quantities) {
-    return Math.ceil((quantities.cableLength / 2000) + (quantities.ctoCount / 10) + (quantities.ceoCount / 1));
+    return estimateLaborDays(quantities);
 }
 
 function getProjectEstimatedDurationDays(projectBom, quantities) {
@@ -11974,168 +9982,501 @@ function panToLocation(location, title) {
     google.maps.event.addListenerOnce(infowindow, 'closeclick', clearSearchMarker);
 }
 
-//Inicia a ferramenta de desenho de polígono ou abre o editor.
-function startPolygonTool() {
-    //Validação de conflitos
-    if (isDrawingCable || isAddingMarker || isMeasuring) {
+//Ferramentas de esboço no mapa (polígono e régua).
+//Substituem a Drawing Library do Google, que foi descontinuada e removida da API.
+const RULER_COLOR = '#e11d48';
+const DEFAULT_POLYGON_COLOR = '#2dd4bf';
+const DEFAULT_POLYGON_OPACITY = 0.35;
+let sketchSession = null; //Sessão de desenho ativa: { shape, color, vertices, line, fill, rubber, labels, listeners }
+let rulerMode = 'distance'; //'distance' ou 'area'
+let polygonEditListeners = []; //Listeners do path do polígono em edição
+
+function formatDistance(meters) {
+    const m = Number(meters) || 0;
+    if (m >= 1000) {
+        return `${(m / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km`;
+    }
+    return `${m.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m`;
+}
+
+function formatArea(squareMeters) {
+    const m2 = Number(squareMeters) || 0;
+    if (m2 >= 1e6) return `${(m2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} km²`;
+    if (m2 >= 1e4) return `${(m2 / 1e4).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha`;
+    return `${Math.round(m2).toLocaleString('pt-BR')} m²`;
+}
+
+//Rótulo de texto HTML preso a uma coordenada do mapa
+function createMapTextLabel(position, text, className) {
+    const overlay = new google.maps.OverlayView();
+    const div = document.createElement('div');
+    div.className = `map-text-label ${className || ''}`.trim();
+    div.textContent = text;
+    overlay.onAdd = function () { this.getPanes().floatPane.appendChild(div); };
+    overlay.draw = function () {
+        const point = this.getProjection()?.fromLatLngToDivPixel(position);
+        if (!point) return;
+        div.style.left = `${point.x}px`;
+        div.style.top = `${point.y}px`;
+    };
+    overlay.onRemove = function () { div.remove(); };
+    overlay.setMap(map);
+    return overlay;
+}
+
+function setAllCablesClickable(isClickable) {
+    savedCables.forEach(cableInfo => {
+        if (cableInfo.polyline) cableInfo.polyline.setOptions({ clickable: isClickable });
+    });
+}
+
+function isSketchToolActive() {
+    return !!sketchSession;
+}
+
+function getSketchVertexIcon(color, isFirstClosable) {
+    return {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: isFirstClosable ? 7 : 5,
+        fillColor: isFirstClosable ? color : '#ffffff',
+        fillOpacity: 1,
+        strokeColor: isFirstClosable ? '#ffffff' : color,
+        strokeWeight: 2
+    };
+}
+
+//Inicia uma sessão de desenho por cliques. shape: 'line' ou 'area'.
+function startSketch(options) {
+    stopSketch();
+    const color = options.color;
+    const session = {
+        shape: options.shape,
+        color,
+        showSegmentLabels: !!options.showSegmentLabels,
+        onChange: options.onChange || null,
+        onClose: options.onClose || null,
+        vertices: [],
+        labels: [],
+        listeners: [],
+        lastCursor: null
+    };
+    session.line = new google.maps.Polyline({
+        map, path: [], clickable: false, strokeColor: color, strokeWeight: 3, strokeOpacity: 0.95, zIndex: 2000
+    });
+    session.fill = new google.maps.Polygon({
+        map: null, paths: [], clickable: false, strokeWeight: 0,
+        fillColor: color, fillOpacity: options.fillOpacity ?? 0.22, zIndex: 1999
+    });
+    session.rubber = new google.maps.Polyline({
+        map, path: [], clickable: false, strokeColor: color, strokeOpacity: 0, zIndex: 2000,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, scale: 2 }, offset: '0', repeat: '9px' }]
+    });
+    session.listeners.push(map.addListener('click', (e) => addSketchPoint(e.latLng)));
+    session.listeners.push(map.addListener('mousemove', (e) => updateSketchRubber(e.latLng)));
+    session.listeners.push(map.addListener('mouseout', () => updateSketchRubber(null)));
+    sketchSession = session;
+    setAllPolygonsClickable(false);
+    setAllCablesClickable(false);
+    setMapCursor('crosshair');
+    refreshSketch(true);
+    return session;
+}
+
+function getSketchPath() {
+    return sketchSession ? sketchSession.vertices.map(v => v.getPosition()) : [];
+}
+
+function addSketchPoint(latLng) {
+    const session = sketchSession;
+    if (!session || !latLng) return;
+    const last = session.vertices[session.vertices.length - 1];
+    if (last && google.maps.geometry.spherical.computeDistanceBetween(last.getPosition(), latLng) < 0.5) return;
+    const vertex = new google.maps.Marker({
+        position: latLng,
+        map,
+        draggable: true,
+        zIndex: 3000,
+        icon: getSketchVertexIcon(session.color, false)
+    });
+    vertex.addListener('drag', () => refreshSketch(false));
+    vertex.addListener('dragend', () => refreshSketch(true));
+    vertex.addListener('rightclick', (e) => {
+        if (e?.domEvent) e.domEvent.preventDefault();
+        removeSketchVertex(vertex);
+    });
+    vertex.addListener('click', () => {
+        //Clicar no primeiro ponto fecha a área
+        if (session.shape === 'area' && session.vertices[0] === vertex && session.vertices.length >= 3 && session.onClose) {
+            session.onClose();
+        }
+    });
+    session.vertices.push(vertex);
+    refreshSketch(true);
+}
+
+function removeSketchVertex(vertex) {
+    const session = sketchSession;
+    if (!session) return;
+    const index = session.vertices.indexOf(vertex);
+    if (index === -1) return;
+    session.vertices.splice(index, 1)[0].setMap(null);
+    refreshSketch(true);
+}
+
+function undoSketchPoint() {
+    const session = sketchSession;
+    if (!session || !session.vertices.length) return false;
+    session.vertices.pop().setMap(null);
+    refreshSketch(true);
+    return true;
+}
+
+function clearSketchPoints() {
+    const session = sketchSession;
+    if (!session) return;
+    session.vertices.forEach(v => v.setMap(null));
+    session.vertices = [];
+    refreshSketch(true);
+}
+
+function setSketchShape(shape) {
+    if (!sketchSession) return;
+    sketchSession.shape = shape;
+    refreshSketch(true);
+}
+
+//Redesenha linha, área, rótulos e linha-guia a partir dos vértices
+function refreshSketch(updateIcons) {
+    const session = sketchSession;
+    if (!session) return;
+    const path = getSketchPath();
+    const isClosedArea = session.shape === 'area' && path.length >= 3;
+    session.line.setPath(isClosedArea ? [...path, path[0]] : path);
+    session.fill.setPaths(path);
+    session.fill.setMap(isClosedArea ? map : null);
+    if (updateIcons) {
+        session.vertices.forEach((v, i) => {
+            v.setIcon(getSketchVertexIcon(session.color, isClosedArea && i === 0 && !!session.onClose));
+            v.setTitle(isClosedArea && i === 0 && session.onClose ? 'Clique para fechar a forma' : 'Arraste para ajustar · clique direito remove');
+        });
+    }
+    renderSketchSegmentLabels(path, isClosedArea);
+    updateSketchRubber(session.lastCursor);
+    if (session.onChange) session.onChange(path);
+}
+
+function renderSketchSegmentLabels(path, isClosedArea) {
+    const session = sketchSession;
+    session.labels.forEach(label => label.setMap(null));
+    session.labels = [];
+    if (!session.showSegmentLabels || path.length < 2) return;
+    const segments = [];
+    for (let i = 1; i < path.length; i++) segments.push([path[i - 1], path[i]]);
+    if (isClosedArea) segments.push([path[path.length - 1], path[0]]);
+    segments.forEach(([a, b]) => {
+        const length = google.maps.geometry.spherical.computeDistanceBetween(a, b);
+        const midpoint = google.maps.geometry.spherical.interpolate(a, b, 0.5);
+        session.labels.push(createMapTextLabel(midpoint, formatDistance(length), 'map-text-label--segment'));
+    });
+}
+
+//Linha tracejada do último ponto até o cursor
+function updateSketchRubber(cursorLatLng) {
+    const session = sketchSession;
+    if (!session) return;
+    session.lastCursor = cursorLatLng;
+    const path = getSketchPath();
+    if (!cursorLatLng || !path.length) {
+        session.rubber.setPath([]);
+        if (session.onCursor) session.onCursor(null);
+        return;
+    }
+    const rubberPath = [path[path.length - 1], cursorLatLng];
+    if (session.shape === 'area' && path.length >= 2) rubberPath.push(path[0]);
+    session.rubber.setPath(rubberPath);
+    if (session.onCursor) session.onCursor(cursorLatLng);
+}
+
+function stopSketch() {
+    const session = sketchSession;
+    if (!session) return;
+    session.listeners.forEach(listener => google.maps.event.removeListener(listener));
+    session.vertices.forEach(v => v.setMap(null));
+    session.labels.forEach(label => label.setMap(null));
+    session.line.setMap(null);
+    session.fill.setMap(null);
+    session.rubber.setMap(null);
+    sketchSession = null;
+    setAllPolygonsClickable(true);
+    setAllCablesClickable(true);
+    setMapCursor('');
+}
+
+//Clique em marcador durante o esboço: usa a posição exata do marcador como ponto
+function handleSketchMarkerClick(markerInfo) {
+    if (!sketchSession || !markerInfo?.marker) return false;
+    addSketchPoint(markerInfo.marker.getPosition());
+    return true;
+}
+
+function handleSketchKeyboard(event) {
+    if (!sketchSession || isEditableKeyboardTarget(event.target)) return false;
+    const key = event.key.toLowerCase();
+    const isUndo = ((event.ctrlKey || event.metaKey) && key === 'z') || key === 'backspace' || key === 'delete';
+    if (!isUndo) return false;
+    event.preventDefault();
+    undoSketchPoint();
+    return true;
+}
+
+// ---------------------------------------------------------------
+// Polígono
+// ---------------------------------------------------------------
+
+function getPolygonFormValues() {
+    const opacityInput = document.getElementById('polygonOpacity');
+    return {
+        name: document.getElementById('polygonName').value.trim(),
+        color: document.getElementById('polygonColor').value,
+        opacity: Math.min(1, Math.max(0, Number(opacityInput.value) / 100))
+    };
+}
+
+function setPolygonBoxPhase(phase) {
+    //phase: 'drawing' (marcando pontos) ou 'editing' (forma fechada, ajustando vértices)
+    const box = document.getElementById('polygonDrawingBox');
+    box.dataset.phase = phase;
+    document.getElementById('polygonUndoButton').classList.toggle('hidden', phase !== 'drawing');
+    document.getElementById('polygonFinishButton').classList.toggle('hidden', phase !== 'drawing');
+    document.getElementById('polygonHelp').textContent = phase === 'drawing'
+        ? 'Clique no mapa para marcar os vértices. Clique no primeiro ponto ou em "Fechar forma" para concluir. Clique direito remove um ponto.'
+        : 'Arraste os vértices para ajustar. Arraste os pontos intermediários para criar novos vértices.';
+}
+
+function updatePolygonStats(path) {
+    const statsEl = document.getElementById('polygonStats');
+    if (!statsEl) return;
+    const points = path ? (Array.isArray(path) ? path : path.getArray()) : [];
+    if (points.length < 3) {
+        statsEl.innerHTML = `<div><dt>Vértices</dt><dd>${points.length}</dd></div><div><dt>Área</dt><dd>—</dd></div><div><dt>Perímetro</dt><dd>—</dd></div>`;
+        document.getElementById('polygonFinishButton').disabled = true;
+        return;
+    }
+    const area = google.maps.geometry.spherical.computeArea(points);
+    const perimeter = google.maps.geometry.spherical.computeLength([...points, points[0]]);
+    statsEl.innerHTML = `<div><dt>Vértices</dt><dd>${points.length}</dd></div><div><dt>Área</dt><dd>${formatArea(area)}</dd></div><div><dt>Perímetro</dt><dd>${formatDistance(perimeter)}</dd></div>`;
+    document.getElementById('polygonFinishButton').disabled = false;
+}
+
+function clearPolygonEditListeners() {
+    polygonEditListeners.forEach(listener => google.maps.event.removeListener(listener));
+    polygonEditListeners = [];
+}
+
+//Mantém a área e o perímetro atualizados enquanto os vértices são arrastados
+function watchPolygonPath(polygon) {
+    clearPolygonEditListeners();
+    const path = polygon.getPath();
+    const update = () => updatePolygonStats(path);
+    ['insert_at', 'set_at', 'remove_at'].forEach(evt => polygonEditListeners.push(path.addListener(evt, update)));
+    update();
+}
+
+//Aplica cor e opacidade do formulário no polígono em edição
+function applyPolygonFormStyle() {
+    const { color, opacity } = getPolygonFormValues();
+    document.getElementById('polygonOpacityValue').textContent = `${Math.round(opacity * 100)}%`;
+    const target = tempPolygon || (editingPolygonIndex !== null ? savedPolygons[editingPolygonIndex]?.polygonObject : null);
+    if (target) target.setOptions({ fillColor: color, strokeColor: color, fillOpacity: opacity });
+    if (sketchSession && isDrawingPolygon) {
+        sketchSession.color = color;
+        sketchSession.line.setOptions({ strokeColor: color });
+        sketchSession.fill.setOptions({ fillColor: color, fillOpacity: opacity });
+        sketchSession.rubber.setOptions({ strokeColor: color });
+        refreshSketch(true);
+    }
+}
+
+function openPolygonBox(title, values) {
+    const box = document.getElementById('polygonDrawingBox');
+    document.getElementById('polygonBoxTitle').textContent = title;
+    document.getElementById('polygonName').value = values.name;
+    document.getElementById('polygonColor').value = values.color;
+    document.getElementById('polygonOpacity').value = Math.round(values.opacity * 100);
+    document.getElementById('polygonOpacityValue').textContent = `${Math.round(values.opacity * 100)}%`;
+    box.classList.remove('hidden');
+    document.getElementById('toolsDropdown').classList.remove('show');
+}
+
+//Inicia a ferramenta de desenho de polígono
+function startPolygonTool(initialPath) {
+    if (isDrawingCable || isAddingMarker) {
         showAlert("Atenção", "Finalize a ação atual antes de desenhar um polígono.");
         return;
     }
-    //Validação se a pasta está ativa
     if (!activeFolderId) {
         showAlert("Atenção", "Selecione uma pasta de projeto para salvar o polígono.");
         return;
     }
-    //Preparação do estado e interface
+    if (isMeasuring) stopRuler();
+    cancelPolygonDrawing();
     isDrawingPolygon = true;
     editingPolygonIndex = null;
-    //Reseta o painel de propriedades do polígono
-    const box = document.getElementById('polygonDrawingBox');
-    document.getElementById('polygonBoxTitle').textContent = 'Desenhar Polígono';
-    document.getElementById('polygonName').value = '';
-    document.getElementById('polygonColor').value = '#2dd4bf';
+    openPolygonBox('Novo polígono', {
+        name: `Polígono ${savedPolygons.length + 1}`,
+        color: DEFAULT_POLYGON_COLOR,
+        opacity: DEFAULT_POLYGON_OPACITY
+    });
     document.getElementById('deletePolygonButton').classList.add('hidden');
-    box.classList.remove('hidden');
-    document.getElementById('toolsDropdown').classList.remove('show');
-    //Configuração do desenho
-    if (!drawingManager) {
-        drawingManager = new google.maps.drawing.DrawingManager({
-        drawingMode: google.maps.drawing.OverlayType.POLYGON,
-        drawingControl: false,
-        polygonOptions: {
-            fillColor: '#2dd4bf',
-            fillOpacity: 0.5,
-            strokeWeight: 2,
-            strokeColor: '#93C572',
-            clickable: false,
-            editable: true,
-            zIndex: 1
-        }
-        });
-        drawingManager.setMap(map);
-        google.maps.event.addListener(drawingManager, 'polygoncomplete', (polygon) => {
-        if (tempPolygon) {
-            tempPolygon.setMap(null);
-        }
-        tempPolygon = polygon;
-        drawingManager.setDrawingMode(null);
-        });
-    } else {
-        drawingManager.setMap(map);
-        drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+    setPolygonBoxPhase('drawing');
+    startSketch({
+        shape: 'area',
+        color: DEFAULT_POLYGON_COLOR,
+        fillOpacity: DEFAULT_POLYGON_OPACITY,
+        showSegmentLabels: false,
+        onChange: updatePolygonStats,
+        onClose: finishPolygonSketch
+    });
+    if (Array.isArray(initialPath)) {
+        initialPath.forEach(point => addSketchPoint(point));
+        if (initialPath.length >= 3) finishPolygonSketch();
     }
-    setMapCursor("crosshair");
 }
 
+//Fecha a forma desenhada e passa para o ajuste dos vértices
+function finishPolygonSketch() {
+    const path = getSketchPath();
+    if (path.length < 3) {
+        showAlert("Atenção", "Marque pelo menos 3 pontos para formar um polígono.");
+        return false;
+    }
+    const { color, opacity } = getPolygonFormValues();
+    stopSketch();
+    if (tempPolygon) tempPolygon.setMap(null);
+    tempPolygon = new google.maps.Polygon({
+        paths: path,
+        map,
+        fillColor: color,
+        strokeColor: color,
+        fillOpacity: opacity,
+        strokeWeight: 2,
+        editable: true,
+        zIndex: 1
+    });
+    setAllPolygonsClickable(false);
+    watchPolygonPath(tempPolygon);
+    setPolygonBoxPhase('editing');
+    return true;
+}
 
-//Salva um polígono novo ou atualiza um existente.
+function wirePolygonInteractions(polygonInfo) {
+    polygonInfo.polygonObject.addListener('click', () => openPolygonEditor(polygonInfo));
+    const nameEl = polygonInfo.listItem.querySelector('.item-name');
+    if (nameEl) nameEl.addEventListener('click', () => openPolygonEditor(polygonInfo));
+    const visCb = polygonInfo.listItem.querySelector('.ge-vis-checkbox');
+    if (visCb) wireItemVisibilityCheckbox(visCb, polygonInfo.polygonObject);
+}
+
+//Salva um polígono novo ou atualiza um existente
 function savePolygon() {
-    //Validação dos dados
-    const name = document.getElementById('polygonName').value.trim();
-    const color = document.getElementById('polygonColor').value;
+    const { name, color, opacity } = getPolygonFormValues();
     if (!name) {
         showAlert("Erro", "Por favor, dê um nome ao polígono.");
         return;
     }
-    let finalPolygon;
-    //Fluxo de edição
+    //Se ainda está marcando pontos, fecha a forma automaticamente
+    if (sketchSession && isDrawingPolygon && !finishPolygonSketch()) return;
+
     if (editingPolygonIndex !== null) {
         const polygonInfo = savedPolygons[editingPolygonIndex];
-        finalPolygon = polygonInfo.polygonObject;
-        //Atualiza os dados
+        const polygon = polygonInfo.polygonObject;
         polygonInfo.name = name;
         polygonInfo.color = color;
-        //Salva novas coordenadas caso tenha arrastado o vértice
-        polygonInfo.path = finalPolygon.getPath().getArray().map(p => ({lat: p.lat(), lng: p.lng()}));
-        finalPolygon.setOptions({ fillColor: color, strokeColor: color, editable: false });
+        polygonInfo.opacity = opacity;
+        polygonInfo.path = polygon.getPath().getArray().map(p => ({ lat: p.lat(), lng: p.lng() }));
+        polygon.setOptions({ fillColor: color, strokeColor: color, fillOpacity: opacity, editable: false });
         polygonInfo.listItem.querySelector('.item-name').textContent = name;
         const polyIcon = polygonInfo.listItem.querySelector('.ge-icon-polygon');
         if (polyIcon) polyIcon.style.setProperty('--ge-item-color', color);
+        editingPolygonIndex = null; //Evita que o cancelamento reverta o que foi salvo
     } else {
-        //Fluxo de criação
         if (!tempPolygon) {
             showAlert("Erro", "Desenhe um polígono no mapa antes de salvar.");
             return;
         }
-        finalPolygon = tempPolygon;
+        const polygon = tempPolygon;
         tempPolygon = null;
-        //Finaliza o desenho no mapa
-        finalPolygon.setOptions({ clickable: true, editable: false, fillColor: color, strokeColor: color });
+        polygon.setOptions({ clickable: true, editable: false, fillColor: color, strokeColor: color, fillOpacity: opacity });
         const template = document.getElementById('polygon-template');
-        const clone = template.content.cloneNode(true);
-        const li = clone.querySelector('li');
+        const li = template.content.cloneNode(true).querySelector('li');
         enableDragAndDropForItem(li);
-        const nameSpan = li.querySelector('.item-name');
-        nameSpan.textContent = name;
+        li.querySelector('.item-name').textContent = name;
         const iconEl = li.querySelector('.ge-icon-polygon');
         if (iconEl) iconEl.style.setProperty('--ge-item-color', color);
         document.getElementById(activeFolderId).appendChild(li);
         const polygonInfo = {
             folderId: activeFolderId,
-            name: name,
-            color: color,
-            path: finalPolygon.getPath().getArray().map(p => ({lat: p.lat(), lng: p.lng()})),
-            polygonObject: finalPolygon,
+            name,
+            color,
+            opacity,
+            path: polygon.getPath().getArray().map(p => ({ lat: p.lat(), lng: p.lng() })),
+            polygonObject: polygon,
             listItem: li
         };
         savedPolygons.push(polygonInfo);
-        finalPolygon.addListener('click', () => openPolygonEditor(polygonInfo));
-        nameSpan.addEventListener('click', () => openPolygonEditor(polygonInfo));
-        const visCb = li.querySelector('.ge-vis-checkbox');
-        if (visCb) wireItemVisibilityCheckbox(visCb, finalPolygon);
+        wirePolygonInteractions(polygonInfo);
     }
     cancelPolygonDrawing();
 }
 
-//Abrir o editor do polígono
-function openPolygonEditor(polygonInfo) {
-    //Valida a localização
+//Abre o editor do polígono (aceita o objeto ou o índice)
+function openPolygonEditor(polygonRef) {
+    const polygonInfo = typeof polygonRef === 'number' ? savedPolygons[polygonRef] : polygonRef;
     if (!polygonInfo) return;
     const index = savedPolygons.indexOf(polygonInfo);
     if (index === -1) {
         showAlert("Erro", "Não foi possível encontrar o polígono para edição.");
         return;
     }
-    //Reset de ferramentas com limpeza e conflito
+    if (isMeasuring) stopRuler();
     cancelPolygonDrawing();
     cancelCableButton.click();
-    //Configuração do estado global
     editingPolygonIndex = index;
     isDrawingPolygon = true;
-    //Atualização da interface
-    const box = document.getElementById('polygonDrawingBox');
-    document.getElementById('polygonBoxTitle').textContent = 'Editar Polígono';
-    document.getElementById('polygonName').value = polygonInfo.name;
-    document.getElementById('polygonColor').value = polygonInfo.color;
-    document.getElementById('deletePolygonButton').classList.remove("hidden");
-    box.classList.remove("hidden");
-    //Visual no mapa
+    //Guarda o estado original para poder cancelar
+    polygonInfo._originalStyle = { color: polygonInfo.color, opacity: polygonInfo.opacity ?? 0.5 };
+    openPolygonBox('Editar polígono', {
+        name: polygonInfo.name,
+        color: polygonInfo.color,
+        opacity: polygonInfo.opacity ?? 0.5
+    });
+    document.getElementById('deletePolygonButton').classList.remove('hidden');
+    setPolygonBoxPhase('editing');
+    setAllPolygonsClickable(false);
     polygonInfo.polygonObject.setEditable(true);
+    watchPolygonPath(polygonInfo.polygonObject);
 }
 
-
-//Cancela a operação de desenho ou edição de polígono.
+//Cancela o desenho ou a edição de polígono
 function cancelPolygonDrawing() {
-    //Desativação da ferramenta de criação
-    if (drawingManager) {
-        drawingManager.setMap(null); 
-        drawingManager.setDrawingMode(null);
-    }
-    //Limpeza dos polígonos não salvos
+    if (sketchSession && isDrawingPolygon) stopSketch();
+    clearPolygonEditListeners();
     if (tempPolygon) {
-        tempPolygon.setMap(null); 
+        tempPolygon.setMap(null);
         tempPolygon = null;
     }
-    //Reversão de edição
+    //Reverte a edição não salva
     if (editingPolygonIndex !== null) {
         const polygonInfo = savedPolygons[editingPolygonIndex];
         if (polygonInfo) {
+            const original = polygonInfo._originalStyle || { color: polygonInfo.color, opacity: polygonInfo.opacity ?? 0.5 };
             polygonInfo.polygonObject.setPath(polygonInfo.path);
             polygonInfo.polygonObject.setEditable(false);
+            polygonInfo.polygonObject.setOptions({ fillColor: original.color, strokeColor: original.color, fillOpacity: original.opacity });
         }
     }
-    //Reset da interface
     document.getElementById('polygonDrawingBox').classList.add('hidden');
+    setAllPolygonsClickable(true);
     setMapCursor("");
     isDrawingPolygon = false;
     editingPolygonIndex = null;
@@ -12150,104 +10491,176 @@ function setAllPolygonsClickable(isClickable) {
     });
 }
 
- //Exclui o polígono que está sendo editado
+//Exclui o polígono que está sendo editado
 function deletePolygon() {
     if (editingPolygonIndex === null) return;
     const polygonInfo = savedPolygons[editingPolygonIndex];
     showConfirm('Excluir Polígono', `Tem certeza que deseja excluir "${polygonInfo.name}"?`, () => {
-        //Remove o polígono do mapa
+        clearPolygonEditListeners();
         polygonInfo.polygonObject.setMap(null);
-        //Remove o item da lista na barra lateral
         polygonInfo.listItem.remove();
-        //Remove o polígono do nosso array de dados
-        savedPolygons.splice(editingPolygonIndex, 1);
-        //Limpa a interface e reseta o estado da ferramenta
-        document.getElementById('polygonDrawingBox').classList.add('hidden');
-        setMapCursor("");
-        isDrawingPolygon = false;
+        savedPolygons.splice(savedPolygons.indexOf(polygonInfo), 1);
         editingPolygonIndex = null;
-        // Garante que o modo de desenho seja desativado
-        if (drawingManager) {
-            drawingManager.setDrawingMode(null);
-            drawingManager.setMap(null);
-        }
+        cancelPolygonDrawing();
     });
+}
+
+// ---------------------------------------------------------------
+// Régua de medição
+// ---------------------------------------------------------------
+
+function getRulerMeasurements(path) {
+    const points = path || getSketchPath();
+    const spherical = google.maps.geometry.spherical;
+    const length = points.length >= 2 ? spherical.computeLength(points) : 0;
+    const lastSegment = points.length >= 2 ? spherical.computeDistanceBetween(points[points.length - 2], points[points.length - 1]) : 0;
+    const area = points.length >= 3 ? spherical.computeArea(points) : 0;
+    const perimeter = points.length >= 3 ? spherical.computeLength([...points, points[0]]) : 0;
+    const poleSpan = getPoleSpanDistance();
+    const estimatedPoles = length > 0 ? Math.ceil(length / poleSpan) + 1 : 0;
+    return { points: points.length, length, lastSegment, area, perimeter, poleSpan, estimatedPoles };
+}
+
+function renderRulerStats(path) {
+    const m = getRulerMeasurements(path);
+    const statsEl = document.getElementById('rulerStats');
+    const valueEl = document.getElementById('rulerDistance');
+    const labelEl = document.getElementById('rulerPrimaryLabel');
+    const toPolygonBtn = document.getElementById('rulerToPolygonButton');
+    const stat = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+    if (rulerMode === 'area') {
+        labelEl.textContent = 'Área';
+        valueEl.textContent = m.points >= 3 ? formatArea(m.area) : '—';
+        statsEl.innerHTML = stat('Perímetro', m.points >= 3 ? formatDistance(m.perimeter) : '—') + stat('Pontos', m.points);
+        toPolygonBtn.classList.toggle('hidden', m.points < 3);
+    } else {
+        labelEl.textContent = 'Distância total';
+        valueEl.textContent = formatDistance(m.length);
+        statsEl.innerHTML = stat('Último trecho', formatDistance(m.lastSegment))
+            + stat('Pontos', m.points)
+            + stat(`Postes (${m.poleSpan} m)`, m.estimatedPoles ? `≈ ${m.estimatedPoles}` : '—');
+        toPolygonBtn.classList.add('hidden');
+    }
+    document.getElementById('rulerUndoButton').disabled = m.points === 0;
+    document.getElementById('rulerClearButton').disabled = m.points === 0;
+    document.getElementById('rulerCopyButton').disabled = rulerMode === 'area' ? m.points < 3 : m.points < 2;
+}
+
+//Mostra a distância até o cursor enquanto o usuário mira o próximo ponto
+function renderRulerCursorHint(cursorLatLng) {
+    const hintEl = document.getElementById('rulerCursorHint');
+    if (!hintEl) return;
+    const path = getSketchPath();
+    if (!cursorLatLng || !path.length || rulerMode !== 'distance') {
+        hintEl.textContent = '';
+        return;
+    }
+    const spherical = google.maps.geometry.spherical;
+    const toCursor = spherical.computeDistanceBetween(path[path.length - 1], cursorLatLng);
+    const total = (path.length >= 2 ? spherical.computeLength(path) : 0) + toCursor;
+    hintEl.textContent = `Com o próximo ponto: ${formatDistance(total)} (+${formatDistance(toCursor)})`;
+}
+
+function setRulerMode(mode) {
+    rulerMode = mode === 'area' ? 'area' : 'distance';
+    document.querySelectorAll('#rulerBox [data-ruler-mode]').forEach(btn => {
+        const active = btn.dataset.rulerMode === rulerMode;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    setSketchShape(rulerMode === 'area' ? 'area' : 'line');
+    renderRulerStats();
+    renderRulerCursorHint(sketchSession?.lastCursor || null);
 }
 
 //Inicia a ferramenta de régua de medição
 function startRuler() {
-    //Validação de conflitos
-    if (isDrawingCable || isAddingMarker || (drawingManager && drawingManager.getMap())) {
+    if (isDrawingCable || isAddingMarker) {
         showAlert("Atenção", "Finalize a ação atual antes de usar a régua.");
         return;
     }
-    //Configuração da interface e estado global
-    isMeasuring = true;
+    if (isDrawingPolygon) cancelPolygonDrawing();
     document.getElementById('toolsDropdown').classList.remove('show');
     document.getElementById('rulerBox').classList.remove('hidden');
-    document.getElementById('rulerDistance').textContent = 'Distância: 0 m';
-    setMapCursor('crosshair');
-    // Limpa medições anteriores
-    stopRuler(false);
     isMeasuring = true;
-    //Cria a linha visual da régua
-    rulerPolyline = new google.maps.Polyline({
-        path: [],
-        geodesic: true,
-        strokeColor: '#FF0000',
-        strokeOpacity: 1.0,
-        strokeWeight: 3,
-        map: map
+    const session = startSketch({
+        shape: rulerMode === 'area' ? 'area' : 'line',
+        color: RULER_COLOR,
+        fillOpacity: 0.15,
+        showSegmentLabels: true,
+        onChange: renderRulerStats
     });
-    //Adiciona o listener de clique no mapa para a régua
-    map.addListener('click', handleRulerClick);
+    session.onCursor = renderRulerCursorHint;
+    setRulerMode(rulerMode);
 }
 
-//Lida com cada clique no mapa durante a medição.
-function handleRulerClick(event) {
-    //Validação do estado
-    if (!isMeasuring) return;
-    //Atualização da geometria da linha
-    const path = rulerPolyline.getPath();
-    path.push(event.latLng);
-    // Adiciona um pequeno marcador no ponto clicado
-    const marker = new google.maps.Marker({
-        position: event.latLng,
-        map: map,
-        icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 4,
-            fillColor: '#FF0000',
-            fillOpacity: 1,
-            strokeWeight: 0
-        }
-    });
-    rulerMarkers.push(marker);
-    // Calcula e exibe a distância
-    const distance = google.maps.geometry.spherical.computeLength(path);
-    document.getElementById('rulerDistance').textContent = `Distância: ${distance.toFixed(2)} m`;
+function copyRulerMeasurement() {
+    const m = getRulerMeasurements();
+    const text = rulerMode === 'area'
+        ? `Área: ${formatArea(m.area)} | Perímetro: ${formatDistance(m.perimeter)} | Pontos: ${m.points}`
+        : `Distância: ${formatDistance(m.length)} | Pontos: ${m.points} | Postes estimados (vão ${m.poleSpan} m): ${m.estimatedPoles}`;
+    const button = document.getElementById('rulerCopyButton');
+    const done = () => {
+        const original = button.dataset.label || button.textContent;
+        button.dataset.label = original;
+        button.textContent = 'Copiado!';
+        setTimeout(() => { button.textContent = original; }, 1400);
+    };
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => showAlert('Medição', text));
+    } else {
+        showAlert('Medição', text);
+    }
 }
 
+//Transforma a área medida em um polígono do projeto
+function convertRulerToPolygon() {
+    const path = getSketchPath();
+    if (path.length < 3) return;
+    if (!activeFolderId) {
+        showAlert("Atenção", "Selecione uma pasta de projeto para salvar o polígono.");
+        return;
+    }
+    stopRuler();
+    startPolygonTool(path);
+}
 
-//Para a ferramenta de régua e limpa os elementos do mapa.
-function stopRuler(hideBox = true) {
-    //Reset do estado e interface
+//Para a ferramenta de régua e limpa os elementos do mapa
+function stopRuler() {
+    if (sketchSession && isMeasuring) stopSketch();
     isMeasuring = false;
-    setMapCursor('');
-    if (hideBox) {
-        document.getElementById('rulerBox').classList.add('hidden');
-    }
-    //Limpeza da linha e marcadores do vertice
-    if (rulerPolyline) {
-        rulerPolyline.setMap(null);
-        rulerPolyline = null;
-    }
-    rulerMarkers.forEach(marker => marker.setMap(null));
-    rulerMarkers = [];
-    // Remove o listener de clique específico da régua
-    google.maps.event.clearListeners(map, 'click');
-    // Readiciona o listener de clique principal para desenho de cabos
-    map.addListener("click", handleMapClick); 
+    document.getElementById('rulerBox').classList.add('hidden');
+    const hintEl = document.getElementById('rulerCursorHint');
+    if (hintEl) hintEl.textContent = '';
+}
+
+function setupMapSketchTools() {
+    document.getElementById('drawPolygonButton').addEventListener('click', (e) => {
+        e.preventDefault();
+        startPolygonTool();
+    });
+    document.getElementById('savePolygonButton').addEventListener('click', savePolygon);
+    document.getElementById('cancelPolygonButton').addEventListener('click', cancelPolygonDrawing);
+    document.getElementById('closePolygonBoxButton').addEventListener('click', cancelPolygonDrawing);
+    document.getElementById('deletePolygonButton').addEventListener('click', deletePolygon);
+    document.getElementById('polygonUndoButton').addEventListener('click', undoSketchPoint);
+    document.getElementById('polygonFinishButton').addEventListener('click', finishPolygonSketch);
+    document.getElementById('polygonColor').addEventListener('input', applyPolygonFormStyle);
+    document.getElementById('polygonOpacity').addEventListener('input', applyPolygonFormStyle);
+
+    document.getElementById('rulerButton').addEventListener('click', (e) => {
+        e.preventDefault();
+        startRuler();
+    });
+    document.getElementById('cancelRulerButton').addEventListener('click', stopRuler);
+    document.getElementById('closeRulerBoxButton').addEventListener('click', stopRuler);
+    document.getElementById('rulerUndoButton').addEventListener('click', undoSketchPoint);
+    document.getElementById('rulerClearButton').addEventListener('click', clearSketchPoints);
+    document.getElementById('rulerCopyButton').addEventListener('click', copyRulerMeasurement);
+    document.getElementById('rulerToPolygonButton').addEventListener('click', convertRulerToPolygon);
+    document.querySelectorAll('#rulerBox [data-ruler-mode]').forEach(btn => {
+        btn.addEventListener('click', () => setRulerMode(btn.dataset.rulerMode));
+    });
 }
 
 //Verifica se uma porta específica já possui uma conexão de fusão.
@@ -13201,136 +11614,44 @@ function startMarkerAdjustment(markerInfo) {
     document.getElementById('markerTypeModal').style.display = 'flex';
 }
 
-//Ancoragem automática do cabo
+//Ao soltar uma ponta perto de uma caixa, ela é ancorada; afastada, perde a ancoragem
 function handleCableVertexDragEnd(vertexIndex) {
-    if (!isDrawingCable || !cableMarkers[vertexIndex]) {
-        return;
-    }
-    const isEndpoint = (vertexIndex === 0 || vertexIndex === cableMarkers.length - 1);
-    if (!isEndpoint) {
-        return;
-    }
-    const anchor = snapCableDrawVertexToNearestAnchor(vertexIndex);
-    if (anchor) {
+    if (!isDrawingCable || !cableMarkers[vertexIndex]) return;
+    const lastIndex = cableMarkers.length - 1;
+    if (vertexIndex !== 0 && vertexIndex !== lastIndex) {
         updatePolylineFromMarkers();
-        showAlert("Ancorado!", `A ponta do cabo foi vinculada ao marcador "${anchor.name}".`);
-    }
-}
-
-//Busca de projeto no firestore, filtros e carregamento
-function searchProjectsInFirestore() {
-    //Validação da atutenticação
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-        showAlert("Erro", "Você precisa estar logado para buscar projetos.");
         return;
     }
-    //Captura filtros de busca
-    const nameFilter = document.getElementById('searchProjectName').value.trim();
-    const cityFilter = document.getElementById('searchProjectCity').value.trim();
-    const neighborhoodFilter = document.getElementById('searchProjectNeighborhood').value.trim();
-    if (!nameFilter && !cityFilter && !neighborhoodFilter) {
-        showAlert("Atenção", "Preencha pelo menos um campo para realizar a busca.");
-        return;
+    const isStart = vertexIndex === 0;
+    const other = isStart ? cableDrawAnchors.end : cableDrawAnchors.start;
+    const previous = isStart ? cableDrawAnchors.start : cableDrawAnchors.end;
+    const anchor = resolveCableDrawEndpointAnchor(cableMarkers[vertexIndex].getPosition(), activeFolderId, other, 12);
+    if (anchor) {
+        cableMarkers[vertexIndex].setPosition(anchor.marker.getPosition());
+        if (isStart) cableDrawAnchors.start = anchor; else cableDrawAnchors.end = anchor;
+        if (anchor !== previous) showToast('Ponta ancorada', `Ponta ${isStart ? 'A' : 'B'} ligada a "${anchor.name}".`);
+    } else if (isStart) {
+        cableDrawAnchors.start = null;
+    } else {
+        cableDrawAnchors.end = null;
     }
-    //Configuração da query do firestore
-    const listElement = document.getElementById('saved-projects-list');
-    listElement.innerHTML = '<li>Buscando projetos...</li>';
-    let query = db.collection("users").doc(currentUser.uid).collection("projects");
-    //Aplica filtros compostos
-    if (nameFilter) {
-        query = query.where('projectName', '==', nameFilter);
-    }
-    if (cityFilter) {
-        query = query.where('sidebar.city', '==', cityFilter);
-    }
-    if (neighborhoodFilter) {
-        query = query.where('sidebar.neighborhood', '==', neighborhoodFilter);
-    }
-    //Execução da busca e renderizaçãdo dos resultados
-    query.get().then((querySnapshot) => {
-        listElement.innerHTML = '';
-        if (querySnapshot.empty) {
-            listElement.innerHTML = '<li>Nenhum projeto encontrado com os filtros informados.</li>';
-            return;
-        }
-        querySnapshot.forEach((doc) => {
-            const project = doc.data();
-            const projectId = doc.id;
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <span><strong>${project.projectName}</strong> <br><small>${project.sidebar.city || ''} - ${project.sidebar.neighborhood || ''}</small></span>
-                    <button class="load-project-btn" style="padding: 8px 12px; background-color: #4CAF50;">Carregar</button>
-                </div>
-            `;
-            listElement.appendChild(li);
-            li.querySelector('.load-project-btn').addEventListener('click', () => {
-                if (document.getElementById(projectId)) {
-                    showAlert("Aviso", `O projeto "${project.projectName}" já está carregado na barra lateral.`);                        return;
-                }
-                document.getElementById('loadProjectModal').style.display = 'none';
-                loadAndDisplayProject(projectId, project);
-            });
-        });
-    })
-    .catch((error) => {
-        console.error("Erro ao buscar projetos: ", error);
-        listElement.innerHTML = '<li>Ocorreu um erro ao buscar os projetos.</li>';
-        showAlert("Erro de Consulta", "A busca falhou. Isso pode exigir a criação de um índice no banco de dados. Verifique o console do navegador (F12) para um link de criação de índice.");
-    });
+    updatePolylineFromMarkers();
 }
 
 //Inversão de sentido do cabo
 function invertCableDirection() {
-    //Validação inicial
-    if (editingCableIndex === null) {
-        showAlert("Erro", "Nenhum cabo selecionado para inverter.");
-        return;
-    }
+    if (editingCableIndex === null) return;
     const cableToInvert = savedCables[editingCableIndex];
-    //Bloqueia a inversão se o cabo já estiver conectado
     const usage = checkCableUsageInFusionPlans(cableToInvert);
     if (usage.isInPlan) {
-        showAlert("Ação Bloqueada",`Este cabo não pode ser invertido porque está em uso no plano de fusão da(s) caixa(s): ${usage.locations.join(', ')}. Remova o cabo do plano de fusão antes de inverter.`);
+        showAlert("Ação bloqueada", `Este cabo não pode ser invertido porque está no plano de fusão da(s) caixa(s): ${usage.locations.join(', ')}. Remova-o do plano de fusão antes de inverter.`);
         return;
     }
-    //Execução da inversão
-    showConfirm('Inverter Cabo', 'Tem certeza que deseja inverter a direção deste cabo? Isso irá recalcular a reserva técnica com base nas novas pontas.', () => {
-        cableToInvert.path.reverse();
-        cablePath = [...cableToInvert.path];
-        //Reconstrução visual
-        cableMarkers.forEach(marker => marker.setMap(null));
-        cableMarkers = [];
-        cablePath.forEach((position, i) => {
-            let markerLabel = null;
-            let markerIconScale = 5;
-            if (i === 0) {
-                markerLabel = "A";
-                markerIconScale = 7;
-            } else if (i === cablePath.length - 1) {
-                markerLabel = "B";
-                markerIconScale = 7;
-            }
-            const marker = new google.maps.Marker({
-                position, map, draggable: true,
-                label: markerLabel
-                    ? { text: markerLabel, color: "black", fontWeight: "bold", fontSize: "12px" }
-                    : null,
-                icon: { path: google.maps.SymbolPath.CIRCLE, scale: markerIconScale, fillColor: "#ffffff", fillOpacity: 1, strokeColor: "#000000", strokeWeight: 1.5 },
-            });
-            cableMarkers.push(marker);
-            wireCableVertexMarker(marker);
-        });
-        //Atualiza os dados
+    showConfirm('Inverter cabo', 'Inverter a direção deste cabo? A ponta A vira B e a reserva técnica é recalculada.', () => {
+        cableMarkers.reverse();
+        cableDrawAnchors = { start: cableDrawAnchors.end, end: cableDrawAnchors.start };
         updatePolylineFromMarkers();
-        //Atualiza propriedade do obejeto
-        cableToInvert.lancamento = cableDistance.lancamento;
-        cableToInvert.reserva = cableDistance.reserva;
-        cableToInvert.totalLength = cableDistance.total;
-        //Atualiza o texto na barra lateral
-        cableToInvert.item.querySelector('.item-name').textContent = `${cableToInvert.name} (${cableToInvert.status}) - ${cableToInvert.totalLength}m`;
-        showAlert("Sucesso", "A direção do cabo foi invertida.");
+        showToast('Cabo invertido', 'Salve o cabo para confirmar.');
     });
 }
 
@@ -13344,53 +11665,7 @@ document.addEventListener('DOMContentLoaded', () => {
    document.querySelectorAll('.sidebar-drag-handle').forEach((el) => el.remove());
 });
 
-//Utilitários de layout
-function updateSvgLayerSize() {
-    const canvas = document.getElementById('fusionCanvas');
-    const svgLayer = document.getElementById('fusion-svg-layer');
-    if (!canvas || !svgLayer) return;
 
-    let contentHeight = canvas.clientHeight;
-    let contentWidth = canvas.clientWidth;
-
-    canvas.querySelectorAll('.splitter-element, .cable-element').forEach((el) => {
-        const top = parseFloat(el.style.top) || el.offsetTop || 0;
-        contentHeight = Math.max(contentHeight, top + el.offsetHeight + FUSION_LAYOUT.verticalGap);
-        const left = parseFloat(el.style.left) || el.offsetLeft || 0;
-        const right = parseFloat(el.style.right);
-        if (!Number.isNaN(right)) {
-            contentWidth = Math.max(contentWidth, canvas.offsetWidth);
-        } else {
-            contentWidth = Math.max(contentWidth, left + el.offsetWidth + 24);
-        }
-    });
-
-    svgLayer.style.width = `${Math.max(contentWidth, canvas.scrollWidth)}px`;
-    svgLayer.style.height = `${Math.max(contentHeight, canvas.scrollHeight)}px`;
-}
-
-//Descrição da conexão - fusão
-function getConnectionDescription(portId) {
-    //Localização no DOM
-    const portElement = document.getElementById(portId);
-    if (!portElement) return 'Desconhecido';
-    //Identificação do componente pai
-    const parentComponent = portElement.closest('.cable-element, .splitter-element');
-    if (!parentComponent) return 'Componente Desconhecido';
-    //Formatação para cabos
-    if (parentComponent.classList.contains('cable-element')) {
-        const cableName = parentComponent.dataset.cableName || 'Cabo';
-        const fiberNumber = portId.split('-').pop();
-        return `${cableName}, Fibra ${fiberNumber}`;
-    }
-    //Formatação para splitter
-    if (parentComponent.classList.contains('splitter-element')) {
-        const splitterLabel = getSplitterLabelText(parentComponent) || 'Splitter';
-        const portLabel = portElement.querySelector('.splitter-port-number')?.textContent || 'Porta';
-        return `${splitterLabel}, ${portLabel}`;
-    }
-    return 'Item Desconhecido';
-}
 
 //Se o componente está fusionado
 function isComponentFused(componentElement) {
