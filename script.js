@@ -4831,6 +4831,71 @@ const MATERIALS_NOT_IN_SHEET = [
     "Cabo AS 200 FO-144",
 ];
 MATERIALS_NOT_IN_SHEET.forEach(name => { delete MATERIAL_PRICES_BASE[name]; });
+//Itens retirados que têm equivalente na planilha: kits e cálculos passam a usar o item da planilha
+//Itens da planilha usados pelos kits (preço da planilha; atualizado pelo botão "Atualizar pela API")
+Object.assign(MATERIAL_PRICES_BASE, {
+    "Rack Indoor": { price: 499.69, unit: 'un', category: 'Data Center' },
+    "BANDEJA DE VENTILAÇÃO DE TETO PARA RACK SERVIDOR IPMETAL 60X60CM 2 VENT. 600 MM BI-VOLT PT": { price: 141.83, unit: 'un', category: 'Data Center' },
+    "CALHA DE TOMADA PARA RACK 19\" COM 12 TOMADAS - 10A ( 2T+P, CABO DE 2,5m COM BITOLA 2,5mm²)": { price: 85.6, unit: 'un', category: 'Data Center' },
+    "CAIXA DE EMENDA ÓPTICA FIST GCO2 B 144 FUSÕES": { price: 209.72, unit: 'un', category: 'Fusão' },
+    "KIT DERIVAÇÃO PARA CAIXA FIST 144FO CS2279-000 -GCO2-16": { price: 17.23, unit: 'un', category: 'Fusão' },
+    "CHASSI OLT - NA 5516": { price: 16050, unit: 'un', category: 'Data Center' },
+    "PLACA EC16B - FIBERHOME": { price: 13375, unit: 'un', category: 'Data Center' },
+    "SWITCH HUAWEI 6720 48P": { price: 23005, unit: 'un', category: 'Data Center' },
+    "FONTE 48VCC 30A - XPS": { price: 5155.26, unit: 'un', category: 'Data Center' },
+    "BATERIAS ESTACIONÁRIAS - 12V/70AH UNIPOWER": { price: 875.54, unit: 'un', category: 'Data Center' },
+});
+const MATERIAL_SUBSTITUTES = {
+    "RAQUETE PARA CEO": "RESERVA OPTILOOP (RAQUETE)",
+    "SUPORTE PRESBOW (REX)": "SUPORTE REX ARMAÇÃO SECUNDÁRIA 1X1 PRESBOW 4,8 MM",
+    "ISOLADOR ROLDANA": "ISOLADOR ROLDANA 72X72 PORCELANA",
+    "BRAÇADEIRA BAP 3": "ABRAÇADEIRA BAP 3",
+    "CABO DE AÇO CORDOALHA 3/16 POL D": "CABO DE AÇO CORDOALHA 3/16 POL",
+    "ALÇA PREFORMADA PARA CORDOALHA 3/16 (4,8MM)": "ALÇA PREFORMADA PARA CORDOALHA 3/16 POL",
+    "CABO ÓPTICO AS 80 S 144 FIBRAS NR KP": "CFOA SM AS 80 S 144 FIBRAS NR KP",
+    "PATCHCORD CAT6 AZUL 2,5M": "PATCHCORD MAXITELECOM CAT6 1,5m",
+    "ADAPTADOR SC/APC SEM ABAS (PASSANTE)": "ADAPTADOR SC/APC COM ABAS (PASSANTE)",
+    "Splitter 1/2 APC": "SPLITTER FUSÃO 1/2",
+    "Splitter 1/2 UPC": "SPLITTER FUSÃO 1/2",
+    "Splitter 1/4 APC": "SPLITTER FUSÃO 1/4",
+    "Splitter 1/4 UPC": "SPLITTER FUSÃO 1/4",
+    "Splitter 1/16": "SPLITTER CONECTORIZADO 1/16 SC/APC",
+    "KIT DERIVAÇÃO POR CABO": "KIT DERIVAÇÃO PARA CAIXA DE EMENDA ÓPTICA",
+    "CAIXA DE EMENDA OPTICA FIBRACEM 216F JUMBO SVM COM REENTRADA DIAMETRO 13 A 18MM": "CAIXA DE EMENDA ÓPTICA FIST GCO2 B 144 FUSÕES",
+    "KIT DE DERIVAÇÃO SVM PARA CEO 144F GROMMET (2 ENTRADAS 7 A 13MM)": "KIT DERIVAÇÃO PARA CAIXA FIST 144FO CS2279-000 -GCO2-16",
+    "CHASSI OLT C650 ZTE": "CHASSI OLT - NA 5516",
+    "PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)": "PLACA EC16B - FIBERHOME",
+    "SWITCH MPLS 24 PORTAS": "SWITCH HUAWEI 6720 48P",
+    "FONTE RETIFICADORA 48VCC / 100A ~ 200A": "FONTE 48VCC 30A - XPS",
+    "BATERIA DE LÍTIO 100A FB100B3 ZTE": "BATERIAS ESTACIONÁRIAS - 12V/70AH UNIPOWER",
+    "RACK INDOOR IPMETAL 44U 800X1000MM / PRETO / PORTA DIANTEIRA PERFURADO E TRASEIRA BI-PARTIDA PERFURADO / CALHA LATERAL": "Rack Indoor",
+    "BANDEJA DE VENTILAÇÃO DE TETO PARA RACK IPMETAL 44U 1000MM": "BANDEJA DE VENTILAÇÃO DE TETO PARA RACK SERVIDOR IPMETAL 60X60CM 2 VENT. 600 MM BI-VOLT PT",
+    "RÉGUA DE TOMADA 2P+T 10A, CABO DE 2,5M COM BITOLA 1,5MM² / SEM FUSÍVEL E DISJUNTOR": "CALHA DE TOMADA PARA RACK 19\" COM 12 TOMADAS - 10A ( 2T+P, CABO DE 2,5m COM BITOLA 2,5mm²)",
+    "XFP 850NM 10G 0,3KM MULTIMODO DUPLEX": "SFP (MULTIMODO, 10G, DUPLEX)",
+};
+Object.assign(MATERIAL_RENAMES, MATERIAL_SUBSTITUTES);
+//Itens retirados sem equivalente na planilha: saem dos kits e da lista de materiais
+//(os tipos de cabo sem preço continuam, porque são a metragem dos cabos desenhados)
+const MATERIALS_DROPPED_SET = new Set(MATERIALS_NOT_IN_SHEET
+    .filter(name => !(name in MATERIAL_SUBSTITUTES) && !/^Cabo AS /.test(name))
+    .map(name => String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()));
+
+function isDroppedMaterial(name) {
+    return MATERIALS_DROPPED_SET.has(String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim());
+}
+
+//Componentes de kit com os nomes da planilha, sem os itens retirados
+function normalizeKitComponents(components) {
+    const merged = [];
+    (components || []).forEach(c => {
+        const name = resolveMaterialName(String(c.name || '').trim());
+        if (!name || isDroppedMaterial(name)) return;
+        const existing = merged.find(m => m.name === name);
+        if (existing) existing.quantity += Number(c.quantity) || 1;
+        else merged.push({ name, quantity: Number(c.quantity) || 1 });
+    });
+    return merged;
+}
 const MATERIALS_NOT_IN_SHEET_SET = new Set(MATERIALS_NOT_IN_SHEET.map(name => String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()));
 Object.keys(MATERIAL_RENAMES).forEach(oldName => {
     if (!(oldName in MATERIAL_PRICES_BASE)) return;
@@ -5109,7 +5174,7 @@ function getKitComponents(kitName) {
     const kit = materialCatalog.kits.find(k => k.name.toUpperCase() === String(kitName).toUpperCase());
     if (kit && kit.components.length) return kit.components;
     const defaults = getDefaultKitDefinitions()[kitName];
-    return defaults ? defaults.components : [];
+    return defaults ? normalizeKitComponents(defaults.components) : [];
 }
 
 //Gera um id simples e único para itens do catálogo
@@ -5128,7 +5193,7 @@ function buildSeedCatalog() {
                 id: generateCatalogId('kit'),
                 name,
                 category: info.category || 'Outros',
-                components: info.components.map(c => ({ name: resolveMaterialName(c.name), quantity: Number(c.quantity) || 1 }))
+                components: normalizeKitComponents(info.components)
             });
         } else {
             materials.push({
@@ -5152,7 +5217,7 @@ function buildSeedCatalog() {
             id: generateCatalogId('kit'),
             name: kitName,
             category: defaults[kitName].category || 'Outros',
-            components: defaults[kitName].components.map(c => ({ name: resolveMaterialName(c.name), quantity: Number(c.quantity) || 1 }))
+            components: normalizeKitComponents(defaults[kitName].components)
         });
     });
     return { materials, kits };
@@ -5181,10 +5246,7 @@ function loadMaterialCatalog(stored) {
         id: k.id || generateCatalogId('kit'),
         name: String(k.name || '').trim(),
         category: k.category || 'Outros',
-        components: Array.isArray(k.components) ? k.components.map(c => ({
-            name: resolveMaterialName(String(c.name || '').trim()),
-            quantity: Number(c.quantity) || 1
-        })).filter(c => c.name) : []
+        components: Array.isArray(k.components) ? normalizeKitComponents(k.components) : []
     })).filter(k => k.name) : [];
     //Mescla itens do seed que ainda não existem (atualizações do código)
     const existingNames = new Set([...materials, ...kits].map(i => i.name.toUpperCase()));
@@ -7301,6 +7363,7 @@ function calculateBomState() {
     const addOrUpdateMaterial = (name, quantity, type = 'unit', group = 'Outros', detail = null) => {
         if (!name || quantity <= 0) return;
         name = resolveMaterialName(name);
+        if (isDroppedMaterial(name)) return;
         const priceInfo = MATERIAL_PRICES[name] || { price: 0, category: 'Outros' };
         const bomKey = makeBomKey(name, group);
         if (!bomState[bomKey]) {
@@ -8352,6 +8415,7 @@ function calculateProjectCost(projectMarkers, projectCables) {
     const addOrUpdate = (name, qty, type = 'unit') => {
         if (!name || qty <= 0) return;
         name = resolveMaterialName(name);
+        if (isDroppedMaterial(name)) return;
         const priceInfo = MATERIAL_PRICES[name] || { price: 0, category: 'Outros' };
         if (!tempBomState[name]) {
         tempBomState[name] = { quantity: 0, type: type, unitPrice: priceInfo.price, category: priceInfo.category };
