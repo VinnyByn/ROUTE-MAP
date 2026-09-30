@@ -1683,3 +1683,6 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 #sizeGroup, #fsSizeField, .ms-size-field { display: none !important; }
 
 #clientModal .client-show-label { margin: 0 0 10px; }
+#clientModal .client-show-label { align-items: center; }
+#clientModal .client-show-label input[type="color"] { width: 34px; height: 24px; padding: 0 2px; margin-left: 6px; border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; }
+#clientModal .client-show-label input[type="color"]:disabled { opacity: 0.4; cursor: default; }

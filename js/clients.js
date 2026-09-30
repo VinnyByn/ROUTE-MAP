@@ -623,7 +623,7 @@ function applyClientAppearance(clientInfo) {
     const variant = clientInfo.client.kind === 'residencial' ? '' : clientInfo.client.kind;
     //B2B pode exibir o nome no mapa, como as caixas
     const showLabel = isB2BClient(clientInfo) && !!clientInfo.client.b2b?.showLabel;
-    clientInfo.marker.setLabel(showLabel ? buildMarkerMapLabel(clientInfo.name, clientInfo.labelColor || '#0f172a') : null);
+    clientInfo.marker.setLabel(showLabel ? buildMarkerMapLabel(clientInfo.name, clientInfo.client.b2b?.labelColor || '#0f172a') : null);
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;
@@ -992,6 +992,8 @@ function openClientModal(clientInfo, presetKind) {
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
     document.getElementById('clientB2BShowLabel').checked = !!b2b.showLabel;
+    document.getElementById('clientB2BLabelColor').value = b2b.labelColor || '#0f172a';
+    document.getElementById('clientB2BLabelColor').disabled = !b2b.showLabel;
     document.getElementById('clientEquipmentList').innerHTML = '';
     const equipments = data.equipments.length ? data.equipments : (clientInfo ? [] : [{ type: 'ONU/ONT' }]);
     equipments.forEach(addClientEquipmentRow);
@@ -1052,6 +1054,7 @@ function collectClientForm() {
                 contactName: value('clientB2BContactName'),
                 contactPhone: value('clientB2BContactPhone'),
                 showLabel: document.getElementById('clientB2BShowLabel').checked,
+                labelColor: document.getElementById('clientB2BLabelColor').value,
             } : {},
             notes: value('clientNotes')
         }
@@ -1242,6 +1245,9 @@ function setupClientModal() {
     document.getElementById('clientDropOverride').addEventListener('input', updateClientDropSummary);
     document.querySelectorAll('#clientKindGroup button').forEach(button => {
         button.addEventListener('click', () => setClientKind(button.dataset.kind));
+    });
+    document.getElementById('clientB2BShowLabel').addEventListener('change', (e) => {
+        document.getElementById('clientB2BLabelColor').disabled = !e.target.checked;
     });
     document.getElementById('clientB2BService').innerHTML = B2B_SERVICES.map(s => `<option>${s}</option>`).join('');
     document.getElementById('addClientEquipmentButton').addEventListener('click', () => {
