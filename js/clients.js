@@ -665,9 +665,10 @@ function addClientMaterialsToBom(projectMarkers, addMaterial) {
         const drop = getClientDropInfo(clientInfo);
         if (drop) addMaterial(CLIENT_DROP_MATERIAL, drop.length, 'length', 'Clientes', clientInfo.name);
         kit.forEach(c => addMaterial(c.name, c.quantity, 'unit', 'Clientes', clientInfo.name));
-        //Equipamentos escolhidos no catálogo (clientes B2B)
+        //Equipamentos do cliente: o escolhido no catálogo entra com o preço dele; o digitado procura
+        //um material de mesmo nome no catálogo e, se não achar, entra pelo tipo e modelo (sem preço)
         (clientInfo.client?.equipments || []).forEach(e => {
-            if (e.material) addMaterial(e.material, 1, 'unit', 'Clientes', clientInfo.name);
+            addMaterial(getClientEquipmentMaterialName(e), 1, 'unit', 'Clientes', clientInfo.name);
         });
     });
 }
@@ -945,6 +946,17 @@ function addClientEquipmentRow(equipment = {}) {
     list.appendChild(row);
     updateClientEquipmentEmptyState();
     return row;
+}
+
+function getClientEquipmentMaterialName(equipment) {
+    if (equipment.material) return equipment.material;
+    const model = String(equipment.model || '').trim();
+    if (model) {
+        const norm = normalizeMaterialName(model);
+        const match = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === norm || (m.code && String(m.code).trim() === model));
+        if (match) return match.name;
+    }
+    return [equipment.type, model].filter(Boolean).join(' - ') || 'Equipamento do cliente';
 }
 
 //Seletor de materiais Data Center (equipamentos do cliente B2B)
