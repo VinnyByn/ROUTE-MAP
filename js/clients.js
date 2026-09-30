@@ -621,7 +621,9 @@ function applyClientAppearance(clientInfo) {
     clientInfo.color = status.color;
     const kind = CLIENT_KINDS[clientInfo.client.kind];
     const variant = clientInfo.client.kind === 'residencial' ? '' : clientInfo.client.kind;
-    clientInfo.marker.setLabel(null);
+    //B2B pode exibir o nome no mapa, como as caixas
+    const showLabel = isB2BClient(clientInfo) && !!clientInfo.client.b2b?.showLabel;
+    clientInfo.marker.setLabel(showLabel ? buildMarkerMapLabel(clientInfo.name, clientInfo.labelColor || '#0f172a') : null);
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;
@@ -989,6 +991,7 @@ function openClientModal(clientInfo, presetKind) {
         clientPredialManagerPhone: data.predial.managerPhone || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
+    document.getElementById('clientB2BShowLabel').checked = !!b2b.showLabel;
     document.getElementById('clientEquipmentList').innerHTML = '';
     const equipments = data.equipments.length ? data.equipments : (clientInfo ? [] : [{ type: 'ONU/ONT' }]);
     equipments.forEach(addClientEquipmentRow);
@@ -1048,6 +1051,7 @@ function collectClientForm() {
                 ipv6: value('clientB2BIpv6'),
                 contactName: value('clientB2BContactName'),
                 contactPhone: value('clientB2BContactPhone'),
+                showLabel: document.getElementById('clientB2BShowLabel').checked,
             } : {},
             notes: value('clientNotes')
         }

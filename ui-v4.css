@@ -1681,3 +1681,5 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 
 /* Tamanho dos marcadores agora é uma preferência do usuário */
 #sizeGroup, #fsSizeField, .ms-size-field { display: none !important; }
+
+#clientModal .client-show-label { margin: 0 0 10px; }
