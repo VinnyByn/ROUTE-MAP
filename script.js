@@ -5165,6 +5165,7 @@ async function addMissingSheetMaterials() {
     const known = new Set(materialCatalog.materials.map(m => normalizeMaterialName(m.name)));
     const knownCodes = new Set(materialCatalog.materials.map(m => String(m.code || '').trim()).filter(c => c && c !== '?'));
     let added = 0;
+    let sectionsChanged = false;
     (data?.itens || []).forEach(item => {
         const name = String(item.descricao || '').trim();
         const price = Number(item.valor_unitario);
@@ -5172,7 +5173,15 @@ async function addMissingSheetMaterials() {
         if (!name || !Number.isFinite(price)) return;
         const norm = normalizeMaterialName(name);
         const aliasTarget = SHEET_MATERIAL_ALIASES[norm];
-        if (known.has(norm) || (aliasTarget && known.has(normalizeMaterialName(resolveMaterialName(aliasTarget))))) return;
+        const section = String(item.secao || '').trim();
+        //Material que já existe: guarda a seção da planilha (define a categoria)
+        const targetNorm = aliasTarget ? normalizeMaterialName(resolveMaterialName(aliasTarget)) : norm;
+        const existing = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === targetNorm || normalizeMaterialName(m.name) === norm);
+        if (existing) {
+            if (section && existing.section !== section) { existing.section = section; sectionsChanged = true; }
+            return;
+        }
+        if (known.has(norm)) return;
         if (code && code !== '?' && knownCodes.has(code) && materialCatalog.materials.some(m => m.code === code && normalizeMaterialName(m.name) === norm)) return;
         materialCatalog.materials.push({
             id: generateCatalogId('mat'),
@@ -5183,11 +5192,12 @@ async function addMissingSheetMaterials() {
             supplier: '',
             code: code === '?' ? '' : code,
             notes: 'Da planilha de preços',
+            section,
         });
         known.add(norm);
         added++;
     });
-    if (!added) return;
+    if (!added && !sectionsChanged) return;
     applyCatalogToMaterialPrices();
     populateCatalogCategoryFilters?.();
     if (document.getElementById('materialCatalogModal')?.style.display === 'flex') renderCatalog();
@@ -5336,7 +5346,8 @@ function loadMaterialCatalog(stored) {
         price: Number(m.price) || 0,
         supplier: m.supplier || '',
         code: m.code || '',
-        notes: m.notes || ''
+        notes: m.notes || '',
+        section: m.section || ''
     })).filter((m, i, all) => m.name && all.findIndex(o => o.name === m.name) === i) //Nome antigo e novo viram um só
         .filter(m => m.notes === 'Da planilha de kits' || !MATERIALS_NOT_IN_SHEET_SET.has(normalizeMaterialName(m.name))); //Fora da planilha da empresa
     const kits = Array.isArray(stored.kits) ? stored.kits.map(k => ({
@@ -6051,10 +6062,21 @@ function classifyPriceSheetCategory(name) {
 
 //Aplica a regra de categorias no catálogo (itens de mão de obra e marcadores internos ficam como estão)
 const CATALOG_FIXED_CATEGORY_NAMES = new Set(['CTO', 'RESERVA', 'CASA', 'PLACA', 'MAO DE OBRA REGIONAL', 'MAO DE OBRA TERCEIRIZADA']);
+//Seção da planilha de preços → categoria do sistema
+function categoryFromSheetSection(section) {
+    const s = normalizeMaterialName(section);
+    if (!s) return null;
+    if (/DATA ?CENTER/.test(s)) return 'Data Center';
+    if (/\bCABOS?\b/.test(s)) return 'Lançamento';
+    if (/\bFERRAGENS?\b/.test(s)) return 'Ferragem';
+    return 'Fusão'; //Seção de caixas, splitters e acessórios de fusão
+}
+
 function applyMaterialCategoryRules(materials) {
     materials.forEach(m => {
         if (CATALOG_FIXED_CATEGORY_NAMES.has(normalizeMaterialName(m.name))) return;
-        m.category = m.notes === 'Da planilha de kits' ? 'Data Center' : classifyPriceSheetCategory(m.name);
+        m.category = m.notes === 'Da planilha de kits' ? 'Data Center'
+            : (categoryFromSheetSection(m.section) || classifyPriceSheetCategory(m.name));
     });
 }
 
