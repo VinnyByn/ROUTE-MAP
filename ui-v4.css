@@ -1678,3 +1678,6 @@ html[data-theme="dark"] .mh-card h5, html[data-theme="dark"] .mh-card__head span
 html[data-theme="dark"] .mh-row.is-free b { color: #4ade80; }
 html[data-theme="dark"] .mh-row.is-busy b { color: #f87171; }
 html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
+
+/* Tamanho dos marcadores agora é uma preferência do usuário */
+#sizeGroup, #fsSizeField, .ms-size-field { display: none !important; }
