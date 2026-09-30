@@ -90,6 +90,13 @@ function getOccupiedCableFibers(cable, ignoreClient) {
     return occupied;
 }
 
+//Cabo desenhado com uma das pontas no cliente B2B (vínculo feito no desenho do cabo)
+function findClientAnchoredCable(clientInfo) {
+    const uid = clientInfo?.uid;
+    if (!uid || !isB2BClient(clientInfo)) return null;
+    return savedCables.find(c => c.startAnchorUid === uid || c.endAnchorUid === uid) || null;
+}
+
 //Ponto do cabo mais próximo do cliente (a derivação sai daí)
 function nearestPointOnCable(cable, position) {
     let best = null;
@@ -421,6 +428,7 @@ function ensureClientDropPath(clientInfo, cto, { force = false, getNetwork }) {
 //Metragem do drop: traçado + sobra da empresa, ou o valor informado
 function getClientDropInfo(clientInfo) {
     if (isPredialClient(clientInfo)) return null;
+    if (findClientAnchoredCable(clientInfo)) return null; //O próprio cabo FO chega ao cliente: sem drop
     if (clientInfo.client?.cableName) {
         const cable = findClientCable(clientInfo);
         if (!cable || !clientInfo.marker) return null;
@@ -485,6 +493,20 @@ function refreshClientDrops(options = {}) {
     };
     markers.forEach(clientInfo => {
         if (clientInfo.type !== 'CLIENTE' || clientInfo === dropEditSession?.clientInfo) return;
+        const anchored = findClientAnchoredCable(clientInfo);
+        if (anchored) {
+            if (onlyCto) return;
+            clientInfo.dropLine?.setPath([]);
+            if (clientInfo.client.linkedCable !== anchored.name) {
+                clientInfo.client.linkedCable = anchored.name;
+                applyClientAppearance(clientInfo);
+            }
+            return;
+        }
+        if (clientInfo.client?.linkedCable) {
+            delete clientInfo.client.linkedCable;
+            applyClientAppearance(clientInfo);
+        }
         if (clientInfo.client?.cableName && !isPredialClient(clientInfo)) {
             if (onlyCto) return;
             const cable = findClientCable(clientInfo);
@@ -541,7 +563,10 @@ function applyClientAppearance(clientInfo) {
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;
-    const link = cable
+    const anchoredCable = findClientAnchoredCable(clientInfo);
+    const link = anchoredCable
+        ? ` · cabo ${anchoredCable.name}`
+        : cable
         ? ` · ${cable.name}${clientInfo.client.cableFiber ? ` fibra ${clientInfo.client.cableFiber}` : ''}`
         : cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
     const units = isPredialClient(clientInfo) && clientInfo.client.predial?.units ? ` · ${clientInfo.client.predial.units} unidades` : '';
@@ -702,7 +727,8 @@ function populateClientCtoSelect(selectedUid) {
         option.textContent = text;
         select.appendChild(option);
     };
-    if (!editingClient) addOption('auto', 'Automática (mais próxima com porta livre)');
+    const b2b = getSelectedClientKind() === 'b2b';
+    if (!editingClient && !b2b) addOption('auto', 'Automática (mais próxima com porta livre)');
     addOption('', 'Sem CTO');
     getProjectCtos(getClientFolderId())
         .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR', { numeric: true }))
@@ -713,14 +739,15 @@ function populateClientCtoSelect(selectedUid) {
             const occupancy = capacity ? `${used} de ${capacity} portas` : `${used} cliente${used === 1 ? '' : 's'}`;
             addOption(uid, `${cto.name} — ${occupancy}`);
         });
-    //B2B: fibra dedicada direto no cabo FO
-    if (getSelectedClientKind() === 'b2b') {
+    //B2B: o vínculo com o cabo FO é feito desenhando o cabo até o cliente; aqui só aparece o vínculo antigo
+    const legacyCable = editingClient?.client?.cableName;
+    if (legacyCable && getSelectedClientKind() === 'b2b') {
         const cables = getProjectCables(getClientFolderId())
             .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR', { numeric: true }));
         if (cables.length) {
             const group = document.createElement('optgroup');
             group.label = 'Cabo FO (fibra dedicada)';
-            cables.forEach(cable => {
+            cables.filter(cable => cable.name === legacyCable).forEach(cable => {
                 const option = document.createElement('option');
                 option.value = CLIENT_CABLE_PREFIX + cable.name;
                 const used = getOccupiedCableFibers(cable, editingClient).size;
@@ -730,9 +757,10 @@ function populateClientCtoSelect(selectedUid) {
             select.appendChild(group);
         }
     }
-    const wanted = selectedUid ?? (editingClient ? '' : 'auto');
+    const fallback = editingClient || b2b ? '' : 'auto';
+    const wanted = selectedUid ?? fallback;
     select.value = wanted;
-    if (select.value !== wanted) select.value = editingClient ? '' : 'auto';
+    if (select.value !== wanted) select.value = fallback;
 }
 
 function populateClientPortSelect(preferredPort) {
@@ -791,6 +819,15 @@ function updateClientDropSummary() {
     const ctoUid = document.getElementById('clientCto').value;
     const override = Number(document.getElementById('clientDropOverride').value) || null;
     actions.hidden = true;
+    const anchored = editingClient && findClientAnchoredCable(editingClient);
+    if (anchored) {
+        summary.innerHTML = `Ligado pelo cabo <strong>${escapeHtml(anchored.name)}</strong> desenhado até o cliente (sem drop).`;
+        return;
+    }
+    if (getSelectedClientKind() === 'b2b' && ctoUid === '') {
+        summary.textContent = 'Para ligar por fibra dedicada, desenhe um cabo da CEO/CTO até este cliente. Ou escolha uma CTO para usar drop.';
+        return;
+    }
     if (getSelectedClientKind() === 'predial') {
         summary.textContent = 'Predial: os clientes estão no próprio prédio, então não há drop até o marcador.';
         return;

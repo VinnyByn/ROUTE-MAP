@@ -201,9 +201,18 @@ function isCableAnchorMarkerType(type) {
     return type === "CEO" || type === "CTO" || type === "RESERVA" || type === "POP";
 }
 
+//Cliente B2B também é ponta de cabo: o cabo FO é desenhado da CEO/CTO até ele
+function isB2BCableAnchor(markerInfo) {
+    return markerInfo?.type === 'CLIENTE' && markerInfo.client?.kind === 'b2b';
+}
+
+function isCableAnchorMarker(markerInfo) {
+    return isCableAnchorMarkerType(markerInfo?.type) || isB2BCableAnchor(markerInfo);
+}
+
 function isCableEndpointAnchorCandidate(markerInfo) {
     if (!markerInfo?.marker) return false;
-    if (isCableAnchorMarkerType(markerInfo.type)) return true;
+    if (isCableAnchorMarker(markerInfo)) return true;
     if (markerInfo.type === 'Importado') return true;
     return false;
 }
@@ -3116,7 +3125,7 @@ function getCableDrawEndpointAnchorCandidates(folderId = activeFolderId) {
     const candidates = folderId
         ? getAnchorMarkerCandidatesForFolder(folderId)
         : markers.filter(isCableEndpointAnchorCandidate);
-    return candidates.filter((markerInfo) => isCableAnchorMarkerType(markerInfo.type));
+    return candidates.filter(isCableAnchorMarker);
 }
 
 function resolveCableDrawEndpointAnchor(point, folderId = activeFolderId, excludeMarker = null, maxDistanceM = CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M) {
@@ -3197,7 +3206,7 @@ function createCableDrawVertexMarker(position) {
 function handleAnchorMarkerClickDuringCableDraw(markerInfo) {
     scheduleSuppressNextCableMapClick();
     const markerPosition = markerInfo.marker.getPosition();
-    const isAnchor = isCableAnchorMarkerType(markerInfo.type);
+    const isAnchor = isCableAnchorMarker(markerInfo);
     const addVertexAt = (position) => {
         const vertex = createCableDrawVertexMarker(position);
         cableMarkers.push(vertex);
@@ -3206,7 +3215,7 @@ function handleAnchorMarkerClickDuringCableDraw(markerInfo) {
     //Ponta A
     if (cableMarkers.length === 0) {
         if (!isAnchor) {
-            showToast('Comece numa caixa', 'O cabo começa em uma CEO, CTO, reserva ou POP.', 'progress');
+            showToast('Comece numa caixa', 'O cabo começa em uma CEO, CTO, reserva, POP ou cliente B2B.', 'progress');
             return;
         }
         addVertexAt(markerPosition);
