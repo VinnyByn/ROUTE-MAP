@@ -5672,8 +5672,64 @@ function nameSimilarity(aNorm, bNorm) {
     return inter / (a.size + b.size - inter);
 }
 
+//Nomes da planilha de preços da empresa → material do sistema (os nomes usados nos cálculos)
+//Itens com o mesmo nome dos dois lados não precisam estar aqui.
+const SHEET_MATERIAL_ALIASES = {
+    'CFOA SM ASU 80 S 06 FIBRAS NR': 'Cabo AS 80 FO-06',
+    'CFOA SM ASU 80 S 12 FIBRAS NR': 'Cabo AS 80 FO-12',
+    'CFOA SM AS 80 S 24 FIBRAS NR KP': 'Cabo AS 80 FO-24',
+    'CFOA SM AS 80 S 36 FIBRAS NR KP': 'Cabo AS 80 FO-36',
+    'CFOA SM AS 80 S 48 FIBRAS NR KP': 'Cabo AS 80 FO-48',
+    'CFOA SM AS 80 S 72 FIBRAS NR KP': 'Cabo AS 80 FO-72',
+    'CFOA SM AS 80 S 144 FIBRAS NR KP': 'Cabo AS 80 FO-144',
+    'CFOA SM AS 200 S 12 FIBRAS NR KP': 'Cabo AS 200 FO-12',
+    'CFOA SM AS 200 S 24 FIBRAS NR KP': 'Cabo AS 200 FO-24',
+    'CFOA SM AS 200 S 36 FIBRAS NR KP': 'Cabo AS 200 FO-36',
+    'DROP FLAT 1FO': 'CABO DROP FLAT LOW FRICTION 1F',
+    'SPLITTER FUSAO 1 2': 'Splitter 1/2',
+    'SPLITTER FUSAO 1 4': 'Splitter 1/4',
+    'SPLITTER FUSAO 1 8': 'Splitter 1/8',
+    'SPLITTER CONECTORIZADO 1 8 SC APC': 'Splitter 1/8 APC',
+    'SPLITTER CONECTORIZADO 1 8 SC UPC': 'Splitter 1/8 UPC',
+    'SPLITTER CONECTORIZADO 1 16 SC APC': 'Splitter 1/16 APC',
+    'SPLITTER CONECTORIZADO 1 16 SC UPC': 'Splitter 1/16 UPC',
+    'CTO FIBERSUL': 'CAIXA DE ATENDIMENTO',
+    'CAIXA DE TERMINACAO OPTICA PREDIAL': 'CAIXA DE ATENDIMENTO PREDIAL',
+    'CAIXAS DE FUSAO 24F EXPANSIVA': 'CAIXA DE EMENDA ÓPTICA (CEO)',
+    'CAIXAS DE EMENDA OPTICA DE 144 FIBRAS': 'CAIXA DE EMENDA OPTICA (CEO) 144 FUSÕES',
+    'KIT DE BANDEJA PARA CAIXA TIPO FOSC 24F': 'KIT DE BANDEJA PARA CAIXA DE EMENDA',
+    'SUPORTE ANCORAGEM PARA CABOS OPTICOS SUPA': 'SUPORTE ANCORAGEM PARA CABOS OPTICOS (SUPAS)',
+    'RESERVA OPTILOOP RAQUETE': 'RESERVA OPTILOOP',
+    'ALCA PREFORMADA DERIVACAO EM T': 'DERIVAÇÃO EM T',
+    'PLAQUETA DE IDENTIFICACAO DE CABOS': 'PLAQUETA DE IDENTIFICAÇÃO',
+    'ARAME DE ESPINAR BOBINA DE 105M': 'ARAME DE ESPIMAR (105 m)',
+    'PRENCA PARA ESPINAR': 'PRENSA DE ESPINAR',
+    'PONTO DE TERMINACAO OPTICA PTO': 'PTO - PONTO DE TERMINAÇÃO ÓPTICA',
+    'CONECTOR PRE POLIDO': 'CONECTOR DE CAMPO SC/APC',
+    'CORDOES SC PC SC APC': 'CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m',
+    'CORDAO OPTICO DUPLEX MULTIMODO LC UPC LC UPC 2M': 'CORDÃO ÓPTICO DUPLEX MULTIMODO LC/UPC > LC/UPC OM3 2M',
+    'CORDAO OPTICO DUPLEX MONOMODO LC UPC SC APC 2M': 'CORDÃO ÓPTICO DUPLEX MONOMODO LC/UPC > SC/APC 2M',
+    'PATCHCORD MAXITELECOM CAT6 1 5M': 'PATCHCORD CAT6 AZUL 1,5M',
+    'DIO DE 144 POSICOES SC APC COM PIGTAILS COR PRETA': 'DGO 144 SC/APC COM PIGTAILS COR PRETA',
+    'ROLO VELCRO 3M PARA ORGANIZAR CABOS': 'ROLO VELCRO DE 3 METROS PARA ORGANIZAR CABOS',
+    'PORCA GAIOLA PARAFUSO': 'KIT PORCA GAIOLA + PARAFUSO',
+    'KIT RODIZIO DE 4 PECAS COM 4 RODAS PARA RACK IPMETAL 60X60CM RP50 PL50X67': 'RODIZIO RP50 PL50X67 - KIT 4 PEÇAS',
+    'SFP 1270NM TX 1330NM RX 20KM 10G BIDI': 'SFP 1270NM TX/1330NM RX 20KM, 10G, BIDI',
+    'SFP 1330NM TX 1270NM RX 20KM 10G BIDI': 'SFP 1330NM TX/1270NM RX 20KM, 10G, BIDI',
+    'SFP MULTIMODO 10G DUPLEX': 'SFP 850NM 10G 0,3KM MULTIMODO DUPLEX',
+    'INVERSOR 48VCC 110VCA 600W XPS': 'FONTE INVERSORA 48VCC/110VCA 600W',
+    'AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO': 'AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO 220V',
+};
+
 //Encontra o melhor material correspondente para um nome da planilha
 function findCatalogMatch(sheetName, code = '') {
+    //Equivalência conhecida entre a planilha e o sistema
+    const aliasName = SHEET_MATERIAL_ALIASES[normalizeMaterialName(sheetName)];
+    if (aliasName) {
+        const aliasTarget = normalizeMaterialName(aliasName);
+        const byAlias = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === aliasTarget);
+        if (byAlias) return { material: byAlias, score: 1 };
+    }
     //Código igual ao do catálogo tem prioridade sobre o nome
     const byCode = code && materialCatalog.materials.find(m => m.code && String(m.code).trim().toLowerCase() === String(code).trim().toLowerCase());
     if (byCode) return { material: byCode, score: 1 };
