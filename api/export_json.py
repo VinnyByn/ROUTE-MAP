@@ -25,14 +25,30 @@ async def build() -> dict:
     }
 
 
-if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "materiais.json"
+async def build_kits() -> dict:
+    import kits
+    text = await main.fetch_sheet_csv(kits.KITS_SHEET_ID, kits.KITS_SHEET_GID)
+    return {
+        "fonte": f"https://docs.google.com/spreadsheets/d/{kits.KITS_SHEET_ID}",
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
+        "kits": kits.parse_kits(text),
+    }
+
+
+def write(target: str, builder, label: str, count) -> None:
     try:
-        data = asyncio.run(build())
+        data = asyncio.run(builder())
     except Exception as error:  # Não derruba o deploy do site por causa da planilha
         detail = getattr(error, "detail", None) or str(error)
-        print(f"::warning::Planilha de materiais não lida: {detail}")
-        sys.exit(0)
+        print(f"::warning::Planilha de {label} não lida: {detail}")
+        return
     with open(target, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=1)
-    print(f"{data['total']} materiais gravados em {target}")
+    print(f"{count(data)} {label} gravados em {target}")
+
+
+if __name__ == "__main__":
+    target = sys.argv[1] if len(sys.argv) > 1 else "materiais.json"
+    write(target, build, "materiais", lambda d: d["total"])
+    kits_target = sys.argv[2] if len(sys.argv) > 2 else "kits.json"
+    write(kits_target, build_kits, "kits", lambda d: {k: len(v) for k, v in d["kits"].items()})

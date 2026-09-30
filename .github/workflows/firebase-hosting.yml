@@ -22,15 +22,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Gerar materiais.json a partir da planilha de preços
+      - name: Gerar materiais.json e kits.json a partir das planilhas
         run: |
           pip install --quiet -r api/requirements.txt
-          cd api && python export_json.py ../materiais.json
-      - name: Conferir planilha de kits (temporário)
-        run: |
-          ID=1MVwYAzcUOhZxB7DxqHzghBKwYmU7ShSuYqF3xF-tlnE
-          curl -sL "https://docs.google.com/spreadsheets/d/$ID/htmlview" | grep -oE 'gid=[0-9]+|"name":"[^"]{1,60}"|sheet-button-[0-9]+[^<]{0,80}' | sort -u | head -40 || true
-          curl -sL "https://docs.google.com/spreadsheets/d/$ID/export?format=csv&gid=0" | head -200 | sed 's/^/KITCSV|/' || true
+          cd api && python export_json.py ../materiais.json ../kits.json
       - name: Instalar Firebase CLI
         # Instala numa pasta à parte para fixar dependências quebradas no npm (ignore@7.0.11 foi retirado do registro)
         run: |

@@ -85,3 +85,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 materiais.json
+kits.json

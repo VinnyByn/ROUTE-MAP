@@ -1398,9 +1398,14 @@ function initMap() {
         const cordaoQty = parseInt(document.getElementById('placaCordaoQty').value, 10);
         const oltQty = parseInt(document.getElementById('placaOltQty').value, 10);
         const sfpQty = parseInt(document.getElementById('placaSfpQty').value, 10);
-        if (cordaoQty > 0) addMaterialToBom('CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m', cordaoQty);
-        if (oltQty > 0) addMaterialToBom('PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)', oltQty);
-        if (sfpQty > 0) addMaterialToBom('MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE', sfpQty);
+        if (hasSheetKit('KIT PLACA')) {
+            //Kit da planilha: cada placa leva o kit completo (cordões, placa com SFPs e licença)
+            addKitToBom('KIT PLACA', Math.max(1, oltQty || 1));
+        } else {
+            if (cordaoQty > 0) addMaterialToBom('CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m', cordaoQty);
+            if (oltQty > 0) addMaterialToBom('PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)', oltQty);
+            if (sfpQty > 0) addMaterialToBom('MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE', sfpQty);
+        }
         if (projectBoms[projectId]) {
             bomState = normalizeBomState(JSON.parse(JSON.stringify(projectBoms[projectId])));
         }
@@ -1426,10 +1431,16 @@ function initMap() {
         const cordaoQty = parseInt(document.getElementById('oltCordaoQty').value, 10);
         const placaOltQty = parseInt(document.getElementById('oltPlacaOltQty').value, 10);
         const sfpQty = parseInt(document.getElementById('oltSfpQty').value, 10);
-        if (cordaoQty > 0) addMaterialToBom('CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m', cordaoQty);
-        if (placaOltQty > 0) addMaterialToBom('PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)', placaOltQty);
-        if (sfpQty > 0) addMaterialToBom('MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE', sfpQty);
-        getKitComponents('KIT OLT').forEach(item => addMaterialToBom(item.name, item.quantity));
+        if (hasSheetKit('KIT OLT')) {
+            //Kit da planilha já inclui a primeira placa; placas a mais entram pelo kit placa
+            addKitToBom('KIT OLT');
+            if (placaOltQty > 1) addKitToBom('KIT PLACA', placaOltQty - 1);
+        } else {
+            if (cordaoQty > 0) addMaterialToBom('CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m', cordaoQty);
+            if (placaOltQty > 0) addMaterialToBom('PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)', placaOltQty);
+            if (sfpQty > 0) addMaterialToBom('MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE', sfpQty);
+            getKitComponents('KIT OLT').forEach(item => addMaterialToBom(item.name, item.quantity));
+        }
         if (projectBoms[projectId]) {
             bomState = normalizeBomState(JSON.parse(JSON.stringify(projectBoms[projectId])));
         }
@@ -1455,10 +1466,16 @@ function initMap() {
         const placaOltQty = parseInt(document.getElementById('popPlacaOltQty').value, 10);
         const sfpQty = parseInt(document.getElementById('popSfpQty').value, 10);
         const cordaoScApcQty = parseInt(document.getElementById('popCordaoScApcQty').value, 10);
-        if (placaOltQty > 0) addMaterialToBom('PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)', placaOltQty);
-        if (sfpQty > 0) addMaterialToBom('MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE', sfpQty);
-        if (cordaoScApcQty > 0) addMaterialToBom('CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m', cordaoScApcQty);
-        getKitComponents('KIT POP').forEach(item => addMaterialToBom(item.name, item.quantity));
+        if (hasSheetKit('KIT POP')) {
+            //Kit da planilha já inclui a primeira placa; placas a mais entram pelo kit placa
+            addKitToBom('KIT POP');
+            if (placaOltQty > 1) addKitToBom('KIT PLACA', placaOltQty - 1);
+        } else {
+            if (placaOltQty > 0) addMaterialToBom('PLACA OLT LINE ANYPON 16 PORTS CARD (HFTH)', placaOltQty);
+            if (sfpQty > 0) addMaterialToBom('MÓDULO SFP C+ PARA PLACA OLT LINE ANYPON ZTE', sfpQty);
+            if (cordaoScApcQty > 0) addMaterialToBom('CORDÃO ÓPTICO SIMPLEX MONOMODO SC/UPC > SC/APC 2m', cordaoScApcQty);
+            getKitComponents('KIT POP').forEach(item => addMaterialToBom(item.name, item.quantity));
+        }
         if (projectBoms[projectId]) {
             bomState = normalizeBomState(JSON.parse(JSON.stringify(projectBoms[projectId])));
         }
@@ -4039,9 +4056,10 @@ document.querySelectorAll(".datacenter-option").forEach(option => {
 });
 
 //Adicionar material a BOM
-function addMaterialToBom(materialName, quantity) {
+function addMaterialToBom(materialName, quantity, unitPrice) {
     if (!activeFolderId) return;
-    materialName = resolveMaterialName(materialName);
+    //Itens de kit da planilha de kits mantêm o nome da planilha; os demais usam o nome do catálogo
+    if (unitPrice === undefined) materialName = resolveMaterialName(materialName);
     //Identifica o projeto e inicializa a BOM se necessário
     const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
     if (!projectRootElement) return;
@@ -4065,7 +4083,7 @@ function addMaterialToBom(materialName, quantity) {
     //Cria o item se não existir ou incrementa a quantidade
     const priceInfo = MATERIAL_PRICES[materialName] || { price: 0, category: 'Outros' };
     if (!projectBoms[projectId][materialName]) {
-        projectBoms[projectId][materialName] = { quantity: 0, type: priceInfo.unit || 'un', unitPrice: priceInfo.price, category: priceInfo.category, removed: false };
+        projectBoms[projectId][materialName] = { quantity: 0, type: priceInfo.unit || 'un', unitPrice: unitPrice ?? priceInfo.price, category: priceInfo.category || 'Data Center', removed: false };
     }
     projectBoms[projectId][materialName].quantity += quantity;
 }
@@ -5051,7 +5069,86 @@ async function loadCompanySettings() {
     }
     applyCatalogPermissions();
     try { syncCatalogPricesIntoBoms(); } catch (e) { /* sem listas calculadas ainda */ }
-    addMissingSheetMaterials();
+    await addMissingSheetMaterials();
+    await loadSheetKits();
+}
+
+//Kits POP, OLT e placa vindos da planilha de kits (kits.json, gerado no deploy).
+//Os itens e valores do kit são os da planilha; materiais que não existem no catálogo são adicionados.
+const SHEET_KIT_SOURCE = 'planilha-kits';
+
+async function loadSheetKits() {
+    let data;
+    try {
+        const response = await fetch(`kits.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        data = await response.json();
+    } catch (e) {
+        return;
+    }
+    const sheetKits = data?.kits || {};
+    if (!Object.keys(sheetKits).length) return;
+    const known = new Set(materialCatalog.materials.map(m => normalizeMaterialName(m.name)));
+    const knownCodes = new Set(materialCatalog.materials.map(m => String(m.code || '').trim()).filter(Boolean));
+    //Nomes antigos do sistema (em qualquer grafia) que já viraram um material da planilha de preços
+    //(as trocas por aproximação não contam: a planilha de kits usa o item original)
+    const renamedNorms = new Set(Object.keys(MATERIAL_RENAMES).filter(k => !(k in MATERIAL_SUBSTITUTES)).map(normalizeMaterialName));
+    let changed = false;
+    Object.entries(sheetKits).forEach(([kitName, items]) => {
+        const components = (items || [])
+            .filter(i => i.descricao && Number(i.quantidade) > 0)
+            .map(i => ({
+                name: String(i.descricao).trim(),
+                quantity: Number(i.quantidade),
+                unit: normalizeImportUnit(i.unidade),
+                price: Number(i.valor_unitario) || 0,
+                code: String(i.codigo || '').trim(),
+            }));
+        if (!components.length) return;
+        components.forEach(c => {
+            const norm = normalizeMaterialName(c.name);
+            if (known.has(norm) || renamedNorms.has(norm) || (c.code && knownCodes.has(c.code))) return;
+            materialCatalog.materials.push({
+                id: generateCatalogId('mat'),
+                name: c.name,
+                category: 'Data Center',
+                unit: c.unit,
+                price: c.price,
+                supplier: '',
+                code: c.code,
+                notes: 'Da planilha de kits',
+            });
+            known.add(norm);
+            changed = true;
+        });
+        const existing = materialCatalog.kits.find(k => k.name.toUpperCase() === kitName.toUpperCase());
+        const signature = JSON.stringify(components);
+        if (existing && JSON.stringify(existing.components) === signature && existing.source === SHEET_KIT_SOURCE) return;
+        if (existing) {
+            existing.components = components;
+            existing.source = SHEET_KIT_SOURCE;
+            existing.category = 'Data Center';
+        } else {
+            materialCatalog.kits.push({ id: generateCatalogId('kit'), name: kitName, category: 'Data Center', components, source: SHEET_KIT_SOURCE });
+        }
+        changed = true;
+    });
+    if (!changed) return;
+    applyCatalogToMaterialPrices();
+    if (document.getElementById('materialCatalogModal')?.style.display === 'flex') renderCatalog();
+    if (AppSession.isAdmin) persistMaterialCatalog();
+}
+
+//Adiciona um kit à lista de materiais com os valores do próprio kit (planilha de kits)
+function addKitToBom(kitName, multiplier = 1) {
+    getKitComponents(kitName).forEach(item => {
+        const qty = (Number(item.quantity) || 0) * multiplier;
+        if (qty > 0) addMaterialToBom(item.name, qty, Number.isFinite(item.price) ? item.price : undefined);
+    });
+}
+
+function hasSheetKit(kitName) {
+    return materialCatalog.kits.some(k => k.name.toUpperCase() === kitName.toUpperCase() && k.source === SHEET_KIT_SOURCE && k.components.length);
 }
 
 //Completa o catálogo com os itens da planilha de preços que ainda não existem no sistema
@@ -5241,12 +5338,15 @@ function loadMaterialCatalog(stored) {
         code: m.code || '',
         notes: m.notes || ''
     })).filter((m, i, all) => m.name && all.findIndex(o => o.name === m.name) === i) //Nome antigo e novo viram um só
-        .filter(m => !MATERIALS_NOT_IN_SHEET_SET.has(normalizeMaterialName(m.name))); //Fora da planilha da empresa
+        .filter(m => m.notes === 'Da planilha de kits' || !MATERIALS_NOT_IN_SHEET_SET.has(normalizeMaterialName(m.name))); //Fora da planilha da empresa
     const kits = Array.isArray(stored.kits) ? stored.kits.map(k => ({
         id: k.id || generateCatalogId('kit'),
         name: String(k.name || '').trim(),
         category: k.category || 'Outros',
-        components: Array.isArray(k.components) ? normalizeKitComponents(k.components) : []
+        source: k.source || undefined,
+        components: !Array.isArray(k.components) ? []
+            : k.source === SHEET_KIT_SOURCE ? k.components.map(c => ({ ...c, quantity: Number(c.quantity) || 1 }))
+            : normalizeKitComponents(k.components)
     })).filter(k => k.name) : [];
     //Mescla itens do seed que ainda não existem (atualizações do código)
     const existingNames = new Set([...materials, ...kits].map(i => i.name.toUpperCase()));
@@ -5655,7 +5755,8 @@ function renderCatalogKits() {
     const cableKitMatches = (!category || category === 'Lançamento') && (!term || CABLE_ALCA_KIT_NAME.toLowerCase().includes(term) || 'cabo alça'.includes(term));
     const cableKitHtml = cableKitMatches ? renderCableAlcaKit(priceOf) : '';
     list.innerHTML = cableKitHtml + kits.map(k => {
-        const total = k.components.reduce((sum, c) => sum + priceOf(c.name) * (Number(c.quantity) || 0), 0);
+        const unitOf = (c) => (Number.isFinite(c.price) ? c.price : priceOf(c.name));
+        const total = k.components.reduce((sum, c) => sum + unitOf(c) * (Number(c.quantity) || 0), 0);
         const color = getCatalogCategoryColor(k.category || 'Outros');
         return `
         <article class="catalog-kit-card cat3-kit" style="--chip:${color}">
@@ -5666,7 +5767,7 @@ function renderCatalogKits() {
                 </div>
                 <strong class="cat3-kit__total">R$ ${formatCatalogPrice(total)}</strong>
             </header>
-            <ul>${k.components.map(c => `<li><span class="kit-li-qty">${c.quantity}×</span><span class="cat3-kit__name">${escapeHtml(c.name)}</span><span class="cat3-kit__price">R$ ${formatCatalogPrice(priceOf(c.name) * (Number(c.quantity) || 0))}</span></li>`).join('') || '<li class="cat3-kit__empty">Sem itens</li>'}</ul>
+            <ul>${k.components.map(c => `<li><span class="kit-li-qty">${c.quantity}×</span><span class="cat3-kit__name">${escapeHtml(c.name)}</span><span class="cat3-kit__price">R$ ${formatCatalogPrice(unitOf(c) * (Number(c.quantity) || 0))}</span></li>`).join('') || '<li class="cat3-kit__empty">Sem itens</li>'}</ul>
             <div class="catalog-row-actions">
                 <button type="button" class="catalog-icon-btn" data-edit-kit="${k.id}">${uiIcon('edit')} Editar</button>
                 <button type="button" class="catalog-icon-btn danger" data-delete-kit="${k.id}" title="Excluir kit" aria-label="Excluir kit">${uiIcon('trash')}</button>

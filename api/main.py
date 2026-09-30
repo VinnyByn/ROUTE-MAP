@@ -180,3 +180,20 @@ async def listar_materiais(
     )
     _cache[key] = (time.time(), result)
     return result
+
+
+@app.get("/kits")
+async def listar_kits(atualizar: bool = Query(False, description="Ignora o cache e lê a planilha de novo")):
+    """Kits POP, OLT e placa da planilha de kits: itens com quantidade, unidade, valor e código."""
+    import kits
+    cached = _cache.get("kits")
+    if cached and not atualizar and time.time() - cached[0] < CACHE_SECONDS:
+        return cached[1]
+    text = await fetch_sheet_csv(kits.KITS_SHEET_ID, kits.KITS_SHEET_GID)
+    result = {
+        "fonte": f"https://docs.google.com/spreadsheets/d/{kits.KITS_SHEET_ID}",
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
+        "kits": kits.parse_kits(text),
+    }
+    _cache["kits"] = (time.time(), result)
+    return result

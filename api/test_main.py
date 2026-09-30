@@ -32,3 +32,24 @@ def test_sem_cabecalho(monkeypatch):
     monkeypatch.setattr(main, "fetch_sheet_csv", fake_fetch)
     main._cache.clear()
     assert TestClient(main.app).get("/materiais").status_code == 422
+
+
+def test_kits():
+    import kits
+    csv_text = """LEVANTAMENTO DE CUSTO PARA NOVO POP,,,,,
+Especificações,Quantidade,Unidade,Valor,Total,Código Protheus
+Equipamentos Passivos,,,,,
+Rack Indoor 44U,1,unid,"R$ 4.736,38","R$ 4.736,38",994014
+"XFP 850NM",0,unid,"R$ 249,00",R$ -,993998
+SWITCH MPLS 24 PORTAS,1,unid,"R$ 24.538,31","R$ 24.538,31",-
+LEVANTAMENTO DE CUSTO PARA OLT,,,,,
+Especificações,Quantidade,Unidade,Valor,Total,Código Protheus
+Chassi OLT C650 ZTE,1,unid,"R$ 2.782,23","R$ 2.782,23",991315
+LEVANTAMENTO DE CUSTO PARA NOVA PLACA,,,,,
+Cordão Óptico,16,unid,"R$ 6,90","R$ 110,40",994035
+"""
+    data = kits.parse_kits(csv_text)
+    assert list(data) == ["KIT POP", "KIT OLT", "KIT PLACA"]
+    assert data["KIT POP"][0] == {"codigo": "994014", "descricao": "Rack Indoor 44U", "quantidade": 1.0, "unidade": "un", "valor_unitario": 4736.38}
+    assert len(data["KIT POP"]) == 2 and data["KIT POP"][1]["codigo"] == ""
+    assert data["KIT PLACA"][0]["quantidade"] == 16
