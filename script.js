@@ -748,6 +748,7 @@ function rebuildMarker(data) {
     ensureMarkerUid(markerInfo);
     markers.push(markerInfo);
     updateMarkerAppearance(markerInfo);
+    wireMarkerDrawHoverCursor(marker);
     //Define o comportamento do clique no marcador, com o modo desenho
     marker.addListener("click", () => {
         if (handleSketchMarkerClick(markerInfo)) return;
@@ -1927,6 +1928,12 @@ function setMapCursor(cursor) {
     layers.forEach((el) => {
         el.style.cursor = cursor || "";
     });
+}
+
+//Durante o desenho do cabo, o ponteiro vira mãozinha sobre os marcadores (dá para clicar) e volta à mira fora deles
+function wireMarkerDrawHoverCursor(marker) {
+    marker.addListener("mouseover", () => { if (isDrawingCable) setMapCursor("pointer"); });
+    marker.addListener("mouseout", () => { if (isDrawingCable) setMapCursor("crosshair"); });
 }
 
 //Painel Locais — helpers estilo Google Earth Pro
@@ -4227,6 +4234,7 @@ function addCustomMarker(location, importedData = null) {
     markers.push(markerInfo);
     updateMarkerAppearance(markerInfo);
     if (markerInfo.type === "CLIENTE") refreshBomAfterProjectChange();
+    wireMarkerDrawHoverCursor(marker);
     //Evento de clique no marcador
     marker.addListener("click", () => {
         if (handleSketchMarkerClick(markerInfo)) return;
