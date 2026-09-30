@@ -42,6 +42,7 @@ class Material(BaseModel):
     descricao: str
     unidade: str
     valor_unitario: float
+    secao: str = ""
 
 
 class MateriaisResponse(BaseModel):
@@ -125,11 +126,19 @@ def parse_rows(rows: list[list[str]]) -> list[Material]:
     start, cols = header
     get = lambda row, field: row[cols[field]].strip() if field in cols and cols[field] < len(row) else ""
     items: list[Material] = []
+    section = ""
     for row in rows[start + 1:]:
         descricao = get(row, "descricao")
         valor = parse_price(get(row, "valor_unitario"))
-        if not descricao or valor is None:
-            continue  # Linha vazia, título de seção ou total
+        if valor is None:
+            # Título de seção: primeira célula com texto numa linha sem preço (ex.: "DATA CENTER")
+            title = next((c.strip() for c in row if c.strip() and not re.search(r"\d{3,}", c)), "")
+            header_words = {alias for aliases in HEADER_ALIASES.values() for alias in aliases}
+            if title and _normalize(title) not in ("total", "subtotal") and _normalize(title) not in header_words:
+                section = title
+            continue
+        if not descricao:
+            continue
         if _normalize(descricao) in ("total", "subtotal"):
             continue
         items.append(Material(
@@ -137,6 +146,7 @@ def parse_rows(rows: list[list[str]]) -> list[Material]:
             descricao=descricao,
             unidade=normalize_unit(get(row, "unidade")),
             valor_unitario=valor,
+            secao=section,
         ))
     return items
 

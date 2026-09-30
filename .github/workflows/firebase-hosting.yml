@@ -26,6 +26,7 @@ jobs:
         run: |
           pip install --quiet -r api/requirements.txt
           cd api && python export_json.py ../materiais.json ../kits.json
+          python -c "import json,collections;d=json.load(open('../materiais.json'));print('SECOES',dict(collections.Counter(i['secao'] for i in d['itens'])))" || true
       - name: Instalar Firebase CLI
         # Instala numa pasta à parte para fixar dependências quebradas no npm (ignore@7.0.11 foi retirado do registro)
         run: |
