@@ -1637,3 +1637,44 @@ html[data-theme="dark"] .olt-pop__icon { color: #a5b4fc; }
 }
 
 .observations-counter { display: block; margin-top: 6px; font-size: 12px; text-align: right; color: var(--color-text-dim); }
+
+/* Cartão ao passar o mouse numa CTO/CEO */
+.mh-card {
+  position: fixed;
+  z-index: 3000;
+  width: 230px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  font-size: 12.5px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.mh-card.is-visible { opacity: 1; transform: none; }
+.mh-card__head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.1); }
+.mh-card__head img { width: 28px; height: 28px; flex: none; }
+.mh-card__head strong { display: block; font-size: 14px; line-height: 1.2; }
+.mh-card__head span { font-size: 11px; color: #64748b; letter-spacing: 0.04em; }
+.mh-card__body { display: grid; gap: 8px; margin-top: 8px; }
+.mh-card section { background: #f1f5f9; border-radius: 8px; padding: 7px 9px; }
+.mh-card h5 { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; }
+.mh-row { display: flex; justify-content: space-between; line-height: 1.6; }
+.mh-row b { font-variant-numeric: tabular-nums; }
+.mh-row.is-free b { color: #16a34a; }
+.mh-row.is-busy b { color: #dc2626; }
+.mh-row.is-total b { color: #0d9488; }
+.mh-card__note { margin: 2px 0 0; font-size: 11px; color: #64748b; }
+.mh-card__empty { margin: 8px 0 0; color: #64748b; text-align: center; }
+
+html[data-theme="dark"] .mh-card { background: #1e293b; color: #e2e8f0; border-color: rgba(148, 163, 184, 0.2); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+html[data-theme="dark"] .mh-card__head { border-color: rgba(148, 163, 184, 0.2); }
+html[data-theme="dark"] .mh-card section { background: #0f172a; }
+html[data-theme="dark"] .mh-card h5, html[data-theme="dark"] .mh-card__head span, html[data-theme="dark"] .mh-card__note, html[data-theme="dark"] .mh-card__empty { color: #94a3b8; }
+html[data-theme="dark"] .mh-row.is-free b { color: #4ade80; }
+html[data-theme="dark"] .mh-row.is-busy b { color: #f87171; }
+html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }

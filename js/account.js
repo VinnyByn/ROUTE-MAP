@@ -93,6 +93,7 @@ function fillAccountForms() {
     document.getElementById('prefTheme').value = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
     document.getElementById('prefMapType').value = prefs.mapType || 'roadmap';
     document.getElementById('prefReopenLastProject').checked = !!prefs.reopenLastProject;
+    document.getElementById('prefMarkerScale').value = prefs.markerScale || 'medio';
 }
 
 // ---------------------------------------------------------------
@@ -166,9 +167,11 @@ async function savePreferencesForm(event) {
     const theme = document.getElementById('prefTheme').value;
     const mapType = document.getElementById('prefMapType').value;
     const reopenLastProject = document.getElementById('prefReopenLastProject').checked;
+    const markerScale = document.getElementById('prefMarkerScale').value;
     applyTheme(theme);
+    applyMarkerScale(markerScale);
     if (typeof map !== 'undefined' && map) map.setMapTypeId(mapType);
-    const ok = await saveUserPreferences({ theme, mapType, reopenLastProject });
+    const ok = await saveUserPreferences({ theme, mapType, reopenLastProject, markerScale });
     setFeedback(panel, ok ? 'Preferências salvas.' : 'Não foi possível salvar as preferências.', ok ? 'success' : 'error');
 }
 
@@ -180,11 +183,28 @@ function rememberLastProject(projectId) {
     try { localStorage.setItem(lastProjectStorageKey(), projectId); } catch (e) { /* ignora */ }
 }
 
+//Redesenha todos os marcadores no tamanho escolhido nas preferências
+function applyMarkerScale(scale) {
+    if (!setMarkerScale(scale)) return;
+    if (typeof markers === 'undefined') return;
+    markers.forEach(info => {
+        if (!info.marker) return;
+        if (info.type === 'CLIENTE') return applyClientAppearance(info);
+        const isCasa = info.type === 'CASA';
+        info.marker.setIcon(buildMarkerMapIcon(info.type, {
+            color: info.color || (isCasa ? '#ffffff' : '#f59e0b'),
+            text: isCasa ? info.name : '',
+            labelColor: info.labelColor,
+        }));
+    });
+}
+
 //Aplica tema, tipo de mapa e reabre o último projeto, conforme as preferências
 function applyStartupPreferences() {
     const prefs = AppSession.profile?.preferences || {};
     if (prefs.theme && prefs.theme !== document.documentElement.getAttribute('data-theme')) applyTheme(prefs.theme);
     if (prefs.mapType && map) map.setMapTypeId(prefs.mapType);
+    applyMarkerScale(prefs.markerScale);
     if (!prefs.reopenLastProject) return;
     let lastId = null;
     try { lastId = localStorage.getItem(lastProjectStorageKey()); } catch (e) { /* ignora */ }

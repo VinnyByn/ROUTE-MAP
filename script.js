@@ -748,7 +748,7 @@ function rebuildMarker(data) {
     ensureMarkerUid(markerInfo);
     markers.push(markerInfo);
     updateMarkerAppearance(markerInfo);
-    wireMarkerDrawHoverCursor(marker);
+    wireMarkerDrawHoverCursor(marker, markerInfo);
     //Define o comportamento do clique no marcador, com o modo desenho
     marker.addListener("click", () => {
         if (handleSketchMarkerClick(markerInfo)) return;
@@ -1931,9 +1931,17 @@ function setMapCursor(cursor) {
 }
 
 //Durante o desenho do cabo, o ponteiro vira mãozinha sobre os marcadores (dá para clicar) e volta à mira fora deles
-function wireMarkerDrawHoverCursor(marker) {
-    marker.addListener("mouseover", () => { if (isDrawingCable) setMapCursor("pointer"); });
-    marker.addListener("mouseout", () => { if (isDrawingCable) setMapCursor("crosshair"); });
+//Fora do desenho, CTO e CEO mostram o resumo do plano de fusão (js/marker-hover.js)
+function wireMarkerDrawHoverCursor(marker, markerInfo) {
+    marker.addListener("mouseover", (e) => {
+        if (isDrawingCable) return setMapCursor("pointer");
+        if (typeof showMarkerHoverCard === 'function') showMarkerHoverCard(markerInfo, e?.domEvent);
+    });
+    marker.addListener("mouseout", () => {
+        if (isDrawingCable) setMapCursor("crosshair");
+        if (typeof hideMarkerHoverCard === 'function') hideMarkerHoverCard();
+    });
+    marker.addListener("mousedown", () => { if (typeof hideMarkerHoverCard === 'function') hideMarkerHoverCard(true); });
 }
 
 //Painel Locais — helpers estilo Google Earth Pro
@@ -1999,7 +2007,7 @@ function getMapFocusPadding() {
 }
 
 function getMarkerHighlightRingIcon(markerInfo, emphasized = false) {
-    const px = (markerInfo.type === 'CASA' || markerInfo.type === 'CLIENTE') ? 30 : getMarkerPixelSize(markerInfo.size);
+    const px = getMarkerPixelSize();
     return {
         path: google.maps.SymbolPath.CIRCLE,
         scale: px / 2 + (emphasized ? 10 : 7),
@@ -4234,7 +4242,7 @@ function addCustomMarker(location, importedData = null) {
     markers.push(markerInfo);
     updateMarkerAppearance(markerInfo);
     if (markerInfo.type === "CLIENTE") refreshBomAfterProjectChange();
-    wireMarkerDrawHoverCursor(marker);
+    wireMarkerDrawHoverCursor(marker, markerInfo);
     //Evento de clique no marcador
     marker.addListener("click", () => {
         if (handleSketchMarkerClick(markerInfo)) return;

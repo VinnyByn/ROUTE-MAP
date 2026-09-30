@@ -1,14 +1,24 @@
 // Ícones dos marcadores em SVG: mesmo desenho no mapa, na barra lateral e nos painéis.
 // Selos modernos com símbolos do Lucide: CEO = emenda, CTO = distribuição, cordoalha = derivação,
-// reserva = voltas de cabo, POP = servidor, casas = balão com a quantidade, cliente = hexágono com pessoa/maleta/prédio.
+// reserva = voltas de cabo, POP = servidor, casas = pílula com a quantidade, cliente = hexágono com pessoa/maleta/prédio.
 
 const MARKER_ICON_OUTLINE = 'rgba(15, 23, 42, 0.55)';
 const markerIconCache = new Map();
 
-//Tamanho em pixels a partir do "Tamanho" do marcador (1–20, padrão 4)
-function getMarkerPixelSize(size) {
-    const value = Math.max(1, Math.min(20, Number(size) || DEFAULT_MARKER_SIZE));
-    return Math.round(12 + value * 3);
+//Tamanho global dos marcadores (preferência do usuário): o tamanho de cada marcador não é mais usado
+const MARKER_SCALES = { pequeno: 20, medio: 26, grande: 34 };
+let markerScalePx = MARKER_SCALES.medio;
+
+function setMarkerScale(scale) {
+    const px = MARKER_SCALES[scale] || MARKER_SCALES.medio;
+    if (px === markerScalePx) return false;
+    markerScalePx = px;
+    markerIconCache.clear();
+    return true;
+}
+
+function getMarkerPixelSize() {
+    return markerScalePx;
 }
 
 function escapeSvgText(text) {
@@ -75,40 +85,38 @@ function svgToDataUrl(svg) {
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-//Pin das casas: balão com a quantidade dentro
+//Casas: pílula branca simples com a quantidade
 function buildCasaPinSvg(text, color, textColor) {
     const label = escapeSvgText(String(text || '0'));
-    const headW = Math.max(26, 12 + label.length * 8.4);
-    const w = headW + 6;
-    const h = 40;
-    const cx = w / 2;
-    const left = 3;
-    const pin = `M${left + 8} 3h${headW - 16}a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8h-${(headW - 16) / 2 - 5}L${cx} 37l-5-8h-${(headW - 16) / 2 - 5}a8 8 0 0 1-8-8V11a8 8 0 0 1 8-8z`;
+    const h = 24;
+    const w = Math.max(h, 12 + label.length * 7.6);
+    const fill = color || '#ffffff';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
-        `<path d="${pin}" stroke="${MARKER_ICON_OUTLINE}" stroke-width="3.6" fill="none" stroke-linejoin="round"/>` +
-        `<path d="${pin}" fill="${color || '#ffffff'}" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/>` +
-        `<text x="${cx}" y="21" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13.5" font-weight="700" fill="${textColor || getContrastTextColor(color || '#ffffff')}">${label}</text>` +
+        `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" rx="${(h - 3) / 2}" stroke="${MARKER_ICON_OUTLINE}" stroke-width="3" fill="none"/>` +
+        `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" rx="${(h - 3) / 2}" fill="${fill}" stroke="#ffffff" stroke-width="1.5"/>` +
+        `<text x="${w / 2}" y="${h / 2 + 4.3}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12.5" font-weight="700" fill="${textColor || getContrastTextColor(fill)}">${label}</text>` +
         `</svg>`;
     return { svg, w, h };
 }
 
 //Ícone do Google Maps para um marcador
 function buildMarkerMapIcon(type, { color, size, text, labelColor, variant, faded } = {}) {
-    const key = [type, color, size, text, labelColor, variant, faded].join('|');
+    const key = [type, color, markerScalePx, text, labelColor, variant, faded].join('|');
     if (markerIconCache.has(key)) return markerIconCache.get(key);
     let icon;
     if (type === 'CASA') {
         const { svg, w, h } = buildCasaPinSvg(text, color, labelColor);
-        const scale = Math.max(0.8, Math.min(1.8, getMarkerPixelSize(size) / 24));
+        const scale = getMarkerPixelSize() / 26;
         const sw = Math.round(w * scale);
         const sh = Math.round(h * scale);
         icon = {
             url: svgToDataUrl(svg),
             scaledSize: new google.maps.Size(sw, sh),
-            anchor: new google.maps.Point(sw / 2, sh - 2 * scale),
+            anchor: new google.maps.Point(sw / 2, sh / 2),
+            labelOrigin: new google.maps.Point(sw / 2, -7),
         };
     } else {
-        const px = type === 'CLIENTE' ? 30 : getMarkerPixelSize(size);
+        const px = getMarkerPixelSize();
         const h = px;
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${h}" viewBox="0 0 32 32">${getMarkerShapeSvg(type, color, { variant, faded })}</svg>`;
         icon = {

@@ -703,7 +703,8 @@ function openFolderMarkerStyleModal(titleElement) {
     }));
     document.getElementById('folderMarkerColor').value = sample?.color || '#16a34a';
     document.getElementById('folderMarkerLabelColor').value = sample?.labelColor || '#0f172a';
-    ['fsApplyColor', 'fsApplyLabel', 'fsApplySize'].forEach(id => { document.getElementById(id).checked = true; });
+    ['fsApplyColor', 'fsApplyLabel'].forEach(id => { document.getElementById(id).checked = true; });
+    document.getElementById('fsApplySize').checked = false; //Tamanho agora é uma preferência do usuário
     document.getElementById('fsApplyWidth').checked = false;
     setMarkerSizeControlValue('folderStyleSize', sample?.size || DEFAULT_MARKER_SIZE);
     const cableWidth = scope.cables[0]?.width || 4;
