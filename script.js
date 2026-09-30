@@ -4984,6 +4984,7 @@ function getDefaultKitDefinitions() {
             { name: "CABO DE AÇO CORDOALHA 3/16 POL", quantity: 50 }
         ]},
         "KIT POP": { category: 'Data Center', components: (typeof POP_KIT_CONFIG !== 'undefined' ? POP_KIT_CONFIG.fixed : []).map(i => ({ name: i.name, quantity: i.quantity })) },
+        ...getDefaultCableKitDefinitions(),
         "KIT OLT": { category: 'Data Center', components: [
             { name: 'CHASSI OLT C650 ZTE', quantity: 1 },
             { name: 'LICENÇA OLT', quantity: 1 },
@@ -4994,6 +4995,29 @@ function getDefaultKitDefinitions() {
             { name: 'SFP GBIC ELÉTRICO', quantity: 1 }
         ]}
     };
+}
+
+//Kits de lançamento: um por tipo de cabo, com o cabo e as ferragens por poste (alça, SUPA, BAP e plaqueta).
+//O cálculo da lista de materiais usa esses kits; editar as quantidades aqui muda as ferragens dos projetos.
+function getCableKitName(cableType) {
+    return `KIT LANÇAMENTO ${resolveMaterialName(cableType)} (POR POSTE)`;
+}
+
+function getDefaultCableKitDefinitions() {
+    if (typeof CABLE_HARDWARE_MAP === 'undefined') return {};
+    const cfg = DEFAULT_LANCAMENTO_CONFIG;
+    const kits = {};
+    Object.entries(CABLE_HARDWARE_MAP).forEach(([cableType, alcaName]) => {
+        if (!MATERIAL_PRICES[cableType]) return;
+        kits[getCableKitName(cableType)] = { category: 'Lançamento', components: [
+            { name: resolveMaterialName(cableType), quantity: cfg.poleSpan },
+            { name: resolveMaterialName(alcaName), quantity: cfg.supaPerPole * cfg.alcaPerSupa },
+            { name: resolveMaterialName('SUPORTE ANCORAGEM PARA CABOS OPTICOS (SUPAS)'), quantity: cfg.supaPerPole },
+            { name: resolveMaterialName('ABRAÇADEIRA BAP 3'), quantity: cfg.bapPerPole },
+            { name: resolveMaterialName('PLAQUETA DE IDENTIFICAÇÃO'), quantity: cfg.plaquetaPerPole },
+        ]};
+    });
+    return kits;
 }
 
 //Retorna os componentes de um kit, priorizando o que está no catálogo (editável)
@@ -6930,11 +6954,22 @@ function exportTablesToExcel() {
 }
 
 //Calculo dos postes através dos cabos
-function calculateHardwareForCable(cableLength, alcaPreformadaName) {
+function calculateHardwareForCable(cableLength, alcaPreformadaName, cableType = null) {
     const hardware = {};
     //Calcula total de postes a partir do vão configurável (padrão 35m)
     const totalPostes = Math.ceil(cableLength / getPoleSpanDistance());
     if (totalPostes <= 0) return hardware;
+    //Kit de lançamento do cabo editado no catálogo: ferragens por poste (o cabo vem da metragem medida)
+    const kit = cableType && materialCatalog.kits.find(k => k.name.toUpperCase() === getCableKitName(cableType).toUpperCase());
+    if (kit && kit.components.length) {
+        const cableName = normalizeMaterialName(resolveMaterialName(cableType));
+        kit.components.forEach(c => {
+            if (normalizeMaterialName(c.name) === cableName) return;
+            const qty = Math.ceil(totalPostes * (Number(c.quantity) || 0));
+            if (qty > 0) hardware[c.name] = (hardware[c.name] || 0) + qty;
+        });
+        return hardware;
+    }
     //Quantidades por poste configuráveis (aba Configurações do cadastro de materiais)
     const qtdPlaqueta = totalPostes * (Number(lancamentoConfig.plaquetaPerPole) || 0);
     const qtdBap = totalPostes * (Number(lancamentoConfig.bapPerPole) || 0);
@@ -6991,7 +7026,7 @@ function applyCableFerragensToBom(projectId, addOrUpdateMaterialFn) {
         const totalLength = aggregatedCableLengths[cableName];
         const alcaName = CABLE_HARDWARE_MAP[cableName];
         if (totalLength <= 0 || !alcaName) return;
-        const hardwareItems = calculateHardwareForCable(totalLength, alcaName);
+        const hardwareItems = calculateHardwareForCable(totalLength, alcaName, cableName);
         const hardwareGroup = `Ferragens: ${cableName}`;
         for (const itemName in hardwareItems) {
             addOrUpdateMaterialFn(itemName, hardwareItems[itemName], 'unit', hardwareGroup);
