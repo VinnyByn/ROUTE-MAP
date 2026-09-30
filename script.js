@@ -348,9 +348,7 @@ function updateSidebarEmptyState() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
     const existing = document.getElementById('sidebar-empty-state');
-    const hasProjectItems = Array.from(sidebar.children).some(
-        (el) => el.id !== 'sidebar-empty-state'
-    );
+    const hasProjectItems = !!sidebar.querySelector(':scope > .folder');
     if (!hasProjectItems) {
         if (!existing) {
             const empty = document.createElement('div');
@@ -463,69 +461,7 @@ function formatRelativeDate(isoDate) {
     return date.toLocaleDateString('pt-BR');
 }
 
-let projectSearchTimer = null;
-let projectSearchSeq = 0;
-
-//Lista os projetos da empresa (com filtro opcional por nome, cidade ou bairro)
-async function renderProjectPickerList() {
-    const listElement = document.getElementById('saved-projects-list');
-    const term = (document.getElementById('projectSearchInput')?.value || '').trim();
-    const seq = ++projectSearchSeq;
-    listElement.innerHTML = '<li class="project-picker__state">Carregando…</li>';
-    await appReady;
-    let query = supabaseClient
-        .from('projects')
-        .select('id, name, city, neighborhood, project_type, updated_at, updated_by')
-        .order('updated_at', { ascending: false })
-        .limit(100);
-    if (term) {
-        const safe = term.replace(/[%,()*]/g, ' ').trim();
-        query = query.or(`name.ilike.%${safe}%,city.ilike.%${safe}%,neighborhood.ilike.%${safe}%`);
-    }
-    const { data, error } = await query;
-    if (seq !== projectSearchSeq) return; //Uma busca mais nova já está em andamento
-    if (error) {
-        console.error("Erro ao listar projetos:", error);
-        listElement.innerHTML = '<li class="project-picker__state project-picker__state--error">Não foi possível carregar os projetos.</li>';
-        return;
-    }
-    if (!data.length) {
-        listElement.innerHTML = term
-            ? '<li class="project-picker__state">Nenhum projeto encontrado para essa busca.</li>'
-            : '<li class="project-picker__state">Nenhum projeto salvo ainda. Crie um em Projeto → Novo Projeto.</li>';
-        return;
-    }
-    listElement.innerHTML = '';
-    data.forEach((project) => {
-        const isOpen = !!document.getElementById(project.id);
-        const place = [project.city, project.neighborhood].filter(Boolean).join(' · ');
-        const li = document.createElement('li');
-        li.className = 'project-picker__item';
-        li.innerHTML = `
-            <div class="project-picker__info">
-                <strong>${escapeHtml(project.name)}</strong>
-                <span>${escapeHtml(place || 'Sem localização')}${project.project_type ? ` · ${escapeHtml(project.project_type)}` : ''}</span>
-                <small>Atualizado ${escapeHtml(formatRelativeDate(project.updated_at))}</small>
-            </div>
-            <button type="button" class="btn ${isOpen ? 'btn-secondary' : 'btn-success'} load-project-btn" ${isOpen ? 'disabled' : ''}>${isOpen ? 'Aberto' : 'Abrir'}</button>`;
-        li.querySelector('.load-project-btn').addEventListener('click', (event) => openProjectFromDatabase(project.id, event.currentTarget));
-        listElement.appendChild(li);
-    });
-}
-
-function openProjectPicker() {
-    document.getElementById('projectDropdown').classList.remove('show');
-    const input = document.getElementById('projectSearchInput');
-    input.value = '';
-    document.getElementById('loadProjectModal').style.display = 'flex';
-    renderProjectPickerList();
-    setTimeout(() => input.focus(), 50);
-}
-
-function handleProjectSearchInput() {
-    clearTimeout(projectSearchTimer);
-    projectSearchTimer = setTimeout(renderProjectPickerList, 250);
-}
+//A janela "Abrir projeto" (busca, filtros e páginas) fica em js/projects.js
 
 //Busca os dados completos do projeto e monta na sidebar/mapa
 async function openProjectFromDatabase(projectId, button) {
@@ -603,6 +539,7 @@ function loadAndDisplayProject(projectId, projectData) {
         syncProjectCableMeasurements(savedCables);
     }
     clientDropsSuspended = false;
+    applySidebarOrder(document.getElementById(projectId));
     refreshClientDrops({ recompute: true });
     //Recria a lista de material
     if (projectData.bom) {
@@ -625,6 +562,7 @@ function serializeMarker(markerInfo) {
     return {
         uid: markerInfo.uid || null,
         folderId: markerInfo.folderId,
+        order: getSidebarOrderIndex(markerInfo.listItem),
         type: markerInfo.type,
         name: markerInfo.name,
         color: markerInfo.color,
@@ -663,6 +601,7 @@ function ensureMarkerUid(markerInfo) {
 function serializeCable(cableInfo) {
     return {
         folderId: cableInfo.folderId,
+        order: getSidebarOrderIndex(cableInfo.item),
         name: cableInfo.name,
         type: cableInfo.type,
         width: cableInfo.width,
@@ -689,6 +628,7 @@ function serializePolygon(polygonInfo) {
     //Retorna com os dados essenciais a serem salvos
     return {
         folderId: polygonInfo.folderId,
+        order: getSidebarOrderIndex(polygonInfo.listItem),
         name: polygonInfo.name,
         color: polygonInfo.color,
         opacity: polygonInfo.opacity ?? 0.5,
@@ -722,6 +662,7 @@ function getSidebarStructureAsJSON(ulElement) {
         if (titleDiv && subUl) {
             const node = {
                 id: subUl.id,
+                order: getSidebarOrderIndex(child),
                 name: titleDiv.dataset.folderName,
                 city: titleDiv.dataset.folderCity || null,
                 neighborhood: titleDiv.dataset.folderNeighborhood || null,
@@ -767,26 +708,7 @@ function rebuildSidebarFromJSON(structureArray, parentElement) {
         //Evento de expandir e recolher as pastas
         const toggleIcon = titleDiv.querySelector('.toggle-icon');
         toggleIcon.onclick = (e) => { e.stopPropagation(); toggleFolder(nodeData.id); };
-        //Pasta selecionada-ativa (clique simples / duplo clique via delegação na sidebar)
-        addDropTargetListenersToFolderTitle(titleDiv);
-        titleDiv.addEventListener('dragleave', (e) => {
-            e.stopPropagation();
-            titleDiv.classList.remove('dragover-target');
-            const subUl = document.getElementById(titleDiv.dataset.folderId);
-            if (subUl && !subUl.contains(e.relatedTarget)) {
-                subUl.classList.remove('dragover');
-            }
-        });
-        titleDiv.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            titleDiv.classList.remove('dragover-target');
-            const subUl = document.getElementById(titleDiv.dataset.folderId);
-            if (subUl) {
-                subUl.classList.remove('dragover');
-                handleDropOnFolder(e, subUl);
-            }
-        });
+        //Pasta selecionada-ativa e arrastar/soltar: delegação na sidebar (js/sidebar.js)
         enableDropOnFolder(subList);
         //Recursão
         if (nodeData.children && nodeData.children.length > 0) {
@@ -794,6 +716,7 @@ function rebuildSidebarFromJSON(structureArray, parentElement) {
         }
         //Finalização e adiciona ao DOM
         const finalElement = clone.querySelector('.folder') || clone.querySelector('.folder-wrapper');
+        if (Number.isFinite(nodeData.order)) finalElement.dataset.order = String(nodeData.order);
         enableDragAndDropForItem(finalElement);
         parentElement.appendChild(finalElement);
     });
@@ -812,6 +735,7 @@ function rebuildMarker(data) {
     nameSpan.className = 'item-name';
     nameSpan.style.cursor = "pointer";
     const li = buildGeProMapItemRow(nameSpan, marker, getMarkerSidebarIconClass(data.type), data.color || '#f9a825');
+    if (Number.isFinite(data.order)) li.dataset.order = String(data.order);
     //Insere o item no pasta correta
     const parentUl = document.getElementById(data.folderId);
     if(parentUl) {
@@ -854,6 +778,7 @@ function rebuildCable(data) {
     nameSpan.textContent = `${data.name} (${data.status}) - ${data.totalLength}m`;
     nameSpan.style.cursor = "pointer";
     const item = buildGeProMapItemRow(nameSpan, polyline, 'ge-icon-path', data.color);
+    if (Number.isFinite(data.order)) item.dataset.order = String(data.order);
     const parentUl = document.getElementById(data.folderId);
     if (parentUl) {
         parentUl.appendChild(item);
@@ -895,8 +820,7 @@ function rebuildPolygon(data) {
     const clone = template.content.cloneNode(true);
     const li = clone.querySelector('li');
     enableDragAndDropForItem(li);
-    const nameEl = li.querySelector('.item-name');
-    nameEl.textContent = data.name;
+    if (Number.isFinite(data.order)) li.dataset.order = String(data.order);
     const iconEl = li.querySelector('.ge-icon-polygon');
     if (iconEl) iconEl.style.setProperty('--ge-item-color', data.color);
     const parentUl = document.getElementById(data.folderId);
@@ -907,6 +831,7 @@ function rebuildPolygon(data) {
     }
     const polygonInfo = { ...data, path: googleMapsPath, polygonObject: polygon, listItem: li };
     savedPolygons.push(polygonInfo);
+    refreshPolygonSidebarLabel(polygonInfo);
     wirePolygonInteractions(polygonInfo);
 }
 
@@ -1202,10 +1127,6 @@ function initMap() {
         e.preventDefault();
         openProjectPicker();
     });
-    document.getElementById('projectSearchInput').addEventListener('input', handleProjectSearchInput);
-    document.getElementById('closeLoadProjectModal').addEventListener('click', () => {
-        document.getElementById('loadProjectModal').style.display = 'none';
-    });
     //Modais genéricos
     const alertModal = document.getElementById('alertModal');
     document.getElementById('alertModalOkButton').addEventListener('click', () => alertModal.style.display = 'none');
@@ -1235,7 +1156,7 @@ function initMap() {
         document.getElementById("projectName").value = "";
         document.getElementById("projectCity").value = "";
         document.getElementById("projectNeighborhood").value = "";
-        document.getElementById("projectType").value = "TCR";
+        setProjectTypeValue('TCR');
         document.getElementById('projectDropdown').classList.remove('show');
         projectModal.style.display = "flex";
     });
@@ -1591,70 +1512,17 @@ function initMap() {
             document.getElementById('createProjectButton')?.click();
             return;
         }
+        //Três pontinhos: menu de ações da linha (js/sidebar.js)
         const actionToggleButton = e.target.closest('.item-actions-toggle-btn');
-        //Menu de ação - Três pontos
         if (actionToggleButton) {
             e.preventDefault();
             e.stopPropagation();
-            const menu = actionToggleButton.nextElementSibling;
-            document.querySelectorAll('.item-actions-menu.show').forEach(openMenu => {
-                if (openMenu !== menu) {
-                    openMenu.classList.remove('show');
-                }
-            });
-            if (menu) {
-                menu.classList.toggle('show');
-            }
+            openSidebarMenuFromButton(actionToggleButton);
             return;
         }
-        //Identificação dos botões de ação
         const visibilityButton = e.target.closest('.visibility-toggle-btn:not(.item-toggle)');
-        const editButton = e.target.closest('.edit-folder-btn');
-        const folderStyleButton = e.target.closest('.folder-style-btn');
-        const deleteProjectButton = e.target.closest('.delete-project-btn');
-        const closeProjectButton = e.target.closest('.close-project-btn');
-        const deleteFolderButton = e.target.closest('.delete-folder-btn');
-        const menuLink = e.target.closest('.item-actions-menu a');
-        if (menuLink) {
-            const parentMenu = menuLink.closest('.item-actions-menu');
-            if (parentMenu) {
-                parentMenu.classList.remove('show');
-            }
-        }
         if (visibilityButton && visibilityButton.type !== 'checkbox') {
             handleVisibilityToggle(visibilityButton);
-            return;
-        }
-        if (editButton) {
-            const titleElement = editButton.closest('.folder-title');
-            openFolderEditor(titleElement);
-            return;
-        }
-        if (folderStyleButton) {
-            const titleElement = folderStyleButton.closest('.folder-title');
-            openFolderMarkerStyleModal(titleElement);
-            return;
-        }
-        if (closeProjectButton) {
-            const titleElement = closeProjectButton.closest('.folder-title');
-            closeProject(titleElement.dataset.folderId, titleElement.closest('.folder'), titleElement.dataset.folderName);
-            return;
-        }
-        if (deleteProjectButton) {
-            const titleElement = deleteProjectButton.closest('.folder-title');
-            const projectElement = titleElement.closest('.folder');
-            const projectId = titleElement.dataset.folderId;
-            const projectName = titleElement.dataset.folderName;
-            deleteProject(projectId, projectElement, projectName);
-            return;
-        }
-        if (deleteFolderButton) {
-            const titleElement = deleteFolderButton.closest('.folder-title');
-            const folderElement = titleElement.closest('.folder-wrapper');
-            const folderId = titleElement.dataset.folderId;
-            const folderName = titleElement.dataset.folderName;
-            deleteFolder(folderId, folderElement, folderName);
-            return;
         }
     });
     //Modal de busca
@@ -1769,9 +1637,13 @@ function initMap() {
             return;
         }
         document.getElementById('observationProjectId').value = projectId;
-        document.getElementById('observationsTextarea').value = projectObservations[projectId] || '';
+        const textarea = document.getElementById('observationsTextarea');
+        textarea.value = projectObservations[projectId] || '';
+        updateObservationsCounter();
         observationsModal.style.display = 'flex';
+        setTimeout(() => textarea.focus(), 30);
     });
+    document.getElementById('observationsTextarea').addEventListener('input', updateObservationsCounter);
     const closeObsModalFn = () => {
         observationsModal.style.display = 'none';
     };
@@ -1785,10 +1657,36 @@ function initMap() {
             showAlert("Erro", "ID do projeto perdido. Não foi possível salvar.");
             return;
         }
-        projectObservations[projectId] = newText;
-        showAlert("Observação Salva", "Sua observação foi salva. Lembre-se de salvar o projeto principal para mantê-la no banco de dados.");
+        projectObservations[projectId] = newText.trim();
         observationsModal.style.display = 'none';
+        //Atualiza o painel do relatório na hora e grava o projeto no banco
+        const projectTitle = document.getElementById(projectId)?.previousElementSibling;
+        renderReportObservations(projectObservations[projectId]);
+        const projectRoot = document.getElementById(projectId)?.closest('.folder');
+        if (projectRoot && AppSession.canEdit) {
+            persistProject(projectRoot)
+                .then(() => showToast('Observações salvas', `Gravadas no projeto "${projectTitle?.dataset.folderName || ''}".`))
+                .catch((error) => {
+                    console.error('Erro ao salvar observações:', error);
+                    showToast('Observações guardadas', 'Não foi possível gravar no banco agora. Salve o projeto para não perder.', 'progress');
+                });
+        }
     });
+}
+
+function updateObservationsCounter() {
+    const textarea = document.getElementById('observationsTextarea');
+    const counter = document.getElementById('observationsCounter');
+    if (counter) counter.textContent = `${textarea.value.length.toLocaleString('pt-BR')} caracteres`;
+}
+
+//Cartão "Observações" do painel do relatório
+function renderReportObservations(text) {
+    const notes = document.getElementById('rv-notes');
+    if (!notes) return;
+    const hasNotes = !!(text && text.trim());
+    notes.textContent = hasNotes ? text.trim() : 'Nenhuma observação registrada. Use o botão Observações para adicionar.';
+    notes.classList.toggle('is-empty', !hasNotes);
 }
 
 
@@ -2018,35 +1916,7 @@ function getSplitterOltValues(splitterElement) {
 }
 
 
-function openSplitterOltConfigModal(splitterElement) {
-    if (!splitterElement) return;
-    activeSplitterForOltConfig = splitterElement;
-    const label = getSplitterLabelText(splitterElement);
-    document.getElementById('splitterOltConfigSubtitle').textContent = label
-        ? `Splitter ${label}`
-        : 'Informe a OLT, placa e PON que atendem este splitter.';
-    document.getElementById('splitterConfigOlt').value = splitterElement.dataset.oltName || '';
-    document.getElementById('splitterConfigPlaca').value = splitterElement.dataset.placaNumber || '';
-    document.getElementById('splitterConfigPon').value = splitterElement.dataset.ponNumber || '';
-    document.getElementById('splitterOltConfigModal').style.display = 'flex';
-}
-
-
-
-
-
-
-function initSplitterOltConfigModal() {
-    const modal = document.getElementById('splitterOltConfigModal');
-    if (!modal) return;
-    const closeModal = () => {
-        modal.style.display = 'none';
-        activeSplitterForOltConfig = null;
-    };
-    document.getElementById('closeSplitterOltConfigModal')?.addEventListener('click', closeModal);
-    document.getElementById('cancelSplitterOltConfig')?.addEventListener('click', closeModal);
-    document.getElementById('confirmSplitterOltConfig')?.addEventListener('click', applySplitterOltConfig);
-}
+//Editor de OLT, placa e PON do splitter: js/fusion.js
 
 
 // Controle de cursor do mapa
@@ -2092,6 +1962,14 @@ function buildGeProMapItemRow(nameSpan, mapObject, iconClass, iconColor) {
     if (iconColor) icon.style.setProperty('--ge-item-color', iconColor);
     li.appendChild(icon);
     li.appendChild(nameSpan);
+    const meta = document.createElement('span');
+    meta.className = 'item-meta';
+    meta.hidden = true;
+    li.appendChild(meta);
+    const actions = document.createElement('div');
+    actions.className = 'ge-pro-actions';
+    actions.innerHTML = '<button type="button" class="item-actions-toggle-btn" title="Ações" aria-label="Ações" aria-haspopup="menu">&#8942;</button>';
+    li.appendChild(actions);
     wireItemVisibilityCheckbox(visibilityCb, mapObject);
     return li;
 }
@@ -2673,25 +2551,6 @@ function appendFolderToParent(parentUl, folderName, folderId) {
 
     const toggleIcon = titleDiv.querySelector('.toggle-icon');
     toggleIcon.onclick = (e) => { e.stopPropagation(); toggleFolder(folderId); };
-    addDropTargetListenersToFolderTitle(titleDiv);
-    titleDiv.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl && !subUl.contains(e.relatedTarget)) {
-            subUl.classList.remove('dragover');
-        }
-    });
-    titleDiv.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl) {
-            subUl.classList.remove('dragover');
-            handleDropOnFolder(e, subUl);
-        }
-    });
     enableDropOnFolder(subList);
     parentUl.appendChild(wrapperLi);
     return folderId;
@@ -2790,75 +2649,12 @@ function wireCableSidebarClick(cableInfo) {
     }
 }
 
-//Ativação do arrastar e soltar para itens
+//Arrastar e soltar na barra lateral: o arraste começa no item (abaixo); o destino
+//(antes, depois ou dentro de uma pasta) é calculado por delegação em js/sidebar.js
 window.sidebarDropTarget = null;
-let sidebarExpandTimer = null;
 
 function isDraggedSidebarFolder(element) {
     return !!element && (element.classList.contains('folder-wrapper') || element.classList.contains('folder'));
-}
-
-function getReorderParentUlForFolderElement(folderElement) {
-    if (!folderElement) return null;
-    const parent = folderElement.parentElement;
-    return parent && parent.classList.contains('subfolders') ? parent : null;
-}
-
-function clearSidebarDropState() {
-    document.querySelectorAll('.folder-title.dragover-target').forEach((el) => el.classList.remove('dragover-target'));
-    document.querySelectorAll('.subfolders.dragover').forEach((el) => el.classList.remove('dragover'));
-    document.querySelectorAll('.sidebar-drop-indicator').forEach((el) => el.remove());
-    window.sidebarDropTarget = null;
-    if (sidebarExpandTimer) {
-        clearTimeout(sidebarExpandTimer);
-        sidebarExpandTimer = null;
-    }
-}
-
-function scheduleSidebarFolderExpand(folderId) {
-    if (!folderId) return;
-    if (sidebarExpandTimer) clearTimeout(sidebarExpandTimer);
-    sidebarExpandTimer = setTimeout(() => {
-        sidebarExpandTimer = null;
-        const ul = document.getElementById(folderId);
-        if (ul && ul.classList.contains('hidden')) {
-            toggleFolder(folderId);
-        }
-    }, 500);
-}
-
-function isValidSidebarDropChild(child) {
-    if (!child || child === window.draggedItem) return false;
-    if (child.classList.contains('drop-placeholder') || child.classList.contains('sidebar-drop-indicator')) return false;
-    if (window.draggedItem && (child === window.draggedItem || window.draggedItem.contains(child))) return false;
-    return true;
-}
-
-function getSidebarDropInsertBefore(ul, clientY) {
-    const children = Array.from(ul.children).filter((c) => isValidSidebarDropChild(c));
-    for (const child of children) {
-        const rect = child.getBoundingClientRect();
-        if (clientY < rect.top + rect.height / 2) {
-            return child;
-        }
-    }
-    return null;
-}
-
-function updateSidebarDropIndicator(ul, clientY) {
-    const insertBefore = getSidebarDropInsertBefore(ul, clientY);
-    window.sidebarDropTarget = { ul, insertBefore };
-    let indicator = ul.querySelector(':scope > .sidebar-drop-indicator');
-    if (!indicator) {
-        indicator = document.createElement('li');
-        indicator.className = 'sidebar-drop-indicator';
-        indicator.setAttribute('aria-hidden', 'true');
-    }
-    if (insertBefore) {
-        ul.insertBefore(indicator, insertBefore);
-    } else {
-        ul.appendChild(indicator);
-    }
 }
 
 function isSidebarDragBlockedTarget(target) {
@@ -2880,11 +2676,7 @@ function beginSidebarDrag(containerElement, e) {
     window.dropWasSuccessful = false;
     document.body.classList.add('is-dragging-globally');
     containerElement.classList.add('is-being-dragged');
-    if (e.dataTransfer.setDragImage) {
-        try {
-            e.dataTransfer.setDragImage(containerElement, 28, 18);
-        } catch (err) { /* navegador pode bloquear */ }
-    }
+    if (typeof setSidebarDragGhost === 'function') setSidebarDragGhost(e, containerElement);
 }
 
 function enableDragAndDropForItem(itemElement) {
@@ -2898,14 +2690,9 @@ function enableDragAndDropForItem(itemElement) {
 
     const onDragEnd = () => {
         if (window.dropWasSuccessful) {
-            itemElement.style.transition = 'background-color 0.35s ease';
-            itemElement.style.backgroundColor = '#e8f0fe';
-            setTimeout(() => {
-                if (itemElement) {
-                    itemElement.style.backgroundColor = '';
-                    itemElement.style.transition = '';
-                }
-            }, 500);
+            const row = itemElement.querySelector(':scope > .folder-title') || itemElement;
+            row.classList.add('sidebar-drop-flash');
+            setTimeout(() => row.classList.remove('sidebar-drop-flash'), 700);
         }
         document.body.classList.remove('is-dragging-globally');
         itemElement.classList.remove('is-being-dragged');
@@ -2923,218 +2710,13 @@ function enableDragAndDropForItem(itemElement) {
         beginSidebarDrag(itemElement, e);
     });
     itemElement.addEventListener('dragend', onDragEnd);
-
-    if (itemElement.classList.contains('folder-wrapper')) {
-        addFolderWrapperDropListeners(itemElement);
-    }
 }
 
-function insertDraggedIntoFolder(destinationUl) {
-    const draggedItem = window.draggedItem;
-    if (!draggedItem || !destinationUl) return;
-    if (draggedItem.contains(destinationUl)) return;
-
-    let insertBefore = (window.sidebarDropTarget && window.sidebarDropTarget.ul === destinationUl)
-        ? window.sidebarDropTarget.insertBefore
-        : null;
-
-    if (insertBefore === draggedItem || (insertBefore && draggedItem.contains(insertBefore))) {
-        insertBefore = null;
-    }
-
-    if (insertBefore) {
-        destinationUl.insertBefore(draggedItem, insertBefore);
-    } else {
-        destinationUl.appendChild(draggedItem);
-    }
-}
-
-function addFolderWrapperDropListeners(wrapperLi) {
-    if (!wrapperLi || wrapperLi.dataset.folderDropBound === '1') return;
-    wrapperLi.dataset.folderDropBound = '1';
-
-    wrapperLi.addEventListener('dragover', (e) => {
-        const dragged = window.draggedItem;
-        if (!isDraggedSidebarFolder(dragged) || dragged === wrapperLi) return;
-        const parentUl = getReorderParentUlForFolderElement(wrapperLi);
-        if (!parentUl || dragged.contains(parentUl)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
-        parentUl.classList.add('dragover');
-        updateSidebarDropIndicator(parentUl, e.clientY);
-    });
-
-    wrapperLi.addEventListener('dragleave', (e) => {
-        if (!wrapperLi.contains(e.relatedTarget)) {
-            wrapperLi.classList.remove('ge-reorder-hover');
-        }
-    });
-
-    wrapperLi.addEventListener('drop', (e) => {
-        const dragged = window.draggedItem;
-        if (!isDraggedSidebarFolder(dragged) || dragged === wrapperLi) return;
-        const parentUl = getReorderParentUlForFolderElement(wrapperLi);
-        if (!parentUl) return;
-        e.preventDefault();
-        e.stopPropagation();
-        parentUl.classList.remove('dragover');
-        wrapperLi.classList.remove('ge-reorder-hover');
-        handleDropOnFolder(e, parentUl);
-    });
-}
-
-//Evento drop em pastas
-function handleDropOnFolder(e, destinationUl) {
-    if (!AppSession.canEdit) {
-        clearSidebarDropState();
-        return;
-    }
-    //Recupera referências globais do item arrastado
-    const draggedItem = window.draggedItem;
-    const sourceProjectElement = window.draggedItemSourceProject;
-    if (!draggedItem || !destinationUl) {
-        window.dropWasSuccessful = false;
-        clearSidebarDropState();
-        return;
-    }
-    //Previne a recursividade
-    if (draggedItem.contains(destinationUl)) {
-        showAlert("Erro", "Não é possível mover uma pasta para dentro dela mesma.");
-        window.dropWasSuccessful = false;
-        clearSidebarDropState();
-        return;
-    }
-    const destinationProjectElement = destinationUl.closest('.folder');
-    //Identifica se é um Item de mapa
-    let itemData = markers.find(m => m.listItem === draggedItem) || savedCables.find(c => c.item === draggedItem) || savedPolygons.find(p => p.listItem === draggedItem);
-    //É um item
-    if (itemData) {
-        itemData.folderId = destinationUl.id;
-        insertDraggedIntoFolder(destinationUl);
-        saveProjectElement(destinationProjectElement);
-        if (sourceProjectElement && sourceProjectElement !== destinationProjectElement) {
-            saveProjectElement(sourceProjectElement);
-        }
-    //É uma pasta
-    } else if (draggedItem.classList.contains('folder') || draggedItem.classList.contains('folder-wrapper')) {
-        insertDraggedIntoFolder(destinationUl);
-        saveProjectElement(destinationProjectElement);
-        if (sourceProjectElement && sourceProjectElement !== destinationProjectElement) {
-            saveProjectElement(sourceProjectElement);
-        }
-    }
-    clearSidebarDropState();
-    window.dropWasSuccessful = true; 
-}
-
-//Configura título da pasta como zona de drop
-function addDropTargetListenersToFolderTitle(titleDiv) {
-    titleDiv.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
-        const dragged = window.draggedItem;
-        const wrapper = titleDiv.closest('.folder-wrapper');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-
-        // Arrastar pasta sobre outra: reordenar no mesmo nível (irmãs)
-        if (isDraggedSidebarFolder(dragged) && wrapper) {
-            const parentUl = getReorderParentUlForFolderElement(wrapper);
-            if (parentUl && !dragged.contains(parentUl)) {
-                titleDiv.classList.add('dragover-target');
-                wrapper.classList.add('ge-reorder-hover');
-                parentUl.classList.add('dragover');
-                updateSidebarDropIndicator(parentUl, e.clientY);
-                return;
-            }
-        }
-
-        titleDiv.classList.add('dragover-target');
-        if (subUl) {
-            subUl.classList.add('dragover');
-            if (window.draggedItem) {
-                updateSidebarDropIndicator(subUl, e.clientY);
-            }
-            if (!isDraggedSidebarFolder(dragged)) {
-                scheduleSidebarFolderExpand(titleDiv.dataset.folderId);
-            }
-        }
-    });
-    titleDiv.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target');
-        const wrapper = titleDiv.closest('.folder-wrapper');
-        if (wrapper) wrapper.classList.remove('ge-reorder-hover');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl && !subUl.contains(e.relatedTarget)) {
-            subUl.classList.remove('dragover');
-            const indicator = subUl.querySelector(':scope > .sidebar-drop-indicator');
-            if (indicator) indicator.remove();
-        }
-        const parentUl = wrapper ? getReorderParentUlForFolderElement(wrapper) : null;
-        if (parentUl && !parentUl.contains(e.relatedTarget)) {
-            parentUl.classList.remove('dragover');
-            const parentIndicator = parentUl.querySelector(':scope > .sidebar-drop-indicator');
-            if (parentIndicator) parentIndicator.remove();
-        }
-    });
-    titleDiv.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target');
-        const dragged = window.draggedItem;
-        const wrapper = titleDiv.closest('.folder-wrapper');
-        if (wrapper) wrapper.classList.remove('ge-reorder-hover');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-
-        if (isDraggedSidebarFolder(dragged) && wrapper) {
-            const parentUl = getReorderParentUlForFolderElement(wrapper);
-            if (parentUl && !dragged.contains(parentUl)) {
-                parentUl.classList.remove('dragover');
-                handleDropOnFolder(e, parentUl);
-                return;
-            }
-        }
-
-        if (subUl) {
-            subUl.classList.remove('dragover');
-            handleDropOnFolder(e, subUl);
-        }
-    });
-}
-
-
+//Mantida para compatibilidade: as listas só recebem a marca de "aceita soltar"
 function enableDropOnFolder(ul) {
-  if (!ul || ul.classList.contains("drop-enabled")) return;
-  ul.classList.add("drop-enabled");
-  ul.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-    ul.classList.add("dragover");
-    if (window.draggedItem) {
-      updateSidebarDropIndicator(ul, e.clientY);
-    }
-  });
-  ul.addEventListener("dragleave", (e) => {
-    e.stopPropagation();
-    if (!ul.contains(e.relatedTarget)) {
-        ul.classList.remove("dragover");
-        const indicator = ul.querySelector(':scope > .sidebar-drop-indicator');
-        if (indicator) indicator.remove();
-        if (window.sidebarDropTarget && window.sidebarDropTarget.ul === ul) {
-            window.sidebarDropTarget = null;
-        }
-    }
-  });
-  ul.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      ul.classList.remove("dragover");
-      handleDropOnFolder(e, ul);
-  });
-  ul.querySelectorAll(':scope > .drop-placeholder').forEach((el) => el.remove());
+    if (!ul || ul.classList.contains('drop-enabled')) return;
+    ul.classList.add('drop-enabled');
+    ul.querySelectorAll(':scope > .drop-placeholder').forEach((el) => el.remove());
 }
 
 //Criação e edição de projetos
@@ -3196,26 +2778,6 @@ function createProject() {
     //Configura eventso de clique na pasta projeto
     const toggleIcon = titleDiv.querySelector('.toggle-icon');
     toggleIcon.onclick = (e) => { e.stopPropagation(); toggleFolder(projectId); };
-    //Configuração do drop - receber
-    addDropTargetListenersToFolderTitle(titleDiv);
-    titleDiv.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target'); // Remove feedback visual
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl && !subUl.contains(e.relatedTarget)) {
-            subUl.classList.remove('dragover'); // Esconde o placeholder
-        }
-    });
-    titleDiv.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl) {
-            subUl.classList.remove('dragover');
-            handleDropOnFolder(e, subUl);
-        }
-    });
     enableDropOnFolder(subList);
     //Adiciona ao DOM
     document.getElementById("sidebar").appendChild(clone);
@@ -3285,26 +2847,6 @@ function createFolder() {
     const toggleIcon = titleDiv.querySelector('.toggle-icon');
     //Remove destaque visual ao sair da área do drop
     toggleIcon.onclick = (e) => { e.stopPropagation(); toggleFolder(folderId); };
-    addDropTargetListenersToFolderTitle(titleDiv);
-    //Processa o drop do item
-    titleDiv.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target'); // Remove feedback visual
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl && !subUl.contains(e.relatedTarget)) {
-            subUl.classList.remove('dragover'); // Esconde o placeholder
-        }
-    });
-    titleDiv.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        titleDiv.classList.remove('dragover-target');
-        const subUl = document.getElementById(titleDiv.dataset.folderId);
-        if (subUl) {
-            subUl.classList.remove('dragover');
-            handleDropOnFolder(e, subUl);
-        }
-    });
     enableDropOnFolder(subList);
     //Inserção no DOM
     const parentUl = document.getElementById(activeFolderId);
@@ -4707,7 +4249,6 @@ function updateMarkerAppearance(markerInfo) {
     }
     if (markerInfo.type === "CTO") refreshClientDrops();
     const isCasa = markerInfo.type === "CASA";
-    const nameSpan = markerInfo.listItem?.querySelector('.item-name');
     const color = markerInfo.color || (isCasa ? '#ffffff' : '#f59e0b');
     markerInfo.marker.setIcon(buildMarkerMapIcon(markerInfo.type, {
         color,
@@ -4716,38 +4257,30 @@ function updateMarkerAppearance(markerInfo) {
         labelColor: markerInfo.labelColor,
     }));
     markerInfo.marker.setLabel(isCasa ? null : buildMarkerMapLabel(markerInfo.name, markerInfo.labelColor));
-    let title = markerInfo.name;
-    let listItemText = `${markerInfo.name} (${markerInfo.type})`;
+    //Barra lateral: nome em destaque e os detalhes (tipo, situação, instalação) em cinza
+    const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP' };
+    let details = [];
+    if (markerInfo.type === "CTO") details = [markerInfo.ctoStatus, markerInfo.isPredial ? 'Predial' : null, markerInfo.needsStickers ? 'Adesivos' : null];
+    if (markerInfo.type === "CEO") details = [markerInfo.ceoStatus, markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null];
+    if (markerInfo.type === "CORDOALHA") details = [markerInfo.cordoalhaStatus, markerInfo.derivationTCount ? `${markerInfo.derivationTCount} deriv.` : null];
+    if (markerInfo.type === "RESERVA") details = [markerInfo.reservaStatus, markerInfo.reservaAccessory];
+    details = details.filter(Boolean);
+    let name = markerInfo.name;
+    let meta = [typeLabels[markerInfo.type] || markerInfo.type, ...details].join(' · ');
+    let title = details.length ? `${markerInfo.name} - ${details.join(' · ')}` : markerInfo.name;
     if (isCasa) {
+        const count = parseInt(markerInfo.name, 10) || 0;
+        name = `${markerInfo.name} ${count === 1 ? 'casa' : 'casas'}`;
+        meta = '';
         title = `Casas: ${markerInfo.name}`;
-        listItemText = `Casas (${markerInfo.name})`;
-    }
-    if (markerInfo.type === "CTO") {
-        const extras = [markerInfo.ctoStatus, markerInfo.isPredial ? 'Predial' : null, markerInfo.needsStickers ? 'Adesivos' : null].filter(Boolean).join(' · ');
-        title += ` - ${extras}`;
-        listItemText += ` - ${extras}`;
-    }
-    if (markerInfo.type === "CEO") {
-        const details = [markerInfo.ceoStatus, markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null].filter(Boolean).join(' · ');
-        title += ` - ${details}`;
-        listItemText += ` - ${details}`;
-    }
-    if (markerInfo.type === "CORDOALHA") {
-        title += ` - ${markerInfo.cordoalhaStatus}`;
-        listItemText += ` - ${markerInfo.cordoalhaStatus}`;
-    }
-    if (markerInfo.type === "RESERVA") {
-        const details = [markerInfo.reservaStatus, markerInfo.reservaAccessory].filter(Boolean).join(' · ');
-        title += ` - ${details}`;
-        listItemText += ` - ${details}`;
     }
     if (markerInfo.type === "Importado") {
         const pending = markerInfo.pendingImportStatus || 'Nova';
-        listItemText = `${markerInfo.name} (Importado · ${pending === 'Existente' ? 'Existente' : 'Novo'})`;
-        title = listItemText;
+        meta = `Importado · ${pending === 'Existente' ? 'Existente' : 'Novo'}`;
+        title = `${markerInfo.name} (${meta})`;
     }
     markerInfo.marker.setTitle(title);
-    if (nameSpan) nameSpan.textContent = listItemText;
+    setSidebarItemLabel(markerInfo.listItem, name, meta);
     if (markerInfo.listItem) markerInfo.listItem.title = markerInfo.description || '';
     applyMarkerSidebarColorStyles(markerInfo);
 }
@@ -4852,7 +4385,7 @@ function openFolderEditor(titleElement) {
         document.getElementById('projectName').value = titleElement.dataset.folderName;
         document.getElementById('projectCity').value = titleElement.dataset.folderCity;
         document.getElementById('projectNeighborhood').value = titleElement.dataset.folderNeighborhood;
-        document.getElementById('projectType').value = titleElement.dataset.folderType;
+        setProjectTypeValue(titleElement.dataset.folderType);
         document.getElementById('projectCity').closest('div').style.display = 'block';
         document.getElementById('projectNeighborhood').closest('div').style.display = 'block';
         document.getElementById('projectType').closest('div').style.display = 'block';
@@ -4869,7 +4402,6 @@ function openFolderEditor(titleElement) {
     }
 }
 
-let folderContextMenuTarget = null;
 let activeSplitterForOltConfig = null;
 
 function getMarkersInFolderScope(folderId) {
@@ -4881,139 +4413,7 @@ function getMarkersInFolderScope(folderId) {
     });
 }
 
-function hideSidebarFolderContextMenu() {
-    const menu = document.getElementById('sidebarFolderContextMenu');
-    if (!menu) return;
-    menu.classList.add('hidden');
-    menu.setAttribute('aria-hidden', 'true');
-}
-
-function showSidebarFolderContextMenu(titleElement, clientX, clientY) {
-    folderContextMenuTarget = titleElement;
-    const menu = document.getElementById('sidebarFolderContextMenu');
-    if (!menu) return;
-    document.querySelectorAll('.item-actions-menu.show').forEach((openMenu) => openMenu.classList.remove('show'));
-    menu.classList.remove('hidden');
-    menu.setAttribute('aria-hidden', 'false');
-    menu.style.left = `${clientX}px`;
-    menu.style.top = `${clientY}px`;
-    requestAnimationFrame(() => {
-        const rect = menu.getBoundingClientRect();
-        const sidebarColumn = document.querySelector('.sidebar-column');
-        const resizer = document.getElementById('dragHandle');
-        const sidebarLeft = sidebarColumn?.getBoundingClientRect().left ?? 8;
-        const maxRight = (resizer?.getBoundingClientRect().left ?? window.innerWidth) - 8;
-        let left = clientX;
-        let top = clientY;
-        if (left + rect.width > maxRight) left = Math.max(sidebarLeft + 8, maxRight - rect.width);
-        if (left < sidebarLeft + 8) left = sidebarLeft + 8;
-        if (top + rect.height > window.innerHeight - 8) top = window.innerHeight - rect.height - 8;
-        if (top < 8) top = 8;
-        menu.style.left = `${left}px`;
-        menu.style.top = `${top}px`;
-    });
-}
-
-function openFolderMarkerStyleModal(titleElement) {
-    if (!requireEdit('padronizar estilos')) return;
-    if (!titleElement?.dataset.folderId) return;
-    const folderId = titleElement.dataset.folderId;
-    const folderName = titleElement.dataset.folderName || 'Pasta';
-    const scopeMarkers = getMarkersInFolderScope(folderId);
-    folderContextMenuTarget = titleElement;
-    document.getElementById('folderMarkerStyleModalTitle').textContent = `Padronizar marcadores — ${folderName}`;
-    document.getElementById('folderMarkerStyleHint').textContent = scopeMarkers.length
-        ? `${scopeMarkers.length} marcador(es) nesta pasta e subpastas receberão as mesmas configurações.`
-        : 'Nenhum marcador encontrado nesta pasta. Você ainda pode definir o padrão para novos marcadores.';
-    const sample = scopeMarkers[0];
-    document.getElementById('folderMarkerColor').value = sample?.color || '#ff0000';
-    document.getElementById('folderMarkerLabelColor').value = sample?.labelColor || '#000000';
-    document.getElementById('folderMarkerSize').value = sample?.size || DEFAULT_MARKER_SIZE;
-    document.getElementById('folderMarkerStyleModal').style.display = 'flex';
-}
-
-function applyFolderMarkerStyle() {
-    const titleElement = folderContextMenuTarget;
-    if (!titleElement?.dataset.folderId) return;
-    const folderId = titleElement.dataset.folderId;
-    const color = document.getElementById('folderMarkerColor').value;
-    const labelColor = document.getElementById('folderMarkerLabelColor').value;
-    const size = parseInt(document.getElementById('folderMarkerSize').value, 10) || DEFAULT_MARKER_SIZE;
-    const scopeMarkers = getMarkersInFolderScope(folderId);
-    if (scopeMarkers.length === 0) {
-        showAlert('Aviso', 'Não há marcadores para padronizar nesta pasta.');
-        return;
-    }
-    scopeMarkers.forEach((markerInfo) => {
-        markerInfo.color = color;
-        markerInfo.labelColor = labelColor;
-        markerInfo.size = size;
-        updateMarkerAppearance(markerInfo);
-    });
-    document.getElementById('folderMarkerStyleModal').style.display = 'none';
-    showAlert('Sucesso', `${scopeMarkers.length} marcador(es) padronizado(s) com sucesso.`);
-}
-
-function handleFolderContextMenuAction(action) {
-    const titleElement = folderContextMenuTarget;
-    hideSidebarFolderContextMenu();
-    if (!titleElement) return;
-    if (action === 'edit') {
-        openFolderEditor(titleElement);
-        return;
-    }
-    if (action === 'style') {
-        openFolderMarkerStyleModal(titleElement);
-        return;
-    }
-    if (action === 'delete') {
-        if (titleElement.dataset.isProject === 'true') {
-            const projectElement = titleElement.closest('.folder');
-            deleteProject(titleElement.dataset.folderId, projectElement, titleElement.dataset.folderName);
-        } else {
-            const folderElement = titleElement.closest('.folder-wrapper');
-            deleteFolder(titleElement.dataset.folderId, folderElement, titleElement.dataset.folderName);
-        }
-    }
-}
-
-function initSidebarFolderContextMenu() {
-    const sidebar = document.getElementById('sidebar');
-    const menu = document.getElementById('sidebarFolderContextMenu');
-    if (!sidebar || !menu) return;
-
-    sidebar.addEventListener('contextmenu', (e) => {
-        const titleElement = e.target.closest('.folder-title');
-        if (!titleElement) return;
-        if (e.target.closest('.item-actions-dropdown')) return;
-        e.preventDefault();
-        showSidebarFolderContextMenu(titleElement, e.clientX, e.clientY);
-    });
-
-    menu.querySelectorAll('button[data-action]').forEach((button) => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            handleFolderContextMenuAction(button.dataset.action);
-        });
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('#sidebarFolderContextMenu')) hideSidebarFolderContextMenu();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') hideSidebarFolderContextMenu();
-    });
-    window.addEventListener('scroll', hideSidebarFolderContextMenu, true);
-    window.addEventListener('resize', hideSidebarFolderContextMenu);
-
-    document.getElementById('closeFolderMarkerStyleModal')?.addEventListener('click', () => {
-        document.getElementById('folderMarkerStyleModal').style.display = 'none';
-    });
-    document.getElementById('cancelFolderMarkerStyle')?.addEventListener('click', () => {
-        document.getElementById('folderMarkerStyleModal').style.display = 'none';
-    });
-    document.getElementById('confirmFolderMarkerStyle')?.addEventListener('click', applyFolderMarkerStyle);
-}
+//Menu de ações da barra lateral e "Padronizar estilo": js/sidebar.js
 
 //Utilitário: Obter IDs de subpastas
 function getAllDescendantFolderIds(startFolderId) {
@@ -7359,14 +6759,12 @@ function setMarkerInfrastructureStatus(markerInfo, statusValue) {
 
 function updateCableSidebarLabel(cable) {
     if (!cable?.item) return;
-    const nameSpan = cable.item.querySelector('.item-name');
-    if (!nameSpan) return;
     const statusLabel = cable.status || 'Novo';
-    if (cable.isImported || cable.type === 'Cabo Importado') {
-        nameSpan.textContent = `${cable.name} (Cabo Importado · ${statusLabel}) · ${cable.totalLength || 0}m`;
-    } else {
-        nameSpan.textContent = `${cable.name} — ${cable.type} (${statusLabel}) · ${cable.totalLength}m`;
-    }
+    const length = `${Number(cable.totalLength || 0).toLocaleString('pt-BR')} m`;
+    const kind = (cable.isImported || cable.type === 'Cabo Importado')
+        ? 'Importado'
+        : String(cable.type || '').replace(/^Cabo\s+/i, '');
+    setSidebarItemLabel(cable.item, cable.name, [kind, statusLabel, length].filter(Boolean).join(' · '));
     applyCableSidebarColorStyles(cable);
 }
 
@@ -9061,7 +8459,8 @@ function createReportPreviewSnapshot(data) {
         title: data.projectName,
         locationLine,
         generatedAt: `Gerado em ${new Date().toLocaleString('pt-BR')}`,
-        options: { bom: true, labor: true, notes: true },
+        //Observações entram marcadas quando existem; sem texto, a opção imprime um espaço para anotações
+        options: { bom: true, labor: true, notes: !!(data.observations && data.observations.trim()) },
         costShare: {
             mat: (data.materialCost / shareBase) * 100,
             lab: (data.laborCost / shareBase) * 100,
@@ -9120,9 +8519,7 @@ function createReportPreviewSnapshot(data) {
             { label: 'Prazo da obra', value: `${data.prazoEstimado} dias` },
             { label: 'Custo total final', value: formatPdfCurrency(data.finalCost) },
         ],
-        observations: (data.observations && data.observations.trim())
-            ? data.observations.trim()
-            : 'Nenhuma observação registrada.',
+        observations: (data.observations || '').trim(),
     };
 
     if (data.regionalLaborDetails) {
@@ -9630,9 +9027,10 @@ function buildReportPreviewFlowBlocks(snapshot) {
     `, 'rp-avoid-break'));
 
     if (options.notes) {
+        const hasNotes = !!(snapshot.observations && snapshot.observations.trim());
         blocks.push(createReportPreviewFlowBlock(`
             <div class="rp-section-title">Observações</div>
-            <div class="rp-observations" contenteditable="true" data-rp-field="observations">${escapeReportPreviewHtml(snapshot.observations)}</div>
+            <div class="rp-observations${hasNotes ? '' : ' rp-observations--blank'}" contenteditable="plaintext-only" data-rp-field="observations" data-placeholder="Espaço para anotações — clique para escrever">${escapeReportPreviewHtml(snapshot.observations || '')}</div>
         `, 'rp-avoid-break'));
     }
 
@@ -9662,7 +9060,9 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
     snapshot.locationLine = readEditableText('[data-rp-field="location"]') || snapshot.locationLine;
     snapshot.generatedAt = readEditableText('[data-rp-field="generatedAt"]') || snapshot.generatedAt;
     snapshot.author = readEditableText('[data-rp-field="author"]') || snapshot.author;
-    snapshot.observations = readEditableText('[data-rp-field="observations"]') || snapshot.observations;
+    //Observações: mantém as quebras de linha e aceita ficar vazia
+    const notesEl = document.querySelector('[data-rp-field="observations"]');
+    if (notesEl) snapshot.observations = (notesEl.innerText || '').replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 
     snapshot.kpis.forEach((kpi, index) => {
         kpi.value = readEditableText(`[data-rp-kpi="${index}"]`) || kpi.value;
@@ -9772,6 +9172,11 @@ function setupReportOptions() {
     ['rpOptBom', 'rpOptLabor', 'rpOptNotes'].forEach((id) => {
         document.getElementById(id)?.addEventListener('change', handleReportOptionChange);
     });
+    //Caixa de observações vazia mostra linhas para anotar; some ao digitar
+    document.getElementById('reportPreviewPages')?.addEventListener('input', (event) => {
+        const notes = event.target.closest?.('[data-rp-field="observations"]');
+        if (notes) notes.classList.toggle('rp-observations--blank', !notes.innerText.trim());
+    });
 }
 
 //Altura útil (em px) de uma página A4 no PDF, descontando as margens de exportação.
@@ -9826,11 +9231,11 @@ function decorateReportPdf(pdf, snapshot) {
         pdf.setFontSize(8);
         pdf.setTextColor(91, 116, 131);
         pdf.line(marginX, height - 12.5, width - marginX, height - 12.5);
-        pdf.text(footerLabel, marginX, height - 8.5);
+        pdf.text(pdfText(footerLabel), marginX, height - 8.5);
         pdf.text(`Página ${page} de ${total}`, width - marginX, height - 8.5, { align: 'right' });
         if (page > 1) {
             pdf.text('ROUTE MAP · Relatório do projeto', marginX, 8);
-            pdf.text(String(snapshot.title || ''), width - marginX, 8, { align: 'right' });
+            pdf.text(pdfText(snapshot.title || ''), width - marginX, 8, { align: 'right' });
             pdf.line(marginX, 10.2, width - marginX, 10.2);
         }
     }
@@ -9842,45 +9247,7 @@ function decorateReportPdf(pdf, snapshot) {
     });
 }
 
-async function exportReportPreviewPdfDocument(snapshot, filename) {
-    const flow = buildReportPreviewExportFlow(snapshot, { forPdf: true });
-    const wrapper = document.createElement('div');
-    wrapper.className = 'report-preview-export-wrapper';
-    wrapper.appendChild(flow);
-    document.body.appendChild(wrapper);
-
-    try {
-        //Espera o logo e o layout ficarem prontos antes de capturar
-        await Promise.all(Array.from(flow.querySelectorAll('img')).map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve())));
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        await html2pdf()
-            .set({
-                margin: [REPORT_EXPORT_PAGE_MARGIN_TOP_MM, 16, REPORT_EXPORT_PAGE_MARGIN_BOTTOM_MM, 16],
-                filename,
-                image: { type: 'jpeg', quality: 0.96 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    scrollY: 0,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-                pagebreak: {
-                    mode: ['css', 'legacy'],
-                    avoid: ['tr', '.rp-kpi-card', '.rp-detail-row', '.rp-avoid-break'],
-                },
-            })
-            .from(flow)
-            .toPdf()
-            .get('pdf')
-            .then((pdf) => decorateReportPdf(pdf, snapshot))
-            .save();
-    } finally {
-        wrapper.remove();
-    }
-}
+//O PDF é desenhado direto com jsPDF (texto de verdade): js/report-pdf.js
 
 const REPORT_PREVIEW_WORD_STYLES = `
 body { font-family: Segoe UI, Arial, sans-serif; font-size: 11pt; color: #16323f; line-height: 1.45; }
@@ -10005,7 +9372,7 @@ function setReportPreviewExportButtonsBusy(isBusy, activeButton, busyLabel) {
 async function confirmReportPdfExport() {
     const context = getReportExportContext();
     if (!context) return;
-    if (typeof html2pdf === 'undefined') {
+    if (!window.jspdf?.jsPDF) {
         showAlert('Erro', 'Biblioteca de PDF não carregada. Recarregue a página e tente novamente.');
         return;
     }
@@ -10016,9 +9383,9 @@ async function confirmReportPdfExport() {
     showToast('Gerando PDF', 'Montando as páginas do relatório…', 'progress');
 
     try {
-        await exportReportPreviewPdfDocument(context.snapshot, filename);
+        const pages = await exportReportPdfNative(context.snapshot, filename);
         closeReportPreviewModal();
-        showToast('PDF gerado', filename);
+        showToast('PDF gerado', `${filename} · ${pages} ${pages === 1 ? 'página' : 'páginas'}`);
     } catch (err) {
         console.error('Erro ao exportar relatório PDF:', err);
         const detail = err?.message ? `\n\nDetalhe: ${err.message}` : '';
@@ -10146,10 +9513,7 @@ function showProjectReportDetails(projectId, projectName) {
     setRv('duration', `${data.prazoEstimado} dias`);
     setRv('finalCost', money(data.finalCost));
 
-    const notes = document.getElementById('rv-notes');
-    const hasNotes = !!(data.observations && data.observations.trim());
-    notes.textContent = hasNotes ? data.observations.trim() : 'Nenhuma observação registrada. Use o botão Observações para adicionar.';
-    notes.classList.toggle('is-empty', !hasNotes);
+    renderReportObservations(data.observations);
 
     document.getElementById("report-project-list").classList.add("hidden");
     document.getElementById("report-project-details").classList.remove("hidden");
@@ -10273,10 +9637,9 @@ function formatDistance(meters) {
     return `${m.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m`;
 }
 
+//Área sempre em metros quadrados (ex.: 12.480 m²)
 function formatArea(squareMeters) {
     const m2 = Number(squareMeters) || 0;
-    if (m2 >= 1e6) return `${(m2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} km²`;
-    if (m2 >= 1e4) return `${(m2 / 1e4).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha`;
     return `${Math.round(m2).toLocaleString('pt-BR')} m²`;
 }
 
@@ -10556,12 +9919,43 @@ function watchPolygonPath(polygon) {
     update();
 }
 
-//Aplica cor e opacidade do formulário no polígono em edição
+const POLYGON_SWATCHES = ['#2dd4bf', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#64748b'];
+
+function renderPolygonSwatches() {
+    const wrap = document.getElementById('polygonSwatches');
+    if (!wrap) return;
+    wrap.innerHTML = POLYGON_SWATCHES.map(color => `<button type="button" class="pg-swatch" data-color="${color}" role="radio" style="--swatch:${color}" title="${color}" aria-label="Cor ${color}"></button>`).join('');
+    wrap.querySelectorAll('.pg-swatch').forEach(button => button.addEventListener('click', () => {
+        document.getElementById('polygonColor').value = button.dataset.color;
+        applyPolygonFormStyle();
+    }));
+}
+
+function syncPolygonStyleControls(color, opacity) {
+    document.querySelectorAll('#polygonSwatches .pg-swatch').forEach(button => {
+        const active = button.dataset.color.toLowerCase() === String(color).toLowerCase();
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+    document.getElementById('polygonOpacityValue').textContent = `${Math.round(opacity * 100)}%`;
+    const preview = document.getElementById('polygonFillPreview');
+    if (preview) {
+        preview.style.setProperty('--fill-color', color);
+        preview.style.setProperty('--fill-opacity', String(opacity));
+    }
+    const range = document.getElementById('polygonOpacity');
+    range?.style.setProperty('--fill', `${Math.round(opacity * 100)}%`);
+    range?.style.setProperty('--track-color', color);
+}
+
+//Aplica cor e opacidade do formulário no polígono em edição (mapa e ícone da barra lateral, ao vivo)
 function applyPolygonFormStyle() {
     const { color, opacity } = getPolygonFormValues();
-    document.getElementById('polygonOpacityValue').textContent = `${Math.round(opacity * 100)}%`;
-    const target = tempPolygon || (editingPolygonIndex !== null ? savedPolygons[editingPolygonIndex]?.polygonObject : null);
+    syncPolygonStyleControls(color, opacity);
+    const editingInfo = editingPolygonIndex !== null ? savedPolygons[editingPolygonIndex] : null;
+    const target = tempPolygon || editingInfo?.polygonObject || null;
     if (target) target.setOptions({ fillColor: color, strokeColor: color, fillOpacity: opacity });
+    editingInfo?.listItem?.querySelector('.ge-icon-polygon')?.style.setProperty('--ge-item-color', color);
     if (sketchSession && isDrawingPolygon) {
         sketchSession.color = color;
         sketchSession.line.setOptions({ strokeColor: color });
@@ -10577,7 +9971,7 @@ function openPolygonBox(title, values) {
     document.getElementById('polygonName').value = values.name;
     document.getElementById('polygonColor').value = values.color;
     document.getElementById('polygonOpacity').value = Math.round(values.opacity * 100);
-    document.getElementById('polygonOpacityValue').textContent = `${Math.round(values.opacity * 100)}%`;
+    syncPolygonStyleControls(values.color, values.opacity);
     box.classList.remove('hidden');
     document.getElementById('toolsDropdown').classList.remove('show');
 }
@@ -10670,9 +10064,7 @@ function savePolygon() {
         polygonInfo.opacity = opacity;
         polygonInfo.path = polygon.getPath().getArray().map(p => ({ lat: p.lat(), lng: p.lng() }));
         polygon.setOptions({ fillColor: color, strokeColor: color, fillOpacity: opacity, editable: false });
-        polygonInfo.listItem.querySelector('.item-name').textContent = name;
-        const polyIcon = polygonInfo.listItem.querySelector('.ge-icon-polygon');
-        if (polyIcon) polyIcon.style.setProperty('--ge-item-color', color);
+        refreshPolygonSidebarLabel(polygonInfo);
         editingPolygonIndex = null; //Evita que o cancelamento reverta o que foi salvo
     } else {
         if (!tempPolygon) {
@@ -10685,9 +10077,6 @@ function savePolygon() {
         const template = document.getElementById('polygon-template');
         const li = template.content.cloneNode(true).querySelector('li');
         enableDragAndDropForItem(li);
-        li.querySelector('.item-name').textContent = name;
-        const iconEl = li.querySelector('.ge-icon-polygon');
-        if (iconEl) iconEl.style.setProperty('--ge-item-color', color);
         document.getElementById(activeFolderId).appendChild(li);
         const polygonInfo = {
             folderId: activeFolderId,
@@ -10699,6 +10088,7 @@ function savePolygon() {
             listItem: li
         };
         savedPolygons.push(polygonInfo);
+        refreshPolygonSidebarLabel(polygonInfo);
         wirePolygonInteractions(polygonInfo);
     }
     cancelPolygonDrawing();
@@ -10753,6 +10143,7 @@ function cancelPolygonDrawing() {
             polygonInfo.polygonObject.setPath(polygonInfo.path);
             polygonInfo.polygonObject.setEditable(false);
             polygonInfo.polygonObject.setOptions({ fillColor: original.color, strokeColor: original.color, fillOpacity: original.opacity });
+            polygonInfo.listItem?.querySelector('.ge-icon-polygon')?.style.setProperty('--ge-item-color', original.color);
         }
     }
     document.getElementById('polygonDrawingBox').classList.add('hidden');
@@ -10925,6 +10316,7 @@ function setupMapSketchTools() {
     document.getElementById('deletePolygonButton').addEventListener('click', deletePolygon);
     document.getElementById('polygonUndoButton').addEventListener('click', undoSketchPoint);
     document.getElementById('polygonFinishButton').addEventListener('click', finishPolygonSketch);
+    renderPolygonSwatches();
     document.getElementById('polygonColor').addEventListener('input', applyPolygonFormStyle);
     document.getElementById('polygonOpacity').addEventListener('input', applyPolygonFormStyle);
 
@@ -11579,6 +10971,7 @@ function importKmlCable(path, parentSidebarId, cableData) {
     const item = buildGeProMapItemRow(nameSpan, polyline, 'ge-icon-path', cableData.color);
     document.getElementById(parentSidebarId).appendChild(item);
     newCableInfo.item = item;
+    updateCableSidebarLabel(newCableInfo);
     if (cableData.isImported) {
         const adjustBtn = document.createElement('button');
         adjustBtn.className = 'adjust-kml-btn';
@@ -11684,7 +11077,6 @@ function createFolderFromKML(folderName, parentUlId) {
     //Expandir recolher a pasta
     toggleIcon.onclick = (e) => { e.stopPropagation(); toggleFolder(folderId); };
     //Configuração de drag & drop
-    addDropTargetListenersToFolderTitle(titleDiv);
     enableDropOnFolder(subList);
     //Renderização no DOM
     parentUl.appendChild(wrapperLi);
@@ -11836,6 +11228,7 @@ function processKmlNode(kmlNode, parentSidebarId, importContext = {}) {
                     listItem: li
                 };
                 savedPolygons.push(polygonInfo);
+                refreshPolygonSidebarLabel(polygonInfo);
                 polygonObject.addListener('click', () => openPolygonEditor(polygonInfo));
                 nameSpan.addEventListener('click', () => openPolygonEditor(polygonInfo));
                 const visCb = li.querySelector('.ge-vis-checkbox');

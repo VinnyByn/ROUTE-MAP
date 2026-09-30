@@ -19,8 +19,9 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=20260930d" />
-    <link rel="stylesheet" href="ui-v3.css?v=20260930d" />
+    <link rel="stylesheet" href="style.css?v=20261001a" />
+    <link rel="stylesheet" href="ui-v3.css?v=20261001a" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261001a" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
@@ -66,6 +67,15 @@
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
       <symbol id="i-money" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5h.01M17.5 14.5h.01"/></symbol>
       <symbol id="i-pop" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10" cy="7.5" r="1.2"/><circle cx="14.5" cy="7.5" r="1.2"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+      <symbol id="i-folder-x" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M10 11l4 4M14 11l-4 4"/></symbol>
+      <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="18" r="1.2"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+      <symbol id="i-collapse" viewBox="0 0 24 24"><path d="M7 10l5-5 5 5M7 19l5-5 5 5"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M7 5l5 5 5-5M7 14l5 5 5-5"/></symbol>
+      <symbol id="i-olt" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1.5"/><rect x="3" y="13" width="18" height="6" rx="1.5"/><path d="M7 8h.01M7 16h.01M11 8h6M11 16h6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     </svg>
 <div class="top-bar">
       <div class="top-bar-brand">
@@ -1016,18 +1026,19 @@
           <label for="markerNumber">Quantidade de casas</label>
           <input type="number" id="markerNumber" min="0" step="1" placeholder="Ex.: 12" />
         </div>
-        <div class="map-tool-field-row marker-panel__appearance" id="markerStyleSection">
-          <div class="map-tool-field map-tool-field--color" id="colorGroup">
-            <label for="markerColor">Cor</label>
-            <input type="color" id="markerColor" value="#16a34a" />
+        <div class="marker-panel__appearance ms-appearance" id="markerStyleSection">
+          <div class="ms-colors">
+            <div class="map-tool-field map-tool-field--color ms-color" id="colorGroup">
+              <label for="markerColor">Cor</label>
+              <input type="color" id="markerColor" value="#16a34a" />
+            </div>
+            <div class="map-tool-field map-tool-field--color ms-color" id="labelColorGroup">
+              <label for="markerLabelColor">Cor do nome</label>
+              <input type="color" id="markerLabelColor" value="#0f172a" />
+            </div>
           </div>
-          <div class="map-tool-field map-tool-field--color" id="labelColorGroup">
-            <label for="markerLabelColor">Nome</label>
-            <input type="color" id="markerLabelColor" value="#0f172a" />
-          </div>
-          <div class="map-tool-field" id="sizeGroup">
-            <label for="markerSize">Tamanho <span id="markerSizeValue">4</span></label>
-            <input type="range" id="markerSize" min="1" max="20" step="1" value="4" />
+          <div class="ms-size-field" id="sizeGroup">
+            <div id="markerSizeMount"></div>
           </div>
         </div>
         <div class="marker-panel__chips hidden" id="ctoOptionsPanel">
@@ -1247,8 +1258,10 @@
           </form>
 
           <div class="fx-main">
-            <div class="fx-columns-legend" aria-hidden="true">
-              <span>Cabos que chegam</span><span>Splitters</span><span>Cabos que saem</span>
+            <div class="fx-canvas-head">
+              <span class="fx-lane-tag fx-lane-tag--left" aria-hidden="true">Coluna esquerda · <b>cabos que chegam</b></span>
+              <span class="fx-footer__hint" id="fusionFooterHint" aria-live="polite"></span>
+              <span class="fx-lane-tag fx-lane-tag--right" aria-hidden="true"><b>cabos que saem</b> · Coluna direita</span>
             </div>
             <div id="fusionCanvas" class="fusion-canvas fx-canvas">
               <div id="fusionStage" class="fx-stage">
@@ -1262,37 +1275,63 @@
             </div>
           </div>
         </div>
-        <div class="modal-footer fx-footer">
-          <span class="fx-footer__hint" id="fusionFooterHint"></span>
-          <button type="button" class="btn btn-secondary" id="cancelFusionPlan">Cancelar</button>
-          <button type="button" class="btn btn-success" id="saveFusionPlan">Salvar plano</button>
+        <div class="modal-footer fx-footer fx-savebar">
+          <div class="fx-status" id="fusionSaveState" role="status">
+            <span class="fx-status__dot" aria-hidden="true"></span>
+            <span class="fx-status__text">Nenhuma alteração pendente</span>
+          </div>
+          <div class="fx-savebar__actions">
+            <button type="button" class="btn btn-secondary fx-cancel" id="cancelFusionPlan">Cancelar</button>
+            <button type="button" class="btn btn-success fx-save" id="saveFusionPlan" title="Salvar plano (Ctrl+S)">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-save"></use></svg>
+              Salvar plano
+              <kbd>Ctrl+S</kbd>
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div id="splitterOltConfigModal" class="modal">
-      <div class="modal-content">
-        <span class="close" id="closeSplitterOltConfigModal">&times;</span>
-        <h2>OLT / Placa / PON</h2>
-        <p id="splitterOltConfigSubtitle" class="splitter-olt-config-subtitle"></p>
-        <div class="modal-form-body">
-          <div class="form-group">
-            <label for="splitterConfigOlt">OLT</label>
-            <input type="text" id="splitterConfigOlt" placeholder="Ex: OLT-01" />
+      </div>
+      <div id="fusionOltPopover" class="olt-pop hidden" role="dialog" aria-labelledby="oltPopTitle">
+        <header class="olt-pop__head">
+          <span class="olt-pop__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-olt"></use></svg></span>
+          <div class="olt-pop__titles">
+            <strong id="oltPopTitle">Origem na OLT</strong>
+            <small id="oltPopSubtitle"></small>
           </div>
-          <div class="form-group">
-            <label for="splitterConfigPlaca">Placa</label>
-            <input type="number" id="splitterConfigPlaca" min="1" max="16" placeholder="Ex: 1" />
-          </div>
-          <div class="form-group">
-            <label for="splitterConfigPon">PON</label>
-            <input type="number" id="splitterConfigPon" min="1" max="16" placeholder="Ex: 3" />
-          </div>
+          <button type="button" class="olt-pop__btn olt-pop__close" id="closeSplitterOltConfigModal" aria-label="Fechar">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+          </button>
+        </header>
+        <label class="olt-pop__field">
+          <span>OLT</span>
+          <input type="text" id="splitterConfigOlt" list="oltNameOptions" placeholder="Ex.: OLT-01" autocomplete="off" />
+        </label>
+        <datalist id="oltNameOptions"></datalist>
+        <div class="olt-pop__row">
+          <label class="olt-pop__field">
+            <span>Placa (slot)</span>
+            <span class="olt-pop__num">
+              <button type="button" class="olt-pop__btn" data-step="-1" data-target="splitterConfigPlaca" aria-label="Menos">−</button>
+              <input type="number" id="splitterConfigPlaca" min="0" max="32" placeholder="—" />
+              <button type="button" class="olt-pop__btn" data-step="1" data-target="splitterConfigPlaca" aria-label="Mais">+</button>
+            </span>
+          </label>
+          <label class="olt-pop__field">
+            <span>Porta PON</span>
+            <span class="olt-pop__num">
+              <button type="button" class="olt-pop__btn" data-step="-1" data-target="splitterConfigPon" aria-label="Menos">−</button>
+              <input type="number" id="splitterConfigPon" min="0" max="128" placeholder="—" />
+              <button type="button" class="olt-pop__btn" data-step="1" data-target="splitterConfigPon" aria-label="Mais">+</button>
+            </span>
+          </label>
         </div>
-        <div class="modal-footer">
-          <button type="button" id="cancelSplitterOltConfig" class="btn btn-secondary">Cancelar</button>
-          <button type="button" id="confirmSplitterOltConfig" class="btn btn-success">Salvar</button>
-        </div>
+        <div class="olt-pop__preview" id="oltPopPreview"></div>
+        <p class="olt-pop__warning" id="oltPopWarning" hidden></p>
+        <footer class="olt-pop__foot">
+          <button type="button" class="olt-pop__btn olt-pop__remove hidden" id="removeSplitterOlt">Remover vínculo</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="cancelSplitterOltConfig">Cancelar</button>
+          <button type="button" class="btn btn-success btn-sm" id="confirmSplitterOltConfig">Aplicar</button>
+        </footer>
       </div>
     </div>
 
@@ -1314,12 +1353,10 @@
             <input type="text" id="projectNeighborhood" placeholder="Ex: Santa Clara" />
           </div>
           <div class="form-group">
-            <label for="projectType">Tipo</label>
-            <select id="projectType">
-              <option value="TCR">TCR</option>
-              <option value="TCT">TCT</option>
-              <option value="MDU">MDU</option>
-            </select>
+            <label id="projectTypeLabel">Tipo</label>
+            <input type="hidden" id="projectType" value="TCR" />
+            <div class="project-type-picker" id="projectTypePicker" role="radiogroup" aria-labelledby="projectTypeLabel"></div>
+            <small class="project-type-hint" id="projectTypeHint"></small>
           </div>
         </div>
         <div class="modal-footer">
@@ -1347,23 +1384,42 @@
     </div>
 
     <div id="folderMarkerStyleModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content folder-style-modal">
         <span class="close" id="closeFolderMarkerStyleModal">&times;</span>
-        <h2 id="folderMarkerStyleModalTitle">Padronizar marcadores</h2>
-        <p id="folderMarkerStyleHint" class="folder-style-hint"></p>
-        <div class="compact-inputs-container folder-style-inputs">
-          <div>
-            <label for="folderMarkerColor">Cor do ícone</label>
-            <input type="color" id="folderMarkerColor" value="#ff0000" />
-          </div>
-          <div>
-            <label for="folderMarkerLabelColor">Cor do nome</label>
-            <input type="color" id="folderMarkerLabelColor" value="#000000" />
-          </div>
-          <div>
-            <label for="folderMarkerSize">Espessura</label>
-            <input type="number" id="folderMarkerSize" value="4" min="1" max="20" />
-          </div>
+        <h2 id="folderMarkerStyleModalTitle">Padronizar estilo</h2>
+        <div class="modal-form-body fs-body">
+          <section class="fs-section" id="folderStyleMarkerSection">
+            <header class="fs-section__head">
+              <h4>Marcadores</h4>
+              <span class="fs-section__note">Aplicar em:</span>
+            </header>
+            <div class="fs-types" id="folderStyleTypes"></div>
+            <div class="fs-grid">
+              <div class="fs-field" id="fsColorField">
+                <label class="fs-toggle"><input type="checkbox" id="fsApplyColor" checked /><span>Cor do ícone</span></label>
+                <input type="color" id="folderMarkerColor" value="#16a34a" aria-label="Cor do ícone" />
+              </div>
+              <div class="fs-field" id="fsLabelField">
+                <label class="fs-toggle"><input type="checkbox" id="fsApplyLabel" checked /><span>Cor do nome</span></label>
+                <input type="color" id="folderMarkerLabelColor" value="#0f172a" aria-label="Cor do nome" />
+              </div>
+            </div>
+            <div class="fs-field fs-field--wide" id="fsSizeField">
+              <label class="fs-toggle"><input type="checkbox" id="fsApplySize" checked /><span>Tamanho</span></label>
+              <div id="folderStyleSizeMount"></div>
+            </div>
+          </section>
+          <section class="fs-section" id="folderStyleCableSection">
+            <header class="fs-section__head">
+              <h4>Cabos</h4>
+              <span class="fs-section__note" id="folderStyleCableCount"></span>
+            </header>
+            <div class="fs-field fs-field--wide is-off" id="fsWidthField">
+              <label class="fs-toggle"><input type="checkbox" id="fsApplyWidth" /><span>Espessura da linha</span><output id="folderCableWidthValue">4 px</output></label>
+              <input type="range" id="folderCableWidth" min="1" max="12" step="1" value="4" aria-label="Espessura dos cabos" />
+            </div>
+          </section>
+          <p id="folderMarkerStyleHint" class="fs-hint" aria-live="polite"></p>
         </div>
         <div class="modal-footer">
           <button type="button" id="cancelFolderMarkerStyle" class="btn btn-secondary">Cancelar</button>
@@ -1545,11 +1601,7 @@
       </div>
     </div>
 
-    <div id="sidebarFolderContextMenu" class="sidebar-folder-context-menu hidden" role="menu" aria-hidden="true">
-      <button type="button" data-action="edit" role="menuitem">Editar</button>
-      <button type="button" data-action="style" role="menuitem">Padronizar cores e espessura</button>
-      <button type="button" data-action="delete" class="danger" role="menuitem">Excluir</button>
-    </div>
+    <div id="sidebarFolderContextMenu" class="sidebar-folder-context-menu sb-menu hidden" role="menu" aria-hidden="true"></div>
 
     <div id="clientModal" class="modal" role="dialog" aria-labelledby="clientModalTitle">
       <div class="modal-content client-modal">
@@ -1899,7 +1951,9 @@
               <dl class="shortcut-list">
                 <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
                 <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela ou cancela a ferramenta</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Salva o projeto selecionado (com o plano de fusão aberto, salva o plano)</dd></div>
                 <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copia e cola itens da barra lateral</dd></div>
+                <div><dt>Clique direito na barra lateral</dt><dd>Abre as ações do projeto, pasta ou item</dd></div>
                 <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>Desfaz o último ponto na régua ou no polígono</dd></div>
                 <div><dt>Clique direito</dt><dd>Remove o ponto ao desenhar cabo, régua ou polígono</dd></div>
                 <div><dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move o mapa enquanto desenha ou edita</dd></div>
@@ -1943,16 +1997,10 @@
           <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn" checked data-visible="true" title="Exibir no mapa" />
           <span class="folder-icon-sidebar ge-folder-icon" aria-hidden="true"></span>
           <span class="folder-name-text"></span>
+          <span class="project-type-tag" aria-hidden="true"></span>
+          <span class="folder-count" aria-hidden="true"></span>
           <div class="folder-buttons ge-pro-actions">
-            <div class="item-actions-dropdown">
-              <button type="button" class="item-actions-toggle-btn" title="Mais opções">&#8942;</button>
-              <div class="item-actions-menu">
-                <a href="#" class="edit-folder-btn">Editar</a>
-                <a href="#" class="folder-style-btn">Padronizar cores e espessura</a>
-                <a href="#" class="close-project-btn">Fechar projeto</a>
-                <a href="#" class="delete-project-btn">Excluir do banco</a>
-              </div>
-            </div>
+            <button type="button" class="item-actions-toggle-btn" title="Ações do projeto" aria-label="Ações do projeto" aria-haspopup="menu">&#8942;</button>
           </div>
         </div>
         <ul class="subfolders hidden"></ul>
@@ -1966,15 +2014,9 @@
           <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn" checked data-visible="true" title="Exibir no mapa" />
           <span class="folder-icon-sidebar ge-folder-icon" aria-hidden="true"></span>
           <span class="folder-name-text"></span>
+          <span class="folder-count" aria-hidden="true"></span>
           <div class="folder-buttons ge-pro-actions">
-            <div class="item-actions-dropdown">
-              <button type="button" class="item-actions-toggle-btn" title="Mais opções">&#8942;</button>
-              <div class="item-actions-menu">
-                <a href="#" class="edit-folder-btn">Editar</a>
-                <a href="#" class="folder-style-btn">Padronizar cores e espessura</a>
-                <a href="#" class="delete-folder-btn">Excluir</a>
-              </div>
-            </div>
+            <button type="button" class="item-actions-toggle-btn" title="Ações da pasta" aria-label="Ações da pasta" aria-haspopup="menu">&#8942;</button>
           </div>
         </div>
         <ul class="subfolders hidden"></ul>
@@ -1984,9 +2026,13 @@
     <template id="polygon-template">
       <li class="sidebar-tree-item ge-pro-row ge-pro-item">
         <span class="ge-expand-spacer" aria-hidden="true"></span>
-        <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn item-toggle" checked data-visible="true" title="Exibir no mapa" />
+        <input type="checkbox" class="ge-vis-checkbox visibility-toggle-btn item-toggle" checked data-visible="true" title="Ocultar no mapa" />
         <span class="ge-item-icon ge-icon-polygon item-icon" aria-hidden="true"></span>
         <span class="item-name"></span>
+        <span class="item-meta" hidden></span>
+        <div class="ge-pro-actions">
+          <button type="button" class="item-actions-toggle-btn" title="Ações" aria-label="Ações" aria-haspopup="menu">&#8942;</button>
+        </div>
       </li>
     </template>
 
@@ -2056,13 +2102,17 @@
           <label for="polygonName">Nome</label>
           <input type="text" id="polygonName" placeholder="Ex.: Área de cobertura" autocomplete="off" />
         </div>
-        <div class="map-tool-field-row">
-          <div class="map-tool-field map-tool-field--color">
-            <label for="polygonColor">Cor</label>
-            <input type="color" id="polygonColor" value="#2dd4bf" />
+        <div class="map-tool-field pg-color-field">
+          <label for="polygonColor">Cor de preenchimento</label>
+          <div class="pg-colors">
+            <div class="pg-swatches" id="polygonSwatches" role="radiogroup" aria-label="Cores prontas"></div>
+            <input type="color" id="polygonColor" value="#2dd4bf" title="Outra cor" aria-label="Outra cor" />
           </div>
-          <div class="map-tool-field">
-            <label for="polygonOpacity">Preenchimento <span id="polygonOpacityValue">35%</span></label>
+        </div>
+        <div class="map-tool-field pg-opacity-field">
+          <label for="polygonOpacity">Opacidade do preenchimento <span id="polygonOpacityValue">35%</span></label>
+          <div class="pg-opacity">
+            <span class="pg-opacity__preview" id="polygonFillPreview" aria-hidden="true"></span>
             <input type="range" id="polygonOpacity" min="0" max="100" step="5" value="35" />
           </div>
         </div>
@@ -2079,16 +2129,39 @@
     </div>
   
     <div id="loadProjectModal" class="modal">
-      <div class="modal-content project-picker" style="max-width: 640px;">
+      <div class="modal-content project-picker" role="dialog" aria-labelledby="loadProjectTitle">
         <span class="close" id="closeLoadProjectModal">&times;</span>
-        <h2>Abrir projeto</h2>
-        <div class="modal-form-body">
-          <p class="project-picker__hint">Projetos da equipe <strong class="company-name-slot"></strong>, do mais recente para o mais antigo.</p>
-          <div class="project-picker__search">
-            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
-            <input type="search" id="projectSearchInput" placeholder="Buscar por nome, cidade ou bairro" autocomplete="off" />
+        <h2 id="loadProjectTitle">Abrir projeto</h2>
+        <div class="pp-body">
+          <div class="pp-toolbar">
+            <div class="pp-search">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
+              <input type="text" id="projectSearchInput" placeholder="Buscar por nome, cidade, bairro ou tipo" autocomplete="off" spellcheck="false" aria-label="Buscar projetos" />
+              <button type="button" class="pp-search__clear hidden" id="projectSearchClear" aria-label="Limpar busca" title="Limpar busca">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+              </button>
+            </div>
+            <label class="pp-select hidden" title="Filtrar por cidade">
+              <span class="sr-only">Cidade</span>
+              <select id="projectCityFilter"><option value="">Todas as cidades</option></select>
+            </label>
+            <label class="pp-select" title="Ordenar">
+              <span class="sr-only">Ordenar</span>
+              <select id="projectSortSelect">
+                <option value="recent">Mais recentes</option>
+                <option value="name">Nome (A–Z)</option>
+                <option value="city">Cidade</option>
+                <option value="oldest">Mais antigos</option>
+              </select>
+            </label>
           </div>
-          <ul id="saved-projects-list" class="project-picker__list" aria-live="polite"></ul>
+          <div class="pp-chips" id="projectTypeChips" role="radiogroup" aria-label="Tipo de projeto"></div>
+          <div class="pp-status">
+            <span id="projectPickerCount" aria-live="polite"></span>
+            <button type="button" class="pp-link hidden" id="projectPickerClear">Limpar filtros</button>
+            <span class="pp-status__keys"><kbd>↑</kbd><kbd>↓</kbd> navegam · <kbd>Enter</kbd> abre</span>
+          </div>
+          <ul id="projectPickerList" class="pp-list" role="listbox" aria-label="Projetos da equipe"></ul>
         </div>
       </div>
     </div>
@@ -2181,17 +2254,18 @@
     </div>
 
     <div id="observationsModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content observations-modal">
           <span class="close" id="closeObservationsModal">&times;</span>
-          <h2>Observações do Projeto</h2>
+          <h2>Observações do projeto</h2>
           <div class="modal-body-content">
-              <p>Este texto será salvo junto com o projeto. Você pode usar este espaço para anotações, escopo, detalhes de contato ou qualquer outra informação relevante.</p>
+              <p class="observations-hint">Escopo, restrições de campo, contatos ou qualquer informação importante. O texto sai na seção <strong>Observações</strong> do relatório e do PDF, com as quebras de linha.</p>
               <input type="hidden" id="observationProjectId" />
-              <textarea id="observationsTextarea" placeholder="Digite suas observações sobre o projeto..."></textarea>
+              <textarea id="observationsTextarea" rows="9" placeholder="Ex.: Rede aérea nos postes da concessionária. Prever 2 dias para poda na Rua São João."></textarea>
+              <small class="observations-counter" id="observationsCounter"></small>
           </div>
           <div class="modal-footer">
               <button type="button" id="cancelObservationButton" class="btn btn-secondary">Cancelar</button>
-              <button type="button" id="saveObservationButton" class="btn btn-success">Salvar Observação</button>
+              <button type="button" id="saveObservationButton" class="btn btn-success">Salvar observações</button>
             </div>
         </div>
     </div>
@@ -2199,17 +2273,21 @@
   <input type="file" id="kml-file-input" accept=".kml,.kmz" style="display: none;" />
     
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-  <script src="js/supabase-client.js?v=20260930d"></script>
-  <script src="script.js?v=20260930d" defer></script>
-  <script src="js/permissions.js?v=20260930d" defer></script>
-  <script src="js/marker-icons.js?v=20260930d" defer></script>
-  <script src="js/marker-panel.js?v=20260930d" defer></script>
-  <script src="js/fusion.js?v=20260930d" defer></script>
-  <script src="js/account.js?v=20260930d" defer></script>
-  <script src="js/clients.js?v=20260930d" defer></script>
+  <script src="js/supabase-client.js?v=20261001a"></script>
+  <script src="script.js?v=20261001a" defer></script>
+  <script src="js/projects.js?v=20261001a" defer></script>
+  <script src="js/sidebar.js?v=20261001a" defer></script>
+  <script src="js/permissions.js?v=20261001a" defer></script>
+  <script src="js/marker-icons.js?v=20261001a" defer></script>
+  <script src="js/marker-panel.js?v=20261001a" defer></script>
+  <script src="js/fusion.js?v=20261001a" defer></script>
+  <script src="js/account.js?v=20261001a" defer></script>
+  <script src="js/clients.js?v=20261001a" defer></script>
+  <script src="js/report-pdf.js?v=20261001a" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>

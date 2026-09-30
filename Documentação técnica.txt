@@ -6,37 +6,44 @@ Frontend: HTML5, CSS3, Vanilla JavaScript (ES2020+), scripts clássicos (sem mó
 Backend (BaaS): Supabase (Auth + Postgres com RLS). Projeto "GeoVini", ref ipdpilzhlchcxijsmgsf.
 Hospedagem: Firebase Hosting (somente arquivos estáticos). O push na branch main publica pelo workflow .github/workflows/firebase-hosting.yml.
 Map Engine: Google Maps JavaScript API (biblioteca geometry). A Drawing Library foi removida pelo Google e não é mais usada.
-Dependências externas (CDN): supabase-js 2.117.2 (UMD), xlsx (SheetJS), jszip, html2pdf, html-docx-js.
+Dependências externas (CDN): supabase-js 2.117.2 (UMD), xlsx (SheetJS), jszip, jsPDF 2.5.1 + jspdf-autotable 3.8.2 (PDF do relatório) e html-docx-js (Word). html2pdf não é mais usado: o PDF é desenhado com texto de verdade, não como imagem.
 
 2. Estrutura de Arquivos
 login.html / login-style.css: Entrar, criar conta, recuperar senha e primeiro acesso (criar empresa ou aceitar convite).
 index.html: Estrutura principal, modais, painéis laterais e templates (<template>).
 style.css: Estilos base. A camada "DESIGN SYSTEM v2" define tokens (claro/escuro), barra, menus, sidebar, modais, botões e notificações.
-ui-v3.css: Camada final (carregada depois de style.css): painéis de marcador e cabo, rótulos/ícones, plano de fusão, catálogo e cliente B2B.
+ui-v3.css: Camada intermediária (depois de style.css): painéis de marcador e cabo, rótulos/ícones, plano de fusão, catálogo e cliente B2B.
+ui-v4.css: Camada final (depois de ui-v3.css): janela de busca de projetos (.pp-*, .project-picker__*), barra lateral nova (linhas, contadores, olho, menu de ações e linha de destino do arrastar), controle de tamanho do marcador (.ms-size), cores prontas do polígono (.pg-swatch) e plano de fusão em duas colunas (.fx-*, faixa da OLT, rodapé de situação).
   Atenção: style.css tem a regra legada ".modal-content button:not([class*="btn-"])…" que pinta botões de azul-petróleo; botões novos usam classes com "btn-" ou definem as cores com !important via variáveis (--fx-btn-bg/--fx-btn-fg).
 js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession (role, isAdmin, canEdit, isViewer), ROLE_LABELS/ROLE_DESCRIPTIONS, requireEdit() e loadAppContext().
 js/permissions.js: aplica o cargo na interface (classes role-*, is-viewer, can-edit no <body>) e lockFormsForViewer() para janelas em modo leitura. O CSS de "somente visualização" está em ui-v3.css (body.is-viewer, .is-readonly). Novas ações de edição devem chamar requireEdit('...') no início e ganhar o seletor de ocultação em ui-v3.css.
 script.js: Núcleo (mapa, sidebar, cabos, materiais, relatórios, persistência de projetos).
+js/projects.js: Tipos de projeto (PROJECT_TYPES: TCR, TCT, MDU, Backbone, B2B), seletor de tipo em botões do formulário e a janela "Abrir projeto" (busca no servidor, filtros por tipo e cidade, ordenação, paginação de 20 e navegação pelo teclado). Depende de script.js.
+js/sidebar.js: Barra lateral (rótulos em duas linhas, contadores, visibilidade pelo olho, menu de ações por item, "Padronizar estilo" com prévia no mapa, arrastar e soltar com posição antes/depois/dentro e a ordem persistida).
+js/report-pdf.js: PDF do relatório desenhado com jsPDF + jspdf-autotable a partir do snapshot da pré-visualização.
 js/marker-icons.js: Ícones SVG dos marcadores (mapa, barra lateral, seletor de tipo) e rótulos com contorno.
 js/marker-panel.js: Painel lateral de criação/edição de marcadores e o posicionamento no mapa.
-js/fusion.js: Plano de fusão (três colunas, linhas por fibra, fusão em sequência, arrastar cartões).
+js/fusion.js: Plano de fusão (duas colunas, linhas por fibra pelo corredor central, fusão em sequência, arrastar cartões, vínculo de OLT/placa/PON no splitter).
 js/account.js: Menu do usuário e janela "Minha conta".
 js/clients.js: Marcador Cliente (residencial/B2B, status, CTO/porta, drop pela rede, equipamentos).
 migrar.html: Ferramenta temporária que copia projetos do Firestore antigo (users/{uid}/projects) para a tabela projects.
 supabase/migrations/: SQL do banco (tabelas, RLS e funções RPC).
-Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → permissions.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js (todos defer) → Google Maps (callback initMap).
+Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → projects.js → sidebar.js → permissions.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js → report-pdf.js (todos defer) → Google Maps (callback initMap). Os arquivos têm ?v=<data> para furar o cache do Firebase Hosting: ao publicar mudanças em JS/CSS, suba o número em todas as tags de uma vez.
 
 3. Banco de Dados (Supabase)
 companies: empresas. company_members: vínculo usuário–empresa com cargo admin | projetista | member (um usuário = uma empresa). "member" é o Membro, somente visualização.
 profiles: nome, cargo, telefone e preferences (jsonb: theme, mapType, reopenLastProject). Criado por trigger no cadastro.
 company_invites: convites por e-mail. O convidado entra na equipe ao criar conta com o mesmo e-mail (accept_pending_invite).
 company_settings: material_catalog ({materials, kits}), lancamento_config (vão, ferragens por poste, dropSlack) e labor_config (custo/hora, horas/dia, produtividade). Somente admin grava.
-projects: id (text, também é o id da <ul> do projeto na sidebar), company_id, name, city, neighborhood, project_type e data (jsonb com sidebar, markers, cables, polygons, bom, observations).
+projects: id (text, também é o id da <ul> do projeto na sidebar), company_id, name, city, neighborhood, project_type e data (jsonb com sidebar, markers, cables, polygons, bom, observations). Cada nó de data (pastas, marcadores, cabos e polígonos) grava order, a posição do item na barra lateral.
+Colunas geradas (migração da busca): search_text (nome + cidade + bairro + tipo, minúsculo e sem acento, via project_search_text) e summary (jsonb com markers, ctos, ceos, clients, cables e cableMeters, via project_summary), para a lista não baixar o data inteiro. Índices: GIN trigram em search_text, (company_id, lower(name)) e (company_id, city).
 member_presence: user_id, company_id, last_seen_at, signed_out_at, project_name. Sem políticas: só as funções (security definer) leem e gravam.
 RLS: cada empresa só enxerga os próprios dados. Projetos: toda a equipe lê; só admin e projetista criam/editam (can_edit_projects); exclusão só pelo admin ou pelo autor projetista. Preços, kits, configurações, convites e dados da empresa: só admin.
-RPCs: get_my_context, create_company, accept_pending_invite, list_company_members (traz last_seen_at, is_online e active_project só para o admin), set_member_role (3 cargos; nunca deixa a empresa sem admin), remove_member, heartbeat(p_project) e go_offline().
+RPCs: get_my_context, create_company, accept_pending_invite, list_company_members (traz last_seen_at, is_online e active_project só para o admin), set_member_role (3 cargos; nunca deixa a empresa sem admin), remove_member, heartbeat(p_project), go_offline(), search_projects(p_term, p_type, p_city, p_sort, p_limit, p_offset) e project_facets().
 Presença: o navegador chama heartbeat a cada 45 s (com a aba visível) e go_offline ao sair/fechar (fetch keepalive). Online = last_seen_at nos últimos 100 s e sem signed_out_at posterior.
-Migrações: 20260929120000_estrutura_multiempresa.sql (base) e 20260930120000_cargos_e_presenca.sql (cargos + presença; quem era "member" vira "projetista"). Para alterar o banco, crie um novo arquivo em supabase/migrations/ e rode no SQL Editor do Supabase ANTES de publicar o código que depende dele.
+Migrações: 20260929120000_estrutura_multiempresa.sql (base), 20260930120000_cargos_e_presenca.sql (cargos + presença; quem era "member" vira "projetista") e 20261001120000_busca_de_projetos.sql (extensões unaccent e pg_trgm, colunas geradas search_text/summary, índices e as funções search_projects/project_facets).
+A busca degrada sozinha: js/projects.js marca projectPicker.rpcAvailable = false quando o Postgres responde PGRST202 ("could not find the function") e passa a consultar a tabela projects direto (fetchProjectPickerPageFallback, com ilike por palavra). Nesse modo a busca não ignora acentos e os cartões não mostram o resumo de CTOs/CEOs/metragem. Rodar a migração liga os dois recursos sem mexer no código.
+Para alterar o banco, crie um novo arquivo em supabase/migrations/ e rode no SQL Editor do Supabase ANTES de publicar o código que depende dele.
 
 4. Módulos Principais
 4.1. Sessão
@@ -47,14 +54,25 @@ loadAndDisplayProject suspende o cálculo dos drops (clientDropsSuspended) até 
 4.3. Marcadores (marker-panel.js + marker-icons.js)
 Cada marcador tem uid permanente (ensureMarkerUid). O painel #markerModal é um floating-box (não é .modal): showMarkerPanel/hideMarkerPanel. Tipos e padrões em MARKER_TYPE_META; cor/tamanho usados por último ficam no localStorage (routeMapMarkerStyle_<tipo>).
 updateMarkerAppearance usa buildMarkerMapIcon (SVG) e buildMarkerMapLabel; o tamanho em pixels vem de getMarkerPixelSize(size).
+Controle de tamanho: buildMarkerSizeControl(mount, { id, type, onInput }) monta o bloco .ms-size (tamanhos prontos + range 1–20 + passos − / +) dentro de um mount; ele é usado no painel do marcador (#markerSizeMount) e em "Padronizar estilo" da barra lateral (#folderStyleSizeMount). Emite o evento size-change e chama onInput, o que permite a prévia ao vivo no mapa; fechar sem salvar restaura os valores anteriores.
 4.4. Cabos
 google.maps.Polyline. Metragem via computeLength, com reservas técnicas (CEO/Reserva/POP = 25 m, CTO = 5 m).
 Ancoragem: cada cabo grava startAnchorUid/endAnchorUid (uid do marcador) além do nome. resolveCableEndAnchor usa o uid; o nome só vale para projetos antigos e nunca "puxa" a ponta para um marcador a mais de 30 m. updateCablesForMovedMarker move apenas as pontas ancoradas no marcador movido.
 Durante o desenho: cableDrawAnchors guarda as caixas clicadas como ponta A/B; os demais cabos ficam não clicáveis (setAllCablesClickable(false)); pontas sem clique só encaixam numa caixa a até 8 m (CABLE_DRAW_ANCHOR_SNAP_DISTANCE_M). O painel (#cableDrawingBox) usa selects ocultos (cableType, cableStatusSelect, cableASType) sincronizados com os botões.
 4.5. Polígono e régua
 startSketch/stopSketch implementam o desenho por cliques (vértices arrastáveis, linha-guia, desfazer). Polígonos salvam cor e opacidade.
+Cores: POLYGON_SWATCHES alimenta #polygonSwatches (botões .pg-swatch) ao lado do <input type="color"> #polygonColor; a mudança repinta o polígono no mapa e o ícone na barra lateral (refreshPolygonSidebarLabel). Área sempre em m² (formatArea, sem hectares).
+
+4.5.1. Barra lateral (sidebar.js)
+Ordem: cada linha guarda data-order; getSidebarOrderIndex grava order ao salvar (buildProjectRecord) e applySidebarOrder(root) reordena o DOM depois de loadAndDisplayProject recriar tudo. Nós sem order vão para o fim, mantendo a ordem de criação.
+Menu de ações: buildSidebarMenuItems(entity) monta a lista conforme o tipo (projeto, pasta, marcador, cabo, polígono) e AppSession.canEdit — quem é Membro só vê abrir/centralizar/visibilidade. handleSidebarMenuAction executa; ações destrutivas passam por requireEdit().
+Arrastar e soltar: computeSidebarDropTarget devolve { mode: 'before' | 'after' | 'inside' }, showSidebarDropFeedback desenha a linha (#sidebarDropLine, criada sob demanda) e autoScrollSidebar rola nas bordas.
+Padronizar estilo: previewFolderStyle aplica no mapa sem gravar, revertFolderStylePreview desfaz no Cancelar e applyFolderMarkerStyle confirma.
 4.6. Plano de fusão (fusion.js)
-Cartões HTML dentro de #fusionStage (colunas: data-lane = left | center | right) e linhas SVG em #fusion-svg-layer.
+Cartões HTML dentro de #fusionStage (colunas: data-lane = left | right) e linhas SVG em #fusion-svg-layer.
+Só existem duas colunas. getCardLane normaliza planos antigos: cabo com role "saida" ou posicionado à direita vai para 'right', e splitter que ficava no meio (lane "center") também vai para 'right', com a entrada voltada para os cabos que chegam. getPortExitSide faz todas as portas saírem pela face interna, e as ligações entre cartões da mesma coluna são desenhadas em "colchete" pelo corredor central, sem cruzar os outros cartões.
+OLT: o cartão do splitter tem a faixa .fx-olt-strip e guarda dataset.oltName / placaNumber / ponNumber (serializados em olt no plano). O popover #fusionOltPopover sugere as OLTs já usadas no projeto e avisa quando a mesma OLT+placa+PON já atende outro splitter — collectProjectOltUsage() varre o plano aberto e os planos salvos das outras caixas.
+Rodapé: #fusionSaveState mostra a situação ("Nenhuma alteração pendente" / alterações a salvar) a partir de markFusionDirty; com o plano aberto, Ctrl+S salva o plano e não o projeto.
 Formato salvo em markerInfo.fusionPlan (JSON): { version: 2, elements: HTML dos cartões, svg: <path class="fusion-line" data-start-id data-end-id>, trayQuantity }.
 Ids das portas: fibras "cable-<nome>-fiber-<n>", splitter "<id>-input-port" e "<id>-output-<n>". Planos antigos são convertidos por upgradeFusionCard mantendo os ids.
 Portas de atendimento da CTO: saídas de .splitter-atendimento, numeradas pela ordem de criação dos splitters (getAtendimentoOutputPorts).
@@ -69,7 +87,7 @@ A Routes API não está liberada na chave atual: a tentativa falha uma vez e o s
 computeProjectReportData reúne os números do projeto (inclui clientes). showProjectReportDetails preenche a janela (#reportModal; valores em elementos [data-rv], barras proporcionais e composição do custo).
 O documento é montado a partir de um "snapshot" (createReportPreviewSnapshot) → blocos (buildReportPreviewFlowBlocks) → folhas A4 (layoutReportPreviewPages). snapshot.options liga/desliga lista de materiais, detalhe da mão de obra e observações; edições feitas na folha são lidas por readReportPreviewSnapshotFromDom e preservadas ao alternar opções (reportPreviewCurrentSnapshot; o original fica em reportPreviewOriginalSnapshot para "Restaurar original").
 Blocos com a classe rp-keep-next são unidos ao bloco seguinte para não ficarem órfãos no fim da página; tabelas maiores que uma página são divididas (splitOversizedTableBlock) repetindo o cabeçalho.
-PDF: html2pdf renderiza o fluxo contínuo (.report-preview-export-flow, 178 mm) e decorateReportPdf (jsPDF) grava cabeçalho, rodapé "Página n de N" e metadados; as margens estão em REPORT_EXPORT_PAGE_MARGIN_*_MM. O CSS do documento (ui-v3.css, .report-preview-page) usa uma paleta fixa (--rp-*) e força as cores das tabelas: as regras globais do tema escuro (ex.: html[data-theme="dark"] table td) não podem vazar para o PDF. Word: REPORT_PREVIEW_WORD_STYLES + convertReportPreviewGridsForWord (grades viram tabelas; logo e barras são removidos).
+PDF (js/report-pdf.js): o documento é desenhado direto com jsPDF + jspdf-autotable a partir do mesmo snapshot da pré-visualização — nada de rasterizar a tela, então o texto sai selecionável, pesquisável e nítido em qualquer zoom. As medidas e as cores ficam na constante RPDF (A4 210×297, margens mx/top/topNext/bottom e a paleta). As tabelas usam autoTable com showHead: 'everyPage' (cabeçalho repetido) e blocos curtos são medidos antes para não quebrar no meio. decorateReportPdf (script.js) grava cabeçalho, rodapé "Página n de N" e os metadados. Sem observações registradas, o bloco imprime linhas em branco para anotar à mão. O CSS do documento (ui-v3.css, .report-preview-page) usa uma paleta fixa (--rp-*) e força as cores das tabelas: as regras globais do tema escuro (ex.: html[data-theme="dark"] table td) não podem vazar para o PDF. Word: REPORT_PREVIEW_WORD_STYLES + convertReportPreviewGridsForWord (grades viram tabelas; logo e barras são removidos).
 
 4.9. Motor de Cálculo de Materiais (calculateBomState)
 Varre marcadores, cabos e planos de fusão e gera a BOM com base em MATERIAL_PRICES, que recebe os preços do catálogo da empresa (applyCatalogToMaterialPrices). Clientes entram por addClientMaterialsToBom (metragem do drop = traçado + sobra).

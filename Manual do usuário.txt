@@ -21,24 +21,42 @@ Quem está online (administrador): o botão "N online" ao lado do avatar mostra 
 2. Gerenciamento de Projetos
 Os projetos são da equipe: todos da empresa veem e editam.
 No menu "Projeto":
-Novo projeto: Informe Nome, Cidade, Bairro e Tipo (TCR, TCT, MDU).
-Abrir projeto: Lista os projetos da empresa, do mais recente para o mais antigo, com busca por nome, cidade ou bairro.
-Salvar projeto: Salva mapa, fusões, materiais e observações. O botão verde "Salvar" na barra faz o mesmo.
+Novo projeto: Informe Nome, Cidade, Bairro e Tipo. O tipo é escolhido em botões: TCR, TCT, MDU (prédios e condomínios), Backbone (rede troncal entre POPs e cidades) e B2B (atendimento empresarial). Cada tipo tem uma cor, usada também na lista de projetos.
+Abrir projeto: Abre a janela de busca dos projetos da empresa.
+- Campo de busca: digite quantas palavras quiser (ex.: "centro cto fibra"). O projeto aparece quando todas as palavras aparecem no nome, cidade, bairro ou tipo. O X limpa a busca.
+- Filtros: chips de tipo (com a quantidade de projetos de cada um) e lista de cidades.
+- Ordenar por: mais recente, mais antigo, nome ou cidade.
+- A lista carrega de 20 em 20 conforme você rola; o botão "Carregar mais" faz o mesmo. O contador mostra quantos projetos foram encontrados.
+- Pelo teclado: ↑ e ↓ percorrem a lista, Enter abre o projeto marcado e Esc fecha a janela.
+- Sem resultado, a janela oferece limpar os filtros ou criar um projeto novo.
+Salvar projeto: Salva mapa, fusões, materiais e observações. O botão verde "Salvar" na barra e o atalho Ctrl+S fazem o mesmo.
 Nova pasta: Cria uma pasta dentro do projeto selecionado.
 Importar/Exportar KML: Traz traçados do Google Earth (.kml/.kmz) ou exporta o projeto.
-No menu de três pontos do projeto (barra lateral):
+No menu de ações do projeto (botão de três pontinhos na barra lateral, ou clique direito no nome):
+Editar projeto: Nome, cidade, bairro e tipo.
+Nova pasta, Padronizar estilo, Centralizar no mapa, Mostrar/Ocultar no mapa e Expandir/Recolher tudo.
+Salvar projeto (Ctrl+S).
 Fechar projeto: Tira o projeto da tela. Ele continua salvo.
 Excluir do banco: Apaga o projeto para toda a equipe (somente quem criou ou um administrador).
 --------------------------------------------------------------------------------------------------------------------------------------------
 3. Desenhando a Rede no mapa
 Use o menu "Desenhar".
-3.1. Pastas e Organização
-Na barra lateral esquerda, arraste e solte itens (Drag & Drop) para movê-los entre pastas.
+3.1. Barra lateral: pastas e organização
+A barra lateral esquerda mostra o projeto aberto e tudo que existe nele.
+Como ler a lista: o nome de cada item fica em destaque e os detalhes (cidade, bairro, tipo, metragem) ficam em cinza abaixo. Cada pasta mostra o contador do que tem dentro.
+Mostrar e ocultar: o ícone de olho ao lado do item o esconde ou mostra no mapa. No projeto ou na pasta, o olho vale para tudo que está dentro.
+Menu de ações: clique no botão de três pontinhos (ou use o clique direito) em qualquer linha — projeto, pasta, marcador, cabo ou polígono. O menu muda conforme o item:
+- Projeto e pasta: editar/renomear, nova pasta ou subpasta, colar (Ctrl+V), padronizar estilo, centralizar no mapa, mostrar/ocultar, expandir/recolher tudo, salvar (Ctrl+S, só no projeto), fechar projeto e excluir.
+- Marcador, cabo e polígono: editar (ou "Ver", para quem é Membro), plano de fusão (CEO e CTO), centralizar no mapa, mostrar/ocultar, copiar (Ctrl+C, marcadores) e excluir.
+- Pelo teclado: ↑ e ↓ percorrem o menu, Enter escolhe e Esc fecha.
+Padronizar estilo: aplica cor, cor do nome e tamanho dos marcadores e espessura dos cabos a tudo que está no projeto ou na pasta. Enquanto você mexe, a prévia aparece no mapa; "Cancelar" desfaz e devolve o visual anterior.
+Arrastar e soltar: arraste qualquer item para reorganizar. Uma linha azul mostra onde ele vai cair — antes do item, depois do item ou dentro da pasta (a pasta fica destacada). Arrastar até a borda da lista rola sozinho. A ordem que você deixar é salva junto com o projeto e volta igual quando você reabre.
 
 3.2. Marcadores
 Clique em "Desenhar → Marcador" e escolha o tipo. Um painel abre à direita do mapa (o mapa continua visível):
 - Situação (Nova, Existente ou Troca) e Instalação (Raquete ou Suporte, para CEO e reserva) ficam no próprio painel.
-- O nome já vem sugerido com o próximo número livre (ex.: CTO-03). Cor, cor do nome e tamanho mudam o ícone na hora.
+- O nome já vem sugerido com o próximo número livre (ex.: CTO-03). Cor e cor do nome mudam o ícone na hora.
+- Tamanho: botões de tamanho pronto (com o desenho do ícone em cada um), uma barra para ajuste fino e os botões − e +. O marcador cresce ou diminui no mapa enquanto você ajusta; fechar o painel sem salvar devolve o tamanho de antes.
 - Clique em "Posicionar no mapa" e depois no local do marcador. Esc cancela.
 Ícones: CEO = círculo, CTO = quadrado, Cordoalha = cruz (+), Reserva = espiral, Casas = pin com a quantidade, POP = casinha, Cliente = pin com pessoa (residencial) ou prédio (B2B).
 Para editar, clique no marcador. O painel mostra coordenadas (com botão Copiar), "Mover" (arrastar no mapa), "Plano de fusão" (CEO e CTO) e "Excluir".
@@ -70,7 +88,8 @@ Enquanto um cabo está em desenho ou edição, os outros cabos não abrem ao cli
 
 3.5. Polígono
 Clique em "Desenhar → Polígono" e clique no mapa para marcar os vértices. Para fechar a forma, clique no primeiro ponto ou em "Fechar forma".
-Depois de fechada, arraste os vértices para ajustar. O painel mostra área e perímetro e permite escolher cor e opacidade.
+Depois de fechada, arraste os vértices para ajustar. O painel mostra área (em m²) e perímetro.
+Cor: escolha uma das cores prontas ou abra o seletor "Outra cor". A cor muda na hora no mapa e no ícone da barra lateral. A opacidade fica no mesmo painel.
 
 3.6. Régua de medição
 Clique em "Desenhar → Régua de medição" e escolha Distância ou Área.
@@ -79,10 +98,11 @@ Em Distância, o painel mostra o total, o último trecho, a distância com o pr�
 Em Área, o botão "Criar polígono" transforma a medição em um polígono do projeto.
 --------------------------------------------------------------------------------------------------------------------------------------------
 4. Plano de Fusão
-Abra uma CEO ou CTO e clique em "Plano de fusão". O diagrama tem três colunas: cabos que chegam (esquerda), splitters (meio) e cabos que saem (direita).
+Abra uma CEO ou CTO e clique em "Plano de fusão". O diagrama tem duas colunas: o que entra na caixa à esquerda e o que sai à direita. Todas as portas ficam voltadas para o corredor do meio, e as ligações entre cartões da mesma coluna passam por esse corredor, sem atravessar os outros cartões.
 Coluna lateral:
 - Cabos da caixa: lista os cabos ancorados na caixa, com origem/destino. "Adicionar" ou "Adicionar todos".
 - Splitter: escolha tipo (Atendimento/Fusão), divisão (1:2 a 1:16), conector (APC/UPC) e situação, e clique em "Adicionar splitter".
+- OLT: cada cartão de splitter tem uma faixa com a origem do sinal. Clique em "Vincular" para informar a OLT, a placa e a porta PON. O campo da OLT sugere os nomes já usados no projeto, e um aviso aparece se aquela PON já atender outro splitter (mostrando qual splitter e em que caixa). O botão "Remover" limpa o vínculo.
 - Fusão em sequência: liga várias fibras de uma vez (ex.: fibras 1 a 12 de um cabo nas fibras 1 a 12 de outro, ou nas saídas de um splitter).
 - Kits de bandeja (CEO) e Resumo (fusões/tubetes, fibras em uso, splitters e portas com cliente).
 - "Mostrar só fibras em uso" esconde as fibras livres para diagramas grandes.
@@ -91,7 +111,8 @@ As linhas têm a cor da fibra. Cada porta mostra para onde está ligada; nas CTO
 Clique numa linha (ou numa porta já ligada) para "Refazer ligação" ou "Desfazer fusão".
 Arraste um cartão pelo cabeçalho para mudar a ordem ou a coluna; as setas também movem, e ⇄ troca o splitter de coluna.
 Na CEO, marque "Kit derivação" no cartão do cabo quando houver derivação.
-Clique em "Salvar plano". Fechar sem salvar pede confirmação. Tubetes, splitters, adaptadores, kits e bandejas entram automaticamente na lista de materiais.
+O rodapé mostra a situação do plano: "Nenhuma alteração pendente" ou o aviso de que há mudanças para salvar.
+Clique em "Salvar plano" ou use Ctrl+S (com o plano aberto, Ctrl+S salva o plano, não o projeto). Fechar sem salvar pede confirmação. Tubetes, splitters, adaptadores, kits e bandejas entram automaticamente na lista de materiais.
 --------------------------------------------------------------------------------------------------------------------------------------------
 5. Materiais e Relatórios
 No menu "Materiais":
@@ -105,9 +126,12 @@ Somente o administrador altera; projetistas e membros apenas consultam.
 Relatório do Projeto (botão "Relatório" na barra):
 - Lista de projetos: cada projeto mostra custo total, novas portas e lançamento para você escolher o certo.
 - Painel do projeto: custo total, novas portas, lançamento e prazo no topo; cartões de rede e cobertura (com a taxa de penetração), rede nova (lançamento, postes, CTOs, CEOs, reservas, cordoalhas), materiais por categoria, mão de obra, clientes (quando houver), resumo financeiro (composição do custo, coeficiente de segurança de 5%, custo por nova porta e custo total final) e observações.
-- "Observações" (projetista e administrador) abre o campo de texto que também sai no relatório. Lembre de salvar o projeto para guardá-las.
+- "Observações" (projetista e administrador) abre o campo de texto que também sai no relatório. O painel já mostra o texto novo assim que você salva, as quebras de linha são mantidas e você pode apagar tudo se quiser. Lembre de salvar o projeto para guardá-las.
 Exportar PDF:
 - O botão "Exportar PDF" abre a pré-visualização em folhas A4. Clique em qualquer texto para editar antes de exportar.
 - Marque ou desmarque "Lista de materiais", "Detalhe da mão de obra" e "Observações" para escolher o que entra no documento; suas edições são mantidas.
-- "Baixar PDF" e "Baixar Word" geram o arquivo Relatorio_<projeto>_<data>. O PDF tem capa com a marca e o nome da empresa, cabeçalho nas páginas seguintes, rodapé com "Página n de N", tabelas com o cabeçalho repetido e propriedades do arquivo (título e autor). O documento sai sempre com o visual claro, mesmo com o sistema no tema escuro.
+- "Baixar PDF" e "Baixar Word" geram o arquivo Relatorio_<projeto>_<data>. O PDF sai com texto de verdade: dá para selecionar, copiar e pesquisar dentro do arquivo, e fica nítido em qualquer zoom ou impressão.
+- O PDF tem capa com a marca e o nome da empresa, cabeçalho nas páginas seguintes, rodapé com "Página n de N" e propriedades do arquivo (título e autor). Tabelas grandes repetem o cabeçalho na página seguinte, e tabelas pequenas não são partidas no meio.
+- Sem observações registradas, o PDF imprime linhas em branco para anotar à mão.
+- O documento sai sempre com o visual claro, mesmo com o sistema no tema escuro.
 - "Restaurar original" descarta as edições e volta aos valores calculados.
