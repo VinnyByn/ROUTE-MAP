@@ -126,8 +126,8 @@ function configureMarkerPanel(type, mode) {
     toggleMarkerPanelGroup('markerPositionRow', isEdit);
     toggleMarkerPanelGroup('deleteMarkerButton', isEdit);
     toggleMarkerPanelGroup('editPositionButton', isEdit);
-    document.querySelector('#labelColorGroup label').textContent = isCasa ? 'Número' : 'Nome';
-    document.querySelector('#colorGroup label').textContent = isCasa ? 'Balão' : 'Cor';
+    document.querySelector('#labelColorGroup label').textContent = isCasa ? 'Cor do número' : 'Cor do nome';
+    document.querySelector('#colorGroup label').textContent = isCasa ? 'Cor do balão' : 'Cor';
 
     const confirmButton = document.getElementById('confirmMarker');
     confirmButton.textContent = isEdit ? 'Salvar' : (isKmlAdjust ? 'Converter' : 'Posicionar no mapa');
@@ -160,14 +160,121 @@ function getMarkerPanelType() {
     return editingMarkerInfo?.type || selectedMarkerData.type;
 }
 
-//Ícone do cabeçalho acompanha cor e tipo escolhidos
+// ---------------------------------------------------------------
+// Controle de tamanho (painel do marcador e "Padronizar estilo")
+// ---------------------------------------------------------------
+
+const MARKER_SIZE_PRESETS = [
+    { value: 2, label: 'P', title: 'Pequeno' },
+    { value: 4, label: 'M', title: 'Médio (padrão)' },
+    { value: 7, label: 'G', title: 'Grande' },
+    { value: 11, label: 'GG', title: 'Muito grande' },
+];
+
+//Monta: prévia no tamanho real, tamanhos prontos e ajuste fino (−, barra, +)
+function buildMarkerSizeControl(mount, { id, type = 'CTO', onInput = null }) {
+    if (!mount) return;
+    mount.innerHTML = `
+        <div class="ms-size" data-size-control="${id}" data-type="${type}">
+            <div class="ms-size__stage" aria-hidden="true">
+                <span class="ms-size__icon"></span>
+                <span class="ms-size__label"></span>
+            </div>
+            <div class="ms-size__controls">
+                <div class="ms-size__head"><span>Tamanho</span><output class="ms-size__value" id="${id}Value"></output></div>
+                <div class="ms-size__presets" role="radiogroup" aria-label="Tamanhos prontos">
+                    ${MARKER_SIZE_PRESETS.map(p => `<button type="button" class="ms-size__preset" data-value="${p.value}" role="radio" title="${p.title} · ${getMarkerPixelSize(p.value)} px"><span class="ms-size__glyph" style="--glyph:${Math.round(getMarkerPixelSize(p.value) * 0.55)}px"></span><b>${p.label}</b></button>`).join('')}
+                </div>
+                <div class="ms-size__fine">
+                    <button type="button" class="ms-size__step" data-step="-1" aria-label="Diminuir" title="Diminuir">−</button>
+                    <input type="range" id="${id}" min="1" max="20" step="1" value="${DEFAULT_MARKER_SIZE}" aria-label="Tamanho do marcador" />
+                    <button type="button" class="ms-size__step" data-step="1" aria-label="Aumentar" title="Aumentar">+</button>
+                </div>
+            </div>
+        </div>`;
+    const root = mount.querySelector('.ms-size');
+    const range = root.querySelector('input[type="range"]');
+    const emit = () => {
+        root.dispatchEvent(new CustomEvent('size-change', { detail: Number(range.value) }));
+        onInput?.(Number(range.value));
+    };
+    range.addEventListener('input', () => { syncMarkerSizeControl(root); emit(); });
+    root.querySelectorAll('.ms-size__preset').forEach(button => button.addEventListener('click', () => {
+        if (range.disabled) return;
+        range.value = button.dataset.value;
+        syncMarkerSizeControl(root);
+        emit();
+    }));
+    root.querySelectorAll('.ms-size__step').forEach(button => button.addEventListener('click', () => {
+        if (range.disabled) return;
+        range.value = Math.max(1, Math.min(20, Number(range.value) + Number(button.dataset.step)));
+        syncMarkerSizeControl(root);
+        emit();
+    }));
+    syncMarkerSizeControl(root);
+}
+
+function getMarkerSizeControl(id) {
+    return document.querySelector(`[data-size-control="${id}"]`);
+}
+
+function getMarkerSizeControlValue(id) {
+    return parseInt(document.getElementById(id)?.value, 10) || DEFAULT_MARKER_SIZE;
+}
+
+function setMarkerSizeControlValue(id, value) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = Math.max(1, Math.min(20, Number(value) || DEFAULT_MARKER_SIZE));
+    const root = getMarkerSizeControl(id);
+    if (root) syncMarkerSizeControl(root);
+}
+
+function syncMarkerSizeControl(root) {
+    const range = root.querySelector('input[type="range"]');
+    const value = Number(range.value);
+    const px = getMarkerPixelSize(value);
+    root.querySelector('.ms-size__value').textContent = `${px} px`;
+    root.querySelectorAll('.ms-size__preset').forEach(button => {
+        const active = Number(button.dataset.value) === value;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+    const icon = root.querySelector('.ms-size__icon');
+    const isCasa = root.dataset.type === 'CASA';
+    icon.style.width = `${isCasa ? Math.round(px * 1.35) : px}px`;
+    icon.style.height = `${isCasa ? Math.round(px * 1.4) : px}px`;
+    range.style.setProperty('--fill', `${((value - 1) / 19) * 100}%`);
+}
+
+//Cor, tipo e nome da prévia
+function updateMarkerSizeControlPreview(id, color, type, { label = '', labelColor = '#0f172a', text = '' } = {}) {
+    const root = getMarkerSizeControl(id);
+    if (!root) return;
+    root.dataset.type = type || 'CTO';
+    const url = `url("${getMarkerIconDataUrl(type || 'CTO', color, { text, labelColor })}")`;
+    root.querySelector('.ms-size__icon').style.backgroundImage = url;
+    root.querySelectorAll('.ms-size__glyph').forEach(glyph => { glyph.style.backgroundImage = url; });
+    const labelEl = root.querySelector('.ms-size__label');
+    labelEl.textContent = type === 'CASA' ? '' : label;
+    labelEl.style.color = labelColor;
+    labelEl.className = `ms-size__label ${getContrastTextColor(labelColor) === '#0f172a' ? 'marker-label--light-halo' : 'marker-label--dark-halo'}`;
+    syncMarkerSizeControl(root);
+}
+
+//Ícone do cabeçalho e prévia acompanham cor, tipo e tamanho escolhidos
 function updateMarkerPanelPreview() {
     const type = getMarkerPanelType();
     const icon = document.getElementById('markerPanelIcon');
     if (!icon || !type) return;
-    icon.style.backgroundImage = `url("${getMarkerIconDataUrl(type, document.getElementById('markerColor').value, { labelColor: document.getElementById('markerLabelColor').value })}")`;
-    const size = document.getElementById('markerSize').value;
-    document.getElementById('markerSizeValue').textContent = size;
+    const color = document.getElementById('markerColor').value;
+    const labelColor = document.getElementById('markerLabelColor').value;
+    icon.style.backgroundImage = `url("${getMarkerIconDataUrl(type, color, { labelColor })}")`;
+    updateMarkerSizeControlPreview('markerSize', color, type, {
+        label: document.getElementById('markerName').value.trim() || getMarkerTypeMeta(type).prefix || type,
+        labelColor,
+        text: document.getElementById('markerNumber').value || '12',
+    });
     if (type === 'CTO') {
         const stickers = document.getElementById('ctoStickerCheckbox');
         const status = getSegmentedValue('markerStatusSegmented');
@@ -175,10 +282,36 @@ function updateMarkerPanelPreview() {
     }
 }
 
+//Na edição, o marcador no mapa já mostra cor, nome e tamanho enquanto se ajusta
+let markerStylePreviewActive = false;
+
+function previewEditingMarkerStyle() {
+    const info = editingMarkerInfo;
+    if (!info?.marker || info.type === 'CLIENTE' || !AppSession.canEdit) return;
+    const form = readMarkerPanelForm();
+    const isCasa = info.type === 'CASA';
+    info.marker.setIcon(buildMarkerMapIcon(info.type, {
+        color: form.color,
+        size: form.size,
+        text: isCasa ? (form.houses || info.name) : '',
+        labelColor: form.labelColor,
+    }));
+    if (!isCasa) info.marker.setLabel(buildMarkerMapLabel(form.name || info.name, form.labelColor));
+    if (focusedMapMarkerInfo === info && focusedMapMarkerRing) {
+        focusedMapMarkerRing.setIcon(getMarkerHighlightRingIcon({ ...info, size: form.size }, true));
+    }
+    markerStylePreviewActive = true;
+}
+
+function handleMarkerStyleInput() {
+    updateMarkerPanelPreview();
+    previewEditingMarkerStyle();
+}
+
 function fillMarkerPanelStyle(values) {
     document.getElementById('markerColor').value = values.color;
     document.getElementById('markerLabelColor').value = values.labelColor;
-    document.getElementById('markerSize').value = values.size;
+    setMarkerSizeControlValue('markerSize', values.size);
 }
 
 // ---------------------------------------------------------------
@@ -383,8 +516,11 @@ function resetMarkerModal({ discardPositionChanges = true } = {}) {
             restoreMarkerEditOriginPosition();
         }
         editingMarkerInfo.marker.setDraggable(false);
+        //Desfaz a prévia de cor/tamanho que não foi salva (depois de salvar, reaplica o mesmo estilo)
+        if (markerStylePreviewActive) updateMarkerAppearance(editingMarkerInfo);
         editingMarkerInfo = null;
     }
+    markerStylePreviewActive = false;
     markerEditOriginPosition = null;
     markerPositionEditSession = null;
     clearMapMarkerHighlight();
@@ -505,6 +641,7 @@ function cancelMarkerPositionEdit() {
 // ---------------------------------------------------------------
 
 function setupMarkerPanel() {
+    buildMarkerSizeControl(document.getElementById('markerSizeMount'), { id: 'markerSize', onInput: handleMarkerStyleInput });
     document.querySelectorAll('#markerTypeModal .marker-option').forEach(option => {
         const type = option.getAttribute('data-type');
         const icon = option.querySelector('.marker-type-glyph');
@@ -531,8 +668,8 @@ function setupMarkerPanel() {
         const text = document.getElementById('infraMarkerCoordinatesText').textContent;
         navigator.clipboard?.writeText(text).then(() => showToast('Copiado', 'Coordenadas copiadas.'));
     });
-    ['markerColor', 'markerLabelColor', 'markerSize'].forEach(id => {
-        document.getElementById(id).addEventListener('input', updateMarkerPanelPreview);
+    ['markerColor', 'markerLabelColor', 'markerName', 'markerNumber'].forEach(id => {
+        document.getElementById(id).addEventListener('input', handleMarkerStyleInput);
     });
     document.getElementById('markerStatusSegmented').addEventListener('segmented-change', updateMarkerPanelPreview);
     document.getElementById('ctoStickerCheckbox').addEventListener('change', (e) => { e.target.dataset.userChanged = '1'; });
