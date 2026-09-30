@@ -26,6 +26,11 @@ jobs:
         run: |
           pip install --quiet -r api/requirements.txt
           cd api && python export_json.py ../materiais.json
+      - name: Conferir planilha de kits (temporário)
+        run: |
+          ID=1MVwYAzcUOhZxB7DxqHzghBKwYmU7ShSuYqF3xF-tlnE
+          curl -sL "https://docs.google.com/spreadsheets/d/$ID/htmlview" | grep -oE 'gid=[0-9]+|"name":"[^"]{1,60}"|sheet-button-[0-9]+[^<]{0,80}' | sort -u | head -40 || true
+          curl -sL "https://docs.google.com/spreadsheets/d/$ID/export?format=csv&gid=0" | head -200 | sed 's/^/KITCSV|/' || true
       - name: Instalar Firebase CLI
         # Instala numa pasta à parte para fixar dependências quebradas no npm (ignore@7.0.11 foi retirado do registro)
         run: |
