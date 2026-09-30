@@ -22,6 +22,7 @@ const DROP_ROUTE_LABELS = {
     osrm: 'pelas ruas (OpenStreetMap)',
     manual: 'desenhado à mão',
     reta: 'em linha reta (sem rede próxima)',
+    cabo: 'do cabo FO até o cliente',
 };
 
 let editingClient = null; //Cliente aberto na janela (null = criação)
@@ -56,6 +57,47 @@ function isPredialClient(clientInfo) {
 
 function findMarkerByUid(uid) {
     return uid ? markers.find(m => m.uid === uid) : null;
+}
+
+// ---------------------------------------------------------------
+// B2B ligado direto num cabo FO (fibra dedicada, sem CTO)
+// ---------------------------------------------------------------
+
+const CLIENT_CABLE_PREFIX = 'cabo:';
+
+function getProjectCables(folderId) {
+    const folderIds = getProjectFolderIdsForItem(folderId) || [];
+    return savedCables.filter(c => folderIds.includes(c.folderId) && c.path?.length > 1);
+}
+
+function findClientCable(clientInfo) {
+    const name = clientInfo?.client?.cableName;
+    return name ? getProjectCables(clientInfo.folderId ?? getClientFolderId()).find(c => c.name === name) || null : null;
+}
+
+function getCableFiberCount(cable) {
+    const fiberType = typeof getFiberType === 'function' ? getFiberType(cable?.type) : null;
+    return fiberType ? parseInt(fiberType.split('-')[1], 10) || 12 : 12;
+}
+
+//Fibras do cabo já usadas por outros clientes B2B
+function getOccupiedCableFibers(cable, ignoreClient) {
+    const occupied = new Map();
+    markers.forEach(m => {
+        if (m === ignoreClient || m.type !== 'CLIENTE' || m.client?.status === 'cancelado') return;
+        if (m.client?.cableName === cable.name && m.client.cableFiber) occupied.set(Number(m.client.cableFiber), m);
+    });
+    return occupied;
+}
+
+//Ponto do cabo mais próximo do cliente (a derivação sai daí)
+function nearestPointOnCable(cable, position) {
+    let best = null;
+    for (let i = 0; i < cable.path.length - 1; i++) {
+        const proj = projectPointOnSegment(position, toLatLng(cable.path[i]), toLatLng(cable.path[i + 1]));
+        if (!best || proj.dist < best.dist) best = proj;
+    }
+    return best?.point || null;
 }
 
 function getProjectCtos(folderId) {
@@ -379,6 +421,17 @@ function ensureClientDropPath(clientInfo, cto, { force = false, getNetwork }) {
 //Metragem do drop: traçado + sobra da empresa, ou o valor informado
 function getClientDropInfo(clientInfo) {
     if (isPredialClient(clientInfo)) return null;
+    if (clientInfo.client?.cableName) {
+        const cable = findClientCable(clientInfo);
+        if (!cable || !clientInfo.marker) return null;
+        const start = nearestPointOnCable(cable, clientInfo.marker.getPosition());
+        if (!start) return null;
+        const routed = google.maps.geometry.spherical.computeDistanceBetween(start, clientInfo.marker.getPosition());
+        const slack = Number(lancamentoConfig.dropSlack) || 0;
+        const automatic = Math.ceil(routed + slack);
+        const override = Number(clientInfo.client?.dropOverride) > 0 ? Math.ceil(Number(clientInfo.client.dropOverride)) : null;
+        return { cto: null, cable, straight: routed, routed, route: 'cabo', slack, automatic, length: override || automatic, isManual: !!override };
+    }
     const cto = findMarkerByUid(clientInfo.client?.ctoUid);
     if (!cto?.marker || !clientInfo.marker) return null;
     const straight = google.maps.geometry.spherical.computeDistanceBetween(cto.marker.getPosition(), clientInfo.marker.getPosition());
@@ -432,6 +485,25 @@ function refreshClientDrops(options = {}) {
     };
     markers.forEach(clientInfo => {
         if (clientInfo.type !== 'CLIENTE' || clientInfo === dropEditSession?.clientInfo) return;
+        if (clientInfo.client?.cableName && !isPredialClient(clientInfo)) {
+            if (onlyCto) return;
+            const cable = findClientCable(clientInfo);
+            const start = cable && nearestPointOnCable(cable, clientInfo.marker.getPosition());
+            if (!start) {
+                clientInfo.dropLine?.setPath([]);
+                return;
+            }
+            if (!clientInfo.dropLine) {
+                clientInfo.dropLine = new google.maps.Polyline({ clickable: false, strokeOpacity: 0, zIndex: 5 });
+                clientInfo.dropLine.bindTo('map', clientInfo.marker);
+                clientInfo.dropLine.bindTo('visible', clientInfo.marker);
+            }
+            const end = clientInfo.marker.getPosition();
+            clientInfo.client.dropPath = [{ lat: start.lat(), lng: start.lng() }, { lat: end.lat(), lng: end.lng() }];
+            clientInfo.client.dropRoute = 'cabo';
+            drawClientDropLine(clientInfo);
+            return;
+        }
         const cto = findMarkerByUid(clientInfo.client?.ctoUid);
         if (onlyCto && cto !== onlyCto) return;
         if (!cto?.marker || isPredialClient(clientInfo)) {
@@ -468,7 +540,10 @@ function applyClientAppearance(clientInfo) {
     clientInfo.marker.setLabel(null);
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
-    const link = cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
+    const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;
+    const link = cable
+        ? ` · ${cable.name}${clientInfo.client.cableFiber ? ` fibra ${clientInfo.client.cableFiber}` : ''}`
+        : cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
     const units = isPredialClient(clientInfo) && clientInfo.client.predial?.units ? ` · ${clientInfo.client.predial.units} unidades` : '';
     clientInfo.marker.setTitle(null); //Sem dica nativa do navegador no mapa
     setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${kind.label}${units} · ${status.label}${link.replace(' · sem CTO', '')}`);
@@ -604,7 +679,13 @@ function setClientKind(kind) {
     document.getElementById('clientModal').classList.toggle('is-predial', predial);
     document.getElementById('clientNameLabel').textContent = b2b ? 'Razão social *' : predial ? 'Nome do prédio / condomínio *' : 'Nome *';
     document.getElementById('clientDocumentLabel').textContent = b2b || predial ? 'CNPJ' : 'CPF / CNPJ';
-    if (document.getElementById('clientModal').style.display === 'flex') updateClientDropSummary();
+    if (document.getElementById('clientModal').style.display === 'flex') {
+        //Troca de tipo: a lista de ligação muda (cabos FO só para B2B)
+        const current = document.getElementById('clientCto').value;
+        populateClientCtoSelect(current);
+        populateClientPortSelect(document.getElementById('clientPort').value);
+        updateClientDropSummary();
+    }
 }
 
 function getSelectedClientKind() {
@@ -632,13 +713,53 @@ function populateClientCtoSelect(selectedUid) {
             const occupancy = capacity ? `${used} de ${capacity} portas` : `${used} cliente${used === 1 ? '' : 's'}`;
             addOption(uid, `${cto.name} — ${occupancy}`);
         });
-    select.value = selectedUid ?? (editingClient ? '' : 'auto');
+    //B2B: fibra dedicada direto no cabo FO
+    if (getSelectedClientKind() === 'b2b') {
+        const cables = getProjectCables(getClientFolderId())
+            .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR', { numeric: true }));
+        if (cables.length) {
+            const group = document.createElement('optgroup');
+            group.label = 'Cabo FO (fibra dedicada)';
+            cables.forEach(cable => {
+                const option = document.createElement('option');
+                option.value = CLIENT_CABLE_PREFIX + cable.name;
+                const used = getOccupiedCableFibers(cable, editingClient).size;
+                option.textContent = `${cable.name} — ${used} de ${getCableFiberCount(cable)} fibras`;
+                group.appendChild(option);
+            });
+            select.appendChild(group);
+        }
+    }
+    const wanted = selectedUid ?? (editingClient ? '' : 'auto');
+    select.value = wanted;
+    if (select.value !== wanted) select.value = editingClient ? '' : 'auto';
 }
 
 function populateClientPortSelect(preferredPort) {
     const ctoUid = document.getElementById('clientCto').value;
     const select = document.getElementById('clientPort');
     select.innerHTML = '';
+    document.getElementById('clientPortLabel').textContent = ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? 'Fibra' : 'Porta';
+    if (ctoUid.startsWith(CLIENT_CABLE_PREFIX)) {
+        const cable = getProjectCables(getClientFolderId()).find(c => c.name === ctoUid.slice(CLIENT_CABLE_PREFIX.length));
+        select.disabled = !cable;
+        if (!cable) return;
+        const occupied = getOccupiedCableFibers(cable, editingClient);
+        const total = getCableFiberCount(cable);
+        let first = null;
+        for (let fiber = 1; fiber <= total; fiber++) {
+            const option = document.createElement('option');
+            option.value = String(fiber);
+            const taken = occupied.get(fiber);
+            option.textContent = taken ? `Fibra ${fiber} — ${taken.name}` : `Fibra ${fiber}`;
+            option.disabled = !!taken;
+            if (!taken && first === null) first = fiber;
+            select.appendChild(option);
+        }
+        const preferred = Number(preferredPort);
+        select.value = String(preferred && !occupied.has(preferred) && preferred <= total ? preferred : (first || ''));
+        return;
+    }
     const cto = findMarkerByUid(ctoUid);
     if (!cto) {
         select.disabled = true;
@@ -680,14 +801,15 @@ function updateClientDropSummary() {
             : 'O drop é traçado pela rede do projeto quando você posicionar o cliente no mapa.';
         return;
     }
-    const sameCto = ctoUid === editingClient.client?.ctoUid;
-    const info = getClientDropInfo({ marker: editingClient.marker, client: { ...editingClient.client, ctoUid, dropOverride: override } });
+    const cableName = ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid.slice(CLIENT_CABLE_PREFIX.length) : null;
+    const sameCto = cableName ? cableName === editingClient.client?.cableName : (ctoUid === editingClient.client?.ctoUid && !editingClient.client?.cableName);
+    const info = getClientDropInfo({ marker: editingClient.marker, folderId: editingClient.folderId, client: { ...editingClient.client, ctoUid: cableName ? null : ctoUid, cableName, dropOverride: override } });
     if (!info) {
         summary.textContent = 'Sem CTO: o drop não será calculado.';
         return;
     }
     if (!sameCto) {
-        summary.innerHTML = `Nova CTO: o traçado é refeito ao salvar (linha reta hoje: ${formatDistance(info.straight)}).`;
+        summary.innerHTML = `Nova ligação: o traçado é refeito ao salvar (linha reta hoje: ${formatDistance(info.straight)}).`;
         return;
     }
     const detail = `${formatDistance(info.routed)} ${DROP_ROUTE_LABELS[info.route] || ''} + ${info.slack} m de sobra = ${info.automatic} m`;
@@ -695,6 +817,7 @@ function updateClientDropSummary() {
         ? `Drop: <strong>${info.length} m</strong> (informado). Traçado: ${detail}.`
         : `Drop: <strong>${info.length} m</strong> · ${detail}.`;
     actions.hidden = false;
+    document.getElementById('editClientDropButton').hidden = !!info.cable; //Ligação no cabo: derivação reta, sem ajuste
 }
 
 // Lista de equipamentos
@@ -770,8 +893,8 @@ function openClientModal(clientInfo, presetKind) {
     const equipments = data.equipments.length ? data.equipments : (clientInfo ? [] : [{ type: 'ONU/ONT' }]);
     equipments.forEach(addClientEquipmentRow);
     updateClientEquipmentEmptyState();
-    populateClientCtoSelect(clientInfo ? (data.ctoUid || '') : 'auto');
-    populateClientPortSelect(data.ctoPort);
+    populateClientCtoSelect(clientInfo ? (data.cableName ? CLIENT_CABLE_PREFIX + data.cableName : (data.ctoUid || '')) : 'auto');
+    populateClientPortSelect(data.cableName ? data.cableFiber : data.ctoPort);
     updateClientDropSummary();
     document.getElementById('deleteClientButton').hidden = !clientInfo;
     document.getElementById('moveClientButton').hidden = !clientInfo;
@@ -801,8 +924,10 @@ function collectClientForm() {
             phone: value('clientPhone'),
             plan: value('clientPlan'),
             address: value('clientAddress'),
-            ctoUid: ctoUid || null,
-            ctoPort: ctoUid && ctoUid !== 'auto' ? Number(value('clientPort')) || null : null,
+            ctoUid: ctoUid && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid : null,
+            ctoPort: ctoUid && ctoUid !== 'auto' && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? Number(value('clientPort')) || null : null,
+            cableName: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid.slice(CLIENT_CABLE_PREFIX.length) : null,
+            cableFiber: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? Number(value('clientPort')) || null : null,
             dropOverride: Number(value('clientDropOverride')) > 0 ? Number(value('clientDropOverride')) : null,
             equipments: collectClientEquipments(),
             predial: kind === 'predial' ? {
@@ -845,6 +970,9 @@ function saveClient(event) {
         name = `${base} ${markers.filter(m => m.type === 'CLIENTE').length + 1}`;
     }
     if (client.kind === 'predial') client.dropOverride = null;
+    if (client.cableName && !client.cableFiber) {
+        return showClientFormError('Esse cabo não tem fibra livre. Escolha outro cabo ou uma CTO.');
+    }
     if (client.ctoUid && client.ctoUid !== 'auto' && !client.ctoPort) {
         return showClientFormError('Essa CTO não tem porta livre. Escolha outra CTO ou "Sem CTO".');
     }
@@ -856,7 +984,7 @@ function saveClient(event) {
         editingClient.name = name;
         editingClient.description = client.notes;
         //Mantém o traçado do drop se a CTO não mudou
-        const keepRoute = previous.ctoUid === client.ctoUid;
+        const keepRoute = previous.ctoUid === client.ctoUid && previous.cableName === client.cableName;
         editingClient.client = {
             ...client,
             dropPath: keepRoute ? previous.dropPath : null,
