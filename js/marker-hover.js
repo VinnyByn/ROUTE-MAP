@@ -103,3 +103,76 @@ function hideMarkerHoverCard(immediate = false) {
     if (immediate) hide();
     else markerHoverHideTimer = setTimeout(hide, 120);
 }
+
+// ---------------------------------------------------------------
+// Fibras de um cabo em uso: ligadas em algum plano de fusão (CTO/CEO) ou em cliente B2B
+// ---------------------------------------------------------------
+const cableFusionCache = new WeakMap(); //markerInfo → { plan, cables: Map(nome → Set(fibras ligadas)) }
+
+function getPlanCableFiberUsage(markerInfo) {
+    const plan = markerInfo.fusionPlan || '';
+    const cached = cableFusionCache.get(markerInfo);
+    if (cached && cached.plan === plan) return cached.cables;
+    const cables = new Map();
+    try {
+        const data = plan ? JSON.parse(plan) : null;
+        const html = data && (data.elements || data.canvas);
+        if (html) {
+            const root = document.createElement('div');
+            root.innerHTML = html;
+            const connected = new Set();
+            if (data.svg) {
+                const svg = document.createElement('div');
+                svg.innerHTML = data.svg;
+                svg.querySelectorAll('.fusion-line').forEach(line => {
+                    if (line.dataset.startId) connected.add(line.dataset.startId);
+                    if (line.dataset.endId) connected.add(line.dataset.endId);
+                });
+            }
+            root.querySelectorAll('.cable-element').forEach(card => {
+                const name = card.dataset.cableName;
+                if (!name) return;
+                const used = cables.get(name) || new Set();
+                card.querySelectorAll('.fiber-row').forEach(row => {
+                    const n = getFiberNumberFromId(row.id);
+                    if (n && connected.has(row.id)) used.add(n);
+                });
+                cables.set(name, used);
+            });
+        }
+    } catch (e) { /* plano ilegível: ignora */ }
+    cableFusionCache.set(markerInfo, { plan, cables });
+    return cables;
+}
+
+//Compacta [1,2,3,5,7,8] em "1-3, 5, 7-8"
+function formatFiberRanges(numbers) {
+    const parts = [];
+    for (let i = 0; i < numbers.length; i++) {
+        let j = i;
+        while (j + 1 < numbers.length && numbers[j + 1] === numbers[j] + 1) j++;
+        parts.push(j > i ? `${numbers[i]}-${numbers[j]}` : String(numbers[i]));
+        i = j;
+    }
+    return parts.join(', ');
+}
+
+function getCableFiberUsage(cable) {
+    const total = getCableFiberCount(cable);
+    const used = new Set();
+    markers.forEach(m => {
+        if (m.fusionPlan) getPlanCableFiberUsage(m).get(cable.name)?.forEach(n => used.add(n));
+    });
+    getOccupiedCableFibers(cable).forEach((_, n) => used.add(n));
+    const usedList = Array.from(used).filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
+    const freeList = [];
+    for (let n = 1; n <= total; n++) if (!used.has(n)) freeList.push(n);
+    return { total, used: usedList, free: freeList };
+}
+
+function buildCableHoverHtml(cable) {
+    const u = getCableFiberUsage(cable);
+    return `<strong>${escapeHtml(cable.name || '')}</strong><br>Total: ${cable.totalLength} m`
+        + `<br>Fibras em uso: ${u.used.length}/${u.total}${u.used.length ? ` (${formatFiberRanges(u.used)})` : ''}`
+        + `<br>Vagas: ${u.free.length}${u.free.length ? ` (${formatFiberRanges(u.free)})` : ''}`;
+}
