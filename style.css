@@ -4266,20 +4266,76 @@ li.folder-wrapper {
 }
 
 #lineConnectionInfo {
-  background-color: #e0f7fa; /* Azul bem claro */
-  border-left: 4px solid var(--color-primary); /* Borda azul para destaque */
-  padding: 12px 15px;
-  margin: 0 0 20px 0; /* Espaçamento abaixo */
-  text-align: center;
-  font-size: 15px;
-  color: #333;
-  font-weight: 500;
-  line-height: 1.5; /* Melhora a legibilidade com quebras de linha */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 14px;
 }
 
-#lineConnectionInfo strong {
-  color: #0a1f35; /* Azul escuro para os títulos "De:" e "Para:" */
+.fx-line-end {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
 }
+
+.fx-line-end__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.fx-line-end__body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fx-line-end__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--color-border);
+}
+
+.fx-line-end__body strong {
+  display: block;
+  font-size: 14px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.fx-line-end__body small {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.fx-line-arrow {
+  text-align: center;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+
+.line-action-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.line-action-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.line-action-footer #deleteLineConfirmButton { margin-right: auto; }
 
 /* Muda o cursor para "agarrar" no ícone de arraste */
 .sidebar-drag-handle {
