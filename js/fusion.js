@@ -452,7 +452,10 @@ function getElementCenter(port) {
     const dot = port.querySelector('.fx-port__dot');
     const dotRect = dot ? dot.getBoundingClientRect() : null;
     const x = dotRect && dotRect.width ? dotRect.left + dotRect.width / 2 : (side === 'left' ? rect.left : rect.right);
-    return { x: x - stageRect.left, y: rect.top + rect.height / 2 - stageRect.top, side };
+    //Medidas da tela vêm com a escala da animação de abertura da janela: converte para o tamanho real
+    const scaleX = stage.offsetWidth ? stageRect.width / stage.offsetWidth : 1;
+    const scaleY = stage.offsetHeight ? stageRect.height / stage.offsetHeight : 1;
+    return { x: (x - stageRect.left) / (scaleX || 1), y: (rect.top + rect.height / 2 - stageRect.top) / (scaleY || 1), side };
 }
 
 function buildFusionCurve(start, end) {
