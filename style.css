@@ -4328,14 +4328,35 @@ li.folder-wrapper {
   color: var(--color-text-muted);
 }
 
-.line-action-footer {
+#lineActionModal .modal-footer.line-action-footer {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
-.line-action-footer #deleteLineConfirmButton { margin-right: auto; }
+#lineActionModal .line-action-footer .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#lineActionModal .line-action-footer .btn .ui-icon { width: 15px; height: 15px; flex: none; }
+
+/* Ordem: Desfazer · Cancelar · Refazer */
+#lineActionModal #deleteLineConfirmButton { order: 1; }
+#lineActionModal #cancelLineActionButton { order: 2; }
+#lineActionModal #editLineButton { order: 3; }
 
 /* Muda o cursor para "agarrar" no ícone de arraste */
 .sidebar-drag-handle {
