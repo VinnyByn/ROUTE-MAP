@@ -10253,7 +10253,7 @@ function addCableEventListeners(polyline) {
             strokeWeight: (originalOptions.strokeWeight || 3) + 3,
             zIndex: 100
         });
-        cableInfoBox.innerHTML = `<strong>${cableData.name}</strong><br>Total: ${cableData.totalLength} m`;
+        cableInfoBox.innerHTML = buildCableHoverHtml(cableData);
         cableInfoBox.classList.remove('hidden');
         mapDiv.addEventListener('mousemove', updateInfoBoxPosition);
     });
