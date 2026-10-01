@@ -761,9 +761,24 @@ function openFusionLineActionModal(line) {
     if (!line) return;
     const info = document.getElementById('lineConnectionInfo');
     if (info) {
-        const from = describeFusionPort(document.getElementById(line.dataset.startId));
-        const to = describeFusionPort(document.getElementById(line.dataset.endId));
-        info.innerHTML = `<span class="fx-line-info"><span>${escapeHtml(from)}</span><span class="fx-line-info__arrow">→</span><span>${escapeHtml(to)}</span></span>`;
+        const end = (port, label) => {
+            const card = getPortCard(port);
+            let title = 'Desconhecido', detail = '';
+            if (card?.classList.contains('cable-element')) {
+                title = card.dataset.cableName || 'Cabo';
+                detail = `Fibra ${getFiberNumberFromId(port.id)}`;
+            } else if (card?.classList.contains('splitter-element')) {
+                title = `Splitter ${getSplitterLabelText(card) || ''}`.trim();
+                detail = port.querySelector('.splitter-port-number')?.textContent || 'Porta';
+            }
+            const color = getPortColor(port) || '#64748b';
+            return `<div class="fx-line-end"><span class="fx-line-end__label">${label}</span>`
+                + `<div class="fx-line-end__body"><span class="fx-line-end__dot" style="background:${color}"></span>`
+                + `<div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></div></div></div>`;
+        };
+        info.innerHTML = end(document.getElementById(line.dataset.startId), 'Origem')
+            + `<div class="fx-line-arrow" aria-hidden="true">↓</div>`
+            + end(document.getElementById(line.dataset.endId), 'Destino');
     }
     activeLineForAction = line;
     document.getElementById('lineActionModal').style.display = 'flex';
