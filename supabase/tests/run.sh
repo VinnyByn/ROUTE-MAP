@@ -12,4 +12,8 @@ for f in migrations/*.sql; do
   psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$f" 2>&1 | grep -v NOTICE || true
   test "${PIPESTATUS[0]}" -eq 0
 done
-psql -v ON_ERROR_STOP=1 -q -At -d "$DB" -f tests/seguranca.sql
+for t in tests/seguranca.sql tests/versoes.sql; do
+  echo "== $(basename "$t")"
+  psql -v ON_ERROR_STOP=1 -q -At -d "$DB" -f "$t" | grep -E "^(ok|FALHA)"
+  test "${PIPESTATUS[0]}" -eq 0
+done
