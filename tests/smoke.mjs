@@ -107,7 +107,7 @@ check(r.kml && r.cableType === 'Cabo AS 80 FO-12', 'importação/exportação KM
 check(r.labor, 'mão de obra disponível');
 
 const report = await page.evaluate(() => {
-  const fns = ['saveActiveProject', 'openProjectFromDatabase', 'buildProjectRecord', 'serializeMarker', 'rebuildCable', 'openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
+  const fns = ['createProject', 'createFolder', 'setActiveFolder', 'copySidebarSelection', 'pasteSidebarClipboard', 'enableDragAndDropForItem', 'saveActiveProject', 'openProjectFromDatabase', 'buildProjectRecord', 'serializeMarker', 'rebuildCable', 'openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
   const missing = fns.filter(n => typeof window[n] !== 'function');
   let error = null;
   try { openReportModal(); } catch (e) { error = e.message; }
@@ -115,7 +115,7 @@ const report = await page.evaluate(() => {
   document.getElementById('reportModal').style.display = 'none';
   return { missing, error, opened, distance: formatDistance(1234.5) };
 });
-check(!report.missing.length, `salvar/abrir projeto, relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
+check(!report.missing.length, `barra lateral, salvar/abrir projeto, relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
 check(!report.error && report.opened, `janela de relatório abre${report.error ? ': ' + report.error : ''}`);
 
 //Lista de materiais de um projeto de exemplo: totais conferidos com a versão publicada em 03/10/2026.
@@ -252,6 +252,28 @@ check(cables.m1.lancamento === 1120 && cables.m1.reserva === 30 && cables.m1.tot
 check(cables.cable12 === 1830 && !cables.cable06, 'cabos na lista de materiais (soma por tipo; cabo existente fora)');
 check(cables.bap === 53 && cables.alca === 106 && cables.ferragem === 2594.33 && cables.cabos === 3696.6 && cables.total === 6569.51,
   `ferragens e totais do projeto com cabos (total R$ ${cables.total})`);
+
+//Barra lateral: cria pastas, converte a estrutura em JSON (como vai para o banco) e reconstrói igual
+const sidebarRoundTrip = await page.evaluate(() => {
+  const box = document.createElement('ul');
+  document.getElementById('sidebar').appendChild(box);
+  appendFolderToParent(box, 'Pasta A', 'fA');
+  appendFolderToParent(document.getElementById('fA'), 'Sub <b>1</b>', 'fA1');
+  appendFolderToParent(box, 'Pasta B', 'fB');
+  const json = getSidebarStructureAsJSON(box);
+  box.remove();
+  const rebuilt = document.createElement('ul');
+  document.getElementById('sidebar').appendChild(rebuilt);
+  rebuildSidebarFromJSON(json, rebuilt);
+  const again = getSidebarStructureAsJSON(rebuilt);
+  const names = [...rebuilt.querySelectorAll('.folder-name-text')].map(e => e.textContent);
+  const injected = !!rebuilt.querySelector('.folder-name-text b');
+  rebuilt.remove();
+  const strip = list => list.map(n => ({ id: n.id, name: n.name, children: strip(n.children) }));
+  return { same: JSON.stringify(strip(json)) === JSON.stringify(strip(again)), names, injected };
+});
+check(sidebarRoundTrip.same && sidebarRoundTrip.names.join('|') === 'Pasta A|Sub <b>1</b>|Pasta B' && !sidebarRoundTrip.injected,
+  'barra lateral: pastas viram JSON e voltam iguais (nome com HTML continua texto)');
 
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
