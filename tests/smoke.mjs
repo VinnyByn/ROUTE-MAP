@@ -3,19 +3,78 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import http from 'node:http';
+import fs from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const failures = [];
 const check = (ok, message) => { console.log(`${ok ? '✓' : '✗'} ${message}`); if (!ok) failures.push(message); };
 
+//Servidor local com os mesmos cabeçalhos do firebase.json. A CSP, publicada em modo "só aviso",
+//aqui é aplicada de verdade: qualquer bloqueio vira falha do teste.
+const firebaseHeaders = JSON.parse(fs.readFileSync(path.join(root, 'firebase.json'), 'utf8')).hosting.headers;
+const globMatches = (glob, file) => glob === '**' || new RegExp('^' + glob.replace(/\./g, '\\.').replace(/\*\*\//g, '(.*/)?').replace(/\*/g, '[^/]*').replace(/\{([^}]+)\}/g, (_, g) => '(' + g.split(',').join('|') + ')') + '$').test(file);
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html';
+  const file = path.join(root, rel);
+  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
+  const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' };
+  firebaseHeaders.filter(h => globMatches(h.source, rel)).forEach(h => h.headers.forEach(({ key, value }) => {
+    headers[key === 'Content-Security-Policy-Report-Only' ? 'Content-Security-Policy' : key] = value;
+  }));
+  res.writeHead(200, headers);
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
 const browser = await chromium.launch();
+const cspViolations = [];
+const watchCsp = (p) => p.on('console', m => { if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text().slice(0, 200)); });
+
+//Tela de login carrega sem erros
+const loginPage = await browser.newPage();
+watchCsp(loginPage);
+await loginPage.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+const loginErrors = [];
+loginPage.on('pageerror', e => loginErrors.push(e.message));
+await loginPage.goto(baseUrl + '/login.html');
+await loginPage.waitForTimeout(800);
+check(loginErrors.length === 0, `tela de login carrega sem erros${loginErrors.length ? ': ' + loginErrors.join(' | ') : ''}`);
+await loginPage.close();
+
+//Login com verificação em 2 etapas: pede o código, recusa código errado, libera com o certo,
+//e o sistema não abre com sessão sem o código
+const mfaPage = await browser.newPage();
+await mfaPage.addInitScript(() => { window.__fakeMfa = true; });
+await mfaPage.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+await mfaPage.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+await mfaPage.goto(baseUrl + '/index.html');
+await mfaPage.waitForURL(/login\.html/, { timeout: 10000 }).catch(() => {});
+check(/login\.html/.test(mfaPage.url()), 'sistema não abre sem o código da verificação em 2 etapas');
+await mfaPage.waitForSelector('#viewMfa:not([hidden])', { timeout: 10000 }).catch(() => {});
+check(await mfaPage.isVisible('#viewMfa'), 'login pede o código do autenticador');
+await mfaPage.fill('#mfaCode', '000000');
+await mfaPage.click('#mfaForm button[type="submit"]');
+await mfaPage.waitForTimeout(400);
+const mfaError = await mfaPage.textContent('#viewMfa .error-message');
+check(/incorreto|expirado/i.test(mfaError || '') && /login\.html/.test(mfaPage.url()), 'código errado é recusado');
+await mfaPage.fill('#mfaCode', '123456');
+await mfaPage.click('#mfaForm button[type="submit"]');
+await mfaPage.waitForURL(/index\.html/, { timeout: 10000 }).catch(() => {});
+await mfaPage.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 10000 }).catch(() => {});
+check(/index\.html/.test(mfaPage.url()) && await mfaPage.evaluate(() => typeof AppSession !== 'undefined' && !!AppSession.company), 'código certo libera o sistema');
+await mfaPage.close();
+
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+watchCsp(page);
 await page.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
 await page.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
 const pageErrors = [];
 page.on('pageerror', e => pageErrors.push(e.message));
-await page.goto('file://' + path.join(root, 'index.html'));
+await page.goto(baseUrl + '/index.html');
 await page.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
 await page.waitForTimeout(800);
 
@@ -48,7 +107,7 @@ check(r.kml && r.cableType === 'Cabo AS 80 FO-12', 'importação/exportação KM
 check(r.labor, 'mão de obra disponível');
 
 const report = await page.evaluate(() => {
-  const fns = ['saveActiveProject', 'openProjectFromDatabase', 'buildProjectRecord', 'serializeMarker', 'rebuildCable', 'openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
+  const fns = ['createProject', 'createFolder', 'setActiveFolder', 'copySidebarSelection', 'pasteSidebarClipboard', 'enableDragAndDropForItem', 'saveActiveProject', 'openProjectFromDatabase', 'buildProjectRecord', 'serializeMarker', 'rebuildCable', 'openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
   const missing = fns.filter(n => typeof window[n] !== 'function');
   let error = null;
   try { openReportModal(); } catch (e) { error = e.message; }
@@ -56,7 +115,7 @@ const report = await page.evaluate(() => {
   document.getElementById('reportModal').style.display = 'none';
   return { missing, error, opened, distance: formatDistance(1234.5) };
 });
-check(!report.missing.length, `salvar/abrir projeto, relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
+check(!report.missing.length, `barra lateral, salvar/abrir projeto, relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
 check(!report.error && report.opened, `janela de relatório abre${report.error ? ': ' + report.error : ''}`);
 
 //Lista de materiais de um projeto de exemplo: totais conferidos com a versão publicada em 03/10/2026.
@@ -94,6 +153,127 @@ const bom = await page.evaluate(() => {
 check(bom.count === 23 && bom.ferragem === 719.94 && bom.fusao === 403.29 && bom.datacenter === 23050.5 && bom.total === 24173.73,
   `lista de materiais do projeto de exemplo (${bom.count} itens, total R$ ${bom.total})`);
 check(bom.typedPrice === 45.5 && bom.typedCategory === 'Data Center', 'equipamento digitado do cliente B2B entra com o valor informado, em Data Center');
+
+//Planos de fusão: monta uma CEO e uma CTO com os construtores do editor e confere tudo que lê os planos
+//(lista de materiais, uso do cabo, portas, cartão do mouse, fibras livres, relatório e OLTs).
+const fusion = await page.evaluate(() => {
+  const makePlan = (cards, links, extra = {}) => {
+    const box = document.createElement('div'); cards.forEach(c => box.appendChild(c));
+    const svg = links.map(([a, b], i) => `<path id="fl-${i}" class="fusion-line" data-start-id="${a}" data-end-id="${b}" d="M0 0"></path>`).join('');
+    return JSON.stringify({ version: 2, elements: box.innerHTML, svg, ...extra });
+  };
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const cA = buildFusionCableCard({ name: 'CABO-A', type: 'Cabo AS 80 FO-12', status: 'Novo', role: 'entrada', fiberCount: 12 });
+  const cB = buildFusionCableCard({ name: 'CABO-B', type: 'Cabo AS 80 FO-06', status: 'Novo', role: 'saida', fiberCount: 6 });
+  const cB2 = buildFusionCableCard({ name: 'CABO-B', type: 'Cabo AS 80 FO-06', status: 'Novo', role: 'entrada', fiberCount: 6 });
+  const sp1 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, status: 'Novo', type: 'Atendimento', connector: 'APC', olt: { olt: 'OLT-1', placa: '2', pon: '5' } });
+  const sp2 = buildFusionSplitterCard({ id: 'splitter-2', label: '1:2', outputs: 2, status: 'Existente', type: 'Fusão', connector: 'APC' });
+  const sp3 = buildFusionSplitterCard({ id: 'splitter-3', label: '1:16 UPC', outputs: 16, status: 'Existente', type: 'Atendimento', connector: 'UPC' });
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><span class="folder-title" data-folder-id="projF">P</span><ul id="projF"></ul></li>');
+  const previousFolder = activeFolderId;
+  activeFolderId = 'projF';
+  const ceo = { folderId: 'projF', type: 'CEO', name: 'CEO-01', ceoStatus: 'Existente',
+    fusionPlan: makePlan([cA, cB, sp2], [[fiber(cA, 1), fiber(cB, 1)], [fiber(cA, 2), fiber(cB, 2)], [fiber(cA, 3), 'splitter-2-input-port']], { trayQuantity: 3 }) };
+  const cto = { folderId: 'projF', type: 'CTO', name: 'CTO-01', ctoStatus: 'Existente', uid: 'cto-uid-1',
+    fusionPlan: makePlan([cB2, sp1, sp3], [[fiber(cB2, 1), 'splitter-1-input-port']]) };
+  const broken = { folderId: 'projF', type: 'CEO', name: 'CEO-RUIM', ceoStatus: 'Existente', fusionPlan: '{não é json' };
+  markers.push(ceo, cto, broken);
+  calculateBomState();
+  const bomQty = (name) => Object.values(bomState).find(i => i.materialName === name)?.quantity || 0;
+  activeMarkerForFusion = { folderId: 'projF', name: 'outra' };
+  const result = {
+    splitterBom: bomQty('SPLITTER CONECTORIZADO 1/8 SC/APC'), adapters: bomQty('ADAPTADOR SC/APC COM ABAS (PASSANTE)'),
+    tubes: bomQty('TUBETE PROTETOR DE EMENDA OPTICA'), trays: bomQty('KIT DE BANDEJA PARA CAIXA TIPO FOSC - 24F'),
+    usageA: checkCableUsageInFusionPlans({ name: 'CABO-A' }), usageB: checkCableUsageInFusionPlans({ name: 'CABO-B' }),
+    capacity: getCtoPortCapacity(cto), hover: summarizeFusionPlan(cto), hoverCeo: summarizeFusionPlan(ceo), broken: summarizeFusionPlan(broken),
+    fibersA: getCableFiberUsage({ name: 'CABO-A', type: 'Cabo AS 80 FO-12' }), ports: countProjectPorts([ceo, cto]),
+    olt: collectProjectOltUsage(),
+  };
+  activeMarkerForFusion = null;
+  [ceo, cto, broken].forEach(m => markers.splice(markers.indexOf(m), 1));
+  activeFolderId = previousFolder; bomState = {};
+  document.querySelector('[data-folder-id="projF"]').closest('li').remove();
+  return result;
+});
+check(fusion.splitterBom === 1 && fusion.adapters === 8 && fusion.tubes === 4 && fusion.trays === 3,
+  'plano de fusão → lista de materiais (splitter novo, adaptadores, tubetes por fusão, bandejas)');
+check(fusion.usageA.isInPlan && fusion.usageA.hasFusions && fusion.usageB.locations.join() === 'CEO-01,CTO-01', 'uso do cabo nos planos de fusão');
+check(fusion.capacity === 24 && fusion.hover.ports === 24 && fusion.hover.splitters === 2 && fusion.hover.ratios === '1:8 APC, 1:16 UPC'
+  && fusion.hoverCeo.usedFibers === 5 && fusion.broken === null, 'portas da CTO e cartão ao passar o mouse');
+check(fusion.fibersA.used.join() === '1,2,3' && fusion.fibersA.free.length === 9, 'fibras em uso e vagas do cabo');
+check(fusion.ports.portasExistentes === 16 && fusion.ports.novasPortas === 8 && fusion.olt.length === 1 && fusion.olt[0].pon === '5',
+  'portas do relatório e OLTs vinculadas');
+
+//Cabos: metragem, reserva nas caixas e ferragens. O Google Maps fica bloqueado no teste, então entra um
+//substituto mínimo com a mesma fórmula de distância (haversine, raio da Terra do Google).
+//Valores conferidos com a versão publicada em 04/10/2026.
+const cables = await page.evaluate(() => {
+  const realGoogle = window.google;
+  class LatLng { constructor(a, b) { this._a = a; this._b = b; } lat() { return this._a; } lng() { return this._b; } equals(o) { return !!o && o.lat() === this._a && o.lng() === this._b; } toJSON() { return { lat: this._a, lng: this._b }; } }
+  const R = 6378137, rad = d => d * Math.PI / 180;
+  const dist = (p, q) => { const dLat = rad(q.lat() - p.lat()), dLng = rad(q.lng() - p.lng()); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p.lat())) * Math.cos(rad(q.lat())) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  window.google = { maps: { LatLng, geometry: { spherical: {
+    computeDistanceBetween: dist,
+    computeLength: path => { const pts = Array.isArray(path) ? path : path.getArray(); let s = 0; for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; },
+  } } } };
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><span class="folder-title" data-folder-id="projC">P</span><ul id="projC"></ul></li>');
+  const previousFolder = activeFolderId;
+  activeFolderId = 'projC';
+  const at = (lat, lng) => ({ getPosition: () => new LatLng(lat, lng), setPosition() {}, setIcon() {}, setMap() {}, getMap() { return null; } });
+  const boxes = [
+    { folderId: 'projC', type: 'CTO', name: 'CTO-01', ctoStatus: 'Nova', uid: 'u-cto', marker: at(-20, -44) },
+    { folderId: 'projC', type: 'CEO', name: 'CEO-01', ceoStatus: 'Nova', ceoAccessory: 'Raquete', uid: 'u-ceo', marker: at(-20.01, -44) },
+  ];
+  const lines = [
+    { folderId: 'projC', name: 'CABO-1', type: 'Cabo AS 80 FO-12', status: 'Novo', path: [new LatLng(-20, -44), new LatLng(-20.01, -44)] },
+    { folderId: 'projC', name: 'CABO-2', type: 'Cabo AS 80 FO-12', status: 'Novo', path: [new LatLng(-20.01, -44), new LatLng(-20.01, -44.004), new LatLng(-20.012, -44.004)] },
+    { folderId: 'projC', name: 'CABO-3', type: 'Cabo AS 80 FO-06', status: 'Existente', path: [new LatLng(-20, -44), new LatLng(-20.02, -44)] },
+  ];
+  markers.push(...boxes); savedCables.push(...lines);
+  calculateBomState();
+  const qty = name => Object.values(bomState).find(i => i.materialName === name)?.quantity || 0;
+  const round = v => Math.round(v * 100) / 100;
+  const t = summarizeBomCosts(bomState);
+  const result = {
+    m1: calculateCableMeasurement(lines[0]), m2: calculateCableMeasurement(lines[1]),
+    cable12: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), cable06: Object.values(bomState).some(i => /06 FIBRAS/.test(i.materialName)),
+    bap: qty('ABRAÇADEIRA BAP 3'), alca: qty('ALÇA PREFORMADA OPDE 1008 - 6,8mm a 7,4mm'),
+    ferragem: round(t.ferragemTotal), cabos: round(t.cabosTotal), total: round(t.grandTotal),
+  };
+  boxes.forEach(m => markers.splice(markers.indexOf(m), 1));
+  lines.forEach(c => savedCables.splice(savedCables.indexOf(c), 1));
+  activeFolderId = previousFolder; bomState = {};
+  document.querySelector('[data-folder-id="projC"]').closest('li').remove();
+  window.google = realGoogle;
+  return result;
+});
+check(cables.m1.lancamento === 1120 && cables.m1.reserva === 30 && cables.m1.total === 1150
+  && cables.m2.lancamento === 650 && cables.m2.reserva === 25 && cables.m2.total === 680, 'metragem dos cabos: lançamento + reserva das caixas, arredondados');
+check(cables.cable12 === 1830 && !cables.cable06, 'cabos na lista de materiais (soma por tipo; cabo existente fora)');
+check(cables.bap === 53 && cables.alca === 106 && cables.ferragem === 2594.33 && cables.cabos === 3696.6 && cables.total === 6569.51,
+  `ferragens e totais do projeto com cabos (total R$ ${cables.total})`);
+
+//Barra lateral: cria pastas, converte a estrutura em JSON (como vai para o banco) e reconstrói igual
+const sidebarRoundTrip = await page.evaluate(() => {
+  const box = document.createElement('ul');
+  document.getElementById('sidebar').appendChild(box);
+  appendFolderToParent(box, 'Pasta A', 'fA');
+  appendFolderToParent(document.getElementById('fA'), 'Sub <b>1</b>', 'fA1');
+  appendFolderToParent(box, 'Pasta B', 'fB');
+  const json = getSidebarStructureAsJSON(box);
+  box.remove();
+  const rebuilt = document.createElement('ul');
+  document.getElementById('sidebar').appendChild(rebuilt);
+  rebuildSidebarFromJSON(json, rebuilt);
+  const again = getSidebarStructureAsJSON(rebuilt);
+  const names = [...rebuilt.querySelectorAll('.folder-name-text')].map(e => e.textContent);
+  const injected = !!rebuilt.querySelector('.folder-name-text b');
+  rebuilt.remove();
+  const strip = list => list.map(n => ({ id: n.id, name: n.name, children: strip(n.children) }));
+  return { same: JSON.stringify(strip(json)) === JSON.stringify(strip(again)), names, injected };
+});
+check(sidebarRoundTrip.same && sidebarRoundTrip.names.join('|') === 'Pasta A|Sub <b>1</b>|Pasta B' && !sidebarRoundTrip.injected,
+  'barra lateral: pastas viram JSON e voltam iguais (nome com HTML continua texto)');
 
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
@@ -151,6 +331,21 @@ const lightBlocks = await page.evaluate(() => {
 });
 check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${lightBlocks.length ? ': ' + lightBlocks.slice(0, 5).join(', ') : ''}`);
 
+const before = cspViolations.length;
+const inlineRan = await page.evaluate(async () => {
+  window.__inlineRan = false;
+  const el = document.createElement('script');
+  el.textContent = 'window.__inlineRan = true';
+  document.body.appendChild(el);
+  await new Promise(r => setTimeout(r, 200));
+  return window.__inlineRan;
+});
+await page.waitForTimeout(200);
+check(!inlineRan && cspViolations.length > before, 'CSP bloqueia script injetado na página');
+cspViolations.splice(before);
+check(cspViolations.length === 0, `política de segurança de conteúdo (CSP) sem bloqueios${cspViolations.length ? ': ' + cspViolations.slice(0, 3).join(' | ') : ''}`);
+
 await browser.close();
+server.close();
 if (failures.length) { console.error(`\n${failures.length} verificação(ões) falharam.`); process.exit(1); }
 console.log('\nTudo certo.');

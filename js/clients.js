@@ -128,16 +128,10 @@ function getProjectCtos(folderId) {
 //Portas de atendimento da CTO, contadas nos splitters de atendimento do plano de fusão
 function getCtoPortCapacity(cto) {
     if (!cto?.fusionPlan) return null;
-    try {
-        const plan = JSON.parse(cto.fusionPlan);
-        const html = plan.elements || plan.canvas;
-        if (!html) return null;
-        const container = parseStoredHtml(html);
-        const ports = container.querySelectorAll('.splitter-element.splitter-atendimento .splitter-outputs .splitter-port-row').length;
-        return ports || null;
-    } catch (e) {
-        return null;
-    }
+    const plan = readFusionPlan(cto);
+    if (!plan || plan.empty) return null;
+    const ports = plan.splitters.filter(s => s.atendimento).reduce((sum, s) => sum + s.outputs, 0);
+    return ports || null;
 }
 
 function getCtoClients(cto) {

@@ -1,7 +1,7 @@
 // Cartão ao passar o mouse numa CTO ou CEO: fibras, splitters e vagas de atendimento, lidos do plano de fusão.
-// Depende de script.js (getSplitterLabelText, escapeHtml) e js/clients.js (getCtoClients).
+// Depende de js/fusion-plan.js (readFusionPlan), script.js (escapeHtml) e js/clients.js (getCtoClients).
 
-const markerHoverCache = new WeakMap(); //markerInfo → { plan, summary }
+const markerHoverCache = new WeakMap(); //markerInfo → { plan (dados de readFusionPlan), summary }
 let markerHoverCard = null;
 let markerHoverHideTimer = null;
 let markerHoverPointer = { x: 0, y: 0 };
@@ -9,42 +9,25 @@ let markerHoverPointer = { x: 0, y: 0 };
 document.addEventListener('mousemove', (e) => { markerHoverPointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
 
 function summarizeFusionPlan(markerInfo) {
-    const plan = markerInfo.fusionPlan || '';
+    const plan = readFusionPlan(markerInfo);
     const cached = markerHoverCache.get(markerInfo);
     if (cached && cached.plan === plan) return cached.summary;
     let summary = null;
-    try {
-        const data = plan ? JSON.parse(plan) : null;
-        const html = data && (data.elements || data.canvas);
-        if (html) {
-            const root = parseStoredHtml(html);
-            const connected = new Set();
-            if (data.svg) {
-                const svg = parseStoredHtml(data.svg);
-                svg.querySelectorAll('.fusion-line').forEach(line => {
-                    if (line.dataset.startId) connected.add(line.dataset.startId);
-                    if (line.dataset.endId) connected.add(line.dataset.endId);
-                });
-            }
-            const fibers = Array.from(root.querySelectorAll('.cable-element .fiber-row'));
-            const splitters = Array.from(root.querySelectorAll('.splitter-element'));
-            const atendimento = root.querySelectorAll('.splitter-element.splitter-atendimento .splitter-outputs .splitter-port-row');
-            const ratios = {};
-            splitters.forEach(s => {
-                const label = getSplitterLabelText(s) || 'Splitter';
-                ratios[label] = (ratios[label] || 0) + 1;
-            });
-            summary = {
-                cables: root.querySelectorAll('.cable-element').length,
-                fibers: fibers.length,
-                usedFibers: fibers.filter(f => connected.has(f.id)).length,
-                splitters: splitters.length,
-                ratios: Object.entries(ratios).map(([label, n]) => (n > 1 ? `${n}× ${label}` : label)).join(', '),
-                ports: atendimento.length,
-            };
-        }
-    } catch (e) {
-        summary = null;
+    if (plan && !plan.empty) {
+        const fibers = plan.cables.flatMap(c => c.fibers);
+        const ratios = {};
+        plan.splitters.forEach(s => {
+            const label = s.label || 'Splitter';
+            ratios[label] = (ratios[label] || 0) + 1;
+        });
+        summary = {
+            cables: plan.cables.length,
+            fibers: fibers.length,
+            usedFibers: fibers.filter(f => f.connected).length,
+            splitters: plan.splitters.length,
+            ratios: Object.entries(ratios).map(([label, n]) => (n > 1 ? `${n}× ${label}` : label)).join(', '),
+            ports: plan.splitters.filter(s => s.atendimento).reduce((sum, s) => sum + s.outputs, 0),
+        };
     }
     markerHoverCache.set(markerInfo, { plan, summary });
     return summary;
@@ -105,38 +88,21 @@ function hideMarkerHoverCard(immediate = false) {
 // ---------------------------------------------------------------
 // Fibras de um cabo em uso: ligadas em algum plano de fusão (CTO/CEO) ou em cliente B2B
 // ---------------------------------------------------------------
-const cableFusionCache = new WeakMap(); //markerInfo → { plan, cables: Map(nome → Set(fibras ligadas)) }
+const cableFusionCache = new WeakMap(); //markerInfo → { plan (dados de readFusionPlan), cables: Map(nome → Set(fibras ligadas)) }
 
 function getPlanCableFiberUsage(markerInfo) {
-    const plan = markerInfo.fusionPlan || '';
+    const plan = readFusionPlan(markerInfo);
     const cached = cableFusionCache.get(markerInfo);
     if (cached && cached.plan === plan) return cached.cables;
     const cables = new Map();
-    try {
-        const data = plan ? JSON.parse(plan) : null;
-        const html = data && (data.elements || data.canvas);
-        if (html) {
-            const root = parseStoredHtml(html);
-            const connected = new Set();
-            if (data.svg) {
-                const svg = parseStoredHtml(data.svg);
-                svg.querySelectorAll('.fusion-line').forEach(line => {
-                    if (line.dataset.startId) connected.add(line.dataset.startId);
-                    if (line.dataset.endId) connected.add(line.dataset.endId);
-                });
-            }
-            root.querySelectorAll('.cable-element').forEach(card => {
-                const name = card.dataset.cableName;
-                if (!name) return;
-                const used = cables.get(name) || new Set();
-                card.querySelectorAll('.fiber-row').forEach(row => {
-                    const n = getFiberNumberFromId(row.id);
-                    if (n && connected.has(row.id)) used.add(n);
-                });
-                cables.set(name, used);
-            });
-        }
-    } catch (e) { /* plano ilegível: ignora */ }
+    if (plan && !plan.empty) {
+        plan.cables.forEach(cable => {
+            if (!cable.name) return;
+            const used = cables.get(cable.name) || new Set();
+            cable.fibers.forEach(f => { if (f.number && f.connected) used.add(f.number); });
+            cables.set(cable.name, used);
+        });
+    }
     cableFusionCache.set(markerInfo, { plan, cables });
     return cables;
 }

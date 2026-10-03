@@ -123,12 +123,11 @@ function countProjectPorts(projectMarkers) {
     projectMarkers.forEach(marker => {
         if ((marker.type === 'CTO' || marker.type === 'CEO') && marker.fusionPlan) {
             try {
-                const planData = JSON.parse(marker.fusionPlan);
-                if (!planData.elements) return;
-                const tempDiv = parseStoredHtml(planData.elements);
-                tempDiv.querySelectorAll('.splitter-atendimento').forEach(splitterElement => {
-                    const status = splitterElement.dataset.status;
-                    const label = getSplitterLabelText(splitterElement) || null;
+                const plan = readFusionPlan(marker);
+                if (!plan || plan.empty || plan.fromLegacyCanvas) return;
+                plan.splitters.filter(s => s.atendimento).forEach(splitter => {
+                    const status = splitter.status;
+                    const label = splitter.label || null;
                     if (!label || !status) return;
                     const ratioMatch = label.match(/1:(\d+)/);
                     const portsInThisSplitter = ratioMatch ? parseInt(ratioMatch[1], 10) : 0;

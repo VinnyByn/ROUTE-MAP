@@ -1140,17 +1140,18 @@ function wireSplitterOltConfigButton(splitterElement) {
 //Splitters com OLT em todas as caixas do projeto (plano aberto + planos salvos)
 function collectProjectOltUsage() {
     const usage = [];
-    const push = (card, boxName) => {
-        const values = { olt: card.dataset.oltName || '', placa: card.dataset.placaNumber || '', pon: card.dataset.ponNumber || '' };
-        if (values.olt || values.pon) usage.push({ ...values, box: boxName, label: getSplitterLabelText(card), id: card.id });
+    const pushValues = (values, label, id, boxName) => {
+        if (values.olt || values.pon) usage.push({ ...values, box: boxName, label, id });
     };
+    const push = (card, boxName) => pushValues(
+        { olt: card.dataset.oltName || '', placa: card.dataset.placaNumber || '', pon: card.dataset.ponNumber || '' },
+        getSplitterLabelText(card), card.id, boxName);
     const folderIds = activeMarkerForFusion ? (getProjectFolderIdsForItem(activeMarkerForFusion.folderId) || []) : [];
     markers.forEach(markerInfo => {
         if (markerInfo === activeMarkerForFusion || !markerInfo.fusionPlan || !folderIds.includes(markerInfo.folderId)) return;
-        try {
-            const temp = parseStoredHtml(JSON.parse(markerInfo.fusionPlan).elements || '');
-            temp.querySelectorAll('.splitter-element').forEach(card => push(card, markerInfo.name));
-        } catch (e) { /* plano ilegível: ignora */ }
+        const plan = readFusionPlan(markerInfo);
+        if (!plan || plan.fromLegacyCanvas) return;
+        plan.splitters.forEach(s => pushValues({ ...s.olt }, s.label, s.id, markerInfo.name));
     });
     getFusionCards().filter(c => c.classList.contains('splitter-element')).forEach(card => push(card, activeMarkerForFusion?.name || 'esta caixa'));
     return usage;
