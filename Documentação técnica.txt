@@ -19,6 +19,9 @@ js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession (r
   Segurança: texto vindo do usuário ou do banco nunca entra em innerHTML sem escapeHtml(). Planos de fusão (HTML salvo) são lidos só com parseStoredHtml/parseStoredSvg, que usam um documento isolado e removem scripts, atributos de evento e links javascript:.
 js/permissions.js: aplica o cargo na interface (classes role-*, is-viewer, can-edit no <body>) e lockFormsForViewer() para janelas em modo leitura. O CSS de "somente visualização" está em ui-v3.css (body.is-viewer, .is-readonly). Novas ações de edição devem chamar requireEdit('...') no início e ganhar o seletor de ocultação em ui-v3.css.
 script.js: Núcleo (sessão, mapa, barra lateral, marcadores, desenho e medição de cabos, busca, atalhos).
+js/sidebar-actions.js: Itens da barra lateral (seleção, copiar/colar, arrastar e soltar, criar projeto/pasta, abrir/fechar, pasta ativa).
+js/fusion-plan.js: readFusionPlan(markerInfo), a leitura central dos planos de fusão salvos (dados de cabos, fibras ligadas, splitters, fusões e bandejas, em cache). Nenhuma outra parte deve interpretar o HTML salvo do plano para ler dados.
+js/theme-init.js e js/login.js: tema inicial (index e login) e a lógica da tela de login (sem scripts embutidos no HTML, por causa da CSP).
 js/persistence.js: Salvar/abrir projetos no Supabase e conversão de marcadores, cabos, polígonos e barra lateral de/para JSON.
 js/catalog.js: Catálogo de materiais e preços (nomes da planilha, preços padrão, kits, configurações da empresa, janela do catálogo, importação da planilha).
 js/bom.js: Lista de materiais do projeto (cálculo, edição, tabelas, totais por seção com summarizeBomCosts/getBomCostSection, Excel, ferragens dos cabos). Tela, relatório e PDF usam a mesma regra de seção.
@@ -36,7 +39,7 @@ js/account.js: Menu do usuário e janela "Minha conta".
 js/clients.js: Marcador Cliente (residencial/B2B, status, CTO/porta, drop pela rede, equipamentos).
 migrar.html: Ferramenta temporária que copia projetos do Firestore antigo (users/{uid}/projects) para a tabela projects.
 supabase/migrations/: SQL do banco (tabelas, RLS e funções RPC).
-Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → persistence.js → catalog.js → kml.js → bom.js → labor.js → report.js → sketch.js → projects.js → sidebar.js → permissions.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js → report-pdf.js (todos defer) → Google Maps (callback initMap). Os arquivos têm ?v=<data> para furar o cache do Firebase Hosting: ao publicar mudanças em JS/CSS, suba o número em todas as tags de uma vez.
+Ordem de carregamento em index.html: theme-init.js (no <head>) … supabase-js → js/supabase-client.js → script.js → persistence.js → sidebar-actions.js → catalog.js → kml.js → bom.js → labor.js → report.js → sketch.js → projects.js → sidebar.js → permissions.js → marker-icons.js → marker-panel.js → fusion-plan.js → fusion.js → account.js → clients.js → report-pdf.js (todos defer) → Google Maps (callback initMap). Os arquivos têm ?v=<data> para furar o cache do Firebase Hosting: ao publicar mudanças em JS/CSS, suba o número em todas as tags de uma vez.
 
 3. Banco de Dados (Supabase)
 companies: empresas. company_members: vínculo usuário–empresa com cargo admin | projetista | member (um usuário = uma empresa). "member" é o Membro, somente visualização.
@@ -111,3 +114,7 @@ E-mails: o SMTP padrão do Supabase só envia para membros do projeto. Para libe
 VERIFICAÇÃO AUTOMÁTICA (tests/ e .github/workflows/checks.yml)
 Roda em cada PR e antes de cada publicação (firebase-hosting.yml só publica se passar): sintaxe de todos os JS, testes da API (api/test_main.py) e tests/smoke.mjs, que abre index.html num Chromium com Supabase simulado (tests/fake-supabase.js) e Google Maps bloqueado e confere: carregamento sem erros, totais da lista de materiais, lista de materiais de um projeto de exemplo (valores fixos — atualize se o cálculo mudar de propósito), catálogo, KML, relatório, tentativa de injeção de código (texto e plano de fusão), abas de "Minha conta" e tema escuro sem fundos claros nas janelas.
 Para rodar localmente: cd tests && npm install && npx playwright install chromium && node smoke.mjs
+
+SEGURANÇA DO BANCO E DO SITE
+- Migração 20261004120000_reforco_seguranca.sql: quem ativou a verificação em 2 etapas só acessa dados com sessão aal2 (políticas restritivas em todas as tabelas + require_mfa() nas funções); convites só para conta com e-mail confirmado. Testes em supabase/tests (run.sh cria um banco limpo com a imitação do Supabase, aplica todas as migrações e roda seguranca.sql) — rodam no GitHub Actions.
+- firebase.json envia cabeçalhos de segurança e a CSP em modo "Content-Security-Policy-Report-Only" (só registra no console). Para passar a bloquear, troque o nome do cabeçalho para "Content-Security-Policy" depois de conferir que o console não mostra avisos com o mapa e o login em uso. Domínio novo (API, CDN) precisa entrar na política. O teste do site aplica a CSP de verdade.
