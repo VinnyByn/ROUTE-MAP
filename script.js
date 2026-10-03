@@ -4999,7 +4999,7 @@ function updateCableNameInAllFusionPlans(oldName, newName) {
                 // Cria um DOM temporário para manipular o HTML salvo
                 const tempDiv = parseStoredHtml(planData.elements);
                 //Encontra o elemento do cabo pelo NOME ANTIGO
-                const cableElements = tempDiv.querySelectorAll(`.cable-element[data-cable-name="${oldName}"]`);
+                const cableElements = tempDiv.querySelectorAll(`.cable-element[data-cable-name="${CSS.escape(oldName)}"]`);
                 if (cableElements.length > 0) {
                     cableElements.forEach(cableElement => {
                         //Atualiza os dados no DOM temporário
@@ -5019,7 +5019,7 @@ function updateCableNameInAllFusionPlans(oldName, newName) {
                     console.log(`Plano de fusão da caixa "${markerInfo.name}" atualizado.`);
                     //Se este plano de fusão estiver aberta, atualiza o DOM ao vivo
                     if (activeMarkerForFusion === markerInfo) {
-                        const liveCableElements = document.querySelectorAll(`#fusionCanvas .cable-element[data-cable-name="${oldName}"]`);
+                        const liveCableElements = document.querySelectorAll(`#fusionCanvas .cable-element[data-cable-name="${CSS.escape(oldName)}"]`);
                         liveCableElements.forEach(liveCableElement => {
                             liveCableElement.dataset.cableName = newName;
                             const liveTitleSpan = liveCableElement.querySelector('.cable-header span');
