@@ -17,7 +17,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="login-style.css?v=20260930b" />
+    <link rel="stylesheet" href="login-style.css?v=20261003a" />
 </head>
 <body>
     <button id="loginThemeToggle" class="login-theme-toggle" type="button" title="Alternar tema claro ou escuro">
@@ -141,6 +141,23 @@
                 </form>
             </section>
 
+            <!-- Verificação em duas etapas -->
+            <section id="viewMfa" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Verificação em duas etapas</h2>
+                    <p>Abra o aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy…) e digite o código de 6 dígitos do ROUTE MAP.</p>
+                </div>
+                <form id="mfaForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="mfaCode">Código</label>
+                        <input type="text" id="mfaCode" class="plain mfa-code-input" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" required />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Verificar</button>
+                </form>
+                <p class="auth-switch"><button type="button" class="link-button" id="mfaLogoutButton">Usar outra conta</button></p>
+            </section>
+
             <!-- Primeiro acesso: empresa -->
             <section id="viewCompany" class="auth-view" hidden>
                 <div id="companyInvite" hidden>
@@ -180,7 +197,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
     <script src="js/supabase-client.js?v=20260930b"></script>
     <script>
-        const views = ['authLoading', 'viewLogin', 'viewSignup', 'viewCheckEmail', 'viewForgot', 'viewReset', 'viewCompany'];
+        const views = ['authLoading', 'viewLogin', 'viewSignup', 'viewCheckEmail', 'viewForgot', 'viewReset', 'viewMfa', 'viewCompany'];
         const goTargets = { login: 'viewLogin', signup: 'viewSignup', forgot: 'viewForgot' };
         let recoveryMode = /type=recovery/.test(location.hash);
 
@@ -205,9 +222,20 @@
             try { return await task(); } finally { button.disabled = false; button.textContent = original; }
         }
 
+        //Conta com verificação em duas etapas: pede o código antes de liberar o sistema
+        async function needsMfaCode() {
+            try {
+                const { data, error } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+                return !error && data?.nextLevel === 'aal2' && data?.currentLevel !== 'aal2';
+            } catch (e) {
+                return false;
+            }
+        }
+
         //Depois do login: garante que o usuário tenha uma empresa antes de abrir o sistema
         async function routeAfterLogin() {
             showView('authLoading');
+            if (await needsMfaCode()) return showView('viewMfa');
             try {
                 await loadAppContext();
             } catch (error) {
@@ -331,6 +359,33 @@
             });
         });
 
+        document.getElementById('mfaCode').addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+        });
+
+        document.getElementById('mfaForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const view = document.getElementById('viewMfa');
+            const code = document.getElementById('mfaCode').value.trim();
+            if (!/^\d{6}$/.test(code)) return setMessage(view, 'Digite os 6 dígitos do aplicativo autenticador.');
+            await withBusy(view.querySelector('.login-button'), 'Verificando…', async () => {
+                const { data: factors, error: listError } = await supabaseClient.auth.mfa.listFactors();
+                const factor = (factors?.totp || []).find(f => f.status === 'verified');
+                if (listError || !factor) return setMessage(view, 'Não foi possível encontrar o autenticador desta conta.');
+                const { error } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+                if (error) {
+                    document.getElementById('mfaCode').value = '';
+                    return setMessage(view, /invalid|expired/i.test(error.message) ? 'Código incorreto ou expirado. Tente o código atual do aplicativo.' : translateAuthError(error));
+                }
+                await routeAfterLogin();
+            });
+        });
+
+        document.getElementById('mfaLogoutButton').addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
+            showView('viewLogin');
+        });
+
         document.getElementById('companyLogoutButton').addEventListener('click', async () => {
             await supabaseClient.auth.signOut();
             showView('viewLogin');
@@ -348,6 +403,12 @@
             if (recoveryMode && data.session) return showView('viewReset');
             if (data.session) return routeAfterLogin();
             showView('viewLogin');
+            try {
+                if (sessionStorage.getItem('routeMapIdleLogout')) {
+                    sessionStorage.removeItem('routeMapIdleLogout');
+                    setMessage(document.getElementById('viewLogin'), 'Sua sessão foi encerrada por inatividade. Entre novamente.', 'info');
+                }
+            } catch (e) { /* ignora */ }
         })();
 
         (function setupLoginTheme() {

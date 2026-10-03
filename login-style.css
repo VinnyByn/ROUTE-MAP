@@ -353,3 +353,11 @@ html[data-theme="dark"] .auth-hint { background: #16232c; color: #a8bbc4; }
 html[data-theme="dark"] .info-message { background: #12301f; border-color: #1f5a36; color: #b9e4c8; }
 html[data-theme="dark"] .error-message { background: #3a1c1f; border-color: #6b2e33; color: #f3b4ba; }
 html[data-theme="dark"] .login-button--secondary { background: #22343e; color: #e8f1f5; }
+
+/* Código da verificação em duas etapas */
+.input-group input.mfa-code-input {
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-size: 22px;
+    letter-spacing: 0.4em;
+    text-align: center;
+}

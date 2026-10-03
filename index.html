@@ -19,9 +19,9 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=20261003c" />
-    <link rel="stylesheet" href="ui-v3.css?v=20261003c" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261003c" />
+    <link rel="stylesheet" href="style.css?v=20261003d" />
+    <link rel="stylesheet" href="ui-v3.css?v=20261003d" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261003d" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
@@ -166,11 +166,11 @@
             <div class="user-menu-header__text">
               <strong id="userEmailDisplay" data-user-name>Conta</strong>
               <span data-user-email></span>
-              <span class="user-menu-company"><span class="company-name-slot"></span> · <span data-user-role></span></span>
+              <span class="user-menu-company"><span class="account-badge" data-user-role-badge></span><span class="company-name-slot"></span></span>
             </div>
           </div>
           <a href="#" data-account-tab="profile" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"></use></svg><span>Meu perfil</span></a>
-          <a href="#" data-account-tab="security" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg><span>Senha e segurança</span></a>
+          <a href="#" data-account-tab="security" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg><span>Senha e segurança</span><em class="user-menu-flag" id="userMenuSecurityFlag" hidden></em></a>
           <a href="#" data-account-tab="company" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span>Empresa</span></a>
           <a href="#" data-account-tab="team" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Equipe e convites</span></a>
           <a href="#" data-account-tab="preferences" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg><span>Preferências e atalhos</span></a>
@@ -1851,13 +1851,22 @@
           <div class="account-panels">
             <!-- Perfil -->
             <section class="account-panel" data-panel="profile" role="tabpanel">
-              <div class="account-identity">
+              <div class="account-hero">
                 <span class="user-avatar user-avatar--xl" data-user-initials aria-hidden="true">?</span>
-                <div>
+                <div class="account-hero__text">
                   <strong data-user-name></strong>
                   <span data-user-email></span>
+                  <div class="account-hero__chips">
+                    <span class="account-badge" data-user-role-badge></span>
+                    <span class="account-chip"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span class="company-name-slot"></span></span>
+                  </div>
                 </div>
               </div>
+              <dl class="account-facts">
+                <div><dt>Membro desde</dt><dd id="accountCreatedAt">—</dd></div>
+                <div><dt>Último acesso</dt><dd id="accountLastSignIn">—</dd></div>
+                <div><dt>Verificação em 2 etapas</dt><dd id="accountMfaFact">—</dd></div>
+              </dl>
               <form id="profileForm" class="account-form" novalidate>
                 <div class="form-group">
                   <label for="profileFullName">Nome completo</label>
@@ -1870,45 +1879,173 @@
                   </div>
                   <div class="form-group">
                     <label for="profilePhone">Telefone</label>
-                    <input type="tel" id="profilePhone" maxlength="20" placeholder="(00) 00000-0000" autocomplete="tel" />
+                    <input type="tel" id="profilePhone" maxlength="15" placeholder="(00) 00000-0000" autocomplete="tel" inputmode="numeric" />
                   </div>
-                </div>
-                <div class="form-group">
-                  <label for="profileEmail">E-mail de acesso</label>
-                  <input type="email" id="profileEmail" disabled />
                 </div>
                 <p class="account-feedback" role="status"></p>
                 <div class="account-actions">
-                  <button type="submit" class="btn btn-success">Salvar perfil</button>
+                  <button type="button" id="profileResetButton" class="btn btn-secondary" disabled>Descartar</button>
+                  <button type="submit" id="profileSaveButton" class="btn btn-success" disabled>Salvar perfil</button>
+                </div>
+              </form>
+
+              <h3>E-mail de acesso</h3>
+              <div class="account-card" id="emailChangeCard">
+                <div>
+                  <strong id="profileEmailDisplay" data-user-email></strong>
+                  <p>Usado para entrar e recuperar a senha.</p>
+                </div>
+                <button type="button" id="emailChangeOpenButton" class="btn btn-secondary">Alterar e-mail</button>
+              </div>
+              <form id="emailChangeForm" class="account-form account-subform" novalidate hidden>
+                <div class="account-form-row">
+                  <div class="form-group">
+                    <label for="newEmail">Novo e-mail</label>
+                    <input type="email" id="newEmail" maxlength="160" autocomplete="email" placeholder="novo@empresa.com" />
+                  </div>
+                  <div class="form-group">
+                    <label for="emailChangePassword">Senha atual</label>
+                    <div class="account-password">
+                      <input type="password" id="emailChangePassword" autocomplete="current-password" />
+                      <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                    </div>
+                  </div>
+                </div>
+                <p class="account-note">Por segurança, enviamos um link de confirmação. A troca só vale depois de confirmada.</p>
+                <p class="account-feedback" role="status"></p>
+                <div class="account-actions">
+                  <button type="button" id="emailChangeCancelButton" class="btn btn-secondary">Cancelar</button>
+                  <button type="submit" class="btn btn-success">Enviar confirmação</button>
                 </div>
               </form>
             </section>
 
             <!-- Segurança -->
             <section class="account-panel" data-panel="security" role="tabpanel" hidden>
+              <div class="account-shield" id="securityLevel">
+                <div class="account-shield__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg></div>
+                <div class="account-shield__text">
+                  <strong>Proteção da conta: <span id="securityLevelLabel">—</span></strong>
+                  <div class="account-shield__bar"><i id="securityLevelBar"></i></div>
+                  <ul class="account-shield__list" id="securityChecklist"></ul>
+                </div>
+              </div>
+
               <h3>Alterar senha</h3>
               <form id="passwordForm" class="account-form" novalidate>
+                <input type="email" class="visually-hidden" autocomplete="username" tabindex="-1" aria-hidden="true" data-user-email-value />
+                <div class="form-group">
+                  <label for="currentPassword">Senha atual</label>
+                  <div class="account-password">
+                    <input type="password" id="currentPassword" autocomplete="current-password" />
+                    <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                  </div>
+                </div>
                 <div class="account-form-row">
                   <div class="form-group">
                     <label for="newPassword">Nova senha</label>
-                    <input type="password" id="newPassword" minlength="8" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" />
+                    <div class="account-password">
+                      <input type="password" id="newPassword" minlength="8" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" />
+                      <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                    </div>
                   </div>
                   <div class="form-group">
                     <label for="newPasswordConfirm">Confirmar nova senha</label>
-                    <input type="password" id="newPasswordConfirm" minlength="8" autocomplete="new-password" />
+                    <div class="account-password">
+                      <input type="password" id="newPasswordConfirm" minlength="8" autocomplete="new-password" />
+                      <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                    </div>
                   </div>
                 </div>
+                <div class="password-strength" id="passwordStrength" data-level="0">
+                  <div class="password-strength__bar"><i></i><i></i><i></i><i></i></div>
+                  <span class="password-strength__label">Digite a nova senha</span>
+                </div>
+                <ul class="password-rules" id="passwordRules">
+                  <li data-rule="length">Pelo menos 8 caracteres</li>
+                  <li data-rule="case">Letras maiúsculas e minúsculas</li>
+                  <li data-rule="number">Pelo menos um número</li>
+                  <li data-rule="symbol">Pelo menos um símbolo (!@#$…)</li>
+                  <li data-rule="match">As duas senhas conferem</li>
+                </ul>
                 <p class="account-feedback" role="status"></p>
                 <div class="account-actions">
                   <button type="submit" class="btn btn-success">Alterar senha</button>
                 </div>
               </form>
+
+              <h3>Verificação em duas etapas</h3>
+              <div class="account-card" id="mfaStatusCard">
+                <div>
+                  <strong id="mfaStatusTitle">Verificando…</strong>
+                  <p id="mfaStatusText">Além da senha, pede um código do aplicativo autenticador do celular ao entrar.</p>
+                </div>
+                <button type="button" id="mfaEnableButton" class="btn btn-success" hidden>Ativar</button>
+                <button type="button" id="mfaDisableButton" class="btn btn-secondary" hidden>Desativar</button>
+              </div>
+              <form id="mfaEnrollForm" class="account-subform mfa-enroll" novalidate hidden>
+                <ol class="mfa-steps">
+                  <li>Instale um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…).</li>
+                  <li>No aplicativo, leia o QR code abaixo ou digite a chave manualmente.</li>
+                  <li>Digite o código de 6 dígitos que aparecer no aplicativo.</li>
+                </ol>
+                <div class="mfa-enroll__body">
+                  <img id="mfaQrImage" class="mfa-qr" alt="QR code para o aplicativo autenticador" />
+                  <div class="mfa-enroll__side">
+                    <label>Chave manual</label>
+                    <div class="mfa-secret">
+                      <code id="mfaSecretText"></code>
+                      <button type="button" class="account-icon-btn" id="mfaCopySecretButton" title="Copiar chave" aria-label="Copiar chave"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+                    </div>
+                    <label for="mfaEnrollCode">Código do aplicativo</label>
+                    <input type="text" id="mfaEnrollCode" class="mfa-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
+                  </div>
+                </div>
+                <p class="account-feedback" role="status"></p>
+                <div class="account-actions">
+                  <button type="button" id="mfaEnrollCancelButton" class="btn btn-secondary">Cancelar</button>
+                  <button type="submit" class="btn btn-success">Confirmar e ativar</button>
+                </div>
+              </form>
+              <form id="mfaDisableForm" class="account-subform" novalidate hidden>
+                <div class="form-group">
+                  <label for="mfaDisableCode">Para desativar, digite o código atual do aplicativo</label>
+                  <input type="text" id="mfaDisableCode" class="mfa-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
+                </div>
+                <p class="account-feedback" role="status"></p>
+                <div class="account-actions">
+                  <button type="button" id="mfaDisableCancelButton" class="btn btn-secondary">Cancelar</button>
+                  <button type="submit" class="btn btn-danger">Desativar verificação</button>
+                </div>
+              </form>
+
+              <h3>Sessões e bloqueio</h3>
               <div class="account-card">
                 <div>
-                  <strong>Sair de todos os dispositivos</strong>
-                  <p>Encerra sua sessão em todos os computadores e celulares, inclusive neste.</p>
+                  <strong>Este dispositivo</strong>
+                  <p id="currentDeviceText">—</p>
                 </div>
-                <button type="button" id="signOutEverywhereButton" class="btn btn-secondary">Sair de todos</button>
+                <button type="button" id="signOutHereButton" class="btn btn-secondary">Sair deste</button>
+              </div>
+              <div class="account-card account-card--tight">
+                <div>
+                  <strong>Bloqueio por inatividade</strong>
+                  <p>Encerra a sessão sozinho se o sistema ficar parado. Recomendado em computadores compartilhados.</p>
+                </div>
+                <select id="prefIdleLock" class="account-inline-select" aria-label="Bloqueio por inatividade">
+                  <option value="0">Desligado</option>
+                  <option value="15">15 minutos</option>
+                  <option value="30">30 minutos</option>
+                  <option value="60">1 hora</option>
+                  <option value="120">2 horas</option>
+                </select>
+              </div>
+              <div class="account-card account-card--danger account-card--tight">
+                <div>
+                  <strong>Sair de todos os dispositivos</strong>
+                  <p>Encerra sua sessão em todos os computadores e celulares, inclusive neste. Use se perdeu um aparelho ou desconfia de acesso indevido.</p>
+                </div>
+                <button type="button" id="signOutEverywhereButton" class="btn btn-danger">Sair de todos</button>
               </div>
             </section>
 
@@ -2345,18 +2482,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-  <script src="js/supabase-client.js?v=20261003c"></script>
-  <script src="script.js?v=20261003c" defer></script>
-  <script src="js/projects.js?v=20261003c" defer></script>
-  <script src="js/sidebar.js?v=20261003c" defer></script>
-  <script src="js/permissions.js?v=20261003c" defer></script>
-  <script src="js/marker-icons.js?v=20261003c" defer></script>
-  <script src="js/marker-panel.js?v=20261003c" defer></script>
-  <script src="js/fusion.js?v=20261003c" defer></script>
-  <script src="js/account.js?v=20261003c" defer></script>
-  <script src="js/clients.js?v=20261003c" defer></script>
-  <script src="js/marker-hover.js?v=20261003c" defer></script>
-  <script src="js/report-pdf.js?v=20261003c" defer></script>
+  <script src="js/supabase-client.js?v=20261003d"></script>
+  <script src="script.js?v=20261003d" defer></script>
+  <script src="js/projects.js?v=20261003d" defer></script>
+  <script src="js/sidebar.js?v=20261003d" defer></script>
+  <script src="js/permissions.js?v=20261003d" defer></script>
+  <script src="js/marker-icons.js?v=20261003d" defer></script>
+  <script src="js/marker-panel.js?v=20261003d" defer></script>
+  <script src="js/fusion.js?v=20261003d" defer></script>
+  <script src="js/account.js?v=20261003d" defer></script>
+  <script src="js/clients.js?v=20261003d" defer></script>
+  <script src="js/marker-hover.js?v=20261003d" defer></script>
+  <script src="js/report-pdf.js?v=20261003d" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>
