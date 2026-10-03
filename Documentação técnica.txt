@@ -15,9 +15,17 @@ style.css: Estilos base. A camada "DESIGN SYSTEM v2" define tokens (claro/escuro
 ui-v3.css: Camada intermediária (depois de style.css): painéis de marcador e cabo, rótulos/ícones, plano de fusão, catálogo e cliente B2B.
 ui-v4.css: Camada final (depois de ui-v3.css): janela de busca de projetos (.pp-*, .project-picker__*), barra lateral nova (linhas, contadores, olho, menu de ações e linha de destino do arrastar), controle de tamanho do marcador (.ms-size), cores prontas do polígono (.pg-swatch) e plano de fusão em duas colunas (.fx-*, faixa da OLT, rodapé de situação).
   Atenção: style.css tem a regra legada ".modal-content button:not([class*="btn-"])…" que pinta botões de azul-petróleo; botões novos usam classes com "btn-" ou definem as cores com !important via variáveis (--fx-btn-bg/--fx-btn-fg).
-js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession (role, isAdmin, canEdit, isViewer), ROLE_LABELS/ROLE_DESCRIPTIONS, requireEdit() e loadAppContext().
+js/supabase-client.js: Cliente Supabase (URL + chave publicável), AppSession (role, isAdmin, canEdit, isViewer), ROLE_LABELS/ROLE_DESCRIPTIONS, requireEdit(), loadAppContext() e a leitura segura de HTML salvo (parseStoredHtml/parseStoredSvg).
+  Segurança: texto vindo do usuário ou do banco nunca entra em innerHTML sem escapeHtml(). Planos de fusão (HTML salvo) são lidos só com parseStoredHtml/parseStoredSvg, que usam um documento isolado e removem scripts, atributos de evento e links javascript:.
 js/permissions.js: aplica o cargo na interface (classes role-*, is-viewer, can-edit no <body>) e lockFormsForViewer() para janelas em modo leitura. O CSS de "somente visualização" está em ui-v3.css (body.is-viewer, .is-readonly). Novas ações de edição devem chamar requireEdit('...') no início e ganhar o seletor de ocultação em ui-v3.css.
-script.js: Núcleo (mapa, sidebar, cabos, materiais, relatórios, persistência de projetos).
+script.js: Núcleo (sessão, mapa, barra lateral, marcadores, desenho e medição de cabos, busca, atalhos).
+js/persistence.js: Salvar/abrir projetos no Supabase e conversão de marcadores, cabos, polígonos e barra lateral de/para JSON.
+js/catalog.js: Catálogo de materiais e preços (nomes da planilha, preços padrão, kits, configurações da empresa, janela do catálogo, importação da planilha).
+js/bom.js: Lista de materiais do projeto (cálculo, edição, tabelas, totais por seção com summarizeBomCosts/getBomCostSection, Excel, ferragens dos cabos). Tela, relatório e PDF usam a mesma regra de seção.
+js/labor.js: Mão de obra (quantitativos, regional, terceirizada, custo para o relatório).
+js/report.js: Relatório do projeto (escolha dos projetos, quantitativos, custos, prazo, prévia paginada, PDF/Word).
+js/kml.js: Importação e exportação KML.
+js/sketch.js: Régua (distância/área) e polígonos.
 js/projects.js: Tipos de projeto (PROJECT_TYPES: TCR, TCT, MDU, Backbone, B2B), seletor de tipo em botões do formulário e a janela "Abrir projeto" (busca no servidor, filtros por tipo e cidade, ordenação, paginação de 20 e navegação pelo teclado). Depende de script.js.
 js/sidebar.js: Barra lateral (rótulos em duas linhas, contadores, visibilidade pelo olho, menu de ações por item, "Padronizar estilo" com prévia no mapa, arrastar e soltar com posição antes/depois/dentro e a ordem persistida).
 js/report-pdf.js: PDF do relatório desenhado com jsPDF + jspdf-autotable a partir do snapshot da pré-visualização.
@@ -28,7 +36,7 @@ js/account.js: Menu do usuário e janela "Minha conta".
 js/clients.js: Marcador Cliente (residencial/B2B, status, CTO/porta, drop pela rede, equipamentos).
 migrar.html: Ferramenta temporária que copia projetos do Firestore antigo (users/{uid}/projects) para a tabela projects.
 supabase/migrations/: SQL do banco (tabelas, RLS e funções RPC).
-Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → projects.js → sidebar.js → permissions.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js → report-pdf.js (todos defer) → Google Maps (callback initMap). Os arquivos têm ?v=<data> para furar o cache do Firebase Hosting: ao publicar mudanças em JS/CSS, suba o número em todas as tags de uma vez.
+Ordem de carregamento em index.html: supabase-js → js/supabase-client.js → script.js → persistence.js → catalog.js → kml.js → bom.js → labor.js → report.js → sketch.js → projects.js → sidebar.js → permissions.js → marker-icons.js → marker-panel.js → fusion.js → account.js → clients.js → report-pdf.js (todos defer) → Google Maps (callback initMap). Os arquivos têm ?v=<data> para furar o cache do Firebase Hosting: ao publicar mudanças em JS/CSS, suba o número em todas as tags de uma vez.
 
 3. Banco de Dados (Supabase)
 companies: empresas. company_members: vínculo usuário–empresa com cargo admin | projetista | member (um usuário = uma empresa). "member" é o Membro, somente visualização.
@@ -99,3 +107,7 @@ Novo tipo de marcador: MARKER_TYPE_META (marker-panel.js), getMarkerShapeSvg (ma
 Chaves: a chave do Google Maps e a chave publicável do Supabase ficam no código cliente. Restrinja a chave do Google Maps ao domínio de produção no Google Cloud. Nunca coloque a chave secreta (service_role) do Supabase no frontend.
 Drop pelas ruas mesmo sem cabo próximo: habilite a "Routes API" no projeto do Google Cloud da chave (cobrança por requisição; a rota fica gravada no cliente e não é pedida de novo).
 E-mails: o SMTP padrão do Supabase só envia para membros do projeto. Para liberar a clientes, configure um SMTP próprio em Authentication → Emails.
+
+VERIFICAÇÃO AUTOMÁTICA (tests/ e .github/workflows/checks.yml)
+Roda em cada PR e antes de cada publicação (firebase-hosting.yml só publica se passar): sintaxe de todos os JS, testes da API (api/test_main.py) e tests/smoke.mjs, que abre index.html num Chromium com Supabase simulado (tests/fake-supabase.js) e Google Maps bloqueado e confere: carregamento sem erros, totais da lista de materiais, lista de materiais de um projeto de exemplo (valores fixos — atualize se o cálculo mudar de propósito), catálogo, KML, relatório, tentativa de injeção de código (texto e plano de fusão), abas de "Minha conta" e tema escuro sem fundos claros nas janelas.
+Para rodar localmente: cd tests && npm install && npx playwright install chromium && node smoke.mjs
