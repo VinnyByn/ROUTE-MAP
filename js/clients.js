@@ -132,8 +132,7 @@ function getCtoPortCapacity(cto) {
         const plan = JSON.parse(cto.fusionPlan);
         const html = plan.elements || plan.canvas;
         if (!html) return null;
-        const container = document.createElement('div');
-        container.innerHTML = html;
+        const container = parseStoredHtml(html);
         const ports = container.querySelectorAll('.splitter-element.splitter-atendimento .splitter-outputs .splitter-port-row').length;
         return ports || null;
     } catch (e) {

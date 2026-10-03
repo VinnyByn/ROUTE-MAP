@@ -73,3 +73,40 @@ function translateAuthError(error) {
     }
     return message || 'Ocorreu um erro inesperado.';
 }
+
+// ---------------------------------------------------------------
+// HTML salvo no banco (planos de fusão): leitura segura
+// ---------------------------------------------------------------
+//O plano de fusão é guardado como HTML. Antes de usar, ele é lido num documento isolado
+//(nada carrega nem executa ali) e perde scripts, atributos de evento (onclick, onerror…)
+//e links "javascript:". Assim um plano adulterado não roda código no navegador de quem o abre.
+const STORED_HTML_BLOCKED_TAGS = 'script, iframe, object, embed, link, meta, base, form, foreignObject, foreignobject';
+const storedHtmlDocument = document.implementation.createHTMLDocument('');
+
+function sanitizeStoredNode(root) {
+    root.querySelectorAll(STORED_HTML_BLOCKED_TAGS).forEach(el => el.remove());
+    root.querySelectorAll('*').forEach(el => {
+        Array.from(el.attributes).forEach(attr => {
+            const name = attr.name.toLowerCase();
+            const value = attr.value.replace(/[\s\u0000-\u001f]/g, '').toLowerCase();
+            if (name.startsWith('on') || ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction') && /^(javascript|data:text\/html|vbscript):/.test(value))) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return root;
+}
+
+//HTML salvo → <div> isolado e limpo (pode ser consultado, editado e serializado de volta com innerHTML)
+function parseStoredHtml(html) {
+    const container = storedHtmlDocument.createElement('div');
+    container.innerHTML = String(html || '');
+    return sanitizeStoredNode(container);
+}
+
+//Conteúdo SVG salvo (linhas de fusão) → <svg> isolado e limpo
+function parseStoredSvg(markup) {
+    const svg = storedHtmlDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.innerHTML = String(markup || '');
+    return sanitizeStoredNode(svg);
+}
