@@ -11,9 +11,9 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261004g" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="ui-v4.css?v=20261005a" />
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
   <body>
     <svg xmlns="http://www.w3.org/2000/svg" class="ui-icon-sprite" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2061,6 +2061,14 @@
                   <p id="myRoleDescription"></p>
                 </div>
               </div>
+              <div class="account-errors" data-admin-only>
+                <div class="account-members-head">
+                  <h3>Erros recentes dos usuários</h3>
+                  <button type="button" class="btn btn-secondary account-small-btn" id="clearClientErrorsButton" hidden>Limpar</button>
+                </div>
+                <p class="account-note">Erros que aconteceram no navegador da equipe nos últimos 90 dias. Ajuda a encontrar problemas antes que alguém precise avisar.</p>
+                <ul class="account-list account-errors__list" id="clientErrorsList"></ul>
+              </div>
               <div class="account-card account-card--danger" id="leaveCompanyCard" hidden>
                 <div>
                   <strong>Sair da empresa</strong>
@@ -2183,6 +2191,38 @@
       </div>
     </div>
 
+
+    <div id="choiceModal" class="modal">
+      <div class="modal-content choice-modal" style="max-width: 560px;">
+        <h2 id="choiceModalTitle"></h2>
+        <div class="modal-body-content">
+          <p id="choiceModalMessage" class="choice-modal__message"></p>
+        </div>
+        <div class="modal-footer choice-modal__footer" id="choiceModalButtons"></div>
+      </div>
+    </div>
+
+    <div id="projectHistoryModal" class="modal">
+      <div class="modal-content safety-modal" role="dialog" aria-labelledby="projectHistoryTitle">
+        <span class="close" data-close-modal>&times;</span>
+        <h2 id="projectHistoryTitle">Histórico de versões</h2>
+        <div class="modal-body-content">
+          <p class="safety-modal__hint">Cada vez que o projeto é salvo, a versão anterior fica guardada aqui (as 20 mais recentes). Restaurar substitui o projeto pela versão escolhida — a atual também vai para o histórico.</p>
+          <ul class="safety-list" id="projectHistoryList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div id="trashModal" class="modal">
+      <div class="modal-content safety-modal" role="dialog" aria-labelledby="trashModalTitle">
+        <span class="close" data-close-modal>&times;</span>
+        <h2 id="trashModalTitle">Lixeira</h2>
+        <div class="modal-body-content">
+          <p class="safety-modal__hint">Projetos excluídos ficam aqui por 30 dias e depois são apagados de vez. Restaurar ou excluir de vez: quem criou o projeto ou um administrador.</p>
+          <ul class="safety-list" id="trashList"></ul>
+        </div>
+      </div>
+    </div>
 
     <template id="project-template">
       <div class="folder ge-pro-project">
@@ -2353,6 +2393,9 @@
           <div class="pp-status">
             <span id="projectPickerCount" aria-live="polite"></span>
             <button type="button" class="pp-link hidden" id="projectPickerClear">Limpar filtros</button>
+            <button type="button" class="pp-link pp-trash hidden" id="projectTrashButton" title="Projetos excluídos nos últimos 30 dias">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg><span>Lixeira</span>
+            </button>
             <span class="pp-status__keys"><kbd>↑</kbd><kbd>↓</kbd> navegam · <kbd>Enter</kbd> abre</span>
           </div>
           <ul id="projectPickerList" class="pp-list" role="listbox" aria-label="Projetos da equipe"></ul>
@@ -2466,29 +2509,31 @@
 
   <input type="file" id="kml-file-input" accept=".kml,.kmz" style="display: none;" />
     
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js" integrity="sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" integrity="sha384-TtrQp5nveof/QP1+f/OLiEHL3GuOIRyl3IfsGxu5X45VO2vHeT4HRNmQuTR3Ea3w" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
   <script src="js/supabase-client.js?v=20261004b"></script>
-  <script src="script.js?v=20261004j" defer></script>
-  <script src="js/persistence.js?v=20261004h" defer></script>
+  <script src="js/error-report.js?v=20261005a"></script>
+  <script src="script.js?v=20261005a" defer></script>
+  <script src="js/persistence.js?v=20261005a" defer></script>
   <script src="js/sidebar-actions.js?v=20261004c" defer></script>
+  <script src="js/project-safety.js?v=20261005a" defer></script>
   <script src="js/catalog.js?v=20261004e" defer></script>
   <script src="js/kml.js?v=20261004e" defer></script>
   <script src="js/bom.js?v=20261004e" defer></script>
   <script src="js/labor.js?v=20261004e" defer></script>
   <script src="js/report.js?v=20261004e" defer></script>
   <script src="js/sketch.js?v=20261004e" defer></script>
-  <script src="js/projects.js?v=20261004b" defer></script>
-  <script src="js/sidebar.js?v=20261004b" defer></script>
+  <script src="js/projects.js?v=20261005a" defer></script>
+  <script src="js/sidebar.js?v=20261005a" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261004b" defer></script>
   <script src="js/marker-panel.js?v=20261004b" defer></script>
   <script src="js/fusion-plan.js?v=20261004b" defer></script>
   <script src="js/fusion.js?v=20261004b" defer></script>
-  <script src="js/account.js?v=20261004b" defer></script>
+  <script src="js/account.js?v=20261005a" defer></script>
   <script src="js/clients.js?v=20261004b" defer></script>
   <script src="js/marker-hover.js?v=20261004b" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>

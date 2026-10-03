@@ -44,14 +44,115 @@ function buildProjectRecord(projectRootElement) {
     };
 }
 
-//Grava (cria ou atualiza) o projeto no banco
-async function persistProject(projectRootElement) {
+//Revisão do projeto (migração 20261005): null = banco ainda sem a coluna (salva do jeito antigo)
+let projectRevisionsSupported = null;
+const isMissingColumnError = (error) => /column .* does not exist|42703|PGRST204|schema cache/i.test(`${error?.code || ''} ${error?.message || ''}`);
+
+//Erro de salvamento quando outra pessoa salvou o projeto depois de ele ter sido aberto aqui
+class ProjectConflictError extends Error {
+    constructor(info) {
+        super('O projeto foi alterado por outra pessoa.');
+        this.name = 'ProjectConflictError';
+        this.info = info; //{ updatedAt, updatedByName, revision }
+    }
+}
+
+function getProjectRevision(projectRootElement) {
+    const value = parseInt(projectRootElement?.querySelector('.folder-title')?.dataset.projectRevision, 10);
+    return Number.isFinite(value) ? value : null;
+}
+
+function setProjectRevision(projectRootElement, revision) {
+    const title = projectRootElement?.querySelector('.folder-title');
+    if (title && Number.isFinite(revision)) title.dataset.projectRevision = String(revision);
+}
+
+async function fetchProjectSaveInfo(projectId) {
+    const { data } = await supabaseClient.from('projects')
+        .select('revision, updated_at, updated_by, deleted_at').eq('id', projectId).maybeSingle();
+    if (!data) return null;
+    let updatedByName = '';
+    if (data.updated_by) {
+        const { data: profile } = await supabaseClient.from('profiles').select('full_name').eq('id', data.updated_by).maybeSingle();
+        updatedByName = profile?.full_name || '';
+    }
+    return { revision: data.revision, updatedAt: data.updated_at, updatedByName, deletedAt: data.deleted_at, isMe: data.updated_by === AppSession.userId };
+}
+
+//Grava (cria ou atualiza) o projeto no banco. Com a revisão conhecida, só grava se ninguém salvou
+//depois que o projeto foi aberto aqui; senão lança ProjectConflictError (force: true grava mesmo assim).
+async function persistProject(projectRootElement, { force = false } = {}) {
     await appReady;
     if (!AppSession.canEdit) throw new Error('Seu cargo é somente de visualização.');
     const record = buildProjectRecord(projectRootElement);
-    const { error } = await supabaseClient.from('projects').upsert(record, { onConflict: 'id' });
+    const revision = getProjectRevision(projectRootElement);
+    if (projectRevisionsSupported !== false && revision !== null) {
+        const { created_by, company_id, ...changes } = record;
+        let query = supabaseClient.from('projects').update(changes).eq('id', record.id);
+        if (!force) query = query.eq('revision', revision);
+        const { data, error } = await query.select('revision');
+        if (error) throw error;
+        if (data && data.length) {
+            setProjectRevision(projectRootElement, data[0].revision);
+            return record;
+        }
+        const info = await fetchProjectSaveInfo(record.id);
+        if (info && !force) throw new ProjectConflictError(info);
+        if (info) throw new Error('Seu cargo não permite alterar este projeto.');
+        //Projeto não existe mais no banco (apagado de vez): grava de novo como novo
+    }
+    const { data, error } = await supabaseClient.from('projects').upsert(record, { onConflict: 'id' }).select('revision');
+    if (error && isMissingColumnError(error)) {
+        projectRevisionsSupported = false;
+        const retry = await supabaseClient.from('projects').upsert(record, { onConflict: 'id' });
+        if (retry.error) throw retry.error;
+        return record;
+    }
     if (error) throw error;
+    if (data?.[0]?.revision != null) {
+        projectRevisionsSupported = true;
+        setProjectRevision(projectRootElement, data[0].revision);
+    }
     return record;
+}
+
+function describeProjectConflict(info) {
+    const who = info.isMe ? 'Você (em outra aba ou aparelho)' : (info.updatedByName || 'Outra pessoa da equipe');
+    const when = info.updatedAt ? new Date(info.updatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    return `${who} salvou este projeto${when ? ` em ${when}` : ''}, depois que você o abriu.`;
+}
+
+//Pergunta o que fazer quando outra pessoa salvou antes; resolve true se o projeto foi salvo
+function resolveProjectConflict(projectRootElement, projectName, info) {
+    return new Promise((resolve) => {
+        showChoice({
+            title: 'Projeto alterado por outra pessoa',
+            message: `${describeProjectConflict(info)}\n\nSalvar mesmo assim substitui a versão salva pela sua — a outra continua no histórico de versões e pode ser restaurada. Para ver as alterações da outra pessoa, recarregue o projeto (as suas alterações não salvas serão perdidas).`,
+            choices: [
+                { label: 'Cancelar', kind: 'secondary', value: 'cancel' },
+                { label: 'Recarregar projeto', kind: 'secondary', value: 'reload' },
+                { label: 'Salvar mesmo assim', kind: 'primary', value: 'force' },
+            ],
+        }).then(async (choice) => {
+            if (choice === 'force') {
+                try {
+                    await persistProject(projectRootElement, { force: true });
+                    showToast('Projeto salvo', `"${projectName}" foi salvo. A versão anterior está no histórico.`);
+                    resolve(true);
+                } catch (error) {
+                    showAlert('Erro', `Não foi possível salvar o projeto. ${error.message || ''}`);
+                    resolve(false);
+                }
+            } else if (choice === 'reload') {
+                const projectId = projectRootElement.querySelector('.folder-title').dataset.folderId;
+                removeProjectFromWorkspace(projectId, projectRootElement);
+                await openProjectFromDatabase(projectId);
+                resolve(false);
+            } else {
+                resolve(false);
+            }
+        });
+    });
 }
 
 //Botão "Salvar Projeto"
@@ -68,6 +169,11 @@ async function saveActiveProject() {
         await persistProject(projectRootElement);
         showAlert("Projeto salvo", `O projeto "${projectName}" foi salvo.`);
     } catch (error) {
+        if (error instanceof ProjectConflictError) {
+            document.getElementById('alertModal').style.display = 'none';
+            await resolveProjectConflict(projectRootElement, projectName, error.info);
+            return;
+        }
         console.error("Erro ao salvar projeto:", error);
         showAlert("Erro", `Não foi possível salvar o projeto. ${error.message || ''}`);
     }
@@ -78,6 +184,10 @@ function saveProjectElement(projectRootElement) {
     if (!projectRootElement || !AppSession.canEdit) return;
     const projectName = projectRootElement.querySelector('.folder-title')?.dataset.folderName || 'Projeto';
     persistProject(projectRootElement).catch((error) => {
+        if (error instanceof ProjectConflictError) {
+            resolveProjectConflict(projectRootElement, projectName, error.info);
+            return;
+        }
         console.error(`Erro ao salvar projeto "${projectName}":`, error);
         showAlert("Erro ao salvar", `Não foi possível salvar a reorganização do projeto "${projectName}".`);
     });
@@ -108,7 +218,11 @@ async function openProjectFromDatabase(projectId, button) {
         button.disabled = true;
         button.textContent = 'Abrindo…';
     }
-    const { data, error } = await supabaseClient.from('projects').select('id, name, data').eq('id', projectId).single();
+    let { data, error } = await supabaseClient.from('projects').select('id, name, data, revision').eq('id', projectId).single();
+    if (error && isMissingColumnError(error)) {
+        projectRevisionsSupported = false;
+        ({ data, error } = await supabaseClient.from('projects').select('id, name, data').eq('id', projectId).single());
+    }
     if (error) {
         console.error("Erro ao abrir projeto:", error);
         showAlert("Erro", "Não foi possível abrir o projeto.");
@@ -120,6 +234,10 @@ async function openProjectFromDatabase(projectId, button) {
     }
     document.getElementById('loadProjectModal').style.display = 'none';
     loadAndDisplayProject(data.id, { ...(data.data || {}), projectName: data.name });
+    if (data.revision != null) {
+        projectRevisionsSupported = true;
+        setProjectRevision(document.getElementById(data.id)?.closest('.folder'), data.revision);
+    }
     if (typeof rememberLastProject === 'function') rememberLastProject(data.id);
 }
 

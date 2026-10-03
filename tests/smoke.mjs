@@ -25,6 +25,11 @@ const server = http.createServer((req, res) => {
     headers[key === 'Content-Security-Policy-Report-Only' ? 'Content-Security-Policy' : key] = value;
   }));
   res.writeHead(200, headers);
+  if (rel.endsWith('.html')) {
+    //O Supabase é trocado pelo simulado (tests/fake-supabase.js): só ele perde a verificação de integridade
+    const html = fs.readFileSync(file, 'utf8').replace(/(<script src="[^"]*supabase-js[^"]*") integrity="[^"]*"/g, '$1');
+    return res.end(html);
+  }
   fs.createReadStream(file).pipe(res);
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -78,6 +83,18 @@ await page.goto(baseUrl + '/index.html');
 await page.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
 await page.waitForTimeout(800);
 
+//Bibliotecas das CDNs carregadas com verificação de integridade (no GitHub; aqui a rede pode bloquear as CDNs)
+if (process.env.CI) {
+  const libs = await page.evaluate(() => ({
+    xlsx: typeof XLSX !== 'undefined' && typeof XLSX.utils === 'object',
+    jszip: typeof JSZip === 'function',
+    jspdf: typeof window.jspdf?.jsPDF === 'function',
+    autotable: typeof window.jspdf?.jsPDF?.API?.autoTable === 'function',
+    docx: typeof htmlDocx === 'object',
+  }));
+  const missing = Object.entries(libs).filter(([, ok]) => !ok).map(([name]) => name);
+  check(!missing.length, `bibliotecas externas carregadas com verificação de integridade${missing.length ? ' (falharam: ' + missing.join(', ') + ')' : ''}`);
+}
 check(pageErrors.length === 0, `site carrega sem erros${pageErrors.length ? ': ' + pageErrors.join(' | ') : ''}`);
 
 const r = await page.evaluate(() => {
@@ -274,6 +291,76 @@ const sidebarRoundTrip = await page.evaluate(() => {
 });
 check(sidebarRoundTrip.same && sidebarRoundTrip.names.join('|') === 'Pasta A|Sub <b>1</b>|Pasta B' && !sidebarRoundTrip.injected,
   'barra lateral: pastas viram JSON e voltam iguais (nome com HTML continua texto)');
+
+//Duas pessoas no mesmo projeto, lixeira, histórico e registro de erros (Supabase simulado com tabela em memória)
+await page.evaluate(() => {
+  window.__fakeDb.projects.projX = { id: 'projX', name: 'Projeto X', revision: 1, data: {}, updated_by: 'u1', deleted_at: null };
+  loadAndDisplayProject('projX', { sidebar: { id: 'projX', name: 'Projeto X', type: 'TCR', isProject: true, children: [] }, markers: [], cables: [], polygons: [] });
+  setProjectRevision(document.getElementById('projX').closest('.folder'), 1);
+  activeFolderId = 'projX';
+  //Outra pessoa salva depois que o projeto foi aberto aqui
+  Object.assign(window.__fakeDb.projects.projX, { revision: 2, updated_by: 'u2', updated_at: '2026-10-05T14:32:00Z' });
+  saveActiveProject();
+});
+await page.waitForSelector('#choiceModal', { state: 'visible', timeout: 5000 }).catch(() => {});
+const conflictText = await page.textContent('#choiceModalMessage').catch(() => '');
+check(/salvou este projeto/.test(conflictText || '') && await page.isVisible('#choiceModal'), 'salvar projeto alterado por outra pessoa mostra o aviso em vez de sobrescrever');
+const keptOther = await page.evaluate(() => window.__fakeDb.projects.projX.revision === 2);
+check(keptOther, 'nada é gravado antes da escolha');
+await page.click('#choiceModalButtons button:has-text("Salvar mesmo assim")');
+await page.waitForTimeout(400);
+const forced = await page.evaluate(() => ({ db: window.__fakeDb.projects.projX.revision, local: getProjectRevision(document.getElementById('projX').closest('.folder')) }));
+check(forced.db === 3 && forced.local === 3, '"Salvar mesmo assim" grava e atualiza a revisão');
+const normal = await page.evaluate(async () => {
+  await persistProject(document.getElementById('projX').closest('.folder'));
+  return window.__fakeDb.projects.projX.revision;
+});
+check(normal === 4, 'salvamento normal (sem ninguém no meio) grava direto');
+
+//Capturas de tela opcionais das janelas novas (SMOKE_SHOTS=pasta node smoke.mjs)
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    showChoice({ title: 'Projeto alterado por outra pessoa', message: describeProjectConflict({ updatedByName: 'Bia Projetista', updatedAt: '2026-10-05T14:32:00Z' }) + '\n\nSalvar mesmo assim substitui a versão salva pela sua — a outra continua no histórico de versões e pode ser restaurada. Para ver as alterações da outra pessoa, recarregue o projeto (as suas alterações não salvas serão perdidas).', choices: [{ label: 'Cancelar', value: 'c' }, { label: 'Recarregar projeto', value: 'r' }, { label: 'Salvar mesmo assim', kind: 'primary', value: 'f' }] });
+  });
+  await page.waitForTimeout(300);
+  await page.locator('#choiceModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'conflito.png') });
+  await page.evaluate(() => { document.getElementById('choiceModal').style.display = 'none'; });
+}
+const history = await page.evaluate(async () => {
+  await openProjectHistory('projX', document.getElementById('projX').closest('.folder'), 'Projeto X');
+  const items = document.querySelectorAll('#projectHistoryList .safety-list__item').length;
+  return items;
+});
+if (process.env.SMOKE_SHOTS) await page.locator('#projectHistoryModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'historico.png') });
+await page.evaluate(() => { document.getElementById('projectHistoryModal').style.display = 'none'; });
+check(history >= 2, `histórico de versões lista as versões salvas (${history})`);
+
+await page.evaluate(() => deleteProject('projX', document.getElementById('projX').closest('.folder'), 'Projeto X'));
+await page.click('#confirmModalConfirmButton');
+await page.waitForTimeout(400);
+const trashed = await page.evaluate(() => ({ deleted: !!window.__fakeDb.projects.projX?.deleted_at, inSidebar: !!document.getElementById('projX') }));
+check(trashed.deleted && !trashed.inSidebar, 'excluir projeto manda para a lixeira (não apaga do banco)');
+await page.evaluate(() => openTrash());
+await page.waitForSelector('#trashList [data-trash-action="restore"]', { timeout: 5000 }).catch(() => {});
+if (process.env.SMOKE_SHOTS) await page.locator('#trashModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'lixeira.png') });
+await page.click('#trashList [data-trash-action="restore"]').catch(() => {});
+await page.waitForTimeout(400);
+const restored = await page.evaluate(() => {
+  document.getElementById('trashModal').style.display = 'none';
+  return window.__fakeDb.projects.projX?.deleted_at === null;
+});
+check(restored, 'projeto volta da lixeira');
+
+const errorsLogged = await page.evaluate(async () => {
+  const fire = (message) => window.dispatchEvent(new ErrorEvent('error', { message, filename: location.origin + '/js/x.js', lineno: 1, colno: 2, error: new Error(message) }));
+  fire('Erro de teste do registro');
+  fire('Erro de teste do registro');          //repetido: ignora
+  fire('ResizeObserver loop limit exceeded');  //ruído: ignora
+  await new Promise(r => setTimeout(r, 300));
+  return window.__fakeDb.client_errors.map(e => e.message);
+});
+check(errorsLogged.length === 1 && errorsLogged[0] === 'Erro de teste do registro', 'erros do navegador são registrados (sem repetidos nem ruído)');
 
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
