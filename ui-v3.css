@@ -848,7 +848,6 @@ html[data-theme="dark"] #fusionModal #fusionCanvas.fx-canvas {
   z-index: 2;
   box-sizing: border-box;
   display: block;
-  width: 244px;
   max-width: none;
   margin: 0;
   padding: 0;
@@ -858,10 +857,6 @@ html[data-theme="dark"] #fusionModal #fusionCanvas.fx-canvas {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.06);
   color: var(--color-text);
   cursor: default;
-}
-
-#fusionModal .fx-card.fx-splitter {
-  width: 214px;
 }
 
 #fusionModal .fx-card.is-dragging {
@@ -1754,7 +1749,6 @@ html[data-theme="dark"] .cat3-stat__icon { color: #7cc4dc; }
 #materialCatalogModal .catalog-group-count { margin-left: 6px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--color-text-muted); }
 
 #materialCatalogModal .cat3-price {
-  min-height: 30px;
   padding: 0 8px;
   border-radius: 7px;
   border: 1px solid transparent;
@@ -2106,8 +2100,6 @@ html[data-theme="dark"] .cat3-card__icon--labor { background: #2b2008; color: #f
 }
 
 #fusionModal .fx-card__kind { display: none; }
-
-#fusionModal .fx-card.fx-splitter { width: 226px; }
 
 /* Logo da marca */
 .top-bar-brand .brand-logo {
@@ -2930,12 +2922,11 @@ html[data-theme="dark"] .report-preview-scroll { background: #0b1216; }
 .report-preview-page .rp-table tr { break-inside: avoid; page-break-inside: avoid; }
 .report-preview-page .rp-table th,
 .report-preview-page .rp-table td { padding: 5px 8px; border: none; border-bottom: 1px solid var(--rp-line); color: var(--rp-ink); }
-.report-preview-page .rp-table th { background: var(--rp-brand-dark); color: #ffffff; font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; text-align: left; text-transform: uppercase; }
-.report-preview-page .rp-table tbody tr:nth-child(even) td { background: #f7fafc; }
+.report-preview-page .rp-table th { font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; text-align: left; text-transform: uppercase; }
 .report-preview-page .rp-table td.num,
 .report-preview-page .rp-table th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.report-preview-page .rp-table tr.subtotal td { background: var(--rp-tint-strong); font-weight: 800; color: var(--rp-brand-dark); }
-.report-preview-page .rp-table tr.grand-total td { background: var(--rp-brand-dark); color: #ffffff; font-size: 10px; font-weight: 800; }
+.report-preview-page .rp-table tr.subtotal td { font-weight: 800; color: var(--rp-brand-dark); }
+.report-preview-page .rp-table tr.grand-total td { font-size: 10px; font-weight: 800; }
 
 .report-preview-page .rp-observations {
   min-height: 46px;
