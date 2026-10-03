@@ -47,6 +47,18 @@ check(r.materials > 0 && r.kits > 0 && r.ctoKit > 0, `catálogo carrega (${r.mat
 check(r.kml && r.cableType === 'Cabo AS 80 FO-12', 'importação/exportação KML disponível e reconhece tipo de cabo');
 check(r.labor, 'mão de obra disponível');
 
+const report = await page.evaluate(() => {
+  const fns = ['openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
+  const missing = fns.filter(n => typeof window[n] !== 'function');
+  let error = null;
+  try { openReportModal(); } catch (e) { error = e.message; }
+  const opened = getComputedStyle(document.getElementById('reportModal')).display !== 'none';
+  document.getElementById('reportModal').style.display = 'none';
+  return { missing, error, opened, distance: formatDistance(1234.5) };
+});
+check(!report.missing.length, `relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
+check(!report.error && report.opened, `janela de relatório abre${report.error ? ': ' + report.error : ''}`);
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;
