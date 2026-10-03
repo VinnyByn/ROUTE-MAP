@@ -98,6 +98,7 @@ function setAccountTab(tab) {
     });
     document.querySelectorAll('#accountModal .account-feedback').forEach(el => { el.hidden = true; });
     if (tab === 'team') loadTeam();
+    if (tab === 'company' && AppSession.isAdmin) loadClientErrors();
     const firstInput = document.querySelector(`#accountModal [data-panel="${tab}"] input:not([disabled])`);
     if (firstInput) setTimeout(() => firstInput.focus(), 40);
 }
@@ -584,6 +585,56 @@ function leaveCompany() {
     });
 }
 
+//Erros recentes do navegador da equipe (só administrador; tabela client_errors)
+async function loadClientErrors() {
+    const list = document.getElementById('clientErrorsList');
+    const clear = document.getElementById('clearClientErrorsButton');
+    list.innerHTML = '<li class="account-list__state">Carregando…</li>';
+    const { data, error } = await supabaseClient.from('client_errors')
+        .select('id, message, detail, page, user_agent, created_at, user_id')
+        .order('created_at', { ascending: false }).limit(30);
+    if (error) {
+        list.innerHTML = `<li class="account-list__state">${/client_errors|42P01|PGRST205/i.test(error.message + error.code)
+            ? 'Disponível depois da migração 20261005120000_versoes_lixeira_erros.sql no Supabase.' : 'Não foi possível carregar os erros.'}</li>`;
+        clear.hidden = true;
+        return;
+    }
+    clear.hidden = !data.length;
+    if (!data.length) {
+        list.innerHTML = '<li class="account-list__state">Nenhum erro registrado nos últimos 90 dias.</li>';
+        return;
+    }
+    const { data: members } = await supabaseClient.rpc('list_company_members');
+    const names = new Map((members || []).map(m => [m.user_id, m.full_name || m.email]));
+    list.innerHTML = '';
+    data.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'account-list__item account-errors__item';
+        const when = new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        li.innerHTML = `
+            <div class="account-list__info">
+                <strong>${escapeHtml(item.message)}</strong>
+                <span>${escapeHtml(when)} · ${escapeHtml(names.get(item.user_id) || 'usuário removido')} · ${escapeHtml(describeUserAgent(item.user_agent))}</span>
+                ${item.detail ? `<details><summary>Detalhes técnicos</summary><pre>${escapeHtml(item.detail)}</pre></details>` : ''}
+            </div>`;
+        list.appendChild(li);
+    });
+}
+
+function describeUserAgent(ua = '') {
+    const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'navegador';
+    const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+    return os ? `${browser} no ${os}` : browser;
+}
+
+function clearClientErrors() {
+    showConfirm('Limpar erros', 'Apagar a lista de erros registrados da empresa?', async () => {
+        const { error } = await supabaseClient.from('client_errors').delete().eq('company_id', AppSession.company.id);
+        if (error) return showAlert('Erro', 'Não foi possível limpar a lista.');
+        loadClientErrors();
+    });
+}
+
 // ---------------------------------------------------------------
 // Equipe e convites
 // ---------------------------------------------------------------
@@ -854,6 +905,7 @@ function setupAccountMenu() {
     document.getElementById('inviteForm').addEventListener('submit', sendInvite);
     document.getElementById('signOutEverywhereButton').addEventListener('click', signOutEverywhere);
     document.getElementById('leaveCompanyButton').addEventListener('click', leaveCompany);
+    document.getElementById('clearClientErrorsButton').addEventListener('click', clearClientErrors);
     document.getElementById('inviteRole').addEventListener('change', updateInviteRoleHint);
     updateInviteRoleHint();
 }

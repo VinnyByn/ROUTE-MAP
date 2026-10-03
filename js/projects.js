@@ -131,6 +131,7 @@ async function loadProjectFacets() {
     projectPicker.facets = facets;
     renderProjectTypeChips();
     renderProjectCityOptions();
+    if (typeof updateTrashButton === 'function') updateTrashButton(facets);
 }
 
 function renderProjectTypeChips() {

@@ -1323,25 +1323,9 @@ function removeMaterialFromBom(materialName, quantity) {
     }
 }
 
-//Exclusão completa de um projeto
+//Excluir projeto: vai para a lixeira (js/project-safety.js); sem a migração da lixeira, apaga de vez
 function deleteProject(projectId, projectElement, projectName) {
-    if (!requireEdit('excluir projetos')) return;
-    const message = `Excluir o projeto "${projectName}" e todo o seu conteúdo do banco de dados? Ele deixará de aparecer para toda a equipe. Esta ação não pode ser desfeita.`;
-    showConfirm('Excluir projeto', message, async () => {
-        const { data, error } = await supabaseClient.from('projects').delete().eq('id', projectId).select('id');
-        if (error) {
-            console.error('Erro ao excluir projeto:', error);
-            showAlert('Erro', 'Não foi possível excluir o projeto do banco de dados.');
-            return;
-        }
-        //Nada apagado: projeto nunca salvo, ou o usuário não é o autor nem admin
-        if (!data.length && await projectExistsInDatabase(projectId)) {
-            showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
-            return;
-        }
-        removeProjectFromWorkspace(projectId, projectElement);
-        showAlert('Projeto excluído', `O projeto "${projectName}" foi excluído.`);
-    });
+    moveProjectToTrash(projectId, projectElement, projectName);
 }
 
 async function projectExistsInDatabase(projectId) {

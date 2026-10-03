@@ -133,7 +133,7 @@ let sidebarMenuEntity = null;
 const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
-    close: 'folder-x', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
+    close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -157,8 +157,9 @@ function buildSidebarMenuItems(entity) {
         items.push({ divider: true });
         if (isProject) {
             if (canEdit) items.push({ action: 'save', label: 'Salvar projeto', kbd: 'Ctrl+S' });
+            items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
             items.push({ action: 'close', label: 'Fechar projeto', hint: 'Continua salvo no banco' });
-            if (canEdit) items.push({ action: 'delete', label: 'Excluir do banco', danger: true });
+            if (canEdit) items.push({ action: 'delete', label: 'Excluir projeto', hint: 'Vai para a lixeira por 30 dias', danger: true });
         } else if (canEdit) {
             items.push({ action: 'delete', label: 'Excluir pasta', danger: true });
         }
@@ -310,6 +311,9 @@ function handleSidebarMenuAction(action) {
         break;
     case 'close':
         closeProject(entity.folderId, entity.container, entity.name);
+        break;
+    case 'history':
+        openProjectHistory(entity.folderId, entity.container, entity.name);
         break;
     case 'delete':
         if (kind === 'project') deleteProject(entity.folderId, entity.container, entity.name);

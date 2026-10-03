@@ -1719,3 +1719,45 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 .client-dc-picker__list button:hover { background: var(--color-surface-muted, rgba(148, 163, 184, 0.15)); }
 .client-dc-picker__list small { color: var(--color-text-muted, #64748b); white-space: nowrap; }
 .client-dc-picker__empty { padding: 8px; font-size: 12px; color: var(--color-text-muted, #64748b); }
+
+/* ---------------------------------------------------------------
+   Janela de escolha, histórico de versões e lixeira
+   --------------------------------------------------------------- */
+.choice-modal__message { white-space: pre-line; line-height: 1.5; }
+#choiceModal .modal-footer.choice-modal__footer { display: flex !important; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+#choiceModal .choice-modal__footer .btn { width: auto; margin: 0; white-space: nowrap; }
+
+.modal-content.safety-modal { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.safety-modal .modal-body-content { overflow-y: auto; min-height: 0; }
+.safety-modal__hint { margin: 0 0 12px; font-size: 13px; color: var(--color-text-muted); }
+
+.safety-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.safety-list__item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+.safety-list__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.safety-list__info strong { font-size: 14px; color: var(--color-text); overflow-wrap: anywhere; }
+.safety-list__info strong em { font-style: normal; font-weight: 500; color: var(--color-text-muted); }
+.safety-list__info span { font-size: 12.5px; color: var(--color-text-muted); }
+.modal-content .safety-list__btn { flex: none; min-height: 34px; padding: 0 12px; font-size: 13px; }
+.safety-list__state { padding: 14px; text-align: center; font-size: 13px; color: var(--color-text-muted); }
+.safety-list__state--error { color: var(--color-danger); }
+
+.pp-trash { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+.pp-trash .ui-icon { width: 14px; height: 14px; }
+
+@media (max-width: 560px) {
+  .safety-list__item { flex-wrap: wrap; }
+  .safety-list__info { flex-basis: 100%; }
+}
+
+/* Minha conta → Empresa: erros recentes dos usuários (administrador) */
+.account-errors { margin-top: 20px; }
+.account-errors .account-members-head h3 { margin: 0; }
+.account-errors__list { margin-top: 10px; max-height: 320px; overflow-y: auto; }
+.account-errors__item { align-items: flex-start; }
+.account-errors__item .account-list__info strong { white-space: normal; overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+.account-errors__item details { margin-top: 4px; font-size: 12px; color: var(--color-text-muted); }
+.account-errors__item pre { margin: 6px 0 0; padding: 8px; max-height: 160px; overflow: auto; white-space: pre-wrap; border-radius: 6px; background: var(--color-surface); border: 1px solid var(--color-border); font-size: 11.5px; }
