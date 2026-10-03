@@ -7143,19 +7143,6 @@ function openCableTypeUsageModal(cableType) {
     modal.style.display = 'flex';
 }
 
-function calculateCabosSectionTotal(projectId) {
-    if (!projectId) return 0;
-    const projectCables = getBillableProjectCables(projectId);
-    const cableGroups = groupCablesByType(projectCables);
-    return Object.entries(cableGroups).reduce((sum, [cableType, cables]) => {
-        const bomKey = makeBomKey(cableType);
-        if (bomState[bomKey]?.removed) return sum;
-        const unitPrice = getCableUnitPrice(cableType);
-        const displayQuantity = getCableDisplayQuantity(cableType, cables);
-        return sum + (displayQuantity * unitPrice);
-    }, 0);
-}
-
 //Renderização das tabelas de materiais
 function renderBomTable() {
     const ferragemBody = document.getElementById('ferragem-list-body');
@@ -7176,10 +7163,8 @@ function renderBomTable() {
 
     for (const bomKey in bomState) {
         const material = bomState[bomKey];
-        if (material.removed || material.category === 'Mão de Obra') continue;
-        const bucketKey = ['Ferragem', 'Lançamento', 'Fusão', 'Data Center'].includes(material.category)
-            ? material.category
-            : 'Ferragem';
+        const bucketKey = getBomCostSection(material);
+        if (!bucketKey) continue;
         buckets[bucketKey].push({ bomKey, material });
     }
 
@@ -8490,36 +8475,15 @@ function handleOutsourcedLaborConfirm() {
     openLaborModal();
 }
 
-//Recalcular o tatal financeiro
+//Recalcula os totais exibidos na lista de materiais
 function recalculateGrandTotal() {
-    //Divizão por categoria
-    let ferragemTotal = 0;
-    let cabosTotal = calculateCabosSectionTotal(getActiveProjectId());
-    let fusaoTotal = 0;
-    let datacenterTotal = 0;
-    //Somatória
-    for (const name in bomState) {
-        const item = bomState[name];
-        if (!item.removed && item.category !== 'Mão de Obra') {
-            const itemTotal = item.quantity * item.unitPrice;
-            if (item.category === 'Ferragem') {
-                ferragemTotal += itemTotal;
-            } else if (item.category === 'Fusão') {
-                fusaoTotal += itemTotal;
-            } else if (item.category === 'Data Center') {
-                datacenterTotal += itemTotal;
-            } else if (item.category !== 'Lançamento') {
-                ferragemTotal += itemTotal;
-            }
-        }
-    }
-    //Atualização
-    const grandTotal = ferragemTotal + cabosTotal + fusaoTotal + datacenterTotal;
-    document.getElementById('ferragem-total-price').textContent = `R$ ${ferragemTotal.toFixed(2).replace('.', ',')}`;
-    document.getElementById('cabos-total-price').textContent = `R$ ${cabosTotal.toFixed(2).replace('.', ',')}`;
-    document.getElementById('fusao-total-price').textContent = `R$ ${fusaoTotal.toFixed(2).replace('.', ',')}`;
-    document.getElementById('datacenter-total-price').textContent = `R$ ${datacenterTotal.toFixed(2).replace('.', ',')}`;
-    document.getElementById('grand-total-price').textContent = `R$ ${grandTotal.toFixed(2).replace('.', ',')}`;
+    const t = summarizeBomCosts(bomState);
+    const money = (v) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+    document.getElementById('ferragem-total-price').textContent = money(t.ferragemTotal);
+    document.getElementById('cabos-total-price').textContent = money(t.cabosTotal);
+    document.getElementById('fusao-total-price').textContent = money(t.fusaoTotal);
+    document.getElementById('datacenter-total-price').textContent = money(t.datacenterTotal);
+    document.getElementById('grand-total-price').textContent = money(t.grandTotal);
 }
 
 //Recuperação de itens
@@ -8534,164 +8498,26 @@ function getProjectItems(projectId) {
   return { markers: projectMarkers, cables: projectCables, polygons: projectPolygons };
 }
 
-//Sumarização dos custos - relatório
-function summarizeBomCosts(projectBom) {
-    //Inicialização de acumuladores
-    let ferragemTotal = 0;
-    let cabosTotal = 0;
-    let fusaoTotal = 0;
-    let datacenterTotal = 0;
-    //Interação e calculo
-    for (const name in projectBom) {
-        const item = projectBom[name];
-        //ignora itens removidos ou sem categoria
-        if (item.removed || !item.category) continue;
-        //Calcula total do item
-        const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
-        //Divisão por categoria
-        switch (item.category) {
-            case 'Ferragem':
-                ferragemTotal += itemTotal;
-                break;
-            case 'Lançamento':
-                cabosTotal += itemTotal;
-                break;
-            case 'Fusão':
-                fusaoTotal += itemTotal;
-                break;
-            case 'Data Center':
-                datacenterTotal += itemTotal;
-                break;
-        }
-    }
-    const grandTotal = ferragemTotal + cabosTotal + fusaoTotal + datacenterTotal;
-    return { ferragemTotal, cabosTotal, fusaoTotal, datacenterTotal, grandTotal };
+//Seção de cada item na lista de materiais (mesma regra da tela, do relatório e do PDF).
+//Retorna null para itens fora da soma (removidos e mão de obra).
+const BOM_COST_SECTIONS = { Ferragem: 'ferragemTotal', 'Lançamento': 'cabosTotal', 'Fusão': 'fusaoTotal', 'Data Center': 'datacenterTotal' };
+
+function getBomCostSection(item) {
+    if (!item || item.removed || item.category === 'Mão de Obra') return null;
+    return BOM_COST_SECTIONS[item.category] ? item.category : 'Ferragem'; //Outros entram em Ferragens
 }
 
-//Cálculo de custos do projeto
-function calculateProjectCost(projectMarkers, projectCables) {
-    const tempBomState = {};
-    let ctoCount = 0;
-    let raqueteInstallCount = 0;
-    const addOrUpdate = (name, qty, type = 'unit', group = null, detail = null, unitPrice = undefined) => {
-        if (!name || qty <= 0) return;
-        name = resolveMaterialName(name);
-        if (isDroppedMaterial(name)) return;
-        const priceInfo = MATERIAL_PRICES[name] || { price: 0, category: 'Outros' };
-        if (!tempBomState[name]) {
-        tempBomState[name] = { quantity: 0, type: type, unitPrice: priceInfo.price, category: priceInfo.category };
-        }
-        //Equipamentos dos clientes contam como Data Center, como na lista de materiais
-        if (group === 'Data Center') tempBomState[name].category = 'Data Center';
-        if (unitPrice > 0 && !(tempBomState[name].unitPrice > 0)) tempBomState[name].unitPrice = unitPrice;
-        tempBomState[name].quantity += qty;
-    };
-    //Processamento dos marcadores
-    projectMarkers.forEach(markerInfo => {
-        if (markerInfo.type === 'Importado') return;
-        const type = markerInfo.type;
-        if (type === 'CASA' || type === 'POP' || isMarkerStatusExistente(markerInfo)) return;
-        if (type === 'CTO') {
-            if (markerInfo.isPredial) { addOrUpdate("CAIXA DE ATENDIMENTO PREDIAL", 1); addOrUpdate("ABRAÇADEIRA DE NYLON", 4); } 
-            else { ctoCount++; const priceInfo = MATERIAL_PRICES['CTO']; if (priceInfo && priceInfo.components) { priceInfo.components.forEach(c => addOrUpdate(c.name, c.quantity)); } }
-        } else if (type === 'CEO') {
-            if (markerInfo.is144F) { addOrUpdate("CAIXA DE EMENDA OPTICA (CEO) 144 FUSÕES", 1); } 
-            else { addOrUpdate("CAIXA DE EMENDA ÓPTICA (CEO)", 1); }
-            if (markerInfo.ceoAccessory === "Raquete") {
-                raqueteInstallCount++;
-                getKitComponents("KIT CEO RAQUETE").forEach(c => addOrUpdate(c.name, c.quantity));
-            } else if (markerInfo.ceoAccessory === "Suporte") {
-                getKitComponents("KIT CEO SUPORTE").forEach(c => addOrUpdate(c.name, c.quantity));
-            }
-        } else if (type === 'RESERVA') {
-            if (markerInfo.reservaAccessory === "Raquete") {
-                raqueteInstallCount++;
-                getKitComponents("KIT CEO RAQUETE").forEach(c => addOrUpdate(c.name, c.quantity));
-            } else if (markerInfo.reservaAccessory === "Suporte") {
-                getKitComponents("KIT CEO SUPORTE").forEach(c => addOrUpdate(c.name, c.quantity));
-            }
-        } else if (type === 'CORDOALHA') {
-            getKitComponents("KIT CORDOALHA").forEach(c => addOrUpdate(c.name, c.quantity));
-            if (markerInfo.derivationTCount && markerInfo.derivationTCount > 0) {
-                addOrUpdate("DERIVAÇÃO EM T", markerInfo.derivationTCount);
-            }
-        }
-    })
-    //Cálculos de consumíveis - ferragens
-    if (raqueteInstallCount > 0) {
-        const totalArameNeeded = raqueteInstallCount * 50;
-        const arameRolls = Math.ceil(totalArameNeeded / 105);
-        addOrUpdate("ARAME DE ESPIMAR (105 m)", arameRolls);
+//Totais de materiais por seção: usado na tela e no relatório
+function summarizeBomCosts(projectBom) {
+    const totals = { ferragemTotal: 0, cabosTotal: 0, fusaoTotal: 0, datacenterTotal: 0 };
+    for (const key in projectBom || {}) {
+        const item = projectBom[key];
+        const section = getBomCostSection(item);
+        if (!section) continue;
+        totals[BOM_COST_SECTIONS[section]] += (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
     }
-    if (ctoCount > 0) {
-        addOrUpdate("FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M", Math.ceil((3 * ctoCount) / 25));
-    }
-    addClientMaterialsToBom(projectMarkers, addOrUpdate);
-    //Processamento de fusões
-    projectMarkers.forEach(markerInfo => {
-        if ((markerInfo.type === 'CTO' || markerInfo.type === 'CEO') && markerInfo.fusionPlan) {
-            try {
-                const planData = JSON.parse(markerInfo.fusionPlan);
-                if (!planData.canvas) return;
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = planData.canvas;
-                
-                tempDiv.querySelectorAll('.splitter-element').forEach(splitterEl => { /* ... lógica dos splitters ... */ });
-                if (markerInfo.type === 'CEO') { /* ... lógica dos kits ... */ }
-                tempDiv.querySelectorAll('.fusion-line').forEach(() => addOrUpdate("TUBETE PROTETOR DE EMENDA OPTICA", 1));
-
-            } catch (e) { /* silent fail */ }
-        }
-    });
-    //Processamento de cabos e ferragens
-    syncProjectCableMeasurements(projectCables);
-    const billableCables = projectCables.filter(
-        (cable) => cable.status !== 'Existente' && cable.type !== 'Cabo Importado'
-    );
-    Object.entries(groupCablesByType(billableCables)).forEach(([cableType, cables]) => {
-        const baseSum = getCableTypeBaseLength(cables);
-        addOrUpdate(cableType, baseSum, 'length');
-    });
-    addOrUpdate("FITA ISOLANTE", 1);
-    const cableHardwareMap = { /* ... seu objeto cableHardwareMap ... */ };
-    const aggregatedFiberLengths = {};
-    for (const name in tempBomState) {
-        const fiberType = getFiberType(name);
-        if (fiberType && tempBomState[name].category === 'Lançamento') {
-            if (!aggregatedFiberLengths[fiberType]) aggregatedFiberLengths[fiberType] = 0;
-            aggregatedFiberLengths[fiberType] += tempBomState[name].quantity;
-        }
-    }
-    Object.keys(aggregatedFiberLengths).forEach(fiberType => {
-        const totalLength = aggregatedFiberLengths[fiberType];
-        if (totalLength > 0 && cableHardwareMap[fiberType]) {
-            const hardwareItems = calculateHardwareForCable(totalLength, cableHardwareMap[fiberType]);
-            for (const itemName in hardwareItems) { addOrUpdate(itemName, hardwareItems[itemName]); }
-        }
-    });
-    //Sumarização financeira final
-    let ferragemTotal = 0, cabosTotal = 0, fusaoTotal = 0, datacenterTotal = 0;
-    for (const name in tempBomState) {
-        const item = tempBomState[name];
-        const itemTotal = item.quantity * item.unitPrice;
-        
-        switch (item.category) {
-            case 'Ferragem':
-                ferragemTotal += itemTotal;
-                break;
-            case 'Lançamento':
-                cabosTotal += itemTotal;
-                break;
-            case 'Fusão':
-                fusaoTotal += itemTotal;
-                break;
-            case 'Data Center':
-                datacenterTotal += itemTotal;
-                break;
-        }
-    }
-    const grandTotal = ferragemTotal + cabosTotal + fusaoTotal + datacenterTotal;
-    return { ferragemTotal, cabosTotal, fusaoTotal, datacenterTotal, grandTotal };
+    totals.grandTotal = totals.ferragemTotal + totals.cabosTotal + totals.fusaoTotal + totals.datacenterTotal;
+    return totals;
 }
 
 //Cálculo final de custos maõ de obra
@@ -9065,7 +8891,8 @@ function groupBomItemsForPdf(projectBom) {
 
     for (const bomKey in projectBom) {
         const item = projectBom[bomKey];
-        if (item.removed || !item.category || item.category === 'Mão de Obra') continue;
+        const section = getBomCostSection(item);
+        if (!section) continue;
         const materialName = getMaterialDisplayName(bomKey, item);
         const unit = item.type === 'length' ? 'm' : (item.type || 'un');
         const qty = item.quantity || 0;
@@ -9073,13 +8900,13 @@ function groupBomItemsForPdf(projectBom) {
         const total = qty * unitPrice;
         const row = { name: materialName, unit, qty, unitPrice, total };
 
-        if (item.category === 'Ferragem') {
+        if (section === 'Ferragem') {
             groups.ferragens.push(row);
-        } else if (item.category === 'Lançamento') {
+        } else if (section === 'Lançamento') {
             groups.cabos.push(row);
-        } else if (item.category === 'Fusão') {
+        } else if (section === 'Fusão') {
             groups.fusao.push(row);
-        } else if (item.category === 'Data Center') {
+        } else if (section === 'Data Center') {
             if (isActiveDatacenterItem(materialName)) {
                 groups.datacenterActive.push(row);
             } else {
