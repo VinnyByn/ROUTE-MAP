@@ -9528,3 +9528,44 @@ html[data-theme="dark"] .user-menu-flag { color: #fbbf24; }
   .account-card { flex-wrap: wrap; }
   .account-inline-select { width: 100%; }
 }
+
+/* Minha conta: janela com altura fixa, menu lateral parado e só o conteúdo rola */
+#accountModal .modal-content.account-modal {
+  height: min(760px, calc(100vh - 48px)) !important;
+  max-height: calc(100vh - 48px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+#accountModal .account-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+#accountModal .account-tabs { overflow-y: auto; }
+
+#accountModal .account-panels {
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#accountModal select.account-inline-select {
+  flex: none;
+  width: 160px !important;
+  max-width: 100%;
+}
+
+#accountModal .account-panel * { max-width: 100%; }
+#accountModal .account-card > div { min-width: 0; }
+
+@media (max-width: 720px) {
+  #accountModal .modal-content.account-modal { height: calc(100vh - 24px) !important; max-height: calc(100vh - 24px) !important; }
+  #accountModal .account-layout { grid-template-rows: auto minmax(0, 1fr); }
+  #accountModal select.account-inline-select { width: 100% !important; }
+}
