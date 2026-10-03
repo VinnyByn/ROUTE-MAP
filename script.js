@@ -1275,21 +1275,12 @@ function checkCableUsageInFusionPlans(cableInfo) {
     if (!cableInfo?.name) return usage;
     const cableName = cableInfo.name.trim();
     markers.filter(m => (m.type === 'CEO' || m.type === 'CTO') && m.fusionPlan).forEach(markerInfo => {
-        try {
-            const planData = JSON.parse(markerInfo.fusionPlan);
-            const tempDiv = parseStoredHtml(planData.elements || planData.canvas || '');
-            const cableEl = Array.from(tempDiv.querySelectorAll('.cable-element')).find(el => (el.dataset.cableName || '').trim() === cableName);
-            if (!cableEl) return;
-            usage.isInPlan = true;
-            if (!usage.locations.includes(markerInfo.name)) usage.locations.push(markerInfo.name);
-            if (!planData.svg) return;
-            const svg = parseStoredSvg(planData.svg);
-            const fiberIds = Array.from(cableEl.querySelectorAll('.fiber-row')).map(f => f.id);
-            const fused = Array.from(svg.querySelectorAll('.fusion-line')).some(line => fiberIds.includes(line.dataset.startId) || fiberIds.includes(line.dataset.endId));
-            if (fused) usage.hasFusions = true;
-        } catch (e) {
-            console.error(`Erro ao verificar o plano de fusão da caixa "${markerInfo.name}":`, e);
-        }
+        const plan = readFusionPlan(markerInfo);
+        const cable = plan?.cables.find(c => c.name.trim() === cableName);
+        if (!cable) return;
+        usage.isInPlan = true;
+        if (!usage.locations.includes(markerInfo.name)) usage.locations.push(markerInfo.name);
+        if (cable.fibers.some(f => f.connected)) usage.hasFusions = true;
     });
     return usage;
 }

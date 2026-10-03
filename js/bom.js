@@ -823,18 +823,16 @@ function calculateBomState() {
     projectMarkers.forEach(markerInfo => {
         if ((markerInfo.type === 'CTO' || markerInfo.type === 'CEO') && markerInfo.fusionPlan) {
             const fusionGroup = `Fusão ${markerInfo.type}`;
-            try {
-                const planData = JSON.parse(markerInfo.fusionPlan);
-                if (planData.elements) {
-                    const tempDiv = parseStoredHtml(planData.elements);
-                    const splittersInPlan = tempDiv.querySelectorAll('.splitter-element');
-                    splittersInPlan.forEach(splitterEl => {
-                        if (splitterEl.dataset.status === 'Novo') {
-                            const label = getSplitterLabelText(splitterEl);
+            const plan = readFusionPlan(markerInfo);
+            if (plan) {
+                if (!plan.empty && !plan.fromLegacyCanvas) {
+                    plan.splitters.forEach(splitter => {
+                        if (splitter.status === 'Novo') {
+                            const label = splitter.label;
                             if (label) {
                                 const splitterMaterialName = `Splitter ${label.replace(':', '/')}`;
                                 addOrUpdateMaterial(splitterMaterialName, 1, 'unit', fusionGroup, markerInfo.name);
-                                if (splitterEl.classList.contains('splitter-atendimento')) {
+                                if (splitter.atendimento) {
                                     const isPredial = markerInfo.isPredial || false;
                                     const connector = label.includes('APC') ? 'APC' : 'UPC';
                                     const ratioMatch = label.match(/1:(\d+)/);
@@ -851,29 +849,19 @@ function calculateBomState() {
                         }
                     });
                     if (markerInfo.type === 'CEO') {
-                        tempDiv.querySelectorAll('.cable-element').forEach(cableEl => {
-                            const checkbox = cableEl.querySelector('.derivation-kit-checkbox');
-                            if (checkbox && (checkbox.dataset.checked === 'true' || checkbox.checked)) {
+                        plan.cables.forEach(cable => {
+                            if (cable.derivationKit) {
                                 addOrUpdateMaterial("KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA", 1, 'unit', fusionGroup, markerInfo.name);
                             }
                         });
                     }
                 }
-                if (markerInfo.type === 'CEO' && planData.trayQuantity) {
-                    const trayQuantity = parseInt(planData.trayQuantity, 10);
-                    if (trayQuantity > 0) {
-                        addOrUpdateMaterial("KIT DE BANDEJA PARA CAIXA DE EMENDA", trayQuantity, 'unit', fusionGroup, markerInfo.name);
-                    }
+                if (markerInfo.type === 'CEO' && plan.trayQuantity > 0) {
+                    addOrUpdateMaterial("KIT DE BANDEJA PARA CAIXA DE EMENDA", plan.trayQuantity, 'unit', fusionGroup, markerInfo.name);
                 }
-                if (planData.svg) {
-                    const svgContainer = parseStoredSvg(planData.svg);
-                    const fusionLinesCount = svgContainer.querySelectorAll('.fusion-line').length;
-                    if (fusionLinesCount > 0) {
-                        addOrUpdateMaterial("TUBETE PROTETOR DE EMENDA OPTICA", fusionLinesCount, 'unit', fusionGroup, markerInfo.name);
-                    }
+                if (plan.lines.length > 0) {
+                    addOrUpdateMaterial("TUBETE PROTETOR DE EMENDA OPTICA", plan.lines.length, 'unit', fusionGroup, markerInfo.name);
                 }
-            } catch (e) {
-                console.error(`Erro ao analisar o plano de fusão para o marcador "${markerInfo.name}":`, e);
             }
         }
     });
