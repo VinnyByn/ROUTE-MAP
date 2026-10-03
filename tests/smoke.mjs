@@ -48,7 +48,7 @@ check(r.kml && r.cableType === 'Cabo AS 80 FO-12', 'importação/exportação KM
 check(r.labor, 'mão de obra disponível');
 
 const report = await page.evaluate(() => {
-  const fns = ['openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
+  const fns = ['saveActiveProject', 'openProjectFromDatabase', 'buildProjectRecord', 'serializeMarker', 'rebuildCable', 'openReportModal', 'showProjectReportDetails', 'buildReportPreviewFlowBlocks', 'startSketch', 'finishPolygonSketch', 'formatDistance'];
   const missing = fns.filter(n => typeof window[n] !== 'function');
   let error = null;
   try { openReportModal(); } catch (e) { error = e.message; }
@@ -56,7 +56,7 @@ const report = await page.evaluate(() => {
   document.getElementById('reportModal').style.display = 'none';
   return { missing, error, opened, distance: formatDistance(1234.5) };
 });
-check(!report.missing.length, `relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
+check(!report.missing.length, `salvar/abrir projeto, relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
 check(!report.error && report.opened, `janela de relatório abre${report.error ? ': ' + report.error : ''}`);
 
 //Lista de materiais de um projeto de exemplo: totais conferidos com a versão publicada em 03/10/2026.
