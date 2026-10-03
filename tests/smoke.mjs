@@ -59,6 +59,42 @@ const report = await page.evaluate(() => {
 check(!report.missing.length, `relatório e régua disponíveis${report.missing.length ? ' (faltando: ' + report.missing.join(', ') + ')' : ''}`);
 check(!report.error && report.opened, `janela de relatório abre${report.error ? ': ' + report.error : ''}`);
 
+//Lista de materiais de um projeto de exemplo: totais conferidos com a versão publicada em 03/10/2026.
+//Se o cálculo mudar de propósito (preço, kit, regra), atualize os valores esperados aqui.
+const bom = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><span class="folder-title" data-folder-id="projTeste">Projeto teste</span><ul id="projTeste"></ul></li>');
+  const previousFolder = activeFolderId;
+  activeFolderId = 'projTeste';
+  const base = { folderId: 'projTeste', size: 30 };
+  const added = [
+    { ...base, type: 'CTO', name: 'CTO-01', ctoStatus: 'Nova' },
+    { ...base, type: 'CTO', name: 'CTO-02', ctoStatus: 'Nova', isPredial: true },
+    { ...base, type: 'CEO', name: 'CEO-01', ceoStatus: 'Nova', ceoAccessory: 'Raquete', is144F: false },
+    { ...base, type: 'RESERVA', name: 'RES-01', reservaStatus: 'Nova', reservaAccessory: 'Suporte' },
+    { ...base, type: 'CORDOALHA', name: 'COR-01', cordoalhaStatus: 'Nova', derivationTCount: 2 },
+    { ...base, type: 'CTO', name: 'CTO-EXIST', ctoStatus: 'Existente' },
+    { ...base, type: 'CLIENTE', name: 'Empresa X', client: { kind: 'b2b', status: 'a_instalar', equipments: [
+      { type: 'Switch', model: 'SWITCH MPLS 24 PORTAS', material: 'SWITCH MPLS 24 PORTAS' },
+      { type: 'Outro', model: 'Cordão Óptico especial', price: 45.5 },
+    ] } },
+  ];
+  markers.push(...added);
+  calculateBomState();
+  const items = Object.values(bomState).filter(i => !i.removed);
+  const totals = summarizeBomCosts(bomState);
+  const typed = items.find(i => i.materialName === 'Outro - Cordão Óptico especial');
+  added.forEach(m => markers.splice(markers.indexOf(m), 1));
+  activeFolderId = previousFolder;
+  bomState = {};
+  document.querySelector('[data-folder-id="projTeste"]').closest('li').remove();
+  const round = v => Math.round(v * 100) / 100;
+  return { count: items.length, typedPrice: typed?.unitPrice, typedCategory: typed?.category,
+    ferragem: round(totals.ferragemTotal), fusao: round(totals.fusaoTotal), datacenter: round(totals.datacenterTotal), total: round(totals.grandTotal) };
+});
+check(bom.count === 23 && bom.ferragem === 719.94 && bom.fusao === 403.29 && bom.datacenter === 23050.5 && bom.total === 24173.73,
+  `lista de materiais do projeto de exemplo (${bom.count} itens, total R$ ${bom.total})`);
+check(bom.typedPrice === 45.5 && bom.typedCategory === 'Data Center', 'equipamento digitado do cliente B2B entra com o valor informado, em Data Center');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;
