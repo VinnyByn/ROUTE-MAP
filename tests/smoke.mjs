@@ -341,6 +341,19 @@ await page.click('#confirmModalConfirmButton');
 await page.waitForTimeout(400);
 const trashed = await page.evaluate(() => ({ deleted: !!window.__fakeDb.projects.projX?.deleted_at, inSidebar: !!document.getElementById('projX') }));
 check(trashed.deleted && !trashed.inSidebar, 'excluir projeto manda para a lixeira (não apaga do banco)');
+//A lixeira abre por cima da janela "Abrir projeto", e a confirmação por cima da lixeira
+const layering = await page.evaluate(async () => {
+  document.getElementById('loadProjectModal').style.display = 'flex';
+  await openTrash();
+  const topAt = (el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + 20); };
+  const trashOnTop = document.getElementById('trashModal').contains(topAt(document.querySelector('#trashModal .modal-content')));
+  showConfirm('Excluir de vez', 'teste', () => {});
+  const confirmOnTop = document.getElementById('confirmModal').contains(topAt(document.querySelector('#confirmModal .modal-content')));
+  document.getElementById('confirmModal').style.display = 'none';
+  document.getElementById('loadProjectModal').style.display = 'none';
+  return { trashOnTop, confirmOnTop };
+});
+check(layering.trashOnTop && layering.confirmOnTop, 'lixeira abre por cima de "Abrir projeto" e a confirmação por cima da lixeira');
 await page.evaluate(() => openTrash());
 await page.waitForSelector('#trashList [data-trash-action="restore"]', { timeout: 5000 }).catch(() => {});
 if (process.env.SMOKE_SHOTS) await page.locator('#trashModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'lixeira.png') });
