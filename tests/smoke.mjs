@@ -45,6 +45,29 @@ await loginPage.waitForTimeout(800);
 check(loginErrors.length === 0, `tela de login carrega sem erros${loginErrors.length ? ': ' + loginErrors.join(' | ') : ''}`);
 await loginPage.close();
 
+//Login com verificação em 2 etapas: pede o código, recusa código errado, libera com o certo,
+//e o sistema não abre com sessão sem o código
+const mfaPage = await browser.newPage();
+await mfaPage.addInitScript(() => { window.__fakeMfa = true; });
+await mfaPage.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+await mfaPage.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+await mfaPage.goto(baseUrl + '/index.html');
+await mfaPage.waitForURL(/login\.html/, { timeout: 10000 }).catch(() => {});
+check(/login\.html/.test(mfaPage.url()), 'sistema não abre sem o código da verificação em 2 etapas');
+await mfaPage.waitForSelector('#viewMfa:not([hidden])', { timeout: 10000 }).catch(() => {});
+check(await mfaPage.isVisible('#viewMfa'), 'login pede o código do autenticador');
+await mfaPage.fill('#mfaCode', '000000');
+await mfaPage.click('#mfaForm button[type="submit"]');
+await mfaPage.waitForTimeout(400);
+const mfaError = await mfaPage.textContent('#viewMfa .error-message');
+check(/incorreto|expirado/i.test(mfaError || '') && /login\.html/.test(mfaPage.url()), 'código errado é recusado');
+await mfaPage.fill('#mfaCode', '123456');
+await mfaPage.click('#mfaForm button[type="submit"]');
+await mfaPage.waitForURL(/index\.html/, { timeout: 10000 }).catch(() => {});
+await mfaPage.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 10000 }).catch(() => {});
+check(/index\.html/.test(mfaPage.url()) && await mfaPage.evaluate(() => typeof AppSession !== 'undefined' && !!AppSession.company), 'código certo libera o sistema');
+await mfaPage.close();
+
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
 watchCsp(page);
 await page.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
@@ -180,6 +203,55 @@ check(fusion.capacity === 24 && fusion.hover.ports === 24 && fusion.hover.splitt
 check(fusion.fibersA.used.join() === '1,2,3' && fusion.fibersA.free.length === 9, 'fibras em uso e vagas do cabo');
 check(fusion.ports.portasExistentes === 16 && fusion.ports.novasPortas === 8 && fusion.olt.length === 1 && fusion.olt[0].pon === '5',
   'portas do relatório e OLTs vinculadas');
+
+//Cabos: metragem, reserva nas caixas e ferragens. O Google Maps fica bloqueado no teste, então entra um
+//substituto mínimo com a mesma fórmula de distância (haversine, raio da Terra do Google).
+//Valores conferidos com a versão publicada em 04/10/2026.
+const cables = await page.evaluate(() => {
+  const realGoogle = window.google;
+  class LatLng { constructor(a, b) { this._a = a; this._b = b; } lat() { return this._a; } lng() { return this._b; } equals(o) { return !!o && o.lat() === this._a && o.lng() === this._b; } toJSON() { return { lat: this._a, lng: this._b }; } }
+  const R = 6378137, rad = d => d * Math.PI / 180;
+  const dist = (p, q) => { const dLat = rad(q.lat() - p.lat()), dLng = rad(q.lng() - p.lng()); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p.lat())) * Math.cos(rad(q.lat())) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  window.google = { maps: { LatLng, geometry: { spherical: {
+    computeDistanceBetween: dist,
+    computeLength: path => { const pts = Array.isArray(path) ? path : path.getArray(); let s = 0; for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; },
+  } } } };
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><span class="folder-title" data-folder-id="projC">P</span><ul id="projC"></ul></li>');
+  const previousFolder = activeFolderId;
+  activeFolderId = 'projC';
+  const at = (lat, lng) => ({ getPosition: () => new LatLng(lat, lng), setPosition() {}, setIcon() {}, setMap() {}, getMap() { return null; } });
+  const boxes = [
+    { folderId: 'projC', type: 'CTO', name: 'CTO-01', ctoStatus: 'Nova', uid: 'u-cto', marker: at(-20, -44) },
+    { folderId: 'projC', type: 'CEO', name: 'CEO-01', ceoStatus: 'Nova', ceoAccessory: 'Raquete', uid: 'u-ceo', marker: at(-20.01, -44) },
+  ];
+  const lines = [
+    { folderId: 'projC', name: 'CABO-1', type: 'Cabo AS 80 FO-12', status: 'Novo', path: [new LatLng(-20, -44), new LatLng(-20.01, -44)] },
+    { folderId: 'projC', name: 'CABO-2', type: 'Cabo AS 80 FO-12', status: 'Novo', path: [new LatLng(-20.01, -44), new LatLng(-20.01, -44.004), new LatLng(-20.012, -44.004)] },
+    { folderId: 'projC', name: 'CABO-3', type: 'Cabo AS 80 FO-06', status: 'Existente', path: [new LatLng(-20, -44), new LatLng(-20.02, -44)] },
+  ];
+  markers.push(...boxes); savedCables.push(...lines);
+  calculateBomState();
+  const qty = name => Object.values(bomState).find(i => i.materialName === name)?.quantity || 0;
+  const round = v => Math.round(v * 100) / 100;
+  const t = summarizeBomCosts(bomState);
+  const result = {
+    m1: calculateCableMeasurement(lines[0]), m2: calculateCableMeasurement(lines[1]),
+    cable12: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), cable06: Object.values(bomState).some(i => /06 FIBRAS/.test(i.materialName)),
+    bap: qty('ABRAÇADEIRA BAP 3'), alca: qty('ALÇA PREFORMADA OPDE 1008 - 6,8mm a 7,4mm'),
+    ferragem: round(t.ferragemTotal), cabos: round(t.cabosTotal), total: round(t.grandTotal),
+  };
+  boxes.forEach(m => markers.splice(markers.indexOf(m), 1));
+  lines.forEach(c => savedCables.splice(savedCables.indexOf(c), 1));
+  activeFolderId = previousFolder; bomState = {};
+  document.querySelector('[data-folder-id="projC"]').closest('li').remove();
+  window.google = realGoogle;
+  return result;
+});
+check(cables.m1.lancamento === 1120 && cables.m1.reserva === 30 && cables.m1.total === 1150
+  && cables.m2.lancamento === 650 && cables.m2.reserva === 25 && cables.m2.total === 680, 'metragem dos cabos: lançamento + reserva das caixas, arredondados');
+check(cables.cable12 === 1830 && !cables.cable06, 'cabos na lista de materiais (soma por tipo; cabo existente fora)');
+check(cables.bap === 53 && cables.alca === 106 && cables.ferragem === 2594.33 && cables.cabos === 3696.6 && cables.total === 6569.51,
+  `ferragens e totais do projeto com cabos (total R$ ${cables.total})`);
 
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
