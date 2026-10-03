@@ -1,0 +1,39 @@
+name: Verificações
+
+# Roda em cada PR e também antes de cada publicação (chamado por firebase-hosting.yml).
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Sintaxe dos arquivos JavaScript
+        run: |
+          for f in script.js js/*.js; do node --check "$f" || exit 1; done
+          echo "JavaScript OK"
+
+      - name: Testes da API de materiais
+        working-directory: api
+        run: |
+          pip install --quiet -r requirements.txt pytest
+          python -m pytest -q
+
+      - name: Teste do site no navegador
+        working-directory: tests
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          node smoke.mjs
