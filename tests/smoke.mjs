@@ -47,6 +47,32 @@ check(r.materials > 0 && r.kits > 0 && r.ctoKit > 0, `catálogo carrega (${r.mat
 check(r.kml && r.cableType === 'Cabo AS 80 FO-12', 'importação/exportação KML disponível e reconhece tipo de cabo');
 check(r.labor, 'mão de obra disponível');
 
+//Segurança: texto digitado e planos de fusão adulterados não executam código
+const xss = await page.evaluate(async () => {
+  window.__xss = 0;
+  const evil = '<img src=x onerror="window.__xss++"><svg onload="window.__xss++"></svg><script>window.__xss++<\/script>';
+  const row = createMaterialRow('ITEM', { materialName: 'Item ' + evil, category: 'Ferragem', quantity: 1, unitPrice: 1, type: 'un' });
+  document.body.appendChild(row);
+  const plan = JSON.stringify({
+    elements: '<div class="cable-element" data-cable-name="C1"><div class="fiber-row" id="cable-C1-fiber-1" onclick="window.__xss++"></div></div>' + evil,
+    svg: '<path class="fusion-line" data-start-id="cable-C1-fiber-1" data-end-id="x" onmouseover="window.__xss++"></path><image href="x" onerror="window.__xss++"/>',
+  });
+  const marker = { type: 'CEO', name: 'CEO ' + evil, fusionPlan: plan };
+  summarizeFusionPlan(marker);
+  getPlanCableFiberUsage(marker);
+  const parsed = parseStoredHtml(JSON.parse(plan).elements);
+  await new Promise(r => setTimeout(r, 400));
+  row.remove();
+  return {
+    executed: window.__xss,
+    textShown: row.textContent.includes('<img'),
+    handlersLeft: parsed.querySelectorAll('[onclick], [onerror], script').length,
+    fiberKept: !!parsed.querySelector('#cable-C1-fiber-1'),
+  };
+});
+check(xss.executed === 0 && xss.handlersLeft === 0, `código embutido não executa (execuções: ${xss.executed}, atributos de evento restantes: ${xss.handlersLeft})`);
+check(xss.textShown && xss.fiberKept, 'texto aparece como texto e o plano de fusão continua legível');
+
 //Minha conta: todas as abas abrem sem estourar a largura do painel
 for (const tab of ['profile', 'security', 'company', 'team', 'preferences']) {
   const info = await page.evaluate(t => {

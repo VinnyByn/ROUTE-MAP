@@ -17,12 +17,10 @@ function summarizeFusionPlan(markerInfo) {
         const data = plan ? JSON.parse(plan) : null;
         const html = data && (data.elements || data.canvas);
         if (html) {
-            const root = document.createElement('div');
-            root.innerHTML = html;
+            const root = parseStoredHtml(html);
             const connected = new Set();
             if (data.svg) {
-                const svg = document.createElement('div');
-                svg.innerHTML = data.svg;
+                const svg = parseStoredHtml(data.svg);
                 svg.querySelectorAll('.fusion-line').forEach(line => {
                     if (line.dataset.startId) connected.add(line.dataset.startId);
                     if (line.dataset.endId) connected.add(line.dataset.endId);
@@ -118,12 +116,10 @@ function getPlanCableFiberUsage(markerInfo) {
         const data = plan ? JSON.parse(plan) : null;
         const html = data && (data.elements || data.canvas);
         if (html) {
-            const root = document.createElement('div');
-            root.innerHTML = html;
+            const root = parseStoredHtml(html);
             const connected = new Set();
             if (data.svg) {
-                const svg = document.createElement('div');
-                svg.innerHTML = data.svg;
+                const svg = parseStoredHtml(data.svg);
                 svg.querySelectorAll('.fusion-line').forEach(line => {
                     if (line.dataset.startId) connected.add(line.dataset.startId);
                     if (line.dataset.endId) connected.add(line.dataset.endId);

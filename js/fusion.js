@@ -1148,8 +1148,7 @@ function collectProjectOltUsage() {
     markers.forEach(markerInfo => {
         if (markerInfo === activeMarkerForFusion || !markerInfo.fusionPlan || !folderIds.includes(markerInfo.folderId)) return;
         try {
-            const temp = document.createElement('div');
-            temp.innerHTML = JSON.parse(markerInfo.fusionPlan).elements || '';
+            const temp = parseStoredHtml(JSON.parse(markerInfo.fusionPlan).elements || '');
             temp.querySelectorAll('.splitter-element').forEach(card => push(card, markerInfo.name));
         } catch (e) { /* plano ilegível: ignora */ }
     });
@@ -1308,16 +1307,14 @@ function populateFusionPlan(markerInfo) {
     if (markerInfo.fusionPlan) {
         try {
             const planData = JSON.parse(markerInfo.fusionPlan);
-            const temp = document.createElement('div');
-            temp.innerHTML = planData.elements || planData.canvas || '';
+            const temp = parseStoredHtml(planData.elements || planData.canvas || '');
             temp.querySelectorAll('.cable-element, .splitter-element').forEach(old => {
                 const card = upgradeFusionCard(old);
                 stage.appendChild(card);
                 wireFusionCard(card);
             });
             if (planData.svg) {
-                const tempSvg = document.createElementNS(SVG_NS, 'svg');
-                tempSvg.innerHTML = planData.svg;
+                const tempSvg = parseStoredSvg(planData.svg);
                 tempSvg.querySelectorAll('.fusion-line').forEach(line => {
                     line.removeAttribute('style');
                     line.setAttribute('class', 'fusion-line');

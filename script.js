@@ -1381,7 +1381,7 @@ function initMap() {
                 fixedItemsList.innerHTML = '';
                 getKitComponents('KIT POP').forEach(item => {
                     const li = document.createElement('li');
-                    li.innerHTML = `<b>${item.quantity}x</b> ${item.name}`;
+                    li.innerHTML = `<b>${escapeHtml(item.quantity)}x</b> ${escapeHtml(item.name)}`;
                     fixedItemsList.appendChild(li);
                 });
                 popKitModal.style.display = 'flex';
@@ -1746,15 +1746,13 @@ function checkCableUsageInFusionPlans(cableInfo) {
     markers.filter(m => (m.type === 'CEO' || m.type === 'CTO') && m.fusionPlan).forEach(markerInfo => {
         try {
             const planData = JSON.parse(markerInfo.fusionPlan);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = planData.elements || planData.canvas || '';
+            const tempDiv = parseStoredHtml(planData.elements || planData.canvas || '');
             const cableEl = Array.from(tempDiv.querySelectorAll('.cable-element')).find(el => (el.dataset.cableName || '').trim() === cableName);
             if (!cableEl) return;
             usage.isInPlan = true;
             if (!usage.locations.includes(markerInfo.name)) usage.locations.push(markerInfo.name);
             if (!planData.svg) return;
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.innerHTML = planData.svg;
+            const svg = parseStoredSvg(planData.svg);
             const fiberIds = Array.from(cableEl.querySelectorAll('.fiber-row')).map(f => f.id);
             const fused = Array.from(svg.querySelectorAll('.fusion-line')).some(line => fiberIds.includes(line.dataset.startId) || fiberIds.includes(line.dataset.endId));
             if (fused) usage.hasFusions = true;
@@ -1773,8 +1771,7 @@ function removeCableFromSavedFusionPlans(cableName, markerNames) {
             const planData = JSON.parse(markerInfo.fusionPlan);
             const html = planData.elements || planData.canvas;
             if (!html) return;
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
+            const tempDiv = parseStoredHtml(html);
             const cableElement = Array.from(tempDiv.querySelectorAll('.cable-element')).find(el => el.dataset.cableName === cableName);
             if (!cableElement) return;
             cableElement.remove();
@@ -4055,7 +4052,7 @@ document.querySelectorAll(".datacenter-option").forEach(option => {
             fixedItemsList.innerHTML = ''; 
             getKitComponents('KIT POP').forEach(item => {
                 const li = document.createElement('li');
-                li.innerHTML = `<b>${item.quantity}x</b> ${item.name}`;
+                li.innerHTML = `<b>${escapeHtml(item.quantity)}x</b> ${escapeHtml(item.name)}`;
                 fixedItemsList.appendChild(li);
             });
             popKitModal.style.display = 'flex';
@@ -4876,8 +4873,7 @@ function countProjectPorts(projectMarkers) {
             try {
                 const planData = JSON.parse(marker.fusionPlan);
                 if (!planData.elements) return;
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = planData.elements;
+                const tempDiv = parseStoredHtml(planData.elements);
                 tempDiv.querySelectorAll('.splitter-atendimento').forEach(splitterElement => {
                     const status = splitterElement.dataset.status;
                     const label = getSplitterLabelText(splitterElement) || null;
@@ -7183,8 +7179,7 @@ function updateCableNameInAllFusionPlans(oldName, newName) {
                 const planData = JSON.parse(markerInfo.fusionPlan);
                 if (!planData.elements) return;
                 // Cria um DOM temporário para manipular o HTML salvo
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = planData.elements;
+                const tempDiv = parseStoredHtml(planData.elements);
                 //Encontra o elemento do cabo pelo NOME ANTIGO
                 const cableElements = tempDiv.querySelectorAll(`.cable-element[data-cable-name="${oldName}"]`);
                 if (cableElements.length > 0) {

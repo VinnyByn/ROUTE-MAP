@@ -94,8 +94,8 @@ function openLaborModal() {
             let type = '';
             let detailsHtml = '';
             let actionsHtml = `
-                <button data-name="${name}" class="edit-labor-btn" style="background-color: #ffc107; color: #333; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px; margin-right: 5px;">Editar</button>
-                <button data-name="${name}" class="remove-labor-btn" style="background-color: #f44336; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px;">Remover</button>
+                <button data-name="${escapeHtml(name)}" class="edit-labor-btn" style="background-color: #ffc107; color: #333; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px; margin-right: 5px;">Editar</button>
+                <button data-name="${escapeHtml(name)}" class="remove-labor-btn" style="background-color: #f44336; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px;">Remover</button>
             `;
             //Lógica mão de obra regional com detalhe nas despesas
             if (name === 'Mão de Obra Regional') {
@@ -111,8 +111,8 @@ function openLaborModal() {
                 const daysDisplay = informedDays !== null ? informedDays : (details.days ?? 'N/A');
                 detailsHtml = `
                     <ul class="details-list">
-                        <li><strong>Técnicos:</strong> ${details.techs || 'N/A'}</li>
-                        <li><strong>Dias Informados:</strong> ${daysDisplay}</li>
+                        <li><strong>Técnicos:</strong> ${escapeHtml(details.techs || 'N/A')}</li>
+                        <li><strong>Dias Informados:</strong> ${escapeHtml(daysDisplay)}</li>
                         <li><strong>Despesas Adic.:</strong> R$ ${expenses.toFixed(2).replace('.', ',')}</li>
                     </ul>`;
             }
@@ -122,8 +122,8 @@ function openLaborModal() {
                 hasOutsourced = true;
                 const details = item.details || {};
                 const companyName = details.companyName || name.replace('Mão de Obra - ', '');
-                detailsHtml = companyName;
-                actionsHtml = `<button data-name="${name}" class="view-labor-details-btn" style="background-color: #17a2b8; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px; margin-right: 5px;">Ver Detalhes</button>` + actionsHtml;
+                detailsHtml = escapeHtml(companyName);
+                actionsHtml = `<button data-name="${escapeHtml(name)}" class="view-labor-details-btn" style="background-color: #17a2b8; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px; margin-right: 5px;">Ver Detalhes</button>` + actionsHtml;
             }
             //Preenchimento da linha da tabela
             row.innerHTML = `
@@ -208,7 +208,7 @@ function showOutsourcedDetails(itemName) {
             const row = tableBody.insertRow();
             const total = service.qty * service.price;
             row.innerHTML = `
-                <td>${service.name}</td>
+                <td>${escapeHtml(service.name)}</td>
                 <td>${service.qty}</td>
                 <td>${service.unit}</td>
                 <td>R$ ${service.price.toFixed(2).replace('.', ',')}</td>
@@ -424,7 +424,7 @@ function buildOutsourcedServiceRow({ name, price, unit, qty, isCustom = false })
 
     if (isCustom) {
         row.innerHTML = `
-            <td><input type="text" class="outsourced-name-input" value="${name || ''}" placeholder="Nome do serviço"></td>
+            <td><input type="text" class="outsourced-name-input" value="${escapeHtml(name || '')}" placeholder="Nome do serviço"></td>
             <td>
                 <div class="outsourced-price-cell">
                     <span>R$</span>
@@ -441,7 +441,7 @@ function buildOutsourcedServiceRow({ name, price, unit, qty, isCustom = false })
         `;
     } else {
         row.innerHTML = `
-            <td class="outsourced-service-name">${name}</td>
+            <td class="outsourced-service-name">${escapeHtml(name)}</td>
             <td>
                 <div class="outsourced-price-cell">
                     <span>R$</span>

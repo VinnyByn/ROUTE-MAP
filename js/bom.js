@@ -310,14 +310,14 @@ function createMaterialRow(bomKey, material) {
     row.dataset.bomKey = bomKey;
     row.dataset.bomGroup = getBomGroup(bomKey, material);
     row.innerHTML = `
-      <td class="material-item-name material-item-clickable" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Ver onde está sendo utilizado">${displayName}</td>
-      <td><span class="material-category-badge">${material.category}</span></td>
+      <td class="material-item-name material-item-clickable" data-bom-key="${escapeHtml(bomKey)}" title="Ver onde está sendo utilizado">${escapeHtml(displayName)}</td>
+      <td><span class="material-category-badge">${escapeHtml(material.category)}</span></td>
       <td class="material-qty">${formattedQuantity}</td>
-      <td class="material-unit">${unit}</td>
+      <td class="material-unit">${escapeHtml(unit)}</td>
       <td>
         <div class="material-actions">
-          <button type="button" class="edit-qty-btn" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Editar quantidade" aria-label="Editar">${uiIcon('edit')}</button>
-          <button type="button" class="remove-item-btn" data-bom-key="${bomKey.replace(/"/g, '&quot;')}" title="Remover item" aria-label="Remover">${uiIcon('x')}</button>
+          <button type="button" class="edit-qty-btn" data-bom-key="${escapeHtml(bomKey)}" title="Editar quantidade" aria-label="Editar">${uiIcon('edit')}</button>
+          <button type="button" class="remove-item-btn" data-bom-key="${escapeHtml(bomKey)}" title="Remover item" aria-label="Remover">${uiIcon('x')}</button>
         </div>
       </td>
       <td class="material-price">${formattedUnitPrice}</td>
@@ -353,8 +353,8 @@ function renderCabosTable(tbody, projectId) {
         const surcharge = getCableTypeSurcharge(cableType);
         const billableLength = getCableDisplayQuantity(cableType, cables);
         const unitPrice = getCableUnitPrice(cableType);
-        const safeBomKey = bomKey.replace(/"/g, '&quot;');
-        const safeType = cableType.replace(/"/g, '&quot;');
+        const safeBomKey = escapeHtml(bomKey);
+        const safeType = escapeHtml(cableType);
         const row = document.createElement('tr');
         row.className = 'cable-material-row';
         row.dataset.cableType = cableType;
@@ -826,8 +826,7 @@ function calculateBomState() {
             try {
                 const planData = JSON.parse(markerInfo.fusionPlan);
                 if (planData.elements) {
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = planData.elements;
+                    const tempDiv = parseStoredHtml(planData.elements);
                     const splittersInPlan = tempDiv.querySelectorAll('.splitter-element');
                     splittersInPlan.forEach(splitterEl => {
                         if (splitterEl.dataset.status === 'Novo') {
@@ -867,8 +866,7 @@ function calculateBomState() {
                     }
                 }
                 if (planData.svg) {
-                    const svgContainer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    svgContainer.innerHTML = planData.svg;
+                    const svgContainer = parseStoredSvg(planData.svg);
                     const fusionLinesCount = svgContainer.querySelectorAll('.fusion-line').length;
                     if (fusionLinesCount > 0) {
                         addOrUpdateMaterial("TUBETE PROTETOR DE EMENDA OPTICA", fusionLinesCount, 'unit', fusionGroup, markerInfo.name);
