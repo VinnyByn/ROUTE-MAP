@@ -3,19 +3,55 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import http from 'node:http';
+import fs from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const failures = [];
 const check = (ok, message) => { console.log(`${ok ? '✓' : '✗'} ${message}`); if (!ok) failures.push(message); };
 
+//Servidor local com os mesmos cabeçalhos do firebase.json. A CSP, publicada em modo "só aviso",
+//aqui é aplicada de verdade: qualquer bloqueio vira falha do teste.
+const firebaseHeaders = JSON.parse(fs.readFileSync(path.join(root, 'firebase.json'), 'utf8')).hosting.headers;
+const globMatches = (glob, file) => glob === '**' || new RegExp('^' + glob.replace(/\./g, '\\.').replace(/\*\*\//g, '(.*/)?').replace(/\*/g, '[^/]*').replace(/\{([^}]+)\}/g, (_, g) => '(' + g.split(',').join('|') + ')') + '$').test(file);
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html';
+  const file = path.join(root, rel);
+  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
+  const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' };
+  firebaseHeaders.filter(h => globMatches(h.source, rel)).forEach(h => h.headers.forEach(({ key, value }) => {
+    headers[key === 'Content-Security-Policy-Report-Only' ? 'Content-Security-Policy' : key] = value;
+  }));
+  res.writeHead(200, headers);
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
 const browser = await chromium.launch();
+const cspViolations = [];
+const watchCsp = (p) => p.on('console', m => { if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text().slice(0, 200)); });
+
+//Tela de login carrega sem erros
+const loginPage = await browser.newPage();
+watchCsp(loginPage);
+await loginPage.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+const loginErrors = [];
+loginPage.on('pageerror', e => loginErrors.push(e.message));
+await loginPage.goto(baseUrl + '/login.html');
+await loginPage.waitForTimeout(800);
+check(loginErrors.length === 0, `tela de login carrega sem erros${loginErrors.length ? ': ' + loginErrors.join(' | ') : ''}`);
+await loginPage.close();
+
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+watchCsp(page);
 await page.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
 await page.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
 const pageErrors = [];
 page.on('pageerror', e => pageErrors.push(e.message));
-await page.goto('file://' + path.join(root, 'index.html'));
+await page.goto(baseUrl + '/index.html');
 await page.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
 await page.waitForTimeout(800);
 
@@ -151,6 +187,21 @@ const lightBlocks = await page.evaluate(() => {
 });
 check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${lightBlocks.length ? ': ' + lightBlocks.slice(0, 5).join(', ') : ''}`);
 
+const before = cspViolations.length;
+const inlineRan = await page.evaluate(async () => {
+  window.__inlineRan = false;
+  const el = document.createElement('script');
+  el.textContent = 'window.__inlineRan = true';
+  document.body.appendChild(el);
+  await new Promise(r => setTimeout(r, 200));
+  return window.__inlineRan;
+});
+await page.waitForTimeout(200);
+check(!inlineRan && cspViolations.length > before, 'CSP bloqueia script injetado na página');
+cspViolations.splice(before);
+check(cspViolations.length === 0, `política de segurança de conteúdo (CSP) sem bloqueios${cspViolations.length ? ': ' + cspViolations.slice(0, 3).join(' | ') : ''}`);
+
 await browser.close();
+server.close();
 if (failures.length) { console.error(`\n${failures.length} verificação(ões) falharam.`); process.exit(1); }
 console.log('\nTudo certo.');
