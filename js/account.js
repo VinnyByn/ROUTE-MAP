@@ -19,6 +19,11 @@ function renderUserIdentity() {
     document.querySelectorAll('[data-user-name]').forEach(el => { el.textContent = name; });
     document.querySelectorAll('[data-user-email]').forEach(el => { el.textContent = AppSession.email; });
     document.querySelectorAll('[data-user-role]').forEach(el => { el.textContent = roleLabel; });
+    document.querySelectorAll('[data-user-role-badge]').forEach(el => {
+        el.textContent = roleLabel;
+        el.className = `account-badge account-badge--${AppSession.role || 'member'}`;
+    });
+    document.querySelectorAll('[data-user-email-value]').forEach(el => { el.value = AppSession.email; });
     document.querySelectorAll('.company-name-slot').forEach(el => { el.textContent = AppSession.company?.name || ''; });
     document.querySelectorAll('.app-url-slot').forEach(el => { el.textContent = `${location.origin}/login.html`; });
     applyRoleToUi();
@@ -43,6 +48,31 @@ async function runBusy(button, busyText, task) {
     button.disabled = true;
     button.textContent = busyText;
     try { return await task(); } finally { button.disabled = false; button.textContent = original; }
+}
+
+function formatAccountDate(value, withTime = false) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (isNaN(date)) return '—';
+    return withTime
+        ? date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+//Navegador e sistema deste aparelho (só para exibição)
+function describeThisDevice() {
+    const ua = navigator.userAgent;
+    const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Navegador';
+    const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'sistema desconhecido';
+    return `${browser} no ${os}`;
+}
+
+function formatPhone(value) {
+    const d = String(value || '').replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d ? `(${d}` : '';
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
 // ---------------------------------------------------------------
@@ -77,10 +107,14 @@ function fillAccountForms() {
     const prefs = profile.preferences || {};
     document.getElementById('profileFullName').value = profile.full_name || '';
     document.getElementById('profileJobTitle').value = profile.job_title || '';
-    document.getElementById('profilePhone').value = profile.phone || '';
-    document.getElementById('profileEmail').value = AppSession.email;
-    document.getElementById('newPassword').value = '';
-    document.getElementById('newPasswordConfirm').value = '';
+    document.getElementById('profilePhone').value = formatPhone(profile.phone);
+    updateProfileDirtyState();
+    closeEmailChange();
+    ['currentPassword', 'newPassword', 'newPasswordConfirm'].forEach(id => { document.getElementById(id).value = ''; });
+    updatePasswordStrength();
+    document.getElementById('prefIdleLock').value = String(prefs.idleLockMinutes || 0);
+    document.getElementById('currentDeviceText').textContent = `${describeThisDevice()} · conectado agora`;
+    refreshAuthDetails();
     document.getElementById('companyNameInput').value = AppSession.company?.name || '';
     document.getElementById('companyDocumentInput').value = AppSession.company?.document || '';
     const readOnly = !AppSession.isAdmin;
@@ -100,38 +134,304 @@ function fillAccountForms() {
 // Perfil, senha e preferências
 // ---------------------------------------------------------------
 
-async function saveProfile(event) {
-    event.preventDefault();
-    const panel = document.querySelector('#accountModal [data-panel="profile"]');
-    const fullName = document.getElementById('profileFullName').value.trim();
-    if (!fullName) return setFeedback(panel, 'Informe seu nome.', 'error');
-    const changes = {
-        full_name: fullName,
+function getProfileFormValues() {
+    return {
+        full_name: document.getElementById('profileFullName').value.trim(),
         job_title: document.getElementById('profileJobTitle').value.trim() || null,
         phone: document.getElementById('profilePhone').value.trim() || null
     };
-    await runBusy(event.submitter || panel.querySelector('[type="submit"]'), 'Salvando…', async () => {
+}
+
+//Salvar/Descartar só ficam ativos com alteração pendente
+function updateProfileDirtyState() {
+    const profile = AppSession.profile || {};
+    const current = getProfileFormValues();
+    const dirty = current.full_name !== (profile.full_name || '')
+        || (current.job_title || '') !== (profile.job_title || '')
+        || (current.phone || '') !== formatPhone(profile.phone);
+    document.getElementById('profileSaveButton').disabled = !dirty;
+    document.getElementById('profileResetButton').disabled = !dirty;
+}
+
+async function saveProfile(event) {
+    event.preventDefault();
+    const panel = document.querySelector('#accountModal [data-panel="profile"]');
+    const changes = getProfileFormValues();
+    if (changes.full_name.length < 2) return setFeedback(panel, 'Informe seu nome completo.', 'error');
+    const digits = String(changes.phone || '').replace(/\D/g, '');
+    if (digits && (digits.length < 10 || digits.length > 11)) return setFeedback(panel, 'Telefone incompleto: use DDD + número.', 'error');
+    await runBusy(document.getElementById('profileSaveButton'), 'Salvando…', async () => {
         const { error } = await supabaseClient.from('profiles').upsert({ id: AppSession.userId, ...changes });
         if (error) return setFeedback(panel, `Não foi possível salvar: ${error.message}`, 'error');
         AppSession.profile = { ...(AppSession.profile || {}), ...changes };
         renderUserIdentity();
         setFeedback(panel, 'Perfil atualizado.');
     });
+    updateProfileDirtyState();
+}
+
+function resetProfileForm() {
+    const profile = AppSession.profile || {};
+    document.getElementById('profileFullName').value = profile.full_name || '';
+    document.getElementById('profileJobTitle').value = profile.job_title || '';
+    document.getElementById('profilePhone').value = formatPhone(profile.phone);
+    updateProfileDirtyState();
+}
+
+//Confirma que quem está mexendo na conta sabe a senha atual (protege computador deixado aberto)
+//Usa um cliente à parte, sem salvar sessão, para não trocar a sessão em uso (nem perder a verificação em duas etapas)
+async function verifyCurrentPassword(password) {
+    if (!password) return 'Informe sua senha atual.';
+    const checker = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'routeMapPasswordCheck' }
+    });
+    const { error } = await checker.auth.signInWithPassword({ email: AppSession.email, password });
+    if (!error) {
+        await checker.auth.signOut({ scope: 'local' }).catch(() => {});
+        return null;
+    }
+    return /invalid login credentials|invalid_credentials/i.test(error.message + (error.code || '')) ? 'Senha atual incorreta.' : translateAuthError(error);
+}
+
+// --- Troca de e-mail ---
+function openEmailChange() {
+    document.getElementById('emailChangeForm').hidden = false;
+    document.getElementById('emailChangeOpenButton').hidden = true;
+    document.getElementById('newEmail').value = '';
+    document.getElementById('emailChangePassword').value = '';
+    document.getElementById('newEmail').focus();
+}
+
+function closeEmailChange() {
+    document.getElementById('emailChangeForm').hidden = true;
+    document.getElementById('emailChangeOpenButton').hidden = false;
+}
+
+async function changeEmail(event) {
+    event.preventDefault();
+    const form = document.getElementById('emailChangeForm');
+    const email = document.getElementById('newEmail').value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setFeedback(form, 'Informe um e-mail válido.', 'error');
+    if (email === AppSession.email.toLowerCase()) return setFeedback(form, 'Esse já é o seu e-mail atual.', 'error');
+    await runBusy(form.querySelector('[type="submit"]'), 'Enviando…', async () => {
+        const passwordError = await verifyCurrentPassword(document.getElementById('emailChangePassword').value);
+        if (passwordError) return setFeedback(form, passwordError, 'error');
+        const { error } = await supabaseClient.auth.updateUser({ email }, { emailRedirectTo: `${location.origin}/login.html` });
+        if (error) return setFeedback(form, translateAuthError(error), 'error');
+        document.getElementById('emailChangePassword').value = '';
+        setFeedback(form, `Enviamos a confirmação para ${email} (e um aviso para o e-mail atual). A troca vale depois de clicar no link.`);
+    });
+}
+
+// --- Senha ---
+function evaluatePassword(password) {
+    const rules = {
+        length: password.length >= 8,
+        case: /[a-z]/.test(password) && /[A-Z]/.test(password),
+        number: /\d/.test(password),
+        symbol: /[^A-Za-z0-9]/.test(password),
+    };
+    let score = Object.values(rules).filter(Boolean).length;
+    if (password.length >= 12 && score >= 3) score = Math.min(4, score + 1);
+    if (!rules.length) score = Math.min(score, 1);
+    if (/^(.)\1+$/.test(password) || /^(12345678|password|senha123|qwerty)/i.test(password)) score = 1;
+    return { rules, score: password ? Math.max(1, score) : 0 };
+}
+
+function updatePasswordStrength() {
+    const password = document.getElementById('newPassword').value;
+    const confirmation = document.getElementById('newPasswordConfirm').value;
+    const { rules, score } = evaluatePassword(password);
+    rules.match = !!password && password === confirmation;
+    const meter = document.getElementById('passwordStrength');
+    meter.dataset.level = String(score);
+    meter.querySelector('.password-strength__label').textContent = ['Digite a nova senha', 'Fraca', 'Razoável', 'Boa', 'Forte'][score];
+    document.querySelectorAll('#passwordRules [data-rule]').forEach(li => li.classList.toggle('is-ok', !!rules[li.dataset.rule]));
 }
 
 async function changePassword(event) {
     event.preventDefault();
-    const panel = document.querySelector('#accountModal [data-panel="security"]');
+    const panel = document.getElementById('passwordForm');
+    const current = document.getElementById('currentPassword').value;
     const password = document.getElementById('newPassword').value;
     const confirmation = document.getElementById('newPasswordConfirm').value;
-    if (password.length < 8) return setFeedback(panel, 'A senha precisa ter pelo menos 8 caracteres.', 'error');
+    const { rules, score } = evaluatePassword(password);
+    if (!rules.length) return setFeedback(panel, 'A nova senha precisa ter pelo menos 8 caracteres.', 'error');
+    if (score < 3) return setFeedback(panel, 'Senha fraca: misture maiúsculas, minúsculas, números e símbolos.', 'error');
     if (password !== confirmation) return setFeedback(panel, 'As senhas não conferem.', 'error');
-    await runBusy(event.submitter || panel.querySelector('[type="submit"]'), 'Alterando…', async () => {
+    if (password === current) return setFeedback(panel, 'A nova senha precisa ser diferente da atual.', 'error');
+    await runBusy(panel.querySelector('[type="submit"]'), 'Alterando…', async () => {
+        const passwordError = await verifyCurrentPassword(current);
+        if (passwordError) return setFeedback(panel, passwordError, 'error');
         const { error } = await supabaseClient.auth.updateUser({ password });
         if (error) return setFeedback(panel, translateAuthError(error), 'error');
-        document.getElementById('newPassword').value = '';
-        document.getElementById('newPasswordConfirm').value = '';
-        setFeedback(panel, 'Senha alterada.');
+        ['currentPassword', 'newPassword', 'newPasswordConfirm'].forEach(id => { document.getElementById(id).value = ''; });
+        updatePasswordStrength();
+        setFeedback(panel, 'Senha alterada. Se você usa o sistema em outros aparelhos, considere "Sair de todos".');
+    });
+}
+
+// --- Verificação em duas etapas (TOTP) ---
+let mfaState = { available: true, factor: null, enrolling: null };
+
+async function loadMfaState() {
+    try {
+        const { data, error } = await supabaseClient.auth.mfa.listFactors();
+        if (error) throw error;
+        mfaState.available = true;
+        mfaState.factor = (data?.totp || []).find(f => f.status === 'verified') || null;
+    } catch (e) {
+        console.warn('Verificação em duas etapas indisponível:', e);
+        mfaState.available = false;
+        mfaState.factor = null;
+    }
+    renderMfaState();
+    return mfaState;
+}
+
+function renderMfaState() {
+    const on = !!mfaState.factor;
+    const title = document.getElementById('mfaStatusTitle');
+    const text = document.getElementById('mfaStatusText');
+    const card = document.getElementById('mfaStatusCard');
+    card.classList.toggle('account-card--ok', on);
+    if (!mfaState.available) {
+        title.textContent = 'Indisponível no momento';
+        text.textContent = 'Não foi possível consultar a verificação em duas etapas. Tente mais tarde.';
+    } else if (on) {
+        title.textContent = 'Ativada';
+        text.textContent = `Ao entrar, o sistema pede o código do aplicativo autenticador. Ativada em ${formatAccountDate(mfaState.factor.created_at)}.`;
+    } else {
+        title.textContent = 'Desativada';
+        text.textContent = 'Além da senha, pede um código do aplicativo autenticador do celular ao entrar. Recomendado.';
+    }
+    document.getElementById('mfaEnableButton').hidden = !mfaState.available || on || !!mfaState.enrolling;
+    document.getElementById('mfaDisableButton').hidden = !on || !document.getElementById('mfaDisableForm').hidden;
+    const fact = document.getElementById('accountMfaFact');
+    if (fact) {
+        fact.textContent = !mfaState.available ? '—' : on ? 'Ativada' : 'Desativada';
+        fact.dataset.state = on ? 'on' : 'off';
+    }
+    renderSecurityLevel();
+}
+
+async function startMfaEnroll() {
+    const form = document.getElementById('mfaEnrollForm');
+    const button = document.getElementById('mfaEnableButton');
+    await runBusy(button, 'Preparando…', async () => {
+        //Remove tentativas anteriores não concluídas
+        const { data: factors } = await supabaseClient.auth.mfa.listFactors();
+        for (const f of (factors?.all || []).filter(f => f.status !== 'verified')) {
+            await supabaseClient.auth.mfa.unenroll({ factorId: f.id });
+        }
+        const { data, error } = await supabaseClient.auth.mfa.enroll({ factorType: 'totp', friendlyName: `ROUTE MAP ${Date.now()}` });
+        if (error) return showAlert('Não foi possível ativar', translateAuthError(error));
+        mfaState.enrolling = data;
+        const qr = data.totp.qr_code || '';
+        document.getElementById('mfaQrImage').src = qr.startsWith('data:') ? qr : `data:image/svg+xml;utf-8,${encodeURIComponent(qr)}`;
+        document.getElementById('mfaSecretText').textContent = data.totp.secret.replace(/(.{4})/g, '$1 ').trim();
+        document.getElementById('mfaEnrollCode').value = '';
+        form.hidden = false;
+        renderMfaState();
+        document.getElementById('mfaEnrollCode').focus();
+    });
+}
+
+async function cancelMfaEnroll() {
+    const pending = mfaState.enrolling;
+    mfaState.enrolling = null;
+    document.getElementById('mfaEnrollForm').hidden = true;
+    if (pending) await supabaseClient.auth.mfa.unenroll({ factorId: pending.id }).catch(() => {});
+    renderMfaState();
+}
+
+async function confirmMfaEnroll(event) {
+    event.preventDefault();
+    const form = document.getElementById('mfaEnrollForm');
+    const code = document.getElementById('mfaEnrollCode').value.trim();
+    if (!/^\d{6}$/.test(code)) return setFeedback(form, 'Digite os 6 dígitos que aparecem no aplicativo.', 'error');
+    await runBusy(form.querySelector('[type="submit"]'), 'Verificando…', async () => {
+        const { error } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: mfaState.enrolling.id, code });
+        if (error) return setFeedback(form, 'Código incorreto ou expirado. Confira o horário do celular e use o código atual.', 'error');
+        mfaState.enrolling = null;
+        form.hidden = true;
+        await loadMfaState();
+        showToast('Verificação em duas etapas ativada', 'No próximo acesso o sistema vai pedir o código do aplicativo.');
+    });
+}
+
+function openMfaDisable() {
+    document.getElementById('mfaDisableForm').hidden = false;
+    document.getElementById('mfaDisableCode').value = '';
+    document.getElementById('mfaDisableCode').focus();
+    renderMfaState();
+}
+
+function closeMfaDisable() {
+    document.getElementById('mfaDisableForm').hidden = true;
+    renderMfaState();
+}
+
+async function confirmMfaDisable(event) {
+    event.preventDefault();
+    const form = document.getElementById('mfaDisableForm');
+    const code = document.getElementById('mfaDisableCode').value.trim();
+    if (!/^\d{6}$/.test(code)) return setFeedback(form, 'Digite os 6 dígitos do aplicativo.', 'error');
+    await runBusy(form.querySelector('[type="submit"]'), 'Desativando…', async () => {
+        const factorId = mfaState.factor.id;
+        const verify = await supabaseClient.auth.mfa.challengeAndVerify({ factorId, code });
+        if (verify.error) return setFeedback(form, 'Código incorreto ou expirado.', 'error');
+        const { error } = await supabaseClient.auth.mfa.unenroll({ factorId });
+        if (error) return setFeedback(form, translateAuthError(error), 'error');
+        form.hidden = true;
+        await loadMfaState();
+        showToast('Verificação em duas etapas desativada', 'Sua conta volta a pedir só a senha.');
+    });
+}
+
+// --- Nível de proteção, datas e sessões ---
+function renderSecurityLevel() {
+    const idle = Number(AppSession.profile?.preferences?.idleLockMinutes) || 0;
+    const checks = [
+        { ok: true, text: 'Senha cadastrada' },
+        { ok: !!mfaState.factor, text: 'Verificação em duas etapas' },
+        { ok: idle > 0, text: 'Bloqueio por inatividade' },
+    ];
+    const score = checks.filter(c => c.ok).length;
+    const level = ['Baixa', 'Básica', 'Boa', 'Forte'][score];
+    const box = document.getElementById('securityLevel');
+    if (!box) return;
+    box.dataset.level = String(score);
+    document.getElementById('securityLevelLabel').textContent = level;
+    document.getElementById('securityLevelBar').style.width = `${(score / checks.length) * 100}%`;
+    document.getElementById('securityChecklist').innerHTML = checks
+        .map(c => `<li class="${c.ok ? 'is-ok' : ''}">${escapeHtml(c.text)}</li>`).join('');
+    const flag = document.getElementById('userMenuSecurityFlag');
+    if (flag) {
+        flag.hidden = !mfaState.available || !!mfaState.factor;
+        flag.textContent = 'Ativar 2FA';
+    }
+}
+
+async function refreshAuthDetails() {
+    try {
+        const { data } = await supabaseClient.auth.getUser();
+        const user = data?.user;
+        document.getElementById('accountCreatedAt').textContent = formatAccountDate(user?.created_at);
+        document.getElementById('accountLastSignIn').textContent = formatAccountDate(user?.last_sign_in_at, true);
+        const note = document.querySelector('#emailChangeCard p');
+        if (note) note.textContent = user?.new_email
+            ? `Troca para ${user.new_email} aguardando confirmação no e-mail.`
+            : 'Usado para entrar e recuperar a senha.';
+    } catch (e) { /* mantém "—" */ }
+    loadMfaState();
+}
+
+function signOutHere() {
+    showConfirm('Sair deste dispositivo', 'Encerrar a sessão neste navegador?', async () => {
+        await Promise.resolve(supabaseClient.rpc('go_offline')).catch(() => {});
+        await supabaseClient.auth.signOut({ scope: 'local' });
+        window.location.replace('login.html');
     });
 }
 
@@ -141,6 +441,51 @@ function signOutEverywhere() {
         await supabaseClient.auth.signOut({ scope: 'global' });
         window.location.replace('login.html');
     });
+}
+
+// --- Bloqueio por inatividade ---
+const IDLE_WARNING_MS = 60000;
+let idleTimer = null;
+let idleWarnTimer = null;
+let idleLastActivity = Date.now();
+
+function scheduleIdleLock() {
+    clearTimeout(idleTimer);
+    clearTimeout(idleWarnTimer);
+    const minutes = Number(AppSession.profile?.preferences?.idleLockMinutes) || 0;
+    if (!minutes) return;
+    const total = minutes * 60000;
+    idleWarnTimer = setTimeout(() => {
+        showToast('Sessão quase expirando', 'Sem atividade: você será desconectado em 1 minuto. Mexa o mouse para continuar.', 'progress');
+    }, Math.max(0, total - IDLE_WARNING_MS));
+    idleTimer = setTimeout(async () => {
+        await Promise.resolve(supabaseClient.rpc('go_offline')).catch(() => {});
+        try { sessionStorage.setItem('routeMapIdleLogout', '1'); } catch (e) { /* ignora */ }
+        await supabaseClient.auth.signOut({ scope: 'local' });
+        window.location.replace('login.html');
+    }, total);
+}
+
+function noteActivity() {
+    const now = Date.now();
+    if (now - idleLastActivity < 5000) return; //no máximo um reinício a cada 5 s
+    idleLastActivity = now;
+    scheduleIdleLock();
+}
+
+function startIdleLock() {
+    ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'].forEach(evt => {
+        document.addEventListener(evt, noteActivity, { passive: true, capture: true });
+    });
+    scheduleIdleLock();
+}
+
+async function saveIdleLock(event) {
+    const minutes = Number(event.target.value) || 0;
+    await saveUserPreferences({ idleLockMinutes: minutes });
+    scheduleIdleLock();
+    renderSecurityLevel();
+    showToast('Bloqueio por inatividade', minutes ? `A sessão encerra após ${event.target.selectedOptions[0].textContent} sem uso.` : 'Desligado.');
 }
 
 //Salva preferências no perfil (mescla com as existentes)
@@ -468,10 +813,42 @@ function setupAccountMenu() {
         btn.addEventListener('click', () => setAccountTab(btn.dataset.tab));
     });
     document.getElementById('closeAccountModal').addEventListener('click', () => {
+        if (mfaState.enrolling) cancelMfaEnroll();
         document.getElementById('accountModal').style.display = 'none';
     });
     document.getElementById('profileForm').addEventListener('submit', saveProfile);
+    document.getElementById('profileForm').addEventListener('input', updateProfileDirtyState);
+    document.getElementById('profileResetButton').addEventListener('click', resetProfileForm);
+    document.getElementById('profilePhone').addEventListener('input', (e) => { e.target.value = formatPhone(e.target.value); });
+    document.getElementById('emailChangeOpenButton').addEventListener('click', openEmailChange);
+    document.getElementById('emailChangeCancelButton').addEventListener('click', closeEmailChange);
+    document.getElementById('emailChangeForm').addEventListener('submit', changeEmail);
     document.getElementById('passwordForm').addEventListener('submit', changePassword);
+    ['newPassword', 'newPasswordConfirm'].forEach(id => document.getElementById(id).addEventListener('input', updatePasswordStrength));
+    document.querySelectorAll('#accountModal [data-toggle-password]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const input = btn.parentElement.querySelector('input');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+            btn.querySelector('use').setAttribute('href', show ? '#i-eye-off' : '#i-eye');
+        });
+    });
+    document.querySelectorAll('#accountModal .mfa-code').forEach(input => {
+        input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 6); });
+    });
+    document.getElementById('mfaEnableButton').addEventListener('click', startMfaEnroll);
+    document.getElementById('mfaEnrollCancelButton').addEventListener('click', cancelMfaEnroll);
+    document.getElementById('mfaEnrollForm').addEventListener('submit', confirmMfaEnroll);
+    document.getElementById('mfaDisableButton').addEventListener('click', openMfaDisable);
+    document.getElementById('mfaDisableCancelButton').addEventListener('click', closeMfaDisable);
+    document.getElementById('mfaDisableForm').addEventListener('submit', confirmMfaDisable);
+    document.getElementById('mfaCopySecretButton').addEventListener('click', () => {
+        const secret = document.getElementById('mfaSecretText').textContent.replace(/\s/g, '');
+        navigator.clipboard?.writeText(secret).then(() => showToast('Chave copiada', 'Cole no aplicativo autenticador.'));
+    });
+    document.getElementById('signOutHereButton').addEventListener('click', signOutHere);
+    document.getElementById('prefIdleLock').addEventListener('change', saveIdleLock);
     document.getElementById('companyForm').addEventListener('submit', saveCompany);
     document.getElementById('preferencesForm').addEventListener('submit', savePreferencesForm);
     document.getElementById('inviteForm').addEventListener('submit', sendInvite);
@@ -490,4 +867,6 @@ function updateInviteRoleHint() {
 setupAccountMenu();
 appReady.then(renderUserIdentity);
 appReady.then(startPresence);
+appReady.then(startIdleLock);
+appReady.then(loadMfaState);
 Promise.all([appReady, mapReady]).then(applyStartupPreferences);

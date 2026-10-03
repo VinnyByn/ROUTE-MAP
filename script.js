@@ -6,6 +6,14 @@ const appReady = (async () => {
         window.location.replace('login.html');
         return new Promise(() => {});
     }
+    //Conta com verificação em duas etapas: a sessão só vale depois do código
+    try {
+        const { data: aal } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+            window.location.replace('login.html');
+            return new Promise(() => {});
+        }
+    } catch (e) { /* MFA indisponível: segue com a senha */ }
     await loadAppContext();
     if (!AppSession.company) {
         window.location.replace('login.html');

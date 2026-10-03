@@ -9210,3 +9210,321 @@ html[data-theme="dark"] .selection-card .ui-icon { color: #7cc4dc; }
 @media (max-width: 640px) {
   .modal .modal-content form > .modal-footer { width: calc(100% + 32px); }
 }
+/* =================================================================
+   Minha conta: perfil completo e segurança
+   ================================================================= */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+
+/* Menu do usuário: cargo como selo e aviso de segurança */
+.user-menu-header .user-menu-company {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px !important;
+  font-weight: 500 !important;
+  color: var(--color-text-muted) !important;
+}
+
+.user-menu-header .user-menu-company .account-badge {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+.user-menu-header .user-menu-company .company-name-slot {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#userDropdown { min-width: 310px; }
+#userDropdown a > span:not(.user-menu-theme-icons) { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+
+.user-menu-flag {
+  position: static !important;
+  flex: none;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  color: #b45309;
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent);
+  white-space: nowrap;
+}
+
+.user-menu-flag[hidden] { display: none; }
+html[data-theme="dark"] .user-menu-flag { color: #fbbf24; }
+
+/* Cabeçalho do perfil */
+.account-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--color-primary) 16%, transparent) 0%, transparent 60%),
+    var(--color-surface-muted);
+}
+
+.account-hero .user-avatar--xl {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+  flex: none;
+}
+
+.account-hero__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.account-hero__text > strong { font-size: 18px; color: var(--color-text); }
+.account-hero__text > span { font-size: 13px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+
+.account-hero__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.account-chip .ui-icon { width: 13px; height: 13px; }
+
+.account-badge--projetista {
+  background: color-mix(in srgb, #0ea5e9 14%, transparent);
+  color: var(--color-text);
+  border-color: color-mix(in srgb, #0ea5e9 40%, transparent);
+}
+
+/* Fatos da conta */
+.account-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.account-facts > div {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.account-facts dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.account-facts dd { margin: 4px 0 0; font-size: 13.5px; font-weight: 600; color: var(--color-text); }
+.account-facts dd[data-state="on"] { color: var(--color-success); }
+.account-facts dd[data-state="off"] { color: #d97706; }
+
+.account-actions { gap: 8px; }
+
+.account-subform {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  background: var(--color-surface);
+}
+
+.account-subform[hidden] { display: none; }
+
+.account-card--tight { margin-top: 10px; }
+.account-card--ok { border-color: color-mix(in srgb, var(--color-success) 40%, transparent); }
+.account-card--ok strong { color: var(--color-success); }
+.account-card .btn[hidden] { display: none; }
+
+.account-inline-select {
+  flex: none;
+  width: 150px;
+  min-height: 36px;
+  margin: 0;
+}
+
+/* Campo de senha com "mostrar" */
+.account-password { position: relative; }
+#accountModal .account-password input { margin: 0; padding-right: 42px !important; }
+
+#accountModal .account-password__toggle {
+  position: absolute !important;
+  top: 0;
+  bottom: 0;
+  right: 6px;
+  margin: auto 0 !important;
+  transform: none !important;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent !important;
+  color: var(--color-text-muted) !important;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+#accountModal .account-password__toggle:hover { color: var(--color-text) !important; background: var(--color-surface-muted) !important; }
+.account-password__toggle .ui-icon { width: 17px; height: 17px; }
+
+/* Força da senha */
+.password-strength { display: flex; align-items: center; gap: 10px; }
+.password-strength__bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; flex: 1; }
+.password-strength__bar i { height: 5px; border-radius: 3px; background: var(--color-border); transition: background .2s; }
+.password-strength__label { min-width: 120px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); text-align: right; }
+
+.password-strength[data-level="1"] i:nth-child(-n+1) { background: #ef4444; }
+.password-strength[data-level="2"] i:nth-child(-n+2) { background: #f59e0b; }
+.password-strength[data-level="3"] i:nth-child(-n+3) { background: #22c55e; }
+.password-strength[data-level="4"] i { background: #16a34a; }
+
+.password-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.password-rules li,
+.account-shield__list li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.password-rules li::before,
+.account-shield__list li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+}
+
+.password-rules li.is-ok,
+.account-shield__list li.is-ok { color: var(--color-text); }
+
+.password-rules li.is-ok::before,
+.account-shield__list li.is-ok::before {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  box-shadow: inset 0 0 0 2px var(--color-surface);
+}
+
+/* Nível de proteção */
+.account-shield {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  --shield: #d97706;
+}
+
+.account-shield[data-level="0"] { --shield: #dc2626; }
+.account-shield[data-level="1"] { --shield: #ea580c; }
+.account-shield[data-level="2"] { --shield: #d97706; }
+.account-shield[data-level="3"] { --shield: var(--color-success); }
+
+.account-shield__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--shield);
+  background: color-mix(in srgb, var(--shield) 14%, transparent);
+}
+
+.account-shield__icon .ui-icon { width: 20px; height: 20px; }
+.account-shield__text { flex: 1; min-width: 0; }
+.account-shield__text strong { font-size: 14px; color: var(--color-text); }
+#securityLevelLabel { color: var(--shield); }
+
+.account-shield__bar { height: 6px; margin: 8px 0 10px; border-radius: 3px; background: var(--color-border); overflow: hidden; }
+.account-shield__bar i { display: block; height: 100%; width: 0; background: var(--shield); transition: width .3s; }
+
+.account-shield__list { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; }
+
+/* Verificação em duas etapas */
+.mfa-steps { margin: 0 0 12px; padding-left: 20px; font-size: 13px; color: var(--color-text-muted); }
+.mfa-steps li + li { margin-top: 3px; }
+
+.mfa-enroll__body { display: flex; gap: 16px; align-items: flex-start; }
+
+.mfa-qr {
+  flex: none;
+  width: 164px;
+  height: 164px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+}
+
+.mfa-enroll__side { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.mfa-enroll__side label { font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+
+.mfa-secret { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+
+.mfa-secret code {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.modal-content input.mfa-code {
+  max-width: 180px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 20px;
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .account-facts { grid-template-columns: 1fr; }
+  .password-rules { grid-template-columns: 1fr; }
+  .mfa-enroll__body { flex-direction: column; align-items: center; }
+  .account-card { flex-wrap: wrap; }
+  .account-inline-select { width: 100%; }
+}
