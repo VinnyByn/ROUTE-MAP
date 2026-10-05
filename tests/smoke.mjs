@@ -398,6 +398,32 @@ const errorsLogged = await page.evaluate(async () => {
 });
 check(errorsLogged.length === 1 && errorsLogged[0] === 'Erro de teste do registro', 'erros do navegador são registrados (sem repetidos nem ruído)');
 
+//Nome no mapa: opção vale para cliente residencial (antes só empresarial) e clientes B2B antigos continuam
+const clientLabel = await page.evaluate(() => {
+  openClientModal(null, 'residencial');
+  const box = document.getElementById('clientShowLabel');
+  const visible = !!box && box.offsetParent !== null;
+  box.checked = true; box.dispatchEvent(new Event('change'));
+  document.getElementById('clientLabelColor').value = '#ff0000';
+  document.getElementById('clientName').value = 'Casa do João';
+  const collected = collectClientForm();
+  closeClientModal();
+  return {
+    visible,
+    saved: collected.client.showLabel === true && collected.client.labelColor === '#ff0000',
+    legacyB2B: getClientMapLabel({ kind: 'b2b', b2b: { showLabel: true, labelColor: '#123456' } }),
+    off: getClientMapLabel({ kind: 'residencial' }).show,
+  };
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => { document.documentElement.setAttribute('data-theme', 'dark'); openClientModal(null, 'residencial'); document.querySelector('#clientShowLabel').scrollIntoView({ block: 'center' }); });
+  await page.waitForTimeout(300);
+  await page.locator('#clientModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'cliente.png') });
+  await page.evaluate(() => closeClientModal());
+}
+check(clientLabel.visible && clientLabel.saved, 'cliente residencial tem a opção "Exibir o nome no mapa"');
+check(clientLabel.legacyB2B.show && clientLabel.legacyB2B.color === '#123456' && !clientLabel.off, 'clientes empresariais antigos continuam com o nome no mapa');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

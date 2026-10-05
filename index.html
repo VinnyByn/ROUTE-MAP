@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261005b" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261005c" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -1659,6 +1659,11 @@
                 <input type="text" id="clientAddress" maxlength="200" placeholder="Rua, número, complemento, bairro" autocomplete="off" />
               </div>
             </div>
+            <label class="account-check client-show-label">
+              <input type="checkbox" id="clientShowLabel" />
+              <span>Exibir o nome no mapa</span>
+              <input type="color" id="clientLabelColor" value="#0f172a" title="Cor do nome" aria-label="Cor do nome no mapa" />
+            </label>
           </fieldset>
 
           <fieldset class="client-section client-section--predial" id="clientPredialSection" hidden>
@@ -1685,11 +1690,6 @@
 
           <fieldset class="client-section client-section--b2b" id="clientB2BSection" hidden>
             <legend>Serviço e rede (B2B)</legend>
-            <label class="account-check client-show-label">
-              <input type="checkbox" id="clientB2BShowLabel" />
-              <span>Exibir o nome no mapa</span>
-              <input type="color" id="clientB2BLabelColor" value="#0f172a" title="Cor do nome" aria-label="Cor do nome no mapa" />
-            </label>
             <div class="client-grid client-grid--3">
               <div class="form-group">
                 <label for="clientB2BService">Serviço</label>
@@ -2535,7 +2535,7 @@
   <script src="js/fusion-plan.js?v=20261004b" defer></script>
   <script src="js/fusion.js?v=20261004b" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
-  <script src="js/clients.js?v=20261004b" defer></script>
+  <script src="js/clients.js?v=20261005c" defer></script>
   <script src="js/marker-hover.js?v=20261004b" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
