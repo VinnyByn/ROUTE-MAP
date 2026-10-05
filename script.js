@@ -3757,11 +3757,7 @@ function getProjectQuantitiesFromItems(projectItems, projectId) {
 
 //Atualiza a posição da caixa
 function updateInfoBoxPosition(e) {
-    if (!cableInfoBox) return;
-    const xOffset = 15;
-    const yOffset = 15;
-    cableInfoBox.style.left = `${e.clientX + xOffset}px`;
-    cableInfoBox.style.top = `${e.clientY + yOffset}px`;
+    if (markerHoverCard?.classList.contains('is-visible')) positionMarkerHoverCard(e.clientX, e.clientY);
 }
 
 //Adiciona efeitos na linha dos cabos - infobox
@@ -3776,7 +3772,7 @@ function addCableEventListeners(polyline) {
         zIndex: polyline.get('zIndex') || 1
     };
     const mapDiv = document.getElementById('map');
-    polyline.addListener('mouseover', function() {
+    polyline.addListener('mouseover', function(event) {
         const cableData = getCableInfoByPolyline(this);
         if (!cableData || !cableData.polyline.getVisible()) return;
         originalOptions = {
@@ -3787,13 +3783,12 @@ function addCableEventListeners(polyline) {
             strokeWeight: (originalOptions.strokeWeight || 3) + 3,
             zIndex: 100
         });
-        cableInfoBox.innerHTML = buildCableHoverHtml(cableData);
-        cableInfoBox.classList.remove('hidden');
+        showCableHoverCard(cableData, event?.domEvent);
         mapDiv.addEventListener('mousemove', updateInfoBoxPosition);
     });
     polyline.addListener('mouseout', function() {
         this.setOptions(originalOptions);
-        cableInfoBox.classList.add('hidden');
+        hideMarkerHoverCard();
         mapDiv.removeEventListener('mousemove', updateInfoBoxPosition);
     });
 }

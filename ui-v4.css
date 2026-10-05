@@ -1800,3 +1800,10 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
   box-shadow: none;
 }
 .sidebar-column .ge-drop-row:has(> .ge-vis-checkbox:not(:checked)) > :is(.item-name, .item-meta, .ge-item-icon) { opacity: 0.45; }
+
+/* Cartão do cabo (mesmo do marcador): faixa com a cor do cabo no lugar do ícone */
+.mh-card__cable { width: 28px; height: 28px; flex: none; border-radius: 8px; background: color-mix(in srgb, var(--cable-color) 18%, transparent); position: relative; }
+.mh-card__cable::after { content: ''; position: absolute; left: 5px; right: 5px; top: 12px; height: 4px; border-radius: 2px; background: var(--cable-color); transform: rotate(-30deg); }
+.mh-card__head div { min-width: 0; }
+.mh-card__head div strong { overflow-wrap: anywhere; }
+.mh-card section .mh-card__note { margin: 0 0 3px; }
