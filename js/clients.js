@@ -607,6 +607,12 @@ async function fillClientAddressFromMap(clientInfo, { force = false } = {}) {
 // Aparência e materiais
 // ---------------------------------------------------------------
 
+//Nome no mapa: vale para qualquer tipo de cliente (antes só B2B, guardado em client.b2b)
+function getClientMapLabel(client) {
+    const show = client?.showLabel ?? client?.b2b?.showLabel;
+    return { show: !!show, color: client?.labelColor || client?.b2b?.labelColor || '#0f172a' };
+}
+
 function applyClientAppearance(clientInfo) {
     clientInfo.client = normalizeClientData(clientInfo.client);
     const status = getClientStatus(clientInfo.client.status);
@@ -614,9 +620,9 @@ function applyClientAppearance(clientInfo) {
     clientInfo.color = status.color;
     const kind = CLIENT_KINDS[clientInfo.client.kind];
     const variant = clientInfo.client.kind === 'residencial' ? '' : clientInfo.client.kind;
-    //B2B pode exibir o nome no mapa, como as caixas
-    const showLabel = isB2BClient(clientInfo) && !!clientInfo.client.b2b?.showLabel;
-    clientInfo.marker.setLabel(showLabel ? buildMarkerMapLabel(clientInfo.name, clientInfo.client.b2b?.labelColor || '#0f172a') : null);
+    //Qualquer cliente pode exibir o nome no mapa, como as caixas
+    const label = getClientMapLabel(clientInfo.client);
+    clientInfo.marker.setLabel(label.show ? buildMarkerMapLabel(clientInfo.name, label.color) : null);
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;
@@ -1067,9 +1073,10 @@ function openClientModal(clientInfo, presetKind) {
         clientPredialManagerPhone: data.predial.managerPhone || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
-    document.getElementById('clientB2BShowLabel').checked = !!b2b.showLabel;
-    document.getElementById('clientB2BLabelColor').value = b2b.labelColor || '#0f172a';
-    document.getElementById('clientB2BLabelColor').disabled = !b2b.showLabel;
+    const mapLabel = getClientMapLabel(data);
+    document.getElementById('clientShowLabel').checked = mapLabel.show;
+    document.getElementById('clientLabelColor').value = mapLabel.color;
+    document.getElementById('clientLabelColor').disabled = !mapLabel.show;
     document.getElementById('clientEquipmentList').innerHTML = '';
     //Cliente novo: residencial/predial começa com uma ONU; B2B escolhe na lista Data Center
     const equipments = data.equipments.length ? data.equipments : (clientInfo || data.kind === 'b2b' ? [] : [{ type: 'ONU/ONT' }]);
@@ -1131,9 +1138,9 @@ function collectClientForm() {
                 ipv6: value('clientB2BIpv6'),
                 contactName: value('clientB2BContactName'),
                 contactPhone: value('clientB2BContactPhone'),
-                showLabel: document.getElementById('clientB2BShowLabel').checked,
-                labelColor: document.getElementById('clientB2BLabelColor').value,
             } : {},
+            showLabel: document.getElementById('clientShowLabel').checked,
+            labelColor: document.getElementById('clientLabelColor').value,
             notes: value('clientNotes')
         }
     };
@@ -1324,8 +1331,8 @@ function setupClientModal() {
     document.querySelectorAll('#clientKindGroup button').forEach(button => {
         button.addEventListener('click', () => setClientKind(button.dataset.kind));
     });
-    document.getElementById('clientB2BShowLabel').addEventListener('change', (e) => {
-        document.getElementById('clientB2BLabelColor').disabled = !e.target.checked;
+    document.getElementById('clientShowLabel').addEventListener('change', (e) => {
+        document.getElementById('clientLabelColor').disabled = !e.target.checked;
     });
     document.getElementById('clientB2BService').innerHTML = B2B_SERVICES.map(s => `<option>${s}</option>`).join('');
     document.getElementById('addClientEquipmentButton').addEventListener('click', () => {
