@@ -341,19 +341,42 @@ await page.click('#confirmModalConfirmButton');
 await page.waitForTimeout(400);
 const trashed = await page.evaluate(() => ({ deleted: !!window.__fakeDb.projects.projX?.deleted_at, inSidebar: !!document.getElementById('projX') }));
 check(trashed.deleted && !trashed.inSidebar, 'excluir projeto manda para a lixeira (não apaga do banco)');
-//A lixeira abre por cima da janela "Abrir projeto", e a confirmação por cima da lixeira
+//Ordem das janelas: a última aberta fica por cima, em qualquer ordem (js/layering.js)
 const layering = await page.evaluate(async () => {
-  document.getElementById('loadProjectModal').style.display = 'flex';
-  await openTrash();
-  const topAt = (el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + 20); };
-  const trashOnTop = document.getElementById('trashModal').contains(topAt(document.querySelector('#trashModal .modal-content')));
-  showConfirm('Excluir de vez', 'teste', () => {});
-  const confirmOnTop = document.getElementById('confirmModal').contains(topAt(document.querySelector('#confirmModal .modal-content')));
-  document.getElementById('confirmModal').style.display = 'none';
-  document.getElementById('loadProjectModal').style.display = 'none';
-  return { trashOnTop, confirmOnTop };
+  const wait = () => new Promise(r => setTimeout(r, 30));
+  const show = async (id) => { document.getElementById(id).style.display = 'flex'; await wait(); };
+  const hide = (id) => { document.getElementById(id).style.display = 'none'; };
+  const isTop = (id) => {
+    const el = document.getElementById(id);
+    const box = (el.querySelector('.modal-content') || el).getBoundingClientRect();
+    return el.contains(document.elementFromPoint(box.left + box.width / 2, box.top + 12));
+  };
+  const results = [];
+  const pairs = [['loadProjectModal', 'trashModal'], ['accountModal', 'loadProjectModal'], ['materialCatalogModal', 'accountModal'], ['projectHistoryModal', 'materialModal']];
+  for (const [a, b] of pairs) {
+    if (!document.getElementById(a) || !document.getElementById(b)) continue;
+    await show(a); await show(b); results.push([`${a} → ${b}`, isTop(b)]); hide(a); hide(b);
+    await show(b); await show(a); results.push([`${b} → ${a}`, isTop(a)]); hide(a); hide(b);
+  }
+  await show('loadProjectModal'); await show('trashModal');
+  showConfirm('Excluir de vez', 'teste', () => {}); await wait();
+  results.push(['confirmação por cima da lixeira', isTop('confirmModal')]);
+  hide('confirmModal'); hide('trashModal'); hide('loadProjectModal');
+  //Caixa de ferramenta aberta e depois uma janela: a janela cobre
+  const ruler = document.getElementById('rulerBox'), poly = document.getElementById('polygonDrawingBox');
+  ruler.classList.remove('hidden'); await wait();
+  await show('accountModal');
+  results.push(['janela aberta depois da régua fica por cima', isTop('accountModal')]);
+  hide('accountModal');
+  //Duas caixas abertas: clicar na de baixo a traz para frente
+  poly.classList.remove('hidden'); await wait();
+  ruler.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  results.push(['clicar na caixa a traz para frente', parseInt(ruler.style.zIndex, 10) > parseInt(poly.style.zIndex, 10)]);
+  ruler.classList.add('hidden'); poly.classList.add('hidden');
+  return results;
 });
-check(layering.trashOnTop && layering.confirmOnTop, 'lixeira abre por cima de "Abrir projeto" e a confirmação por cima da lixeira');
+const layeringFail = layering.filter(([, ok]) => !ok).map(([name]) => name);
+check(layering.length >= 8 && !layeringFail.length, `a última janela aberta fica por cima (${layering.length} combinações)${layeringFail.length ? ': falhou ' + layeringFail.join('; ') : ''}`);
 await page.evaluate(() => openTrash());
 await page.waitForSelector('#trashList [data-trash-action="restore"]', { timeout: 5000 }).catch(() => {});
 if (process.env.SMOKE_SHOTS) await page.locator('#trashModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'lixeira.png') });
