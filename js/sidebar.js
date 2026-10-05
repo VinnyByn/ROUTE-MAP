@@ -109,6 +109,11 @@ function getSidebarEntity(element) {
             row: title,
         };
     }
+    const dropRow = element.closest('.ge-drop-row');
+    if (dropRow) {
+        const client = markers.find(m => m.listItem === dropRow.parentElement);
+        return client ? { kind: 'drop', info: client, name: `Drop · ${client.name}`, row: dropRow } : null;
+    }
     const li = element.closest('.ge-pro-item');
     if (!li) return null;
     const marker = markers.find(m => m.listItem === li);
@@ -134,6 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
+    'drop-edit': 'edit', 'drop-recalc': 'refresh', 'open-client': 'client',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -141,6 +147,16 @@ function buildSidebarMenuItems(entity) {
     const visible = getEntityVisibilityCheckbox(entity)?.checked !== false;
     const visibility = { action: visible ? 'hide' : 'show', label: visible ? 'Ocultar no mapa' : 'Mostrar no mapa' };
     const items = [];
+    if (entity.kind === 'drop') {
+        const onCable = !!entity.info.client?.cableName;
+        if (canEdit && !onCable) items.push({ action: 'drop-edit', label: 'Editar traçado', hint: 'Arraste os pontos da linha no mapa' });
+        if (canEdit && !onCable) items.push({ action: 'drop-recalc', label: 'Recalcular traçado', hint: 'Segue a rede do projeto de novo' });
+        items.push({ action: 'focus', label: 'Centralizar no mapa' });
+        items.push({ action: visible ? 'hide' : 'show', label: visible ? 'Ocultar drop no mapa' : 'Mostrar drop no mapa' });
+        items.push({ divider: true });
+        items.push({ action: 'open-client', label: canEdit ? 'Editar cliente' : 'Ver cliente' });
+        return items;
+    }
     if (entity.kind === 'project' || entity.kind === 'folder') {
         const isProject = entity.kind === 'project';
         const ul = document.getElementById(entity.folderId);
@@ -185,7 +201,7 @@ function buildSidebarMenuItems(entity) {
 
 function renderSidebarMenu(entity) {
     const menu = document.getElementById('sidebarFolderContextMenu');
-    const kindLabels = { project: 'Projeto', folder: 'Pasta', marker: entity.info?.type === 'CLIENTE' ? 'Cliente' : 'Marcador', cable: 'Cabo', polygon: 'Polígono' };
+    const kindLabels = { project: 'Projeto', folder: 'Pasta', marker: entity.info?.type === 'CLIENTE' ? 'Cliente' : 'Marcador', cable: 'Cabo', polygon: 'Polígono', drop: 'Drop do cliente' };
     const items = buildSidebarMenuItems(entity);
     menu.innerHTML = `<div class="sb-menu__head"><small>${escapeHtml(kindLabels[entity.kind] || '')}</small><strong>${escapeHtml(entity.name || '')}</strong></div>`
         + items.map(item => item.divider
@@ -296,6 +312,18 @@ function handleSidebarMenuAction(action) {
         else if (kind === 'marker') focusMapToMarker(info);
         else if (kind === 'cable') focusMapToCable(info);
         else if (kind === 'polygon') focusMapToPolygon(info);
+        else if (kind === 'drop') focusMapToClientDrop(info);
+        break;
+    case 'drop-edit':
+        editClientDropFromSidebar(info);
+        break;
+    case 'drop-recalc':
+        recalculateClientDropFromSidebar(info);
+        break;
+    case 'open-client':
+        selectSidebarMarker(info);
+        focusMapToMarker(info);
+        openMarkerFromUserAction(info);
         break;
     case 'hide':
     case 'show':

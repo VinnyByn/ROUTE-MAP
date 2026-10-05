@@ -3607,7 +3607,7 @@ function handleVisibilityToggle(element, explicitVisible) {
     folderIdsToToggle.forEach((id) => {
         const ul = document.getElementById(id);
         if (!ul) return;
-        ul.querySelectorAll(':scope > .ge-pro-item .ge-vis-checkbox').forEach((cb) => {
+        ul.querySelectorAll(':scope > .ge-pro-item > .ge-vis-checkbox').forEach((cb) => {
             cb.checked = newVisibility;
             cb.dataset.visible = String(newVisibility);
         });

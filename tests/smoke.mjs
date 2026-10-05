@@ -424,6 +424,56 @@ if (process.env.SMOKE_SHOTS) {
 check(clientLabel.visible && clientLabel.saved, 'cliente residencial tem a opção "Exibir o nome no mapa"');
 check(clientLabel.legacyB2B.show && clientLabel.legacyB2B.color === '#123456' && !clientLabel.off, 'clientes empresariais antigos continuam com o nome no mapa');
 
+//Drop do cliente aparece na barra lateral embaixo do cliente: ocultar, centralizar e editar pelo menu
+const dropRow = await page.evaluate(() => {
+  const realInfo = window.getClientDropInfo;
+  window.getClientDropInfo = (c) => c.dropLine?.getPath().getLength() >= 2 ? { length: 45, route: c.client.dropRoute, isManual: false } : null;
+  const calls = [];
+  const path = [1, 2];
+  const line = { getPath: () => ({ getLength: () => path.length, forEach: () => {} }), setVisible: v => calls.push(v) };
+  const marker = { getVisible: () => true };
+  const ul = document.createElement('ul');
+  ul.className = 'subfolders';
+  document.getElementById('sidebar').appendChild(ul);
+  const li = buildGeProMapItemRow(Object.assign(document.createElement('span'), { className: 'item-name', textContent: 'Casa 1' }), null, 'ge-icon-client');
+  ul.appendChild(li);
+  const info = { type: 'CLIENTE', name: 'Casa 1', listItem: li, marker, dropLine: line, client: { kind: 'residencial', status: 'ativo', ctoUid: 'cto-1', dropRoute: 'rede' } };
+  markers.push(info);
+  refreshClientDropSidebarRow(info);
+  const row = li.querySelector(':scope > .ge-drop-row');
+  const result = { exists: !!row, meta: row?.querySelector('.item-meta').textContent, counted: li.querySelectorAll('.ge-pro-item').length };
+  const entity = getSidebarEntity(row.querySelector('.item-name'));
+  result.kind = entity?.kind;
+  result.client = entity?.info === info;
+  result.actions = buildSidebarMenuItems(entity).map(i => i.action).filter(Boolean);
+  const cb = row.querySelector('.ge-drop-vis');
+  cb.checked = false; cb.dispatchEvent(new Event('change', { bubbles: true }));
+  result.hidden = info.client.dropHidden === true && calls.at(-1) === false;
+  result.menuAfterHide = buildSidebarMenuItems(getSidebarEntity(row)).some(i => i.action === 'show');
+  setClientDropHidden(info, false);
+  result.shown = !info.client.dropHidden && calls.at(-1) === true && cb.checked;
+  path.length = 0;
+  refreshClientDropSidebarRow(info);
+  result.removed = !li.querySelector('.ge-drop-row');
+  path.push(1, 2);
+  refreshClientDropSidebarRow(info);
+  window.__dropTest = { info, ul, realInfo };
+  return result;
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => { document.documentElement.setAttribute('data-theme', 'light'); window.__dropTest.ul.scrollIntoView(); });
+  await page.waitForTimeout(200);
+  await page.locator('#sidebar').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'drop-sidebar.png') });
+}
+await page.evaluate(() => {
+  const { info, ul, realInfo } = window.__dropTest;
+  markers.splice(markers.indexOf(info), 1); ul.remove(); window.getClientDropInfo = realInfo;
+});
+check(dropRow.exists && dropRow.meta.startsWith('45 m') && dropRow.counted === 0, `drop aparece embaixo do cliente na barra lateral (${dropRow.meta})`);
+check(dropRow.kind === 'drop' && dropRow.client && ['drop-edit', 'drop-recalc', 'focus', 'hide', 'open-client'].every(a => dropRow.actions.includes(a)), 'menu do drop tem editar traçado, recalcular, centralizar, ocultar e abrir cliente');
+check(dropRow.hidden && dropRow.menuAfterHide && dropRow.shown, 'ocultar e mostrar o drop sem ocultar o cliente');
+check(dropRow.removed, 'cliente sem drop não mostra a linha');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

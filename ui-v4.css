@@ -1776,3 +1776,27 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 }
 #clientModal .client-show-label input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
 #clientModal .client-show-label input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 3px; }
+
+/* Drop do cliente: linha própria embaixo do cliente na barra lateral */
+.sidebar-column .ge-pro-item.has-drop-row { flex-wrap: wrap; }
+.sidebar-column .ge-drop-row {
+  display: flex;
+  align-items: center;
+  flex: 1 0 100%;
+  min-width: 0;
+  margin: 0 0 2px 22px;
+  min-height: 26px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sidebar-column .ge-drop-row:hover { background: var(--sb-row-hover); }
+.sidebar-column .ge-drop-row > .item-name { flex: 0 0 auto; font-weight: 600; }
+.sidebar-column .ge-drop-row > .item-meta { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-column .ge-drop-row > .ge-icon-path::after {
+  height: 0;
+  top: 8px;
+  border-top: 2px dashed var(--ge-item-color, #3367d6);
+  background: none;
+  box-shadow: none;
+}
+.sidebar-column .ge-drop-row:has(> .ge-vis-checkbox:not(:checked)) > :is(.item-name, .item-meta, .ge-item-icon) { opacity: 0.45; }

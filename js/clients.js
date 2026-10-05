@@ -483,6 +483,7 @@ function drawClientDropLine(clientInfo) {
         }],
     });
     clientInfo.dropLine.setPath(path.map(toLatLng));
+    refreshClientDropSidebarRow(clientInfo);
 }
 
 //Desenha (ou atualiza) o drop de cada cliente.
@@ -521,11 +522,7 @@ function refreshClientDrops(options = {}) {
                 clientInfo.dropLine?.setPath([]);
                 return;
             }
-            if (!clientInfo.dropLine) {
-                clientInfo.dropLine = new google.maps.Polyline({ clickable: false, strokeOpacity: 0, zIndex: 5 });
-                clientInfo.dropLine.bindTo('map', clientInfo.marker);
-                clientInfo.dropLine.bindTo('visible', clientInfo.marker);
-            }
+            ensureClientDropLine(clientInfo);
             const end = clientInfo.marker.getPosition();
             clientInfo.client.dropPath = [{ lat: start.lat(), lng: start.lng() }, { lat: end.lat(), lng: end.lng() }];
             clientInfo.client.dropRoute = 'cabo';
@@ -538,12 +535,7 @@ function refreshClientDrops(options = {}) {
             clientInfo.dropLine?.setPath([]);
             return;
         }
-        if (!clientInfo.dropLine) {
-            clientInfo.dropLine = new google.maps.Polyline({ clickable: false, strokeOpacity: 0, zIndex: 5 });
-            //Some junto com o marcador (exclusão, pasta oculta, visibilidade)
-            clientInfo.dropLine.bindTo('map', clientInfo.marker);
-            clientInfo.dropLine.bindTo('visible', clientInfo.marker);
-        }
+        ensureClientDropLine(clientInfo);
         if (live && Array.isArray(clientInfo.client.dropPath)) {
             const path = clientInfo.dropLine.getPath();
             if (path.getLength()) path.setAt(0, cto.marker.getPosition());
@@ -552,6 +544,111 @@ function refreshClientDrops(options = {}) {
         ensureClientDropPath(clientInfo, cto, { force: recompute, getNetwork });
         drawClientDropLine(clientInfo);
     });
+    markers.forEach(m => { if (m.type === 'CLIENTE') refreshClientDropSidebarRow(m); });
+}
+
+//Linha do drop: some junto com o marcador (exclusão, pasta oculta) e pode ser ocultada sozinha
+function ensureClientDropLine(clientInfo) {
+    if (clientInfo.dropLine) return;
+    clientInfo.dropLine = new google.maps.Polyline({ clickable: false, strokeOpacity: 0, zIndex: 5 });
+    clientInfo.dropLine.bindTo('map', clientInfo.marker);
+    clientInfo.marker.addListener('visible_changed', () => syncClientDropVisibility(clientInfo));
+    syncClientDropVisibility(clientInfo);
+}
+
+function syncClientDropVisibility(clientInfo) {
+    clientInfo.dropLine?.setVisible(clientInfo.marker.getVisible() !== false && !clientInfo.client?.dropHidden);
+}
+
+// ---------------------------------------------------------------
+// Drop na barra lateral: linha embaixo do cliente (ocultar, centralizar, editar traçado)
+// ---------------------------------------------------------------
+
+function hasClientDrop(clientInfo) {
+    return !!clientInfo.dropLine && clientInfo.dropLine.getPath().getLength() >= 2 && !!getClientDropInfo(clientInfo);
+}
+
+function refreshClientDropSidebarRow(clientInfo) {
+    const li = clientInfo.listItem;
+    if (!li) return;
+    let row = li.querySelector(':scope > .ge-drop-row');
+    if (!hasClientDrop(clientInfo)) {
+        row?.remove();
+        li.classList.remove('has-drop-row');
+        return;
+    }
+    if (!row) {
+        row = document.createElement('div');
+        row.className = 'ge-pro-row ge-drop-row';
+        row.innerHTML = `<input type="checkbox" class="ge-vis-checkbox ge-drop-vis">
+            <span class="ge-item-icon ge-icon-path" aria-hidden="true"></span>
+            <span class="item-name">Drop</span><span class="item-meta"></span>
+            <div class="ge-pro-actions"><button type="button" class="item-actions-toggle-btn" title="Ações" aria-label="Ações do drop" aria-haspopup="menu">&#8942;</button></div>`;
+        const checkbox = row.querySelector('.ge-drop-vis');
+        checkbox.addEventListener('change', (e) => {
+            e.stopPropagation();
+            setClientDropHidden(clientInfo, !checkbox.checked);
+        });
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('input, button')) return;
+            e.stopPropagation();
+            selectSidebarMarker(clientInfo);
+            focusMapToClientDrop(clientInfo);
+        });
+        row.addEventListener('dblclick', (e) => {
+            if (e.target.closest('input, button')) return;
+            e.stopPropagation();
+            if (AppSession.canEdit) editClientDropFromSidebar(clientInfo);
+            else focusMapToClientDrop(clientInfo);
+        });
+        li.appendChild(row);
+        li.classList.add('has-drop-row');
+    }
+    const info = getClientDropInfo(clientInfo);
+    const visible = !clientInfo.client.dropHidden;
+    const checkbox = row.querySelector('.ge-drop-vis');
+    checkbox.checked = visible;
+    checkbox.title = visible ? 'Ocultar drop no mapa' : 'Exibir drop no mapa';
+    row.querySelector('.ge-item-icon').style.setProperty('--ge-item-color', getClientStatus(clientInfo.client.status).color);
+    const route = info.cable ? 'no cabo' : (DROP_ROUTE_LABELS[info.route] || '');
+    const meta = [`${info.length} m`, route, info.isManual ? 'metragem informada' : ''].filter(Boolean).join(' · ');
+    const metaEl = row.querySelector('.item-meta');
+    if (metaEl.textContent !== meta) metaEl.textContent = meta;
+}
+
+function setClientDropHidden(clientInfo, hidden) {
+    if (hidden) clientInfo.client.dropHidden = true;
+    else delete clientInfo.client.dropHidden;
+    syncClientDropVisibility(clientInfo);
+    refreshClientDropSidebarRow(clientInfo);
+}
+
+function focusMapToClientDrop(clientInfo) {
+    const bounds = new google.maps.LatLngBounds();
+    clientInfo.dropLine?.getPath().forEach(p => bounds.extend(p));
+    if (bounds.isEmpty()) focusMapToMarker(clientInfo);
+    else map.fitBounds(bounds, { top: 56, right: 48, bottom: 56, left: getMapFocusPadding() });
+}
+
+//Edição do traçado pela barra lateral (mesma edição do botão na janela do cliente)
+function editClientDropFromSidebar(clientInfo) {
+    if (!requireEdit('editar o drop')) return;
+    if (clientInfo.client.cableName || !findMarkerByUid(clientInfo.client.ctoUid)) {
+        showToast('Drop no cabo', 'A derivação direto no cabo é reta e não tem traçado para ajustar.', 'progress');
+        return;
+    }
+    if (clientInfo.client.dropHidden) setClientDropHidden(clientInfo, false);
+    editingClient = clientInfo;
+    startClientDropEdit();
+}
+
+function recalculateClientDropFromSidebar(clientInfo) {
+    if (!requireEdit('recalcular o drop')) return;
+    clientInfo.client.dropRoute = null;
+    clientInfo.client.dropKey = null;
+    refreshClientDrops({ onlyCto: findMarkerByUid(clientInfo.client.ctoUid) });
+    refreshBomAfterProjectChange();
+    showToast('Drop recalculado', DROP_ROUTE_LABELS[clientInfo.client.dropRoute] ? `Traçado ${DROP_ROUTE_LABELS[clientInfo.client.dropRoute]}.` : 'Traçado atualizado.');
 }
 
 // ---------------------------------------------------------------
@@ -1187,6 +1284,7 @@ function saveClient(event) {
             dropPath: keepRoute ? previous.dropPath : null,
             dropRoute: keepRoute ? previous.dropRoute : null,
             dropKey: keepRoute ? previous.dropKey : null,
+            dropHidden: previous.dropHidden,
         };
         updateMarkerAppearance(editingClient);
         refreshBomAfterProjectChange();
