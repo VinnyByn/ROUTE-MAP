@@ -474,6 +474,42 @@ check(dropRow.kind === 'drop' && dropRow.client && ['drop-edit', 'drop-recalc', 
 check(dropRow.hidden && dropRow.menuAfterHide && dropRow.shown, 'ocultar e mostrar o drop sem ocultar o cliente');
 check(dropRow.removed, 'cliente sem drop não mostra a linha');
 
+//Traçado do drop já desenhado não muda ao abrir o projeto ou mexer em cabos (recompute)
+const dropStable = await page.evaluate(() => {
+  const realGoogle = window.google;
+  const realRoute = window.routeDropAlongNetwork;
+  const realStreet = window.requestStreetDropRoute;
+  const LatLng = function (lat, lng) { this.la = lat; this.ln = lng; };
+  LatLng.prototype.lat = function () { return this.la; };
+  LatLng.prototype.lng = function () { return this.ln; };
+  window.google = { maps: { LatLng } };
+  window.routeDropAlongNetwork = () => [new LatLng(0, 0), new LatLng(9, 9), new LatLng(1, 1)];
+  window.requestStreetDropRoute = () => {};
+  const cto = { uid: 'cto-1', marker: { getPosition: () => new LatLng(0, 0) } };
+  const make = (route) => {
+    const c = { folderId: 'f', marker: { getPosition: () => new LatLng(1, 1) }, client: { dropRoute: route, dropPath: [{ lat: 0, lng: 0 }, { lat: 5, lng: 5 }, { lat: 1, lng: 1 }] } };
+    c.client.dropKey = getDropKey(cto, c);
+    return c;
+  };
+  const out = {};
+  for (const route of ['rede', 'osrm', 'rua', 'manual']) {
+    const c = make(route);
+    ensureClientDropPath(c, cto, { force: true, getNetwork: () => ({}) });
+    out[route] = c.client.dropRoute === route && c.client.dropPath[1].lat === 5;
+  }
+  const straight = make('reta');
+  ensureClientDropPath(straight, cto, { force: true, getNetwork: () => ({}) });
+  out.retaMelhora = straight.client.dropRoute === 'rede' && straight.client.dropPath[1].lat === 9;
+  const moved = make('rede');
+  moved.marker.getPosition = () => new LatLng(1, 1.5);
+  ensureClientDropPath(moved, cto, { getNetwork: () => ({}) });
+  out.movidoRefaz = moved.client.dropPath[1].lat === 9;
+  window.google = realGoogle; window.routeDropAlongNetwork = realRoute; window.requestStreetDropRoute = realStreet;
+  return out;
+});
+check(dropStable.rede && dropStable.osrm && dropStable.rua && dropStable.manual, `traçado do drop desenhado é mantido ao reabrir/mexer em cabos (${JSON.stringify(dropStable)})`);
+check(dropStable.retaMelhora && dropStable.movidoRefaz, 'linha reta provisória passa pela rede e cliente movido refaz o traçado');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

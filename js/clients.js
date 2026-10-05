@@ -414,7 +414,9 @@ function ensureClientDropPath(clientInfo, cto, { force = false, getNetwork }) {
         }
         return;
     }
-    if (!force && hasPath && data.dropKey === key) return;
+    //Traçado já feito fica como está (abrir o projeto ou mexer em cabos não refaz a rota).
+    //force só melhora a linha reta provisória; CTO ou cliente movidos e "Recalcular" refazem.
+    if (hasPath && data.dropKey === key && !(force && data.dropRoute === 'reta')) return;
     const routed = routeDropAlongNetwork(getNetwork(clientInfo.folderId), ctoPos, clientPos);
     if (routed) {
         data.dropPath = routed.map(p => ({ lat: p.lat(), lng: p.lng() }));
@@ -487,7 +489,7 @@ function drawClientDropLine(clientInfo) {
 }
 
 //Desenha (ou atualiza) o drop de cada cliente.
-//onlyCto: só os clientes dessa CTO · live: CTO sendo arrastada (move só a ponta) · recompute: refaz rotas automáticas
+//onlyCto: só os clientes dessa CTO · live: CTO sendo arrastada (move só a ponta) · recompute: tenta trocar linhas retas pela rede
 function refreshClientDrops(options = {}) {
     if (typeof google === 'undefined' || !google.maps?.geometry || clientDropsSuspended) return;
     const { onlyCto = null, live = false, recompute = false } = options;
