@@ -510,6 +510,29 @@ const dropStable = await page.evaluate(() => {
 check(dropStable.rede && dropStable.osrm && dropStable.rua && dropStable.manual, `traçado do drop desenhado é mantido ao reabrir/mexer em cabos (${JSON.stringify(dropStable)})`);
 check(dropStable.retaMelhora && dropStable.movidoRefaz, 'linha reta provisória passa pela rede e cliente movido refaz o traçado');
 
+//Cartão do cabo ao passar o mouse: mesmo desenho do cartão dos marcadores
+const cableCard = await page.evaluate(() => {
+  const cable = { name: 'FO-06-CTO-03', type: 'CFOA-SM-AS80 6F', color: '#f59e0b', lancamento: 300, reserva: 30, totalLength: 330 };
+  const real = window.getCableFiberUsage;
+  window.getCableFiberUsage = () => ({ total: 6, used: [3], free: [1, 2, 4, 5, 6] });
+  showCableHoverCard(cable, { clientX: 300, clientY: 200 });
+  window.getCableFiberUsage = real;
+  const card = document.querySelector('.mh-card.is-visible');
+  return {
+    head: card?.querySelector('.mh-card__head strong')?.textContent,
+    sections: [...(card?.querySelectorAll('h5') || [])].map(h => h.textContent),
+    text: card?.textContent || '',
+  };
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.waitForTimeout(200);
+  await page.locator('.mh-card.is-visible').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'cabo-hover.png') });
+}
+await page.evaluate(() => hideMarkerHoverCard(true));
+check(cableCard.head === 'FO-06-CTO-03' && cableCard.sections.join() === 'Metragem,Fibras'
+  && cableCard.text.includes('1 / 6') && cableCard.text.includes('1-2, 4-6') && cableCard.text.includes('330 m'), 'cabo ao passar o mouse usa o cartão dos marcadores (metragem e fibras)');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

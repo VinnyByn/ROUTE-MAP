@@ -134,7 +134,28 @@ function getCableFiberUsage(cable) {
 
 function buildCableHoverHtml(cable) {
     const u = getCableFiberUsage(cable);
-    return `<strong>${escapeHtml(cable.name || '')}</strong><br>Total: ${cable.totalLength} m`
-        + `<br>Fibras em uso: ${u.used.length}/${u.total}${u.used.length ? ` (${formatFiberRanges(u.used)})` : ''}`
-        + `<br>Vagas: ${u.free.length}${u.free.length ? ` (${formatFiberRanges(u.free)})` : ''}`;
+    const row = (label, value, cls = '') => `<div class="mh-row ${cls}"><span>${label}</span><b>${value}</b></div>`;
+    const color = /^#[0-9a-f]{3,8}$/i.test(cable.color || '') ? cable.color : '#3b82f6';
+    const head = `<header class="mh-card__head"><span class="mh-card__cable" style="--cable-color:${color}" aria-hidden="true"></span>`
+        + `<div><strong>${escapeHtml(cable.name || '')}</strong><span>${escapeHtml(cable.type || 'Cabo')}</span></div></header>`;
+    let body = `<section><h5>Metragem</h5>${row('Lançamento', `${cable.lancamento ?? cable.totalLength} m`)}`
+        + `${cable.reserva ? row('Reserva', `${cable.reserva} m`) : ''}${row('Total', `${cable.totalLength} m`, 'is-total')}</section>`;
+    body += `<section><h5>Fibras</h5>${row('Em uso', `${u.used.length} / ${u.total}`, 'is-busy')}`
+        + `${u.used.length ? `<p class="mh-card__note">${formatFiberRanges(u.used)}</p>` : ''}`
+        + `${row('Livres', u.free.length, 'is-free')}${u.free.length ? `<p class="mh-card__note">${formatFiberRanges(u.free)}</p>` : ''}</section>`;
+    return head + `<div class="mh-card__body">${body}</div>`;
+}
+
+//Cabo: mesmo cartão dos marcadores
+function showCableHoverCard(cable, domEvent) {
+    clearTimeout(markerHoverHideTimer);
+    if (!markerHoverCard) {
+        markerHoverCard = document.createElement('div');
+        markerHoverCard.className = 'mh-card';
+        markerHoverCard.setAttribute('role', 'tooltip');
+        document.body.appendChild(markerHoverCard);
+    }
+    markerHoverCard.innerHTML = buildCableHoverHtml(cable);
+    markerHoverCard.classList.add('is-visible');
+    positionMarkerHoverCard(domEvent?.clientX ?? markerHoverPointer.x, domEvent?.clientY ?? markerHoverPointer.y);
 }
