@@ -675,6 +675,30 @@ check(route.t1 === 'R-A#1,R-B#1|R-CTO:1|1' && route.t2 === 'R-A#2,R-B#2|0' && ro
 check(route.allRows === 2 && route.allHasCto && route.overlaysAll === 4, 'rota do cabo: "Todas as fibras" mostra cada fibra em uso e destaca no mapa');
 check(route.oneMode && route.oneHasSteps && route.overlaysOne === 2, 'rota do cabo: "Uma fibra" mostra o caminho passo a passo');
 
+//Rota com splitters em cascata na mesma caixa (1:8 porta 1 → entrada do 1:4 → cabos das CTOs)
+const cascade = await page.evaluate(() => {
+  const box = document.createElement('div');
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const feed = buildFusionCableCard({ name: 'K-FEED', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const s8 = buildFusionSplitterCard({ id: 'splitter-8', label: '1:8', outputs: 8, type: 'Fusão' });
+  const s4 = buildFusionSplitterCard({ id: 'splitter-4', label: '1:4', outputs: 4, type: 'Fusão' });
+  const c1 = buildFusionCableCard({ name: 'K-CTO1', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const c2 = buildFusionCableCard({ name: 'K-CTO2', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const other = buildFusionCableCard({ name: 'K-CEO2', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  box.append(feed, s8, s4, c1, c2, other);
+  const links = [[fiber(feed, 1), 'splitter-8-input-port'], ['splitter-8-output-1', 'splitter-4-input-port'], ['splitter-8-output-2', fiber(other, 1)],
+    ['splitter-4-output-1', fiber(c1, 1)], ['splitter-4-output-2', fiber(c2, 1)]];
+  const ceo = { type: 'CEO', name: 'K-CEO', uid: 'k-ceo', fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg: links.map(([a, b]) => `<path class="fusion-line" data-start-id="${a}" data-end-id="${b}"></path>`).join('') }) };
+  markers.push(ceo);
+  const g = buildFiberGraph();
+  const down = traceFiberRoute(g, 'K-FEED', 1).segments.map(s => s.cable).sort().join();
+  const up = traceFiberRoute(g, 'K-CTO1', 1).segments.map(s => s.cable).sort().join();
+  markers.splice(markers.indexOf(ceo), 1);
+  return { down, up };
+});
+check(cascade.down === 'K-CEO2,K-CTO1,K-CTO2,K-FEED' && cascade.up === 'K-CTO1,K-FEED',
+  `rota passa por splitters em cascata e, subindo, não espalha pelas saídas do mesmo splitter (${JSON.stringify(cascade)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');
