@@ -70,7 +70,18 @@ function buildProjectSheets(scope) {
         for (let n = 1; n <= getCableFiberCount(c); n++) fibras.push([c.name, n, colorNames[(n - 1) % 12], used.has(n) ? 'Em uso' : 'Livre']);
     });
 
-    return { Caixas: caixas, Cabos: cabos, Clientes: clientes, 'Portas das CTOs': portas, Fibras: fibras };
+    const equipamentos = [['POP', 'Equipamento', 'Nome', 'Modelo', 'Slot / portas', 'PONs / conector']];
+    boxes.filter(b => b.type === 'POP').forEach(pop => {
+        const eq = normalizePopEquipment(pop.popEquipment);
+        eq.olts.forEach(o => {
+            equipamentos.push([pop.name, 'OLT', o.name, o.model, `${o.cards.length} placa(s)`, o.cards.reduce((n, c) => n + c.pons, 0)]);
+            o.cards.forEach(c => equipamentos.push([pop.name, 'Placa OLT', o.name, c.model, `Slot ${c.slot}`, c.pons]));
+        });
+        eq.dgos.forEach(d => equipamentos.push([pop.name, 'DGO', d.name, '', d.ports, d.connector]));
+        eq.switches.forEach(w => equipamentos.push([pop.name, 'Switch', w.name, w.model, w.ports, `${w.uplinks} uplink(s)`]));
+    });
+
+    return { Caixas: caixas, Cabos: cabos, Clientes: clientes, 'Portas das CTOs': portas, Fibras: fibras, 'Equipamentos do POP': equipamentos };
 }
 
 function exportProjectSpreadsheet() {

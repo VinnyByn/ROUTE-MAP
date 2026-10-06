@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006g" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261006i" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -1075,6 +1075,19 @@
       </div>
     </div>
 
+    <div id="popEquipmentModal" class="modal" role="dialog" aria-labelledby="popEquipmentTitle">
+      <div class="modal-content pop-equipment-modal">
+        <span class="close" id="closePopEquipmentModal" aria-label="Fechar">&times;</span>
+        <h2 id="popEquipmentTitle">Equipamentos do POP</h2>
+        <p class="pop-summary" id="popEquipmentSummary"></p>
+        <div class="modal-form-body" id="popEquipmentBody"></div>
+        <div class="modal-footer">
+          <button type="button" id="cancelPopEquipment" class="btn btn-secondary">Cancelar</button>
+          <button type="button" id="savePopEquipment" class="btn btn-success">Salvar</button>
+        </div>
+      </div>
+    </div>
+
     <div id="markerModal" class="floating-box map-tool-box marker-panel hidden" role="dialog" aria-labelledby="markerModalTitle">
       <div class="map-tool-box__header">
         <span class="marker-panel__icon" id="markerPanelIcon" aria-hidden="true"></span>
@@ -1124,6 +1137,11 @@
         </div>
         <div class="marker-panel__chips hidden" id="ceo144Group">
           <label class="map-tool-chip"><input type="checkbox" id="ceo144Checkbox" /><span>Caixa Jumbo (144 fusões)</span></label>
+        </div>
+        <div class="map-tool-field hidden" id="popEquipmentGroup">
+          <label>Equipamentos do POP</label>
+          <p class="map-tool-help" id="popEquipmentPanelSummary"></p>
+          <button type="button" class="btn btn-secondary" id="openPopEquipmentButton">OLTs, placas, DGOs e switches</button>
         </div>
         <div class="map-tool-field hidden" id="derivationTGroup">
           <label for="markerDerivationT">Derivações em T</label>
@@ -2624,8 +2642,8 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261006d" defer></script>
-  <script src="js/persistence.js?v=20261005a" defer></script>
+  <script src="script.js?v=20261006i" defer></script>
+  <script src="js/persistence.js?v=20261006i" defer></script>
   <script src="js/sidebar-actions.js?v=20261006c" defer></script>
   <script src="js/project-safety.js?v=20261005a" defer></script>
   <script src="js/catalog.js?v=20261006g" defer></script>
@@ -2635,19 +2653,20 @@
   <script src="js/report.js?v=20261004e" defer></script>
   <script src="js/sketch.js?v=20261006d" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261006h" defer></script>
+  <script src="js/sidebar.js?v=20261006i" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261004b" defer></script>
-  <script src="js/marker-panel.js?v=20261004b" defer></script>
+  <script src="js/marker-panel.js?v=20261006i" defer></script>
   <script src="js/fusion-plan.js?v=20261006c" defer></script>
-  <script src="js/fusion.js?v=20261006b" defer></script>
+  <script src="js/fusion.js?v=20261006i" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
   <script src="js/clients.js?v=20261005e" defer></script>
   <script src="js/optical-budget.js?v=20261006g" defer></script>
   <script src="js/project-check.js?v=20261006g" defer></script>
-  <script src="js/project-export.js?v=20261006h" defer></script>
+  <script src="js/project-export.js?v=20261006i" defer></script>
+  <script src="js/pop-equipment.js?v=20261006i" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
-  <script src="js/marker-hover.js?v=20261005f" defer></script>
+  <script src="js/marker-hover.js?v=20261006i" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>

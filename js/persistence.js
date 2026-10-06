@@ -334,6 +334,7 @@ function serializeMarker(markerInfo) {
         reservaStatus: markerInfo.reservaStatus,
         reservaAccessory: markerInfo.reservaAccessory,
         client: markerInfo.type === 'CLIENTE' ? (markerInfo.client || {}) : undefined,
+        popEquipment: markerInfo.type === 'POP' && markerInfo.popEquipment ? markerInfo.popEquipment : undefined,
         position: { lat: position.lat(), lng: position.lng() }
     };
 }

@@ -139,7 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'drop-recalc': 'refresh', 'open-client': 'client',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -189,6 +189,7 @@ function buildSidebarMenuItems(entity) {
         if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO')) {
             items.push({ action: 'fusion', label: 'Plano de fusão' });
         }
+        if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Equipamentos do POP', hint: 'OLTs, placas, DGOs e switches' });
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);
@@ -333,6 +334,10 @@ function handleSidebarMenuAction(action) {
         else if (kind === 'cable') focusMapToCable(info);
         else if (kind === 'polygon') focusMapToPolygon(info);
         else if (kind === 'drop') focusMapToClientDrop(info);
+        break;
+    case 'pop-equipment':
+        selectSidebarMarker(info);
+        openPopEquipmentModal(info);
         break;
     case 'export-xlsx':
         setActiveFolder(entity.folderId);

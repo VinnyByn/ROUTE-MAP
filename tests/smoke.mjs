@@ -799,9 +799,42 @@ const sheets = await page.evaluate(() => {
     fibras: out.Fibras.length - 1,
   };
 });
-check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
+check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras,Equipamentos do POP' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
   && sheets.cliente === 'X-Cli|C-9|X-CTO|3|55' && sheets.portas === 8 && sheets.porta3 === 'X-CTO|3|Ocupada|X-Cli|C-9' && sheets.fibras === 12,
   `exportar planilha monta as abas do projeto (${JSON.stringify(sheets)})`);
+
+//Equipamentos do POP: OLT com placas, DGO e switch; salva no POP e sugere a OLT no "Vincular OLT"
+const popEq = await page.evaluate(() => {
+  const pop = { folderId: 'projP', type: 'POP', name: 'POP-01', uid: 'pop-1' };
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projP" data-folder-name="P"></div><ul id="projP" class="subfolders"></ul></li>');
+  markers.push(pop);
+  openPopEquipmentModal(pop);
+  const modal = document.getElementById('popEquipmentModal');
+  modal.querySelector('[data-pop-add="olt"]').click();
+  modal.querySelector('[data-pop-add="card"]').click();
+  const name = modal.querySelector('[data-pop="olts.0.name"]'); name.value = 'OLT-CENTRO'; name.dispatchEvent(new Event('input', { bubbles: true }));
+  modal.querySelector('[data-pop-add="dgo"]').click();
+  modal.querySelector('[data-pop-add="switch"]').click();
+  const summary = document.getElementById('popEquipmentSummary').textContent;
+  window.__popShot = () => { document.getElementById('savePopEquipment').click(); };
+  return { summary };
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.waitForTimeout(150);
+  await page.locator('#popEquipmentModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'pop-equipamentos.png') });
+}
+const popSaved = await page.evaluate(() => {
+  window.__popShot();
+  const pop = markers.find(m => m.uid === 'pop-1');
+  const saved = JSON.stringify(pop.popEquipment);
+  const olts = getProjectPopOlts('projP').map(o => o.name).join();
+  const hover = buildPopHoverHtml(pop).includes('OLT-CENTRO');
+  markers.splice(markers.indexOf(pop), 1);
+  document.querySelector('[data-folder-id="projP"]').closest('.folder').remove();
+  return { saved, olts, hover, closed: document.getElementById('popEquipmentModal').style.display === 'none' };
+}).catch(e => ({ error: String(e) }));
+check(popEq.summary === '1 OLT · 2 placas · 32 PONs · 1 DGO (24 portas) · 1 switch' && popSaved.olts === 'OLT-CENTRO' && popSaved.hover && popSaved.closed
+  && popSaved.saved.includes('"slot":"2"'), `equipamentos do POP: OLT com placas, DGO e switch (${popEq.summary} · ${JSON.stringify(popSaved)})`);
 
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {

@@ -375,6 +375,7 @@ function openMarkerEditor(markerInfo) {
     setMarkerEditorCoordinatesText(markerInfo.type, position.lat().toFixed(6), position.lng().toFixed(6));
     configureMarkerPanel(markerInfo.type, 'edit');
     if (markerInfo.type === 'CTO') renderCtoClientsPanel(markerInfo);
+    if (typeof updatePopEquipmentPanelSummary === 'function') updatePopEquipmentPanelSummary(markerInfo);
     highlightMapMarker(markerInfo, { persistent: true });
     if (AppSession.isViewer) {
         document.getElementById('markerPanelSubtitle').textContent = 'Somente visualização';
@@ -507,6 +508,7 @@ function startPlacingMarker() {
 function resetMarkerModal({ discardPositionChanges = true } = {}) {
     hideMarkerPanel();
     document.getElementById('ctoClientsPanel')?.classList.add('hidden');
+    document.getElementById('popEquipmentGroup')?.classList.add('hidden');
     if (placeMarkerListener) {
         google.maps.event.removeListener(placeMarkerListener);
         placeMarkerListener = null;

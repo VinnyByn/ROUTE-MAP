@@ -3324,6 +3324,7 @@ function addCustomMarker(location, importedData = null) {
         reservaStatus: data.type === "RESERVA" ? data.reservaStatus : null,
         reservaAccessory: data.type === "RESERVA" ? data.reservaAccessory : null,
         client: data.type === "CLIENTE" ? { ...(data.client || {}) } : undefined,
+        popEquipment: data.type === "POP" && data.popEquipment ? data.popEquipment : undefined,
         uid: data.uid || null,
     };
     ensureMarkerUid(markerInfo);
