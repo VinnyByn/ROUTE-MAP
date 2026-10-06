@@ -16,7 +16,7 @@ function getActiveProjectScope() {
 function runProjectCheck(scope) {
     const issues = [];
     const add = (level, title, detail, target) => issues.push({ level, title, detail, target });
-    const boxes = scope.markers.filter(m => m.type === 'CEO' || m.type === 'CTO');
+    const boxes = scope.markers.filter(m => m.type === 'CEO' || m.type === 'CTO' || m.type === 'POP');
     const cableNames = new Set(savedCables.map(c => c.name));
 
     //Nomes repetidos: o plano de fusão liga cartão e cabo pelo nome
@@ -60,6 +60,7 @@ function runProjectCheck(scope) {
         const ports = new Set();
         plan.cables.forEach(c => c.fibers.forEach(f => ports.add(f.id)));
         plan.splitters.forEach(sp => [...sp.inputIds, ...sp.outputIds].forEach(id => ports.add(id)));
+        (plan.equipment || []).forEach(eq => eq.ports.forEach(p => ports.add(p.id)));
         const uses = new Map();
         let orphans = 0;
         plan.lines.forEach(l => [l.startId, l.endId].forEach(id => {
@@ -103,7 +104,7 @@ function runProjectCheck(scope) {
     //Orçamento óptico
     const optical = getProjectOpticalBudget(scope);
     if (optical.ctos.length && !optical.hasSource) {
-        add('aviso', 'Orçamento óptico sem OLT', 'Nenhum splitter do caminho está vinculado a uma OLT/PON. Use "Vincular" no splitter que recebe o sinal da OLT.', null);
+        add('aviso', 'Orçamento óptico sem OLT', 'Não há OLT no caminho. No plano do POP, ligue a PON da OLT no DGO e o DGO na fibra do cabo (ou use "Vincular" no splitter que recebe o sinal).', null);
     }
     optical.rows.forEach(row => {
         if (row.dbm == null) {

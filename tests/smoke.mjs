@@ -1001,6 +1001,83 @@ const poste = await page.evaluate(() => {
 check(poste.groupVisible && poste.icon && poste.row === 'P-01|CEMIG-4521|Existente|11|300|Concreto|Cemig|2' && poste.found === 'P-01'
   && poste.desc === 'nº CEMIG-4521 · 11 m · 300 daN · Concreto · Existente', `poste: cadastro, busca e aba "Postes" na planilha (${JSON.stringify(poste)})`);
 
+//Plano do POP: OLT, DGO e switch como cartões; PON → DGO (cordão) → cabo (fusão) → CTO. A rota e o orçamento
+//óptico encontram a OLT pelo caminho e a PON mostra até onde chega
+const popPlan = await page.evaluate(async () => {
+  const stage = getFusionStage(); const svg = getFusionSvg();
+  const prevActive = activeMarkerForFusion;
+  const reset = () => { stage.querySelectorAll('.cable-element, .splitter-element, .equipment-element').forEach(e => e.remove()); svg.innerHTML = ''; };
+  reset();
+  const pop = { type: 'POP', name: 'POP-T', uid: 'pop-t', popEquipment: { olts: [{ name: 'OLT-01', model: 'C600', cards: [{ slot: '1', model: 'GPON', pons: 16 }] }], dgos: [{ name: 'DGO-01', ports: 24, connector: 'SC/APC' }], switches: [{ name: 'SW-01', model: '', ports: 8, uplinks: 2 }] } };
+  markers.push(pop);
+  activeMarkerForFusion = pop;
+  const added = syncPopEquipmentCards();
+  const out = buildFusionCableCard({ name: 'T-POP-CTO', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+  stage.appendChild(out);
+  const pon1 = stage.querySelector('.equip-port-row[data-side="pon"][data-pon="1"]');
+  const front1 = stage.querySelector('.fx-equipment--dgo .equip-port-row[data-side="front"][data-port="1"]');
+  const back1 = stage.querySelector('.fx-equipment--dgo .equip-port-row[data-side="back"][data-port="1"]');
+  createFusionLine(pon1, front1);
+  createFusionLine(back1, [...out.querySelectorAll('.fiber-row')][0]);
+  const desc = describeFusionPort(pon1, { short: true });
+  pop.fusionPlan = serializeFusionPlan();
+  //CTO do outro lado do cabo com splitter de atendimento
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const inCard = buildFusionCableCard({ name: 'T-POP-CTO', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const box = document.createElement('div'); box.append(inCard, at);
+  const cto = { type: 'CTO', name: 'T-CTO', uid: 't-cto', fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg: `<path class="fusion-line" data-start-id="${fiber(inCard, 1)}" data-end-id="splitter-1-input-port"></path>` }) };
+  const client = { type: 'CLIENTE', name: 'T-Cli', client: { ctoUid: 't-cto', status: 'ativo', ctoPort: 1 } };
+  const cable = { name: 'T-POP-CTO', type: 'Cabo AS 80 FO-12', totalLength: 1000 };
+  markers.push(cto, client); savedCables.push(cable);
+  //Alcance mostrado na PON
+  renderFusionConnections();
+  await new Promise(r => setTimeout(r, 400));
+  const ponDest = pon1.querySelector('.fx-port__dest')?.textContent || '';
+  const equipFromCards = popEquipmentFromCards();
+  const graph = buildFiberGraph();
+  const route = traceFiberRoute(graph, 'T-POP-CTO', 1);
+  const port = getOpticalBudgetByCto([cto]).get(cto)?.worstPort;
+  const plan = readFusionPlan(pop);
+  reset(); activeMarkerForFusion = prevActive;
+  [pop, cto, client].forEach(m => markers.splice(markers.indexOf(m), 1)); savedCables.splice(savedCables.indexOf(cable), 1);
+  return {
+    added, desc, ponDest,
+    kinds: plan.equipment.map(e => `${e.kind}:${e.ports.length}`).join(),
+    oltFound: route.olts.map(o => `${o.splitter.olt.olt}/${o.splitter.olt.placa}/${o.splitter.olt.pon}`).join(),
+    ctos: route.ctos.map(c => c.box.name).join(),
+    port: port == null ? null : Math.round(port * 100) / 100,
+    equip: `${equipFromCards.olts.length}/${equipFromCards.dgos.length}/${equipFromCards.switches.length}`,
+  };
+});
+check(popPlan.added === 3 && popPlan.kinds === 'olt:16,dgo:48,switch:10' && popPlan.desc === 'OLT-01 · S1 PON 1' && popPlan.equip === '1/1/1',
+  `plano do POP: OLT, DGO e switch viram cartões (${JSON.stringify(popPlan)})`);
+check(popPlan.oltFound === 'OLT-01/1/1' && popPlan.ctos === 'T-CTO' && popPlan.port === -7.65 && /1 CTO · 1 cli/.test(popPlan.ponDest),
+  `plano do POP: rota acha a OLT pelo caminho, potência −7,65 dBm e a PON mostra o alcance (${popPlan.ponDest})`);
+
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const pop = { type: 'POP', name: 'POP-CENTRO', uid: 'pop-shot', folderId: 'x', popEquipment: { olts: [{ name: 'OLT-01', model: 'ZTE C600', cards: [{ slot: '1', model: 'GPON 16', pons: 4 }] }], dgos: [{ name: 'DGO-01', ports: 4, connector: 'SC/APC' }], switches: [] } };
+    window.__popShot = pop;
+    markers.push(pop);
+    populateFusionPlan(pop);
+    document.getElementById('fusionModal').style.display = 'flex';
+    const stage = getFusionStage();
+    const out = buildFusionCableCard({ name: 'FO-12-POP-CEO01', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+    stage.appendChild(out); wireFusionCard(out);
+    const q = (sel) => stage.querySelector(sel);
+    createFusionLine(q('[data-side="pon"][data-pon="1"]'), q('[data-side="front"][data-port="1"]'));
+    createFusionLine(q('[data-side="pon"][data-pon="2"]'), q('[data-side="front"][data-port="2"]'));
+    createFusionLine(q('[data-side="back"][data-port="1"]'), [...out.querySelectorAll('.fiber-row')][0]);
+    createFusionLine(q('[data-side="back"][data-port="2"]'), [...out.querySelectorAll('.fiber-row')][1]);
+    repackAllElements({ animate: false });
+  });
+  await page.waitForTimeout(500);
+  await page.locator('#fusionModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'pop-plano.png') });
+  await page.evaluate(() => { closeFusionModal({ force: true }); markers.splice(markers.indexOf(window.__popShot), 1); });
+}
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

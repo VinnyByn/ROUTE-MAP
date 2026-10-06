@@ -21,10 +21,20 @@ function buildFiberGraph() {
         adj.get(b).add(a);
     };
     markers.forEach(box => {
-        if (box.type !== 'CEO' && box.type !== 'CTO') return;
+        if (box.type !== 'CEO' && box.type !== 'CTO' && box.type !== 'POP') return;
         const plan = readFusionPlan(box);
         if (!plan) return;
         const key = (id) => `${ensureMarkerUid(box)}|${id}`;
+        //POP: porta PON da OLT é a origem; no DGO, o lado do cordão e o da fusão são a mesma porta
+        (plan.equipment || []).forEach(eq => {
+            const dgo = new Map();
+            eq.ports.forEach(p => {
+                if (p.side === 'pon') info.set(key(p.id), { kind: 'olt-port', box, olt: { olt: eq.name, placa: p.slot, pon: p.pon } });
+                else info.set(key(p.id), { kind: 'equip-port', box, equipment: eq, port: p });
+                if (eq.kind === 'dgo') dgo.set(`${p.port}:${p.side}`, key(p.id));
+            });
+            if (eq.kind === 'dgo') eq.ports.filter(p => p.side === 'front').forEach(p => link(key(p.id), dgo.get(`${p.port}:back`)));
+        });
         plan.cables.forEach(cable => cable.fibers.forEach(f => {
             if (!f.number) return;
             const k = key(f.id);
@@ -50,8 +60,16 @@ function buildFiberGraph() {
 //Percorre a partir de uma fibra do cabo. Entrando num splitter por uma saída, segue só para a entrada
 //(não espalha para os outros clientes do mesmo splitter)
 function traceFiberRoute(graph, cableName, fiberNumber) {
-    const start = graph.fiberNodes.get(`${cableName}#${fiberNumber}`) || [];
-    const segments = new Map([[`${cableName}#${fiberNumber}`, { cable: cableName, number: fiberNumber }]]);
+    return traceRouteFromNodes(graph, graph.fiberNodes.get(`${cableName}#${fiberNumber}`) || [], { cable: cableName, number: fiberNumber });
+}
+
+//A partir de uma porta qualquer (ex.: PON da OLT no plano do POP)
+function traceFromNode(graph, nodeKey) {
+    return traceRouteFromNodes(graph, graph.info.has(nodeKey) ? [nodeKey] : [], null);
+}
+
+function traceRouteFromNodes(graph, start, first) {
+    const segments = new Map(first ? [[`${first.cable}#${first.number}`, first]] : []);
     const steps = [];
     const visited = new Set();
     const queue = start.map(k => [k, null]);
@@ -82,6 +100,11 @@ function traceFiberRoute(graph, cableName, fiberNumber) {
     });
     const splitterList = Array.from(splitters.values());
     const olts = splitterList.filter(s => s.splitter.olt?.olt);
+    //OLT encontrada pelo caminho (porta PON ligada no plano do POP)
+    visited.forEach(k => {
+        const i = graph.info.get(k);
+        if (i?.kind === 'olt-port') olts.push({ box: i.box, splitter: { label: '', olt: i.olt } });
+    });
     const ctos = new Map();
     splitterList.filter(s => s.splitter.atendimento && s.box.type === 'CTO').forEach(s => {
         if (!ctos.has(s.box)) ctos.set(s.box, { box: s.box, splitters: [], clients: getCtoClients(s.box).length });
@@ -143,6 +166,8 @@ function drawCableRouteHighlight(traces) {
 
 function describeRoutePort(p) {
     if (p.kind === 'fiber') return `${escapeHtml(p.cable)} F${p.number}`;
+    if (p.kind === 'olt-port') return `${escapeHtml(p.olt.olt)} placa ${escapeHtml(p.olt.placa)} PON ${escapeHtml(p.olt.pon)}`;
+    if (p.kind === 'equip-port') return `${escapeHtml(p.equipment.name)} porta ${escapeHtml(p.port.port)}${p.port.side === 'front' ? ' (cordão)' : ''}`;
     if (p.kind === 'split-in') return `splitter ${escapeHtml(p.splitter.label)} (entrada)`;
     return `splitter ${escapeHtml(p.splitter.label)} porta ${p.port}`;
 }

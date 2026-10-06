@@ -69,7 +69,13 @@ function buildPopHoverHtml(markerInfo) {
     if (!s.olts && !s.dgos && !s.switches) return `${head}<p class="mh-card__empty">Sem equipamentos cadastrados</p>`;
     const row = (label, value, cls = '') => `<div class="mh-row ${cls}"><span>${label}</span><b>${value}</b></div>`;
     let body = '';
-    if (s.olts) body += `<section><h5>OLTs</h5>${eq.olts.map(o => row(escapeHtml(o.name || 'OLT'), `${o.cards.length} placa${o.cards.length === 1 ? '' : 's'} · ${o.cards.reduce((n, c) => n + c.pons, 0)} PONs`)).join('')}</section>`;
+    //PONs ligadas no plano do POP
+    const planEq = (readFusionPlan(markerInfo)?.equipment || []);
+    const ponsInUse = (name) => planEq.filter(e => e.kind === 'olt' && e.name === name).reduce((n, e) => n + e.ports.filter(p => p.side === 'pon' && p.connected).length, 0);
+    if (s.olts) body += `<section><h5>OLTs</h5>${eq.olts.map(o => {
+        const total = o.cards.reduce((n, c) => n + c.pons, 0);
+        return row(escapeHtml(o.name || 'OLT'), `${ponsInUse(o.name)}/${total} PONs em uso`);
+    }).join('')}</section>`;
     if (s.dgos) body += `<section><h5>DGOs</h5>${eq.dgos.map(d => row(escapeHtml(d.name || 'DGO'), `${d.ports} portas`)).join('')}</section>`;
     if (s.switches) body += `<section><h5>Switches</h5>${eq.switches.map(w => row(escapeHtml(w.name || 'Switch'), `${w.ports} portas`)).join('')}</section>`;
     return head + `<div class="mh-card__body">${body}</div>`;
