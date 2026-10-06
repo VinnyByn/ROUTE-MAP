@@ -67,7 +67,9 @@ function traceFiberRoute(graph, cableName, fiberNumber) {
         (graph.adj.get(node) || []).forEach(next => {
             if (visited.has(next)) return;
             const n = graph.info.get(next);
-            if (here?.kind === 'split-in' && prev?.kind === 'split-out' && n?.kind === 'split-out') return;
+            //Subindo por uma saída do MESMO splitter até a entrada: não desce pelas outras saídas dele.
+            //(Splitter em cascata — saída de um ligada na entrada de outro — segue normalmente)
+            if (here?.kind === 'split-in' && prev?.kind === 'split-out' && prev.splitter === here.splitter && n?.kind === 'split-out' && n.splitter === here.splitter) return;
             visited.add(next);
             queue.push([next, node]);
         });
