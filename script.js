@@ -4023,52 +4023,59 @@ function renderStickerCounts(counts) {
 }
 
 //Sincronização de renomeação de cabos
-function updateCableNameInAllFusionPlans(oldName, newName) {
-    if (oldName === newName) return; // Nenhum trabalho a fazer
-    console.log(`Atualizando nome do cabo em todos os planos: de "${oldName}" para "${newName}"`);
-    markers.forEach(markerInfo => {
-        //Verifica se o marcador tem um plano de fusão
-        if ((markerInfo.type === 'CTO' || markerInfo.type === 'CEO') && markerInfo.fusionPlan) {
-            let planUpdated = false;
-            try {
-                const planData = JSON.parse(markerInfo.fusionPlan);
-                if (!planData.elements) return;
-                // Cria um DOM temporário para manipular o HTML salvo
-                const tempDiv = parseStoredHtml(planData.elements);
-                //Encontra o elemento do cabo pelo NOME ANTIGO
-                const cableElements = tempDiv.querySelectorAll(`.cable-element[data-cable-name="${CSS.escape(oldName)}"]`);
-                if (cableElements.length > 0) {
-                    cableElements.forEach(cableElement => {
-                        //Atualiza os dados no DOM temporário
-                        cableElement.dataset.cableName = newName; // Atualiza o dataset
-                        const titleSpan = cableElement.querySelector('.cable-header span');
-                        if (titleSpan) {
-                            // Substitui apenas a primeira ocorrência do nome antigo, preservando a (Ponta A/B)
-                            titleSpan.textContent = titleSpan.textContent.replace(oldName, newName);
-                        }
-                    });
-                    planUpdated = true;
-                }
-                //Se o plano foi alterado, salva-o de volta no marcador
-                if (planUpdated) {
-                    planData.elements = tempDiv.innerHTML;
-                    markerInfo.fusionPlan = JSON.stringify(planData);
-                    console.log(`Plano de fusão da caixa "${markerInfo.name}" atualizado.`);
-                    //Se este plano de fusão estiver aberta, atualiza o DOM ao vivo
-                    if (activeMarkerForFusion === markerInfo) {
-                        const liveCableElements = document.querySelectorAll(`#fusionCanvas .cable-element[data-cable-name="${CSS.escape(oldName)}"]`);
-                        liveCableElements.forEach(liveCableElement => {
-                            liveCableElement.dataset.cableName = newName;
-                            const liveTitleSpan = liveCableElement.querySelector('.cable-header span');
-                            if (liveTitleSpan) {
-                                liveTitleSpan.textContent = liveTitleSpan.textContent.replace(oldName, newName);
-                            }
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error(`Erro ao atualizar o nome do cabo no plano de fusão da ${markerInfo.name}:`, e);
+//Renomeia o cabo nos planos de fusão: nome do cartão, ids das fibras (levavam o nome antigo) e as fusões
+function renameCableInPlanDom(root, lineRoot, oldName, newName) {
+    const cards = Array.from(root.querySelectorAll('.cable-element')).filter(el => el.dataset.cableName === oldName);
+    if (!cards.length) return false;
+    const safeNew = newName.replace(/\s+/g, '-');
+    const idMap = new Map();
+    cards.forEach(card => {
+        card.dataset.cableName = newName;
+        const title = card.querySelector('.cable-header-name, .cable-header span');
+        if (title) title.textContent = title.textContent.replace(oldName, newName);
+        card.querySelectorAll('.fiber-row').forEach(row => {
+            const n = getFiberNumberFromId(row.id);
+            if (!n) return;
+            let id = `cable-${safeNew}-fiber-${n}`;
+            for (let i = 2; root.querySelector(`[id="${CSS.escape(id)}"]`) && root.querySelector(`[id="${CSS.escape(id)}"]`) !== row; i++) {
+                id = `cable-${safeNew}~${i}-fiber-${n}`;
             }
+            if (id !== row.id) idMap.set(row.id, id);
+            row.id = id;
+        });
+    });
+    lineRoot?.querySelectorAll('.fusion-line').forEach(line => {
+        if (idMap.has(line.dataset.startId)) line.dataset.startId = idMap.get(line.dataset.startId);
+        if (idMap.has(line.dataset.endId)) line.dataset.endId = idMap.get(line.dataset.endId);
+    });
+    return true;
+}
+
+function updateCableNameInAllFusionPlans(oldName, newName) {
+    if (oldName === newName) return;
+    markers.forEach(markerInfo => {
+        //Cliente ligado direto no cabo (B2B) guarda o nome do cabo
+        if (markerInfo.type === 'CLIENTE' && markerInfo.client) {
+            if (markerInfo.client.cableName === oldName) markerInfo.client.cableName = newName;
+            if (markerInfo.client.linkedCable === oldName) markerInfo.client.linkedCable = newName;
+            return;
+        }
+        if ((markerInfo.type !== 'CTO' && markerInfo.type !== 'CEO') || !markerInfo.fusionPlan) return;
+        try {
+            const planData = JSON.parse(markerInfo.fusionPlan);
+            if (!planData.elements) return;
+            const tempDiv = parseStoredHtml(planData.elements);
+            const tempSvg = planData.svg ? parseStoredSvg(planData.svg) : null;
+            if (!renameCableInPlanDom(tempDiv, tempSvg, oldName, newName)) return;
+            planData.elements = tempDiv.innerHTML;
+            if (tempSvg) planData.svg = tempSvg.innerHTML;
+            markerInfo.fusionPlan = JSON.stringify(planData);
+            //Plano aberto na tela: aplica o mesmo
+            if (activeMarkerForFusion === markerInfo) {
+                renameCableInPlanDom(getFusionStage(), getFusionSvg(), oldName, newName);
+            }
+        } catch (e) {
+            console.error(`Erro ao atualizar o nome do cabo no plano de fusão da ${markerInfo.name}:`, e);
         }
     });
 }

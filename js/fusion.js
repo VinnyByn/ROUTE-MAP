@@ -170,6 +170,16 @@ function buildPortRow({ id, className, label, chip, color }) {
     return row;
 }
 
+//Id da fibra que ainda não existe no plano aberto (um cabo renomeado pode ter deixado ids com o nome antigo)
+function getFreeFiberRowId(safeName, n) {
+    const base = `cable-${safeName}-fiber-${n}`;
+    if (!document.getElementById(base)) return base;
+    for (let i = 2; ; i++) {
+        const id = `cable-${safeName}~${i}-fiber-${n}`;
+        if (!document.getElementById(id)) return id;
+    }
+}
+
 //Cartão de cabo. fiberIds preserva os ids antigos (as linhas salvas apontam para eles)
 function buildFusionCableCard({ name, type, status, role, fiberCount, fiberIds = new Map(), kitChecked = false, otherEnd = '' }) {
     const card = document.createElement('div');
@@ -239,7 +249,7 @@ function buildFusionCableCard({ name, type, status, role, fiberCount, fiberIds =
             const n = t * 12 + f + 1;
             if (n > fiberCount) break;
             fibers.appendChild(buildPortRow({
-                id: fiberIds.get(n) || `cable-${safeName}-fiber-${n}`,
+                id: fiberIds.get(n) || getFreeFiberRowId(safeName, n),
                 className: 'fiber-row',
                 label: `F${n}`,
                 color: getFiberColor(n),
@@ -310,7 +320,9 @@ function upgradeFusionCard(card) {
             if (n) fiberIds.set(n, row.id);
         });
         const saved = savedCables.find(c => c.name === name);
-        const fiberCount = fiberIds.size || parseInt(card.dataset.fiberCount, 10) || parseInt((getFiberType(saved?.type) || 'FO-12').split('-')[1], 10);
+        //Tipo do cabo trocado (só é permitido sem fusões): o cartão segue a quantidade de fibras atual
+        const savedCount = getFiberType(saved?.type) ? parseInt(getFiberType(saved.type).split('-')[1], 10) : 0;
+        const fiberCount = savedCount || fiberIds.size || parseInt(card.dataset.fiberCount, 10) || 12;
         const role = card.dataset.cableRole || (card.classList.contains('cable-saida') ? 'saida' : 'entrada');
         const kitBox = card.querySelector('.derivation-kit-checkbox');
         const upgraded = buildFusionCableCard({

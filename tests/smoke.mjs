@@ -574,6 +574,41 @@ const looseCable = await page.evaluate(() => {
 });
 check(looseCable, 'cabo importado salva sem as pontas nas caixas (cabo desenhado continua exigindo)');
 
+//Renomear cabo: plano de fusão passa a usar o nome novo (cartão, ids das fibras e fusões) e
+//trocar nomes entre dois cabos não deixa fibras com o mesmo id
+const rename = await page.evaluate(() => {
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const a = buildFusionCableCard({ name: 'CAB 1', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+  const b = buildFusionCableCard({ name: 'CAB-2', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+  const box = document.createElement('div'); box.append(a, b);
+  const svg = `<path class="fusion-line" data-start-id="${fiber(a, 1)}" data-end-id="${fiber(b, 1)}"></path><path class="fusion-line" data-start-id="${fiber(a, 2)}" data-end-id="${fiber(b, 3)}"></path>`;
+  const ceo = { type: 'CEO', name: 'CEO-R', fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg }) };
+  const client = { type: 'CLIENTE', name: 'B2B', client: { cableName: 'CAB 1', cableFiber: 5 } };
+  markers.push(ceo, client);
+  updateCableNameInAllFusionPlans('CAB 1', 'CAB-TMP');
+  updateCableNameInAllFusionPlans('CAB-2', 'CAB 1');
+  updateCableNameInAllFusionPlans('CAB-TMP', 'CAB-2');
+  const plan = readFusionPlan(ceo);
+  const root = parseStoredHtml(JSON.parse(ceo.fusionPlan).elements);
+  const ids = [...root.querySelectorAll('.fiber-row')].map(r => r.id);
+  const lines = plan.lines.map(l => [l.startId, l.endId]);
+  const owner = (id) => root.querySelector(`[id="${CSS.escape(id)}"]`)?.closest('.cable-element')?.dataset.cableName;
+  const out = {
+    names: plan.cables.map(c => c.name).sort().join(),
+    uniqueIds: new Set(ids).size === ids.length,
+    idsUseNewName: ids.every(id => id.startsWith('cable-CAB-2-') || id.startsWith('cable-CAB-1-')),
+    linksKept: lines.every(([s, e]) => owner(s) === 'CAB-2' && owner(e) === 'CAB 1'),
+    fibersKept: lines.map(([s, e]) => `${getFiberNumberFromId(s)}>${getFiberNumberFromId(e)}`).join(),
+    client: client.client.cableName,
+    usage: checkCableUsageInFusionPlans({ name: 'CAB-2' }).hasFusions,
+  };
+  markers.splice(markers.indexOf(ceo), 2);
+  return out;
+});
+check(rename.names === 'CAB 1,CAB-2' && rename.uniqueIds && rename.linksKept && rename.fibersKept === '1>1,2>3',
+  `renomear cabo atualiza o plano de fusão sem ids repetidos (${JSON.stringify(rename)})`);
+check(rename.client === 'CAB-2' && rename.usage, 'renomear cabo atualiza o cliente ligado no cabo e o uso nas fusões');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;
