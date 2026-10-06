@@ -139,7 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'drop-recalc': 'refresh', 'open-client': 'client',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'drop-recalc': 'refresh', 'open-client': 'client',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -174,7 +174,8 @@ function buildSidebarMenuItems(entity) {
         if (isProject) {
             if (canEdit) items.push({ action: 'save', label: 'Salvar projeto', kbd: 'Ctrl+S' });
             items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
-            items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas e drops' });
+            items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
+            items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
             items.push({ action: 'close', label: 'Fechar projeto', hint: 'Continua salvo no banco' });
             if (canEdit) items.push({ action: 'delete', label: 'Excluir projeto', hint: 'Vai para a lixeira por 30 dias', danger: true });
         } else if (canEdit) {
@@ -332,6 +333,10 @@ function handleSidebarMenuAction(action) {
         else if (kind === 'cable') focusMapToCable(info);
         else if (kind === 'polygon') focusMapToPolygon(info);
         else if (kind === 'drop') focusMapToClientDrop(info);
+        break;
+    case 'export-xlsx':
+        setActiveFolder(entity.folderId);
+        exportProjectSpreadsheet();
         break;
     case 'check':
         setActiveFolder(entity.folderId);

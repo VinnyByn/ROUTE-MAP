@@ -775,6 +775,34 @@ check(Math.abs(optical.port + 17.55) < 0.001 && optical.status === 'ok' && !opti
   `orçamento óptico soma as perdas do caminho (porta da CTO: ${optical.port?.toFixed(2)} dBm)`);
 check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows === 'O-CTO2:sem,O-CTO:-17.55', `orçamento óptico classifica erro/margem e aponta CTO sem OLT (${optical.rows})`);
 
+//Exportar planilha: abas e linhas do projeto ativo
+const sheets = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projX" data-folder-name="Projeto X"></div><ul id="projX" class="subfolders"></ul></li>');
+  const prevFolder = activeFolderId; activeFolderId = 'projX';
+  const realDrop = window.getClientDropInfo; window.getClientDropInfo = () => ({ length: 55 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const box = document.createElement('div'); box.append(at);
+  const cto = { folderId: 'projX', type: 'CTO', name: 'X-CTO', uid: 'x-cto', ctoStatus: 'Novo', position: { lat: -20.1, lng: -44.2 }, fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg: '' }) };
+  const cli = { folderId: 'projX', type: 'CLIENTE', name: 'X-Cli', client: { kind: 'residencial', status: 'ativo', ctoUid: 'x-cto', ctoPort: 3, code: 'C-9' } };
+  const cable = { folderId: 'projX', name: 'X-CABO', type: 'Cabo AS 80 FO-12', status: 'Novo', startAnchorUid: 'x-cto', totalLength: 120, lancamento: 100, reserva: 20 };
+  markers.push(cto, cli); savedCables.push(cable);
+  const out = buildProjectSheets(getActiveProjectScope());
+  markers.splice(markers.indexOf(cto), 2); savedCables.splice(savedCables.indexOf(cable), 1);
+  document.querySelector('[data-folder-id="projX"]').closest('.folder').remove();
+  activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
+  return {
+    tabs: Object.keys(out).join(),
+    caixa: out.Caixas[1].slice(0, 2).concat(out.Caixas[1].slice(8, 11)).join('|'),
+    cabo: [out.Cabos[1][0], out.Cabos[1][7], out.Cabos[1][8]].join('|'),
+    cliente: [out.Clientes[1][0], out.Clientes[1][1], out.Clientes[1][4], out.Clientes[1][5], out.Clientes[1][6]].join('|'),
+    portas: out['Portas das CTOs'].length - 1, porta3: out['Portas das CTOs'][3].join('|'),
+    fibras: out.Fibras.length - 1,
+  };
+});
+check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
+  && sheets.cliente === 'X-Cli|C-9|X-CTO|3|55' && sheets.portas === 8 && sheets.porta3 === 'X-CTO|3|Ocupada|X-Cli|C-9' && sheets.fibras === 12,
+  `exportar planilha monta as abas do projeto (${JSON.stringify(sheets)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');
