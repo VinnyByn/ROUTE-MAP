@@ -836,6 +836,39 @@ const popSaved = await page.evaluate(() => {
 check(popEq.summary === '1 OLT · 2 placas · 32 PONs · 1 DGO (24 portas) · 1 switch' && popSaved.olts === 'OLT-CENTRO' && popSaved.hover && popSaved.closed
   && popSaved.saved.includes('"slot":"2"'), `equipamentos do POP: OLT com placas, DGO e switch (${popEq.summary} · ${JSON.stringify(popSaved)})`);
 
+//Busca global (Ctrl+K): acha caixa, cliente por código/endereço sem acento, cabo e coordenada; Enter vai até o item
+const gsearch = await page.evaluate(async () => {
+  const items = [
+    { type: 'CTO', name: 'CTO-17', uid: 'g-cto' },
+    { type: 'CLIENTE', name: 'João da Silva', client: { code: 'CLI-4521', address: 'Rua São José, 120', ctoUid: 'g-cto' } },
+  ];
+  const cable = { name: 'FO-12-BACKBONE', type: 'Cabo AS 80 FO-12', totalLength: 950 };
+  markers.push(...items); savedCables.push(cable);
+  const realFocus = window.focusMapToMarker; let focused = null;
+  window.focusMapToMarker = (m) => { focused = m.name; };
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+  const open = !document.getElementById('globalSearch').classList.contains('hidden');
+  const input = document.getElementById('globalSearchInput');
+  const run = (q) => { input.value = q; input.dispatchEvent(new Event('input')); return globalSearchResults.map(r => r.title); };
+  const out = {
+    open,
+    byCode: run('cli-4521'),
+    byAddress: run('sao jose'),
+    accent: run('joao'),
+    cable: run('backbone'),
+    coords: globalSearchResults.length && run('-20.1394, -44.8872')[0],
+  };
+  run('cto-17');
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  out.went = focused; out.closed = document.getElementById('globalSearch').classList.contains('hidden');
+  window.focusMapToMarker = realFocus;
+  items.forEach(i => markers.splice(markers.indexOf(i), 1)); savedCables.splice(savedCables.indexOf(cable), 1);
+  return out;
+});
+check(gsearch.open && gsearch.byCode[0] === 'João da Silva' && gsearch.byAddress[0] === 'João da Silva' && gsearch.accent[0] === 'João da Silva'
+  && gsearch.cable[0] === 'FO-12-BACKBONE' && gsearch.coords === '-20.1394, -44.8872' && gsearch.went === 'CTO-17' && gsearch.closed,
+  `busca global acha caixa, cliente (código/endereço, sem acento), cabo e coordenada (${JSON.stringify(gsearch)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

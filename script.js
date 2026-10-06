@@ -1127,6 +1127,10 @@ function initMap() {
     const closeSearchModal = document.getElementById('closeSearchModal');
     const structuredSearchButton = document.getElementById('structuredSearchButton');
     openSearchModalButton.addEventListener('click', () => {
+        if (typeof openGlobalSearch === 'function') {
+            openGlobalSearch();
+            return;
+        }
         document.getElementById('searchCoordinates').value = '';
         searchModal.style.display = 'flex';
     });
