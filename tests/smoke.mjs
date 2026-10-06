@@ -900,6 +900,31 @@ check(tpl.splitters === '1:8/Fusão,1:4 APC/Atendimento' && tpl.links === 2 && !
   && tpl.desc.includes('S0-output-1>S1-input-port') && tpl.desc.some(d => /^cable-T-OUTRO-fiber-3>S0-input-port$/.test(d)),
   `modelo de caixa recria splitters, cascata e fusão do cabo (${JSON.stringify(tpl)})`);
 
+//Desfazer/refazer: foto do projeto depois de cada alteração; Ctrl+Z volta, Ctrl+Y refaz, no mesmo lugar da barra lateral
+const undoRes = await page.evaluate(async () => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projU', name: 'Projeto U', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const prev = activeFolderId;
+  setActiveFolder('projU');
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const folders = () => [...document.getElementById('projU').querySelectorAll('.folder-name-text')].map(e => e.textContent).join(',');
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); refreshBomAfterProjectChange(); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); refreshBomAfterProjectChange(); await wait(450);
+  const before = folders();
+  const key = (k, extra = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, ...extra }));
+  key('z'); const undo1 = folders();
+  key('z'); const undo2 = folders();
+  key('y'); const redo1 = folders();
+  const stillProject = !!document.querySelector('.folder-title[data-folder-id="projU"]');
+  appendFolderToParent(document.getElementById('projU'), 'Pasta X', 'pUX'); refreshBomAfterProjectChange(); await wait(450);
+  key('y'); const afterNewChange = folders(); //refazer some depois de uma alteração nova
+  document.querySelector('.folder-title[data-folder-id="projU"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { before, undo1, undo2, redo1, stillProject, afterNewChange };
+});
+check(undoRes.before === 'Pasta 1,Pasta 2' && undoRes.undo1 === 'Pasta 1' && undoRes.undo2 === '' && undoRes.redo1 === 'Pasta 1'
+  && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X', `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

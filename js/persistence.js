@@ -266,7 +266,7 @@ function clearWorkspace() {
 }
 
 // Carrega e reconstrói o projeto salvo na barra lateral e no mapa:
-function loadAndDisplayProject(projectId, projectData) {
+function loadAndDisplayProject(projectId, projectData, { silent = false } = {}) {
     //Verifica se os dados na barra lateral já existem para evitar erros
     if (!projectData || !projectData.sidebar) {
         console.error("Dados do projeto ou da sidebar estão faltando. Carregamento cancelado.", projectData);
@@ -302,7 +302,8 @@ function loadAndDisplayProject(projectId, projectData) {
     if (projectData.observations) {
         projectObservations[projectId] = projectData.observations;
     }
-    showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
+    if (!silent) showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
+    if (typeof resetProjectUndo === 'function') resetProjectUndo(projectId);
 }
 
 //Converte o objeto de marcador para o formato JSON, salvando os dados no banco de dados
