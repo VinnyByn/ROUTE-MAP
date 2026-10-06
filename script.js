@@ -1370,6 +1370,7 @@ async function projectExistsInDatabase(projectId) {
 //Fecha o projeto na tela (continua salvo no banco)
 function closeProject(projectId, projectElement, projectName) {
     showConfirm('Fechar projeto', `Fechar "${projectName}"? Alterações não salvas serão perdidas. O projeto continua disponível em Projeto → Carregar Projeto.`, () => {
+        if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
         removeProjectFromWorkspace(projectId, projectElement);
     });
 }
@@ -3329,6 +3330,7 @@ function addCustomMarker(location, importedData = null) {
         reservaAccessory: data.type === "RESERVA" ? data.reservaAccessory : null,
         client: data.type === "CLIENTE" ? { ...(data.client || {}) } : undefined,
         popEquipment: data.type === "POP" && data.popEquipment ? data.popEquipment : undefined,
+        pole: data.type === "POSTE" && data.pole ? data.pole : undefined,
         uid: data.uid || null,
     };
     ensureMarkerUid(markerInfo);
@@ -3395,12 +3397,13 @@ function updateMarkerAppearance(markerInfo) {
     }));
     markerInfo.marker.setLabel(isCasa ? null : buildMarkerMapLabel(markerInfo.name, markerInfo.labelColor));
     //Barra lateral: nome em destaque e os detalhes (tipo, situação, instalação) em cinza
-    const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP' };
+    const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP', POSTE: 'Poste' };
     let details = [];
     if (markerInfo.type === "CTO") details = [markerInfo.ctoStatus, markerInfo.isPredial ? 'Predial' : null, markerInfo.needsStickers ? 'Adesivos' : null];
     if (markerInfo.type === "CEO") details = [markerInfo.ceoStatus, markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null];
     if (markerInfo.type === "CORDOALHA") details = [markerInfo.cordoalhaStatus, markerInfo.derivationTCount ? `${markerInfo.derivationTCount} deriv.` : null];
     if (markerInfo.type === "RESERVA") details = [markerInfo.reservaStatus, markerInfo.reservaAccessory];
+    if (markerInfo.type === "POSTE") details = [markerInfo.pole?.situation, markerInfo.pole?.height ? `${markerInfo.pole.height} m` : null, markerInfo.pole?.effort ? `${markerInfo.pole.effort} daN` : null];
     details = details.filter(Boolean);
     let name = markerInfo.name;
     let meta = [typeLabels[markerInfo.type] || markerInfo.type, ...details].join(' · ');

@@ -94,6 +94,7 @@ async function persistProject(projectRootElement, { force = false } = {}) {
         if (error) throw error;
         if (data && data.length) {
             setProjectRevision(projectRootElement, data[0].revision);
+            if (typeof liveSyncAnnounceSaved === 'function') liveSyncAnnounceSaved(record.id, data[0].revision);
             return record;
         }
         const info = await fetchProjectSaveInfo(record.id);
@@ -112,6 +113,7 @@ async function persistProject(projectRootElement, { force = false } = {}) {
     if (data?.[0]?.revision != null) {
         projectRevisionsSupported = true;
         setProjectRevision(projectRootElement, data[0].revision);
+        if (typeof liveSyncAnnounceSaved === 'function') liveSyncAnnounceSaved(record.id, data[0].revision);
     }
     return record;
 }
@@ -239,6 +241,7 @@ async function openProjectFromDatabase(projectId, button) {
         setProjectRevision(document.getElementById(data.id)?.closest('.folder'), data.revision);
     }
     if (typeof rememberLastProject === 'function') rememberLastProject(data.id);
+    if (typeof liveSyncJoin === 'function') liveSyncJoin(data.id);
 }
 
 /*Limpa a barra lateral e o mapa, removendo todos os elementos visuais*/
@@ -336,6 +339,7 @@ function serializeMarker(markerInfo) {
         reservaAccessory: markerInfo.reservaAccessory,
         client: markerInfo.type === 'CLIENTE' ? (markerInfo.client || {}) : undefined,
         popEquipment: markerInfo.type === 'POP' && markerInfo.popEquipment ? markerInfo.popEquipment : undefined,
+        pole: markerInfo.type === 'POSTE' && markerInfo.pole ? markerInfo.pole : undefined,
         position: { lat: position.lat(), lng: position.lng() }
     };
 }
@@ -352,9 +356,18 @@ function ensureMarkerUid(markerInfo) {
     return markerInfo.uid;
 }
 
+//Identificador permanente de cabo e polígono (edição ao vivo: js/live-sync.js)
+function ensureItemUid(info, prefix, list) {
+    if (!info.uid || list.some(x => x !== info && x.uid === info.uid)) {
+        info.uid = `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    }
+    return info.uid;
+}
+
 //Converte o objeto de cabo para o formato JSON, salvando os dados no banco de dados
 function serializeCable(cableInfo) {
     return {
+        uid: ensureItemUid(cableInfo, 'cb', savedCables),
         folderId: cableInfo.folderId,
         order: getSidebarOrderIndex(cableInfo.item),
         name: cableInfo.name,
@@ -382,6 +395,7 @@ function serializePolygon(polygonInfo) {
     const currentPath = polygonInfo.polygonObject.getPath().getArray();
     //Retorna com os dados essenciais a serem salvos
     return {
+        uid: ensureItemUid(polygonInfo, 'pg', savedPolygons),
         folderId: polygonInfo.folderId,
         order: getSidebarOrderIndex(polygonInfo.listItem),
         name: polygonInfo.name,

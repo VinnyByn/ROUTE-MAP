@@ -799,7 +799,7 @@ const sheets = await page.evaluate(() => {
     fibras: out.Fibras.length - 1,
   };
 });
-check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras,Equipamentos do POP' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
+check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras,Equipamentos do POP,Postes' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
   && sheets.cliente === 'X-Cli|C-9|X-CTO|3|55' && sheets.portas === 8 && sheets.porta3 === 'X-CTO|3|Ocupada|X-Cli|C-9' && sheets.fibras === 12,
   `exportar planilha monta as abas do projeto (${JSON.stringify(sheets)})`);
 
@@ -977,6 +977,30 @@ const tour = await page.evaluate(() => {
 check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
   `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
 
+//Poste: painel com os dados, salvos no marcador, rótulo na barra lateral, busca e aba "Postes" na planilha
+const poste = await page.evaluate(() => {
+  openMarkerCreatePanel('POSTE');
+  const groupVisible = !document.getElementById('poleGroup').classList.contains('hidden');
+  const set = (id, v) => { document.getElementById(id).value = v; };
+  set('poleNumber', 'CEMIG-4521'); set('poleHeight', '11'); set('poleEffort', '300'); set('poleMaterial', 'Concreto');
+  set('poleUtility', 'Cemig'); set('poleOccupants', '2'); set('poleSituation', 'Existente');
+  const form = readMarkerPanelForm();
+  resetMarkerModal();
+  const icon = getMarkerIconDataUrl('POSTE', '#64748b');
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projPo" data-folder-name="Po"></div><ul id="projPo" class="subfolders"></ul></li>');
+  const prev = activeFolderId; activeFolderId = 'projPo';
+  const pole = { folderId: 'projPo', type: 'POSTE', name: 'P-01', pole: form.pole, position: { lat: -20, lng: -44 } };
+  markers.push(pole);
+  const sheet = buildProjectSheets(getActiveProjectScope()).Postes;
+  const found = searchMapItems('cemig-4521').map(r => r.title).join();
+  markers.splice(markers.indexOf(pole), 1);
+  document.querySelector('[data-folder-id="projPo"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { groupVisible, pole: form.pole, icon: icon.startsWith('data:image/svg'), row: sheet[1]?.slice(0, 8).join('|'), found, desc: describePole(form.pole) };
+});
+check(poste.groupVisible && poste.icon && poste.row === 'P-01|CEMIG-4521|Existente|11|300|Concreto|Cemig|2' && poste.found === 'P-01'
+  && poste.desc === 'nº CEMIG-4521 · 11 m · 300 daN · Concreto · Existente', `poste: cadastro, busca e aba "Postes" na planilha (${JSON.stringify(poste)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');
@@ -1060,6 +1084,85 @@ const lightBlocks = await page.evaluate(() => {
   return found;
 });
 check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${lightBlocks.length ? ': ' + lightBlocks.slice(0, 5).join(', ') : ''}`);
+
+//Edição simultânea ao vivo: duas abas no mesmo projeto (Realtime simulado entre abas) e uma terceira que entra depois
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
+  const liveErrors = [];
+  const openLive = async () => {
+    const p = await ctx.newPage();
+    p.on('pageerror', e => liveErrors.push(e.message));
+    await p.addInitScript(() => { try { localStorage.setItem('routeMapTourDone', '1'); } catch (e) {} });
+    await p.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+    await p.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+    await p.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
+    await p.goto(baseUrl + '/index.html');
+    await p.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
+    await p.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
+    await p.evaluate(() => {
+      const data = { sidebar: { id: 'projL', name: 'Projeto Live', isProject: true, type: 'TCR', children: [] },
+        markers: [{ uid: 'mk1', type: 'CTO', name: 'L-CTO', folderId: 'projL', position: { lat: -20, lng: -44 }, ctoStatus: 'Nova', color: '#16a34a', size: 24 }],
+        cables: [], polygons: [] };
+      loadAndDisplayProject('projL', data, { silent: true });
+      setActiveFolder('projL');
+      liveSyncJoin('projL');
+    });
+    return p;
+  };
+  const A = await openLive();
+  const B = await openLive();
+  const wait = (ms) => A.waitForTimeout(ms);
+  await wait(500);
+  const names = (pg) => pg.evaluate(() => markers.filter(m => m.folderId === 'projL' || document.getElementById(m.folderId)?.closest('.folder')?.querySelector('[data-folder-id="projL"]')).map(m => m.name).sort().join(','));
+  const live = {};
+  live.presence = await B.evaluate(() => document.querySelector('.folder-title[data-folder-id="projL"] .live-badge')?.textContent || '');
+  await A.evaluate(() => {
+    rebuildMarker({ uid: 'mk2', type: 'CEO', name: 'L-CEO', folderId: 'projL', position: { lat: -20.001, lng: -44.001 }, ceoStatus: 'Nova', color: '#f59e0b', size: 24 });
+    refreshBomAfterProjectChange();
+  });
+  await wait(900);
+  live.added = await names(B);
+  await A.evaluate(() => { const m = markers.find(x => x.uid === 'mk1'); m.name = 'L-CTO-RENOMEADA'; updateMarkerAppearance(m); refreshBomAfterProjectChange(); });
+  await wait(900);
+  live.renamed = await names(B);
+  await B.evaluate(() => { const m = markers.find(x => x.uid === 'mk2'); m.marker.setMap(null); m.listItem.remove(); markers = markers.filter(x => x !== m); refreshBomAfterProjectChange(); });
+  await wait(900);
+  live.deleted = await names(A);
+  await A.evaluate(() => { appendFolderToParent(document.getElementById('projL'), 'Pasta Live', 'pL1'); refreshBomAfterProjectChange(); });
+  await wait(1200);
+  live.folder = await B.evaluate(() => !!document.querySelector('.folder-title[data-folder-id="pL1"]') && markers.some(m => m.name === 'L-CTO-RENOMEADA'));
+  //B no meio de uma edição (janela aberta): recebe quando termina
+  await B.evaluate(() => { document.getElementById('alertModal').style.display = 'flex'; });
+  await A.evaluate(() => { const m = markers.find(x => x.uid === 'mk1'); m.name = 'L-CTO-3'; refreshBomAfterProjectChange(); });
+  await wait(900);
+  live.waitedWhileBusy = await B.evaluate(() => !markers.some(m => m.name === 'L-CTO-3') && !!document.getElementById('liveWaitingNote'));
+  await B.evaluate(() => { document.getElementById('alertModal').style.display = 'none'; });
+  await wait(1600);
+  live.appliedAfter = await B.evaluate(() => markers.some(m => m.name === 'L-CTO-3') && !document.getElementById('liveWaitingNote'));
+  //Cabo criado numa aba aparece na outra, com a metragem
+  await A.evaluate(() => {
+    rebuildMarker({ uid: 'mk3', type: 'CTO', name: 'L-CTO-B', folderId: 'projL', position: { lat: -20.002, lng: -44 }, ctoStatus: 'Nova', color: '#16a34a', size: 24 });
+    rebuildCable({ uid: 'cb1', name: 'L-CABO', type: 'Cabo AS 80 FO-12', status: 'Novo', width: 4, color: '#22c55e', folderId: 'projL',
+      path: [{ lat: -20, lng: -44 }, { lat: -20.002, lng: -44 }], startAnchorUid: 'mk1', endAnchorUid: 'mk3' });
+    refreshBomAfterProjectChange();
+  });
+  await wait(1000);
+  live.cable = await B.evaluate(() => { const c = savedCables.find(x => x.uid === 'cb1'); return c ? `${c.name}:${c.totalLength > 200}` : 'nenhum'; });
+  //Salvar avisa a nova revisão
+  await A.evaluate(() => liveSyncAnnounceSaved('projL', 7));
+  await wait(500);
+  live.revision = await B.evaluate(() => getProjectRevision(document.getElementById('projL').closest('.folder')));
+  //Quem entra depois recebe o estado atual
+  const C = await openLive();
+  await C.waitForTimeout(1500);
+  live.lateJoiner = await C.evaluate(() => markers.some(m => m.name === 'L-CTO-3') && !!document.querySelector('.folder-title[data-folder-id="pL1"]'));
+  live.errors = liveErrors.slice(0, 3);
+  await ctx.close();
+  check(/1/.test(live.presence) && live.added === 'L-CEO,L-CTO' && live.renamed === 'L-CEO,L-CTO-RENOMEADA' && live.deleted === 'L-CTO-RENOMEADA' && live.folder,
+    `edição ao vivo: presença, incluir, renomear, excluir e pastas chegam na outra aba (${JSON.stringify(live)})`);
+  check(live.waitedWhileBusy && live.appliedAfter && live.revision === 7 && live.lateJoiner && live.cable === 'L-CABO:true' && !live.errors.length,
+    `edição ao vivo: cabo, espera a edição em andamento, avisa a revisão salva e quem entra depois recebe o estado (${live.cable})`);
+}
 
 const before = cspViolations.length;
 const inlineRan = await page.evaluate(async () => {

@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006n" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261007b" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -966,6 +966,11 @@
             <span class="selection-card__title">Predial</span>
             <span class="selection-card__hint">Prédio sem drop</span>
           </div>
+          <div class="marker-option selection-card" data-type="POSTE" role="button" tabindex="0">
+            <span class="marker-type-glyph" aria-hidden="true"></span>
+            <span class="selection-card__title">Poste</span>
+            <span class="selection-card__hint">Cadastro de postes</span>
+          </div>
           <div class="marker-option selection-card" data-type="POP" role="button" tabindex="0">
             <span class="marker-type-glyph" aria-hidden="true"></span>
             <span class="selection-card__title">POP</span>
@@ -1146,6 +1151,19 @@
           <label>Equipamentos do POP</label>
           <p class="map-tool-help" id="popEquipmentPanelSummary"></p>
           <button type="button" class="btn btn-secondary" id="openPopEquipmentButton">OLTs, placas, DGOs e switches</button>
+        </div>
+        <div class="map-tool-field hidden" id="poleGroup">
+          <label>Dados do poste</label>
+          <div class="pole-grid">
+            <label class="pole-f"><span>Número / plaqueta</span><input type="text" id="poleNumber" maxlength="40" /></label>
+            <label class="pole-f"><span>Situação</span><select id="poleSituation"><option>Existente</option><option>Novo</option><option>Substituir</option><option>Remover</option></select></label>
+            <label class="pole-f"><span>Altura (m)</span><input type="number" id="poleHeight" min="0" step="0.5" placeholder="11" /></label>
+            <label class="pole-f"><span>Esforço (daN)</span><input type="number" id="poleEffort" min="0" step="50" placeholder="300" /></label>
+            <label class="pole-f"><span>Material</span><select id="poleMaterial"><option>Concreto</option><option>Madeira</option><option>Metálico</option><option>Fibra</option></select></label>
+            <label class="pole-f"><span>Ocupantes</span><input type="number" id="poleOccupants" min="0" step="1" placeholder="0" title="Outras empresas no poste" /></label>
+            <label class="pole-f pole-f--wide"><span>Concessionária / dono</span><input type="text" id="poleUtility" maxlength="60" placeholder="Ex.: Cemig, Enel, Energisa, prefeitura" /></label>
+            <label class="pole-f pole-f--wide"><span>Observação</span><input type="text" id="poleNotes" maxlength="200" /></label>
+          </div>
         </div>
         <div class="map-tool-field hidden" id="derivationTGroup">
           <label for="markerDerivationT">Derivações em T</label>
@@ -2685,34 +2703,35 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261006m" defer></script>
-  <script src="js/persistence.js?v=20261006m" defer></script>
+  <script src="script.js?v=20261007b" defer></script>
+  <script src="js/persistence.js?v=20261007b" defer></script>
   <script src="js/sidebar-actions.js?v=20261006c" defer></script>
-  <script src="js/project-safety.js?v=20261005a" defer></script>
+  <script src="js/project-safety.js?v=20261007a" defer></script>
   <script src="js/catalog.js?v=20261006g" defer></script>
   <script src="js/kml.js?v=20261006d" defer></script>
-  <script src="js/bom.js?v=20261006l" defer></script>
+  <script src="js/bom.js?v=20261007b" defer></script>
   <script src="js/labor.js?v=20261004e" defer></script>
   <script src="js/report.js?v=20261004e" defer></script>
   <script src="js/sketch.js?v=20261006d" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261006i" defer></script>
+  <script src="js/sidebar.js?v=20261007b" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
-  <script src="js/marker-icons.js?v=20261004b" defer></script>
-  <script src="js/marker-panel.js?v=20261006i" defer></script>
+  <script src="js/marker-icons.js?v=20261007b" defer></script>
+  <script src="js/marker-panel.js?v=20261007b" defer></script>
   <script src="js/fusion-plan.js?v=20261006c" defer></script>
   <script src="js/fusion.js?v=20261006k" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
   <script src="js/clients.js?v=20261005e" defer></script>
   <script src="js/optical-budget.js?v=20261006g" defer></script>
   <script src="js/project-check.js?v=20261006g" defer></script>
-  <script src="js/project-export.js?v=20261006i" defer></script>
+  <script src="js/project-export.js?v=20261007b" defer></script>
   <script src="js/pop-equipment.js?v=20261006i" defer></script>
-  <script src="js/global-search.js?v=20261006j" defer></script>
+  <script src="js/global-search.js?v=20261007b" defer></script>
   <script src="js/box-templates.js?v=20261006k" defer></script>
   <script src="js/undo.js?v=20261006l" defer></script>
   <script src="js/map-selection.js?v=20261006m" defer></script>
   <script src="js/tour.js?v=20261006n" defer></script>
+  <script src="js/live-sync.js?v=20261007a" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
   <script src="js/marker-hover.js?v=20261006i" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>

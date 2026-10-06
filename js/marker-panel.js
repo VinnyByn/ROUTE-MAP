@@ -9,6 +9,7 @@ const MARKER_TYPE_META = {
     RESERVA: { name: 'Reserva técnica', article: 'Nova', noun: 'reserva técnica', prefix: 'RT', statuses: ['Nova', 'Existente'], accessory: true, color: '#ef4444' },
     CASA: { name: 'Casas', article: 'Novas', noun: 'casas', prefix: '', statuses: null, color: '#ffffff', labelColor: '#0f172a' },
     POP: { name: 'POP', article: 'Novo', noun: 'POP', prefix: 'POP', statuses: null, color: '#7c3aed' },
+    POSTE: { name: 'Poste', article: 'Novo', noun: 'poste', prefix: 'P', statuses: null, color: '#64748b' },
     Importado: { name: 'Marcador importado', article: 'Novo', noun: 'marcador', prefix: 'MK', statuses: ['Nova', 'Existente'], color: '#ff9800' },
 };
 const MARKER_STYLE_STORAGE_PREFIX = 'routeMapMarkerStyle_';
@@ -123,6 +124,7 @@ function configureMarkerPanel(type, mode) {
     toggleMarkerPanelGroup('ctoOptionsPanel', type === 'CTO');
     toggleMarkerPanelGroup('ceo144Group', type === 'CEO');
     toggleMarkerPanelGroup('derivationTGroup', type === 'CORDOALHA');
+    toggleMarkerPanelGroup('poleGroup', type === 'POSTE');
     toggleMarkerPanelGroup('markerPositionRow', isEdit);
     toggleMarkerPanelGroup('deleteMarkerButton', isEdit);
     toggleMarkerPanelGroup('editPositionButton', isEdit);
@@ -371,6 +373,7 @@ function openMarkerEditor(markerInfo) {
     document.getElementById('ctoStickerCheckbox').checked = markerInfo.needsStickers ?? shouldDefaultCtoStickers(markerInfo.ctoStatus);
     document.getElementById('ceo144Checkbox').checked = !!markerInfo.is144F;
     document.getElementById('markerDerivationT').value = markerInfo.derivationTCount || 0;
+    fillPoleForm(markerInfo.pole || {});
     const position = markerInfo.marker.getPosition();
     setMarkerEditorCoordinatesText(markerInfo.type, position.lat().toFixed(6), position.lng().toFixed(6));
     configureMarkerPanel(markerInfo.type, 'edit');
@@ -403,6 +406,7 @@ function readMarkerPanelForm() {
         needsStickers: document.getElementById('ctoStickerCheckbox').checked,
         is144F: document.getElementById('ceo144Checkbox').checked,
         derivationTCount: parseInt(document.getElementById('markerDerivationT').value, 10) || 0,
+        pole: readPoleForm(),
     };
 }
 
@@ -422,6 +426,33 @@ function applyMarkerFormToData(target, type, form) {
     }
     if (type === 'RESERVA') target.reservaAccessory = form.accessory;
     if (type === 'CORDOALHA') target.derivationTCount = form.derivationTCount;
+    if (type === 'POSTE') target.pole = form.pole;
+}
+
+// ---------------------------------------------------------------
+// Poste: número/plaqueta, altura, esforço, material, concessionária, ocupantes, situação
+// ---------------------------------------------------------------
+
+const POLE_SITUATIONS = ['Existente', 'Novo', 'Substituir', 'Remover'];
+
+function readPoleForm() {
+    const v = (id) => document.getElementById(id)?.value.trim() || '';
+    const n = (id) => { const x = parseFloat(v(id).replace(',', '.')); return Number.isFinite(x) && x >= 0 ? x : null; };
+    return {
+        number: v('poleNumber'), height: n('poleHeight'), effort: n('poleEffort'), material: v('poleMaterial'),
+        utility: v('poleUtility'), occupants: n('poleOccupants'), situation: v('poleSituation') || 'Existente', notes: v('poleNotes'),
+    };
+}
+
+function fillPoleForm(pole = {}) {
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.value = value ?? ''; };
+    set('poleNumber', pole.number); set('poleHeight', pole.height); set('poleEffort', pole.effort);
+    set('poleMaterial', pole.material || 'Concreto'); set('poleUtility', pole.utility); set('poleOccupants', pole.occupants);
+    set('poleSituation', pole.situation || 'Existente'); set('poleNotes', pole.notes);
+}
+
+function describePole(pole = {}) {
+    return [pole.number && `nº ${pole.number}`, pole.height && `${pole.height} m`, pole.effort && `${pole.effort} daN`, pole.material, pole.situation].filter(Boolean).join(' · ');
 }
 
 function handleMarkerPanelConfirm() {

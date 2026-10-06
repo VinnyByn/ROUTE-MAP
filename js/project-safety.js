@@ -123,6 +123,7 @@ function moveProjectToTrash(projectId, projectElement, projectName) {
             if (!data.length && await projectExistsInDatabase(projectId)) {
                 return showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
             }
+            if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
             removeProjectFromWorkspace(projectId, projectElement);
             showToast('Projeto na lixeira', `"${projectName}" pode ser restaurado em até 30 dias.`);
         });

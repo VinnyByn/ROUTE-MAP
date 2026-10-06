@@ -682,6 +682,7 @@ function refreshBomAfterProjectChange() {
     calculateBomState();
     projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
     if (typeof scheduleProjectUndoSnapshot === 'function') scheduleProjectUndoSnapshot(projectId);
+    if (typeof liveSyncLocalChange === 'function') liveSyncLocalChange(projectId);
     const materialModal = document.getElementById('materialModal');
     if (materialModal && materialModal.style.display === 'flex') {
         renderBomTable();
@@ -753,7 +754,7 @@ function calculateBomState() {
         if (markerInfo.type === 'Importado') return;
         const type = markerInfo.type;
         if (type === 'CLIENTE') return; //Tratado em addClientMaterialsToBom
-        if (type === 'CASA' || type === 'POP' || isMarkerStatusExistente(markerInfo)) return;
+        if (type === 'CASA' || type === 'POP' || type === 'POSTE' || isMarkerStatusExistente(markerInfo)) return;
         if (type === 'CTO') {
             if (markerInfo.isPredial) {
                 addOrUpdateMaterial("CAIXA DE ATENDIMENTO PREDIAL", 1, 'unit', 'CTO Predial', markerInfo.name);
