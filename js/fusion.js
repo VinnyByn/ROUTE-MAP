@@ -1178,7 +1178,8 @@ function openSplitterOltConfigModal(splitterElement) {
     document.getElementById('splitterConfigOlt').value = values.olt;
     document.getElementById('splitterConfigPlaca').value = values.placa;
     document.getElementById('splitterConfigPon').value = values.pon;
-    const names = [...new Set(collectProjectOltUsage().map(u => u.olt).filter(Boolean))].sort();
+    const popOlts = typeof getProjectPopOlts === 'function' && activeMarkerForFusion ? getProjectPopOlts(activeMarkerForFusion.folderId) : [];
+    const names = [...new Set([...popOlts.map(o => o.name), ...collectProjectOltUsage().map(u => u.olt)].filter(Boolean))].sort();
     document.getElementById('oltNameOptions').innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
     document.getElementById('removeSplitterOlt').classList.toggle('hidden', !(values.olt || values.placa || values.pon));
     updateOltPopoverPreview();
@@ -1306,6 +1307,7 @@ function updateFusionModalTitle(markerInfo) {
 
 function populateFusionPlan(markerInfo) {
     activeMarkerForFusion = markerInfo;
+    if (typeof refreshBoxTemplatesSection === 'function') refreshBoxTemplatesSection();
     cancelFusionArm();
     activeLineForAction = null;
     updateFusionModalTitle(markerInfo);

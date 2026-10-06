@@ -681,6 +681,7 @@ function refreshBomAfterProjectChange() {
     if (!projectId) return;
     calculateBomState();
     projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
+    if (typeof scheduleProjectUndoSnapshot === 'function') scheduleProjectUndoSnapshot(projectId);
     const materialModal = document.getElementById('materialModal');
     if (materialModal && materialModal.style.display === 'flex') {
         renderBomTable();

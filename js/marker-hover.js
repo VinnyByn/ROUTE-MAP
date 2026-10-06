@@ -61,8 +61,22 @@ function positionMarkerHoverCard(x, y) {
     card.style.top = `${Math.max(8, top)}px`;
 }
 
+function buildPopHoverHtml(markerInfo) {
+    const icon = getMarkerIconDataUrl(markerInfo.type, markerInfo.color || '#7c3aed');
+    const head = `<header class="mh-card__head"><img src="${icon}" alt=""><div><strong>${escapeHtml(markerInfo.name || '')}</strong><span>POP</span></div></header>`;
+    const eq = normalizePopEquipment(markerInfo.popEquipment);
+    const s = summarizePopEquipment(eq);
+    if (!s.olts && !s.dgos && !s.switches) return `${head}<p class="mh-card__empty">Sem equipamentos cadastrados</p>`;
+    const row = (label, value, cls = '') => `<div class="mh-row ${cls}"><span>${label}</span><b>${value}</b></div>`;
+    let body = '';
+    if (s.olts) body += `<section><h5>OLTs</h5>${eq.olts.map(o => row(escapeHtml(o.name || 'OLT'), `${o.cards.length} placa${o.cards.length === 1 ? '' : 's'} · ${o.cards.reduce((n, c) => n + c.pons, 0)} PONs`)).join('')}</section>`;
+    if (s.dgos) body += `<section><h5>DGOs</h5>${eq.dgos.map(d => row(escapeHtml(d.name || 'DGO'), `${d.ports} portas`)).join('')}</section>`;
+    if (s.switches) body += `<section><h5>Switches</h5>${eq.switches.map(w => row(escapeHtml(w.name || 'Switch'), `${w.ports} portas`)).join('')}</section>`;
+    return head + `<div class="mh-card__body">${body}</div>`;
+}
+
 function showMarkerHoverCard(markerInfo, domEvent) {
-    if (!markerInfo || (markerInfo.type !== 'CTO' && markerInfo.type !== 'CEO')) return;
+    if (!markerInfo || (markerInfo.type !== 'CTO' && markerInfo.type !== 'CEO' && markerInfo.type !== 'POP')) return;
     clearTimeout(markerHoverHideTimer);
     if (!markerHoverCard) {
         markerHoverCard = document.createElement('div');
@@ -70,7 +84,7 @@ function showMarkerHoverCard(markerInfo, domEvent) {
         markerHoverCard.setAttribute('role', 'tooltip');
         document.body.appendChild(markerHoverCard);
     }
-    markerHoverCard.innerHTML = buildMarkerHoverHtml(markerInfo);
+    markerHoverCard.innerHTML = markerInfo.type === 'POP' ? buildPopHoverHtml(markerInfo) : buildMarkerHoverHtml(markerInfo);
     markerHoverCard.classList.add('is-visible');
     const x = domEvent?.clientX ?? markerHoverPointer.x;
     const y = domEvent?.clientY ?? markerHoverPointer.y;

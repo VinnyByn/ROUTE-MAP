@@ -699,6 +699,284 @@ const cascade = await page.evaluate(() => {
 check(cascade.down === 'K-CEO2,K-CTO1,K-CTO2,K-FEED' && cascade.up === 'K-CTO1,K-FEED',
   `rota passa por splitters em cascata e, subindo, não espalha pelas saídas do mesmo splitter (${JSON.stringify(cascade)})`);
 
+//Verificação do projeto: encontra pontas soltas, caixas sem plano, cabos fora do plano, fusões duplicadas/quebradas,
+//cliente sem porta, porta usada duas vezes e drop longo
+const projCheck = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projV" data-folder-name="Projeto V"></div><ul id="projV" class="subfolders"></ul></li>');
+  const prevFolder = activeFolderId; activeFolderId = 'projV';
+  const realDrop = window.getClientDropInfo;
+  window.getClientDropInfo = (c) => c.name === 'V-Longe' ? { length: 420 } : { length: 80 };
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const a = buildFusionCableCard({ name: 'V-1', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const old = buildFusionCableCard({ name: 'V-NOME-ANTIGO', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const sp = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Atendimento' });
+  const box = document.createElement('div'); box.append(a, old, sp);
+  const lines = [[fiber(a, 1), fiber(old, 1)], [fiber(a, 1), fiber(old, 2)], [fiber(a, 3), 'cable-SUMIU-fiber-1']];
+  const ceo = { folderId: 'projV', type: 'CEO', name: 'V-CEO', uid: 'v-ceo', fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg: lines.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }) };
+  const cto = { folderId: 'projV', type: 'CTO', name: 'V-CTO', uid: 'v-cto', fusionPlan: '' };
+  const c1 = { folderId: 'projV', name: 'V-1', startAnchorUid: 'v-ceo', endAnchorUid: 'v-cto' };
+  const c2 = { folderId: 'projV', name: 'V-2', startAnchorUid: 'v-ceo', endAnchorUid: null };
+  const c3 = { folderId: 'projV', name: 'V-2', startAnchorUid: 'v-ceo', endAnchorUid: 'v-cto' };
+  const cli = (name, extra) => ({ folderId: 'projV', type: 'CLIENTE', name, client: { kind: 'residencial', status: 'ativo', ctoUid: 'v-cto', ...extra } });
+  const clients = [cli('V-SemPorta', {}), cli('V-P1', { ctoPort: 1 }), cli('V-P1b', { ctoPort: 1 }), cli('V-Longe', { ctoPort: 2 }), cli('V-Solto', { ctoUid: null })];
+  const items = [ceo, cto, ...clients];
+  markers.push(...items); savedCables.push(c1, c2, c3);
+  const scope = getActiveProjectScope();
+  const issues = runProjectCheck(scope);
+  openProjectCheck();
+  const panel = document.getElementById('projectCheckBody').textContent;
+  window.__checkCleanup = () => {
+    document.getElementById('projectCheckBox').classList.add('hidden');
+    items.forEach(i => markers.splice(markers.indexOf(i), 1));
+    [c1, c2, c3].forEach(c => savedCables.splice(savedCables.indexOf(c), 1));
+    document.querySelector('[data-folder-id="projV"]').closest('.folder').remove();
+    activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
+  };
+  return { titles: issues.map(i => `${i.level}:${i.title}`), panelHasCount: /erros?/.test(panel) && /avisos?/.test(panel) };
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.waitForTimeout(150);
+  await page.locator('#projectCheckBox').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'verificar-projeto.png') });
+}
+await page.evaluate(() => window.__checkCleanup());
+const expectCheck = ['erro:Nome de cabo repetido: V-2', 'erro:Cabo com ponta solta: V-2', 'aviso:CTO sem plano de fusão: V-CTO',
+  'erro:Cabo inexistente no plano de V-CEO', 'erro:Fusão duplicada em V-CEO', 'erro:Fusão quebrada em V-CEO', 'aviso:Splitter sem entrada em V-CEO',
+  'aviso:Cliente sem porta: V-SemPorta', 'erro:Porta usada duas vezes na V-CTO', 'aviso:Drop longo: V-Longe', 'aviso:Cliente sem CTO: V-Solto'];
+const missingCheck = expectCheck.filter(t => !projCheck.titles.includes(t));
+check(!missingCheck.length && projCheck.panelHasCount, `verificação do projeto encontra os problemas${missingCheck.length ? ` (faltou: ${missingCheck.join(' | ')})` : ''}`);
+
+//Orçamento óptico: OLT +5 → conector 0,5 → 1:8 (10,5) → fusão 0,1 → 1 km (0,35) → fusão 0,1 → 1:8 (10,5) → conector 0,5 = −17,55 dBm
+const optical = await page.evaluate(() => {
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const mk = (cards, links) => { const b = document.createElement('div'); b.append(...cards); return JSON.stringify({ version: 2, elements: b.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }); };
+  const s8 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Fusão', olt: { olt: 'OLT-1', placa: '1', pon: '1' } });
+  const bOut = buildFusionCableCard({ name: 'O-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const ceo = { type: 'CEO', name: 'O-CEO', uid: 'o-ceo', fusionPlan: mk([s8, bOut], [['splitter-1-output-1', fiber(bOut, 1)]]) };
+  const bIn = buildFusionCableCard({ name: 'O-B', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const cto = { type: 'CTO', name: 'O-CTO', uid: 'o-cto', fusionPlan: mk([bIn, at], [[fiber(bIn, 1), 'splitter-1-input-port']]) };
+  const orphanCard = buildFusionCableCard({ name: 'O-SOLTO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at2 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:16', outputs: 16, type: 'Atendimento' });
+  const cto2 = { type: 'CTO', name: 'O-CTO2', uid: 'o-cto2', fusionPlan: mk([orphanCard, at2], [[fiber(orphanCard, 1), 'splitter-1-input-port']]) };
+  const cable = { name: 'O-B', totalLength: 1000 };
+  markers.push(ceo, cto, cto2); savedCables.push(cable);
+  const cfg = normalizeOpticalConfig();
+  const byCto = getOpticalBudgetByCto([cto, cto2]);
+  const port = byCto.get(cto)?.worstPort;
+  const strict = classifyOpticalPower(port, { ...cfg, onuSensitivity: -16 });
+  const margin = classifyOpticalPower(port, { ...cfg, onuSensitivity: -19 });
+  const scope = { markers: [ceo, cto, cto2], cables: [cable] };
+  const budget = getProjectOpticalBudget(scope);
+  markers.splice(markers.indexOf(ceo), 3); savedCables.splice(savedCables.indexOf(cable), 1);
+  return { port, status: byCto.get(cto)?.status, noSource: byCto.has(cto2), strict, margin, rows: budget.rows.map(r => `${r.cto.name}:${r.dbm == null ? 'sem' : r.dbm.toFixed(2)}`).join() };
+});
+check(Math.abs(optical.port + 17.55) < 0.001 && optical.status === 'ok' && !optical.noSource,
+  `orçamento óptico soma as perdas do caminho (porta da CTO: ${optical.port?.toFixed(2)} dBm)`);
+check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows === 'O-CTO2:sem,O-CTO:-17.55', `orçamento óptico classifica erro/margem e aponta CTO sem OLT (${optical.rows})`);
+
+//Exportar planilha: abas e linhas do projeto ativo
+const sheets = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projX" data-folder-name="Projeto X"></div><ul id="projX" class="subfolders"></ul></li>');
+  const prevFolder = activeFolderId; activeFolderId = 'projX';
+  const realDrop = window.getClientDropInfo; window.getClientDropInfo = () => ({ length: 55 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const box = document.createElement('div'); box.append(at);
+  const cto = { folderId: 'projX', type: 'CTO', name: 'X-CTO', uid: 'x-cto', ctoStatus: 'Novo', position: { lat: -20.1, lng: -44.2 }, fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg: '' }) };
+  const cli = { folderId: 'projX', type: 'CLIENTE', name: 'X-Cli', client: { kind: 'residencial', status: 'ativo', ctoUid: 'x-cto', ctoPort: 3, code: 'C-9' } };
+  const cable = { folderId: 'projX', name: 'X-CABO', type: 'Cabo AS 80 FO-12', status: 'Novo', startAnchorUid: 'x-cto', totalLength: 120, lancamento: 100, reserva: 20 };
+  markers.push(cto, cli); savedCables.push(cable);
+  const out = buildProjectSheets(getActiveProjectScope());
+  markers.splice(markers.indexOf(cto), 2); savedCables.splice(savedCables.indexOf(cable), 1);
+  document.querySelector('[data-folder-id="projX"]').closest('.folder').remove();
+  activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
+  return {
+    tabs: Object.keys(out).join(),
+    caixa: out.Caixas[1].slice(0, 2).concat(out.Caixas[1].slice(8, 11)).join('|'),
+    cabo: [out.Cabos[1][0], out.Cabos[1][7], out.Cabos[1][8]].join('|'),
+    cliente: [out.Clientes[1][0], out.Clientes[1][1], out.Clientes[1][4], out.Clientes[1][5], out.Clientes[1][6]].join('|'),
+    portas: out['Portas das CTOs'].length - 1, porta3: out['Portas das CTOs'][3].join('|'),
+    fibras: out.Fibras.length - 1,
+  };
+});
+check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras,Equipamentos do POP' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
+  && sheets.cliente === 'X-Cli|C-9|X-CTO|3|55' && sheets.portas === 8 && sheets.porta3 === 'X-CTO|3|Ocupada|X-Cli|C-9' && sheets.fibras === 12,
+  `exportar planilha monta as abas do projeto (${JSON.stringify(sheets)})`);
+
+//Equipamentos do POP: OLT com placas, DGO e switch; salva no POP e sugere a OLT no "Vincular OLT"
+const popEq = await page.evaluate(() => {
+  const pop = { folderId: 'projP', type: 'POP', name: 'POP-01', uid: 'pop-1' };
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projP" data-folder-name="P"></div><ul id="projP" class="subfolders"></ul></li>');
+  markers.push(pop);
+  openPopEquipmentModal(pop);
+  const modal = document.getElementById('popEquipmentModal');
+  modal.querySelector('[data-pop-add="olt"]').click();
+  modal.querySelector('[data-pop-add="card"]').click();
+  const name = modal.querySelector('[data-pop="olts.0.name"]'); name.value = 'OLT-CENTRO'; name.dispatchEvent(new Event('input', { bubbles: true }));
+  modal.querySelector('[data-pop-add="dgo"]').click();
+  modal.querySelector('[data-pop-add="switch"]').click();
+  const summary = document.getElementById('popEquipmentSummary').textContent;
+  window.__popShot = () => { document.getElementById('savePopEquipment').click(); };
+  return { summary };
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.waitForTimeout(150);
+  await page.locator('#popEquipmentModal .modal-content').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'pop-equipamentos.png') });
+}
+const popSaved = await page.evaluate(() => {
+  window.__popShot();
+  const pop = markers.find(m => m.uid === 'pop-1');
+  const saved = JSON.stringify(pop.popEquipment);
+  const olts = getProjectPopOlts('projP').map(o => o.name).join();
+  const hover = buildPopHoverHtml(pop).includes('OLT-CENTRO');
+  markers.splice(markers.indexOf(pop), 1);
+  document.querySelector('[data-folder-id="projP"]').closest('.folder').remove();
+  return { saved, olts, hover, closed: document.getElementById('popEquipmentModal').style.display === 'none' };
+}).catch(e => ({ error: String(e) }));
+check(popEq.summary === '1 OLT · 2 placas · 32 PONs · 1 DGO (24 portas) · 1 switch' && popSaved.olts === 'OLT-CENTRO' && popSaved.hover && popSaved.closed
+  && popSaved.saved.includes('"slot":"2"'), `equipamentos do POP: OLT com placas, DGO e switch (${popEq.summary} · ${JSON.stringify(popSaved)})`);
+
+//Busca global (Ctrl+K): acha caixa, cliente por código/endereço sem acento, cabo e coordenada; Enter vai até o item
+const gsearch = await page.evaluate(async () => {
+  const items = [
+    { type: 'CTO', name: 'CTO-17', uid: 'g-cto' },
+    { type: 'CLIENTE', name: 'João da Silva', client: { code: 'CLI-4521', address: 'Rua São José, 120', ctoUid: 'g-cto' } },
+  ];
+  const cable = { name: 'FO-12-BACKBONE', type: 'Cabo AS 80 FO-12', totalLength: 950 };
+  markers.push(...items); savedCables.push(cable);
+  const realFocus = window.focusMapToMarker; let focused = null;
+  window.focusMapToMarker = (m) => { focused = m.name; };
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+  const open = !document.getElementById('globalSearch').classList.contains('hidden');
+  const input = document.getElementById('globalSearchInput');
+  const run = (q) => { input.value = q; input.dispatchEvent(new Event('input')); return globalSearchResults.map(r => r.title); };
+  const out = {
+    open,
+    byCode: run('cli-4521'),
+    byAddress: run('sao jose'),
+    accent: run('joao'),
+    cable: run('backbone'),
+    coords: globalSearchResults.length && run('-20.1394, -44.8872')[0],
+  };
+  run('cto-17');
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  out.went = focused; out.closed = document.getElementById('globalSearch').classList.contains('hidden');
+  window.focusMapToMarker = realFocus;
+  items.forEach(i => markers.splice(markers.indexOf(i), 1)); savedCables.splice(savedCables.indexOf(cable), 1);
+  return out;
+});
+check(gsearch.open && gsearch.byCode[0] === 'João da Silva' && gsearch.byAddress[0] === 'João da Silva' && gsearch.accent[0] === 'João da Silva'
+  && gsearch.cable[0] === 'FO-12-BACKBONE' && gsearch.coords === '-20.1394, -44.8872' && gsearch.went === 'CTO-17' && gsearch.closed,
+  `busca global acha caixa, cliente (código/endereço, sem acento), cabo e coordenada (${JSON.stringify(gsearch)})`);
+
+//Modelos de caixa: captura splitters + cascata + fusão cabo → splitter e aplica em outra caixa com outros cabos
+const tpl = await page.evaluate(() => {
+  const stage = getFusionStage(); const svg = getFusionSvg();
+  const prev = activeMarkerForFusion;
+  const reset = () => { stage.querySelectorAll('.cable-element, .splitter-element').forEach(e => e.remove()); svg.innerHTML = ''; };
+  reset();
+  activeMarkerForFusion = { type: 'CEO', name: 'T-CEO-A', folderId: 'x' };
+  const feed = buildFusionCableCard({ name: 'T-FEED', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+  const s8 = buildFusionSplitterCard({ id: 'splitter-a8', label: '1:8', outputs: 8, type: 'Fusão' });
+  const s4 = buildFusionSplitterCard({ id: 'splitter-a4', label: '1:4 APC', outputs: 4, type: 'Atendimento', connector: 'APC' });
+  stage.append(feed, s8, s4);
+  const f3 = [...feed.querySelectorAll('.fiber-row')][2];
+  createFusionLine(f3, document.getElementById('splitter-a8-input-port'));
+  createFusionLine(document.getElementById('splitter-a8-output-1'), document.getElementById('splitter-a4-input-port'));
+  const template = captureFusionTemplate();
+  reset();
+  activeMarkerForFusion = { type: 'CEO', name: 'T-CEO-B', folderId: 'x' };
+  const other = buildFusionCableCard({ name: 'T-OUTRO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  stage.append(other);
+  let result, err = null;
+  try { result = applyFusionTemplate(template); } catch (e) { err = String(e); }
+  const plan = serializeFusionPlan();
+  const lines = getFusionLines().map(l => [l.dataset.startId, l.dataset.endId]);
+  const desc = lines.map(([a, b]) => `${a.replace(/splitter-m\w+?(\d)-/, 'S$1-')}>${b.replace(/splitter-m\w+?(\d)-/, 'S$1-')}`).sort();
+  reset(); activeMarkerForFusion = prev;
+  return { splitters: template.splitters.map(s => `${s.label}/${s.type}`).join(), links: template.links.length, result, err, desc };
+});
+check(tpl.splitters === '1:8/Fusão,1:4 APC/Atendimento' && tpl.links === 2 && !tpl.err && tpl.result?.splitters === 2 && tpl.result?.links === 2
+  && tpl.desc.includes('S0-output-1>S1-input-port') && tpl.desc.some(d => /^cable-T-OUTRO-fiber-3>S0-input-port$/.test(d)),
+  `modelo de caixa recria splitters, cascata e fusão do cabo (${JSON.stringify(tpl)})`);
+
+//Desfazer/refazer: foto do projeto depois de cada alteração; Ctrl+Z volta, Ctrl+Y refaz, no mesmo lugar da barra lateral
+const undoRes = await page.evaluate(async () => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projU', name: 'Projeto U', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const prev = activeFolderId;
+  setActiveFolder('projU');
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const folders = () => [...document.getElementById('projU').querySelectorAll('.folder-name-text')].map(e => e.textContent).join(',');
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); refreshBomAfterProjectChange(); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); refreshBomAfterProjectChange(); await wait(450);
+  const before = folders();
+  const key = (k, extra = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, ...extra }));
+  key('z'); const undo1 = folders();
+  key('z'); const undo2 = folders();
+  key('y'); const redo1 = folders();
+  const stillProject = !!document.querySelector('.folder-title[data-folder-id="projU"]');
+  appendFolderToParent(document.getElementById('projU'), 'Pasta X', 'pUX'); refreshBomAfterProjectChange(); await wait(450);
+  key('y'); const afterNewChange = folders(); //refazer some depois de uma alteração nova
+  document.querySelector('.folder-title[data-folder-id="projU"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { before, undo1, undo2, redo1, stillProject, afterNewChange };
+});
+check(undoRes.before === 'Pasta 1,Pasta 2' && undoRes.undo1 === 'Pasta 1' && undoRes.undo2 === '' && undoRes.redo1 === 'Pasta 1'
+  && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X', `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
+
+//Seleção múltipla: retângulo seleciona os marcadores do projeto; muda situação, move de pasta e exclui
+const sel = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projS', name: 'Projeto S', isProject: true, type: 'TCR', children: [{ id: 'pS1', name: 'Pasta 1', children: [] }] }], sidebar);
+  const prev = activeFolderId; setActiveFolder('projS');
+  const pos = (lat, lng) => ({ lat: () => lat, lng: () => lng });
+  const mk = (type, name, lat, lng) => {
+    const li = document.createElement('li'); document.getElementById('projS').appendChild(li);
+    return { type, name, folderId: 'projS', listItem: li, ctoStatus: 'Nova', reservaStatus: 'Nova', marker: { getPosition: () => pos(lat, lng), getVisible: () => true, setMap() {}, setVisible() {} } };
+  };
+  const a = mk('CTO', 'S-CTO', 1, 1), b = mk('RESERVA', 'S-RT', 2, 2), far = mk('CTO', 'S-LONGE', 50, 50);
+  markers.push(a, b, far);
+  const realAppearance = window.updateMarkerAppearance; window.updateMarkerAppearance = () => {};
+  selectMarkersInBounds({ contains: (p) => p.lat() < 10 });
+  const picked = [...mapSelection.items].map(m => m.name).sort().join();
+  const barShown = !document.getElementById('mapSelectionBar').classList.contains('hidden');
+  const count = document.getElementById('mapSelectionCount').textContent;
+  applySelectionStatus('Troca');
+  const status = `${a.ctoStatus}/${b.reservaStatus}`;
+  moveSelectionToFolder('pS1');
+  const moved = `${a.folderId},${b.folderId}` + '|' + document.getElementById('pS1').children.length;
+  deleteSelection();
+  document.getElementById('confirmModalConfirmButton').click();
+  const left = markers.filter(m => [a, b, far].includes(m)).map(m => m.name).join();
+  const cleared = document.getElementById('mapSelectionBar').classList.contains('hidden');
+  markers.splice(markers.indexOf(far), 1);
+  window.updateMarkerAppearance = realAppearance;
+  document.querySelector('.folder-title[data-folder-id="projS"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { picked, barShown, count, status, moved, left, cleared };
+});
+check(sel.picked === 'S-CTO,S-RT' && sel.barShown && sel.count === '2 selecionados' && sel.status === 'Troca/Nova'
+  && sel.moved === 'pS1,pS1|2' && sel.left === 'S-LONGE' && sel.cleared, `seleção múltipla: retângulo, situação, mover e excluir (${JSON.stringify(sel)})`);
+
+//Tour pelo sistema e tecla "?" para os atalhos
+const tour = await page.evaluate(() => {
+  startTour();
+  const layer = document.getElementById('tourLayer');
+  const first = layer.querySelector('.tour-title').textContent;
+  const total = layer.querySelector('.tour-step').textContent;
+  layer.querySelector('[data-tour="next"]').click();
+  const second = layer.querySelector('.tour-title').textContent;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const closed = !document.getElementById('tourLayer');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+  const shortcuts = document.getElementById('accountModal').style.display !== 'none' && !document.querySelector('#accountModal [data-panel="preferences"]').hidden;
+  document.getElementById('accountModal').style.display = 'none';
+  return { first, total, second, closed, shortcuts, items: document.querySelectorAll('#accountModal .shortcut-list > div').length };
+});
+check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
+  `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

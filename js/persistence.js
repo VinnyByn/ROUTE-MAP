@@ -266,7 +266,7 @@ function clearWorkspace() {
 }
 
 // Carrega e reconstrói o projeto salvo na barra lateral e no mapa:
-function loadAndDisplayProject(projectId, projectData) {
+function loadAndDisplayProject(projectId, projectData, { silent = false } = {}) {
     //Verifica se os dados na barra lateral já existem para evitar erros
     if (!projectData || !projectData.sidebar) {
         console.error("Dados do projeto ou da sidebar estão faltando. Carregamento cancelado.", projectData);
@@ -302,7 +302,8 @@ function loadAndDisplayProject(projectId, projectData) {
     if (projectData.observations) {
         projectObservations[projectId] = projectData.observations;
     }
-    showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
+    if (!silent) showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
+    if (typeof resetProjectUndo === 'function') resetProjectUndo(projectId);
 }
 
 //Converte o objeto de marcador para o formato JSON, salvando os dados no banco de dados
@@ -334,6 +335,7 @@ function serializeMarker(markerInfo) {
         reservaStatus: markerInfo.reservaStatus,
         reservaAccessory: markerInfo.reservaAccessory,
         client: markerInfo.type === 'CLIENTE' ? (markerInfo.client || {}) : undefined,
+        popEquipment: markerInfo.type === 'POP' && markerInfo.popEquipment ? markerInfo.popEquipment : undefined,
         position: { lat: position.lat(), lng: position.lng() }
     };
 }
@@ -503,7 +505,12 @@ function rebuildMarker(data) {
     updateMarkerAppearance(markerInfo);
     wireMarkerDrawHoverCursor(marker, markerInfo);
     //Define o comportamento do clique no marcador, com o modo desenho
-    marker.addListener("click", () => {
+    marker.addListener("click", (e) => {
+        //Shift + clique: entra ou sai da seleção múltipla (js/map-selection.js)
+        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelection === 'function') {
+            toggleMapSelection(markerInfo);
+            return;
+        }
         if (handleSketchMarkerClick(markerInfo)) return;
         if (isDrawingCable) {
             handleAnchorMarkerClickDuringCableDraw(markerInfo);

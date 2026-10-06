@@ -1127,6 +1127,10 @@ function initMap() {
     const closeSearchModal = document.getElementById('closeSearchModal');
     const structuredSearchButton = document.getElementById('structuredSearchButton');
     openSearchModalButton.addEventListener('click', () => {
+        if (typeof openGlobalSearch === 'function') {
+            openGlobalSearch();
+            return;
+        }
         document.getElementById('searchCoordinates').value = '';
         searchModal.style.display = 'flex';
     });
@@ -3324,6 +3328,7 @@ function addCustomMarker(location, importedData = null) {
         reservaStatus: data.type === "RESERVA" ? data.reservaStatus : null,
         reservaAccessory: data.type === "RESERVA" ? data.reservaAccessory : null,
         client: data.type === "CLIENTE" ? { ...(data.client || {}) } : undefined,
+        popEquipment: data.type === "POP" && data.popEquipment ? data.popEquipment : undefined,
         uid: data.uid || null,
     };
     ensureMarkerUid(markerInfo);
@@ -3355,7 +3360,12 @@ function addCustomMarker(location, importedData = null) {
     }
     wireMarkerDrawHoverCursor(marker, markerInfo);
     //Evento de clique no marcador
-    marker.addListener("click", () => {
+    marker.addListener("click", (e) => {
+        //Shift + clique: entra ou sai da seleção múltipla (js/map-selection.js)
+        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelection === 'function') {
+            toggleMapSelection(markerInfo);
+            return;
+        }
         if (handleSketchMarkerClick(markerInfo)) return;
         if (!isDrawingCable) {
             openMarkerFromUserAction(markerInfo);

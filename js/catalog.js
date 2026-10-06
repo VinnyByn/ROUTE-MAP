@@ -348,7 +348,8 @@ const DEFAULT_LANCAMENTO_CONFIG = {
     bapPerPole: 1,       //Abraçadeiras BAP por poste
     supaPerPole: 2,      //Suportes de ancoragem (SUPAS) por poste
     alcaPerSupa: 1,      //Alças preformadas por SUPA
-    dropSlack: 15        //Metros somados a cada drop de cliente (subida, reserva e acomodação)
+    dropSlack: 15,       //Metros somados a cada drop de cliente (subida, reserva e acomodação)
+    dropMaxLength: 300   //Drop mais longo que isso aparece na verificação do projeto (m)
 };
 
 const DEFAULT_LABOR_CONFIG = {
@@ -360,7 +361,30 @@ const DEFAULT_LABOR_CONFIG = {
 };
 
 //Configuração do lançamento (vão entre postes e ferragens por poste)
-let lancamentoConfig = { ...DEFAULT_LANCAMENTO_CONFIG };
+//Orçamento óptico (valores típicos GPON classe C+), guardado junto da configuração de lançamento
+const DEFAULT_OPTICAL_CONFIG = {
+    oltPower: 5,          //dBm na saída da PON
+    onuSensitivity: -27,  //dBm mínimo na ONU
+    lossPerKm: 0.35,      //dB/km
+    lossFusion: 0.1,      //dB por fusão
+    lossConnector: 0.5,   //dB por conector
+    margin: 3,            //dB de margem de segurança
+    splitters: { 2: 3.7, 4: 7.3, 8: 10.5, 16: 13.7, 32: 17.1, 64: 20.5 },
+};
+
+function normalizeOpticalConfig(src = {}) {
+    const n = (v, fb) => (v !== '' && v != null && Number.isFinite(Number(v)) ? Number(v) : fb);
+    const d = DEFAULT_OPTICAL_CONFIG;
+    const splitters = {};
+    Object.keys(d.splitters).forEach(k => { splitters[k] = n(src.splitters?.[k], d.splitters[k]); });
+    return {
+        oltPower: n(src.oltPower, d.oltPower), onuSensitivity: n(src.onuSensitivity, d.onuSensitivity),
+        lossPerKm: n(src.lossPerKm, d.lossPerKm), lossFusion: n(src.lossFusion, d.lossFusion),
+        lossConnector: n(src.lossConnector, d.lossConnector), margin: n(src.margin, d.margin), splitters,
+    };
+}
+
+let lancamentoConfig = { ...DEFAULT_LANCAMENTO_CONFIG, optical: normalizeOpticalConfig() };
 //Custo e produtividade da mão de obra regional
 let laborConfig = { ...DEFAULT_LABOR_CONFIG };
 
@@ -373,7 +397,9 @@ function normalizeLancamentoConfig(stored) {
         bapPerPole: n(src.bapPerPole, DEFAULT_LANCAMENTO_CONFIG.bapPerPole),
         supaPerPole: n(src.supaPerPole, DEFAULT_LANCAMENTO_CONFIG.supaPerPole),
         alcaPerSupa: n(src.alcaPerSupa, DEFAULT_LANCAMENTO_CONFIG.alcaPerSupa),
-        dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack)
+        dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack),
+        dropMaxLength: Number(src.dropMaxLength) > 0 ? Number(src.dropMaxLength) : DEFAULT_LANCAMENTO_CONFIG.dropMaxLength,
+        optical: normalizeOpticalConfig(src.optical)
     };
 }
 
@@ -423,6 +449,15 @@ function saveCompanySettings(patch) {
         return true;
     });
     return companySettingsSaveChain;
+}
+
+//Campos do orçamento óptico (aceita valores negativos, como a sensibilidade da ONU)
+function readOpticalConfigForm() {
+    const raw = (id) => document.getElementById(id)?.value;
+    const src = { splitters: {} };
+    ['oltPower', 'onuSensitivity', 'lossPerKm', 'lossFusion', 'lossConnector', 'margin'].forEach(k => { src[k] = raw(`configOptical_${k}`); });
+    Object.keys(DEFAULT_OPTICAL_CONFIG.splitters).forEach(k => { src.splitters[k] = raw(`configOpticalSplit_${k}`); });
+    return normalizeOpticalConfig(src);
 }
 
 function persistLancamentoConfig() {
@@ -950,6 +985,10 @@ function renderLancamentoConfigForm() {
     set('configSupaPerPole', lancamentoConfig.supaPerPole);
     set('configAlcaPerSupa', lancamentoConfig.alcaPerSupa);
     set('configDropSlack', lancamentoConfig.dropSlack);
+    set('configDropMaxLength', lancamentoConfig.dropMaxLength);
+    const optical = lancamentoConfig.optical || normalizeOpticalConfig();
+    ['oltPower', 'onuSensitivity', 'lossPerKm', 'lossFusion', 'lossConnector', 'margin'].forEach(k => set(`configOptical_${k}`, optical[k]));
+    Object.keys(optical.splitters).forEach(k => set(`configOpticalSplit_${k}`, optical.splitters[k]));
     set('configLaborHourlyRate', laborConfig.hourlyRate);
     set('configLaborHoursPerDay', laborConfig.hoursPerDay);
     set('configCablePerDay', laborConfig.cablePerDay);
@@ -1034,7 +1073,9 @@ async function saveLancamentoConfigHandler() {
         bapPerPole: num('configBapPerPole', 1),
         supaPerPole: num('configSupaPerPole', 2),
         alcaPerSupa: num('configAlcaPerSupa', 1),
-        dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack)
+        dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack),
+        dropMaxLength: num('configDropMaxLength', DEFAULT_LANCAMENTO_CONFIG.dropMaxLength) || DEFAULT_LANCAMENTO_CONFIG.dropMaxLength,
+        optical: readOpticalConfigForm()
     };
     const saved = await persistLancamentoConfig();
     if (typeof refreshClientDrops === 'function') refreshClientDrops();

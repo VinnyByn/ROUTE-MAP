@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006c" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261006n" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -94,6 +94,12 @@
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="importKmlButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"></use></svg><span>Importar KML/KMZ</span></a>
             <a href="#" id="exportKmlButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg><span>Exportar para KML</span></a>
+            <a href="#" id="exportSpreadsheetButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg><span>Exportar planilha (Excel)</span></a>
+            <div class="dropdown-divider" role="separator"></div>
+            <a href="#" id="undoButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg><span>Desfazer</span><kbd>Ctrl+Z</kbd></a>
+            <a href="#" id="redoButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg><span>Refazer</span><kbd>Ctrl+Y</kbd></a>
+            <div class="dropdown-divider" role="separator"></div>
+            <a href="#" id="projectCheckButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg><span>Verificar projeto</span></a>
           </div>
         </div>
         <div class="dropdown">
@@ -127,7 +133,7 @@
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-report"></use></svg>
           <span class="top-bar-button__label">Relatório</span>
         </button>
-        <button id="openSearchModalButton" class="top-bar-button" type="button" title="Ir para coordenadas">
+        <button id="openSearchModalButton" class="top-bar-button" type="button" title="Buscar caixa, cliente, cabo, endereço ou coordenada (Ctrl+K)">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
           <span class="top-bar-button__label">Localizar</span>
         </button>
@@ -164,6 +170,7 @@
           <a href="#" data-account-tab="company" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span>Empresa</span></a>
           <a href="#" data-account-tab="team" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Equipe e convites</span></a>
           <a href="#" data-account-tab="preferences" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg><span>Preferências e atalhos</span></a>
+          <a href="#" id="userMenuTour" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard"></use></svg><span>Tour pelo sistema</span></a>
           <div class="dropdown-divider" role="separator"></div>
           <a href="#" id="themeToggleButton" role="menuitem" title="Alternar tema claro ou escuro">
             <span class="user-menu-theme-icons">
@@ -499,6 +506,73 @@
                   <span>Sobra por drop</span>
                   <span class="cat3-input"><input type="number" id="configDropSlack" min="0" step="1" value="15" /><em>m</em></span>
                   <small>Somada a cada cliente</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Drop máximo</span>
+                  <span class="cat3-input"><input type="number" id="configDropMaxLength" min="1" step="1" value="300" /><em>m</em></span>
+                  <small>Acima disso, avisa na verificação do projeto</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
+                <div>
+                  <h3>Orçamento óptico</h3>
+                  <p>Potência estimada em cada CTO e cliente, somando as perdas pelo caminho das fusões.</p>
+                </div>
+              </header>
+              <div class="cat3-fields">
+                <label class="cat3-field">
+                  <span>Potência da OLT</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_oltPower" step="0.1" /><em>dBm</em></span>
+                  <small>Saída da PON</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Sensibilidade da ONU</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_onuSensitivity" step="0.1" /><em>dBm</em></span>
+                  <small>Mínimo aceito pela ONU</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Margem de segurança</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_margin" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Perda do cabo</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_lossPerKm" step="0.01" /><em>dB/km</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Perda por fusão</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_lossFusion" step="0.01" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Perda por conector</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_lossConnector" step="0.01" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:2</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_2" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:4</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_4" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:8</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_8" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:16</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_16" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:32</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_32" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:64</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_64" step="0.1" /><em>dB</em></span>
                 </label>
               </div>
             </section>
@@ -1005,6 +1079,19 @@
       </div>
     </div>
 
+    <div id="popEquipmentModal" class="modal" role="dialog" aria-labelledby="popEquipmentTitle">
+      <div class="modal-content pop-equipment-modal">
+        <span class="close" id="closePopEquipmentModal" aria-label="Fechar">&times;</span>
+        <h2 id="popEquipmentTitle">Equipamentos do POP</h2>
+        <p class="pop-summary" id="popEquipmentSummary"></p>
+        <div class="modal-form-body" id="popEquipmentBody"></div>
+        <div class="modal-footer">
+          <button type="button" id="cancelPopEquipment" class="btn btn-secondary">Cancelar</button>
+          <button type="button" id="savePopEquipment" class="btn btn-success">Salvar</button>
+        </div>
+      </div>
+    </div>
+
     <div id="markerModal" class="floating-box map-tool-box marker-panel hidden" role="dialog" aria-labelledby="markerModalTitle">
       <div class="map-tool-box__header">
         <span class="marker-panel__icon" id="markerPanelIcon" aria-hidden="true"></span>
@@ -1054,6 +1141,11 @@
         </div>
         <div class="marker-panel__chips hidden" id="ceo144Group">
           <label class="map-tool-chip"><input type="checkbox" id="ceo144Checkbox" /><span>Caixa Jumbo (144 fusões)</span></label>
+        </div>
+        <div class="map-tool-field hidden" id="popEquipmentGroup">
+          <label>Equipamentos do POP</label>
+          <p class="map-tool-help" id="popEquipmentPanelSummary"></p>
+          <button type="button" class="btn btn-secondary" id="openPopEquipmentButton">OLTs, placas, DGOs e switches</button>
         </div>
         <div class="map-tool-field hidden" id="derivationTGroup">
           <label for="markerDerivationT">Derivações em T</label>
@@ -1229,6 +1321,17 @@
                 </div>
               </div>
               <button type="button" class="btn btn-primary fx-block" id="addSplitterToFusion">Adicionar splitter</button>
+            </section>
+
+            <section class="fx-section" id="fusionTemplatesSection">
+              <header class="fx-section__head"><h4>Modelos de caixa</h4></header>
+              <p class="fx-note" id="fxTemplateNote"></p>
+              <label class="fx-field fx-field--grow"><span class="fx-field__label">Modelo</span><select id="fxTemplateSelect"></select></label>
+              <div class="fx-seq-row">
+                <button type="button" class="btn btn-secondary fx-seq-go" id="fxTemplateApply">Aplicar</button>
+                <button type="button" class="btn btn-secondary fx-seq-go" id="fxTemplateSave">Salvar este plano como modelo</button>
+              </div>
+              <button type="button" class="fx-link" id="fxTemplateDelete">Excluir modelo selecionado</button>
             </section>
 
             <section class="fx-section" id="fusionSequenceSection">
@@ -1800,6 +1903,22 @@
       </div>
     </div>
 
+    <div id="projectCheckBox" class="floating-box map-tool-box cable-route-box project-check-box hidden" role="dialog" aria-labelledby="projectCheckTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="projectCheckTitle">Verificação do projeto</h3>
+          <span class="map-tool-box__subtitle" id="projectCheckSubtitle"></span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeProjectCheckBox" title="Fechar" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body">
+        <div id="projectCheckBody"></div>
+        <button type="button" class="route-clear" id="rerunProjectCheckButton">Verificar de novo</button>
+      </div>
+    </div>
     <div id="cableRouteBox" class="floating-box map-tool-box cable-route-box hidden" role="dialog" aria-labelledby="cableRouteTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
@@ -2172,15 +2291,20 @@
               </form>
               <h3>Atalhos do teclado</h3>
               <dl class="shortcut-list">
-                <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
-                <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela ou cancela a ferramenta</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd></dt><dd>Busca: caixa, cliente, código, cabo, endereço ou coordenada</dd></div>
                 <div><dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Salva o projeto selecionado (com o plano de fusão aberto, salva o plano)</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></dt><dd>Desfaz / refaz a última alteração do projeto (na régua e no polígono, o último ponto)</dd></div>
                 <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copia e cola itens da barra lateral</dd></div>
-                <div><dt>Clique direito na barra lateral</dt><dd>Abre as ações do projeto, pasta ou item</dd></div>
-                <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>Desfaz o último ponto na régua ou no polígono</dd></div>
-                <div><dt>Clique direito</dt><dd>Remove o ponto ao desenhar cabo, régua ou polígono</dd></div>
+                <div><dt><kbd>Shift</kbd> + arrastar no mapa</dt><dd>Seleciona vários marcadores (Ctrl + Shift soma à seleção)</dd></div>
+                <div><dt><kbd>Shift</kbd> + clique no marcador</dt><dd>Põe ou tira o marcador da seleção</dd></div>
+                <div><dt>Clique direito no mapa ou na barra lateral</dt><dd>Abre as ações do item (editar, plano de fusão, ver rota, excluir…)</dd></div>
+                <div><dt>Clique direito ao desenhar</dt><dd>Remove o ponto do cabo, da régua ou do polígono</dd></div>
+                <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
+                <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela, cancela a ferramenta ou limpa a seleção</dd></div>
                 <div><dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move o mapa enquanto desenha ou edita</dd></div>
+                <div><dt><kbd>?</kbd></dt><dd>Mostra esta lista de atalhos</dd></div>
               </dl>
+              <button type="button" class="btn btn-secondary" id="startTourButton">Fazer o tour pelo sistema</button>
             </section>
           </div>
         </div>
@@ -2290,6 +2414,29 @@
         </div>
       </li>
     </template>
+
+    <div id="mapSelectionBar" class="map-selection-bar hidden" role="toolbar" aria-label="Itens selecionados">
+      <div class="map-selection-bar__info"><strong id="mapSelectionCount"></strong><small id="mapSelectionKinds"></small></div>
+      <select id="mapSelectionStatus" data-sel-edit title="Situação">
+        <option value="">Situação…</option><option>Nova</option><option>Existente</option><option>Troca</option>
+      </select>
+      <select id="mapSelectionFolder" data-sel-edit title="Mover para pasta"></select>
+      <button type="button" id="mapSelectionHide">Ocultar</button>
+      <button type="button" id="mapSelectionDelete" class="is-danger" data-sel-edit>Excluir</button>
+      <button type="button" id="mapSelectionClear" title="Limpar seleção (Esc)" aria-label="Limpar seleção">&times;</button>
+    </div>
+
+    <div id="globalSearch" class="global-search hidden" role="dialog" aria-label="Busca">
+      <div class="global-search__panel">
+        <div class="global-search__field">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
+          <input type="search" id="globalSearchInput" placeholder="Caixa, cliente, código, cabo, endereço ou -20.13, -44.88" autocomplete="off" spellcheck="false" />
+          <kbd>Esc</kbd>
+        </div>
+        <ul id="globalSearchResults" class="global-search__results"></ul>
+        <p class="global-search__hint"><kbd>↑</kbd><kbd>↓</kbd> navegar · <kbd>Enter</kbd> ir até o item · <kbd>Ctrl</kbd>+<kbd>K</kbd> abrir de qualquer lugar</p>
+      </div>
+    </div>
 
     <div id="searchModal" class="modal">
       <div class="modal-content">
@@ -2538,27 +2685,36 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261006d" defer></script>
-  <script src="js/persistence.js?v=20261005a" defer></script>
+  <script src="script.js?v=20261006m" defer></script>
+  <script src="js/persistence.js?v=20261006m" defer></script>
   <script src="js/sidebar-actions.js?v=20261006c" defer></script>
   <script src="js/project-safety.js?v=20261005a" defer></script>
-  <script src="js/catalog.js?v=20261004e" defer></script>
+  <script src="js/catalog.js?v=20261006g" defer></script>
   <script src="js/kml.js?v=20261006d" defer></script>
-  <script src="js/bom.js?v=20261004e" defer></script>
+  <script src="js/bom.js?v=20261006l" defer></script>
   <script src="js/labor.js?v=20261004e" defer></script>
   <script src="js/report.js?v=20261004e" defer></script>
   <script src="js/sketch.js?v=20261006d" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261006d" defer></script>
+  <script src="js/sidebar.js?v=20261006i" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261004b" defer></script>
-  <script src="js/marker-panel.js?v=20261004b" defer></script>
+  <script src="js/marker-panel.js?v=20261006i" defer></script>
   <script src="js/fusion-plan.js?v=20261006c" defer></script>
-  <script src="js/fusion.js?v=20261006b" defer></script>
+  <script src="js/fusion.js?v=20261006k" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
   <script src="js/clients.js?v=20261005e" defer></script>
+  <script src="js/optical-budget.js?v=20261006g" defer></script>
+  <script src="js/project-check.js?v=20261006g" defer></script>
+  <script src="js/project-export.js?v=20261006i" defer></script>
+  <script src="js/pop-equipment.js?v=20261006i" defer></script>
+  <script src="js/global-search.js?v=20261006j" defer></script>
+  <script src="js/box-templates.js?v=20261006k" defer></script>
+  <script src="js/undo.js?v=20261006l" defer></script>
+  <script src="js/map-selection.js?v=20261006m" defer></script>
+  <script src="js/tour.js?v=20261006n" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
-  <script src="js/marker-hover.js?v=20261005f" defer></script>
+  <script src="js/marker-hover.js?v=20261006i" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
