@@ -869,6 +869,37 @@ check(gsearch.open && gsearch.byCode[0] === 'João da Silva' && gsearch.byAddres
   && gsearch.cable[0] === 'FO-12-BACKBONE' && gsearch.coords === '-20.1394, -44.8872' && gsearch.went === 'CTO-17' && gsearch.closed,
   `busca global acha caixa, cliente (código/endereço, sem acento), cabo e coordenada (${JSON.stringify(gsearch)})`);
 
+//Modelos de caixa: captura splitters + cascata + fusão cabo → splitter e aplica em outra caixa com outros cabos
+const tpl = await page.evaluate(() => {
+  const stage = getFusionStage(); const svg = getFusionSvg();
+  const prev = activeMarkerForFusion;
+  const reset = () => { stage.querySelectorAll('.cable-element, .splitter-element').forEach(e => e.remove()); svg.innerHTML = ''; };
+  reset();
+  activeMarkerForFusion = { type: 'CEO', name: 'T-CEO-A', folderId: 'x' };
+  const feed = buildFusionCableCard({ name: 'T-FEED', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+  const s8 = buildFusionSplitterCard({ id: 'splitter-a8', label: '1:8', outputs: 8, type: 'Fusão' });
+  const s4 = buildFusionSplitterCard({ id: 'splitter-a4', label: '1:4 APC', outputs: 4, type: 'Atendimento', connector: 'APC' });
+  stage.append(feed, s8, s4);
+  const f3 = [...feed.querySelectorAll('.fiber-row')][2];
+  createFusionLine(f3, document.getElementById('splitter-a8-input-port'));
+  createFusionLine(document.getElementById('splitter-a8-output-1'), document.getElementById('splitter-a4-input-port'));
+  const template = captureFusionTemplate();
+  reset();
+  activeMarkerForFusion = { type: 'CEO', name: 'T-CEO-B', folderId: 'x' };
+  const other = buildFusionCableCard({ name: 'T-OUTRO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  stage.append(other);
+  let result, err = null;
+  try { result = applyFusionTemplate(template); } catch (e) { err = String(e); }
+  const plan = serializeFusionPlan();
+  const lines = getFusionLines().map(l => [l.dataset.startId, l.dataset.endId]);
+  const desc = lines.map(([a, b]) => `${a.replace(/splitter-m\w+?(\d)-/, 'S$1-')}>${b.replace(/splitter-m\w+?(\d)-/, 'S$1-')}`).sort();
+  reset(); activeMarkerForFusion = prev;
+  return { splitters: template.splitters.map(s => `${s.label}/${s.type}`).join(), links: template.links.length, result, err, desc };
+});
+check(tpl.splitters === '1:8/Fusão,1:4 APC/Atendimento' && tpl.links === 2 && !tpl.err && tpl.result?.splitters === 2 && tpl.result?.links === 2
+  && tpl.desc.includes('S0-output-1>S1-input-port') && tpl.desc.some(d => /^cable-T-OUTRO-fiber-3>S0-input-port$/.test(d)),
+  `modelo de caixa recria splitters, cascata e fusão do cabo (${JSON.stringify(tpl)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

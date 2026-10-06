@@ -1307,6 +1307,7 @@ function updateFusionModalTitle(markerInfo) {
 
 function populateFusionPlan(markerInfo) {
     activeMarkerForFusion = markerInfo;
+    if (typeof refreshBoxTemplatesSection === 'function') refreshBoxTemplatesSection();
     cancelFusionArm();
     activeLineForAction = null;
     updateFusionModalTitle(markerInfo);
