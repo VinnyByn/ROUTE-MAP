@@ -746,6 +746,35 @@ const expectCheck = ['erro:Nome de cabo repetido: V-2', 'erro:Cabo com ponta sol
 const missingCheck = expectCheck.filter(t => !projCheck.titles.includes(t));
 check(!missingCheck.length && projCheck.panelHasCount, `verificação do projeto encontra os problemas${missingCheck.length ? ` (faltou: ${missingCheck.join(' | ')})` : ''}`);
 
+//Orçamento óptico: OLT +5 → conector 0,5 → 1:8 (10,5) → fusão 0,1 → 1 km (0,35) → fusão 0,1 → 1:8 (10,5) → conector 0,5 = −17,55 dBm
+const optical = await page.evaluate(() => {
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const mk = (cards, links) => { const b = document.createElement('div'); b.append(...cards); return JSON.stringify({ version: 2, elements: b.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }); };
+  const s8 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Fusão', olt: { olt: 'OLT-1', placa: '1', pon: '1' } });
+  const bOut = buildFusionCableCard({ name: 'O-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const ceo = { type: 'CEO', name: 'O-CEO', uid: 'o-ceo', fusionPlan: mk([s8, bOut], [['splitter-1-output-1', fiber(bOut, 1)]]) };
+  const bIn = buildFusionCableCard({ name: 'O-B', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const cto = { type: 'CTO', name: 'O-CTO', uid: 'o-cto', fusionPlan: mk([bIn, at], [[fiber(bIn, 1), 'splitter-1-input-port']]) };
+  const orphanCard = buildFusionCableCard({ name: 'O-SOLTO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at2 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:16', outputs: 16, type: 'Atendimento' });
+  const cto2 = { type: 'CTO', name: 'O-CTO2', uid: 'o-cto2', fusionPlan: mk([orphanCard, at2], [[fiber(orphanCard, 1), 'splitter-1-input-port']]) };
+  const cable = { name: 'O-B', totalLength: 1000 };
+  markers.push(ceo, cto, cto2); savedCables.push(cable);
+  const cfg = normalizeOpticalConfig();
+  const byCto = getOpticalBudgetByCto([cto, cto2]);
+  const port = byCto.get(cto)?.worstPort;
+  const strict = classifyOpticalPower(port, { ...cfg, onuSensitivity: -16 });
+  const margin = classifyOpticalPower(port, { ...cfg, onuSensitivity: -19 });
+  const scope = { markers: [ceo, cto, cto2], cables: [cable] };
+  const budget = getProjectOpticalBudget(scope);
+  markers.splice(markers.indexOf(ceo), 3); savedCables.splice(savedCables.indexOf(cable), 1);
+  return { port, status: byCto.get(cto)?.status, noSource: byCto.has(cto2), strict, margin, rows: budget.rows.map(r => `${r.cto.name}:${r.dbm == null ? 'sem' : r.dbm.toFixed(2)}`).join() };
+});
+check(Math.abs(optical.port + 17.55) < 0.001 && optical.status === 'ok' && !optical.noSource,
+  `orçamento óptico soma as perdas do caminho (porta da CTO: ${optical.port?.toFixed(2)} dBm)`);
+check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows === 'O-CTO2:sem,O-CTO:-17.55', `orçamento óptico classifica erro/margem e aponta CTO sem OLT (${optical.rows})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

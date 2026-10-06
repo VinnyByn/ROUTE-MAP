@@ -100,7 +100,45 @@ function runProjectCheck(scope) {
         const drop = getClientDropInfo(client);
         if (drop && drop.length > maxDrop) add('aviso', `Drop longo: ${client.name}`, `${drop.length} m (limite configurado: ${maxDrop} m).`, { kind: 'marker', info: client });
     });
+    //Orçamento óptico
+    const optical = getProjectOpticalBudget(scope);
+    if (optical.ctos.length && !optical.hasSource) {
+        add('aviso', 'Orçamento óptico sem OLT', 'Nenhum splitter do caminho está vinculado a uma OLT/PON. Use "Vincular" no splitter que recebe o sinal da OLT.', null);
+    }
+    optical.rows.forEach(row => {
+        if (row.dbm == null) {
+            if (optical.hasSource) add('aviso', `Sem sinal calculado: ${row.cto.name}`, 'Não há caminho de fusões até um splitter vinculado à OLT.', { kind: 'marker', info: row.cto });
+            return;
+        }
+        if (row.status === 'erro') add('erro', `Potência abaixo do mínimo: ${row.cto.name}`, `${formatDbm(row.dbm)} na porta (mínimo da ONU: ${formatDbm(optical.cfg.onuSensitivity)}).`, { kind: 'marker', info: row.cto });
+        else if (row.status === 'aviso') add('aviso', `Potência no limite: ${row.cto.name}`, `${formatDbm(row.dbm)} na porta, dentro da margem de ${optical.cfg.margin} dB.`, { kind: 'marker', info: row.cto });
+        row.clients.filter(c => c.status === 'erro').forEach(c => add('erro', `Cliente sem potência suficiente: ${c.client.name}`, `${formatDbm(c.dbm)} estimado na ONU (drop incluído).`, { kind: 'marker', info: c.client }));
+    });
     return issues;
+}
+
+//Potência em cada CTO do projeto (pior porta de atendimento)
+function getProjectOpticalBudget(scope) {
+    const cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_CONFIG;
+    const ctos = scope.markers.filter(m => m.type === 'CTO' && readFusionPlan(m)?.splitters.some(sp => sp.atendimento));
+    if (!ctos.length) return { cfg, ctos, rows: [], hasSource: false };
+    const byCto = getOpticalBudgetByCto(ctos);
+    const hasSource = computeOpticalPower(cfg).sources.length > 0;
+    const rows = ctos.map(cto => {
+        const e = byCto.get(cto);
+        return { cto, dbm: e ? e.worstPort : null, status: e ? e.status : 'sem', clients: e ? e.clients : [] };
+    }).sort((a, b) => (a.dbm ?? -999) - (b.dbm ?? -999));
+    return { cfg, ctos, rows, hasSource };
+}
+
+function renderOpticalTable(scope) {
+    const optical = getProjectOpticalBudget(scope);
+    if (!optical.rows.length) return '';
+    return `<h4 class="check-section">Potência nas CTOs <small>OLT ${formatDbm(optical.cfg.oltPower)} · ONU mín. ${formatDbm(optical.cfg.onuSensitivity)}</small></h4>
+        <ul class="check-power">${optical.rows.map(row => `
+            <li><button type="button" data-power-cto="${escapeHtml(row.cto.uid || '')}">
+                <span>${escapeHtml(row.cto.name)}</span><b class="is-${row.status}">${row.dbm == null ? 'sem OLT' : formatDbm(row.dbm)}</b>
+            </button></li>`).join('')}</ul>`;
 }
 
 function focusProjectCheckTarget(target) {
@@ -130,8 +168,9 @@ function renderProjectCheck() {
     const warnings = projectCheckIssues.length - errors;
     const name = document.querySelector(`.folder-title[data-folder-id="${CSS.escape(scope.projectId)}"]`)?.dataset.folderName || '';
     subtitle.textContent = name;
+    const opticalHtml = renderOpticalTable(scope);
     if (!projectCheckIssues.length) {
-        body.innerHTML = '<p class="check-ok">Nenhum problema encontrado.</p>';
+        body.innerHTML = '<p class="check-ok">Nenhum problema encontrado.</p>' + opticalHtml;
         return;
     }
     const sorted = [...projectCheckIssues].sort((a, b) => (a.level === b.level ? 0 : a.level === 'erro' ? -1 : 1));
@@ -139,7 +178,7 @@ function renderProjectCheck() {
         <ul class="check-list">${sorted.map((issue) => `
             <li><button type="button" class="is-${issue.level}" data-check-index="${projectCheckIssues.indexOf(issue)}">
                 <strong>${escapeHtml(issue.title)}</strong><small>${escapeHtml(issue.detail)}</small>
-            </button></li>`).join('')}</ul>`;
+            </button></li>`).join('')}</ul>` + opticalHtml;
 }
 
 function openProjectCheck() {
@@ -160,6 +199,8 @@ function setupProjectCheck() {
     box.addEventListener('click', (e) => {
         const item = e.target.closest('[data-check-index]');
         if (item) focusProjectCheckTarget(projectCheckIssues[Number(item.dataset.checkIndex)]?.target);
+        const power = e.target.closest('[data-power-cto]');
+        if (power) focusProjectCheckTarget({ kind: 'marker', info: findMarkerByUid(power.dataset.powerCto) });
     });
 }
 

@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006f" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261006g" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -506,6 +506,68 @@
                   <span>Drop máximo</span>
                   <span class="cat3-input"><input type="number" id="configDropMaxLength" min="1" step="1" value="300" /><em>m</em></span>
                   <small>Acima disso, avisa na verificação do projeto</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
+                <div>
+                  <h3>Orçamento óptico</h3>
+                  <p>Potência estimada em cada CTO e cliente, somando as perdas pelo caminho das fusões.</p>
+                </div>
+              </header>
+              <div class="cat3-fields">
+                <label class="cat3-field">
+                  <span>Potência da OLT</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_oltPower" step="0.1" /><em>dBm</em></span>
+                  <small>Saída da PON</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Sensibilidade da ONU</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_onuSensitivity" step="0.1" /><em>dBm</em></span>
+                  <small>Mínimo aceito pela ONU</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Margem de segurança</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_margin" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Perda do cabo</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_lossPerKm" step="0.01" /><em>dB/km</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Perda por fusão</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_lossFusion" step="0.01" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Perda por conector</span>
+                  <span class="cat3-input"><input type="number" id="configOptical_lossConnector" step="0.01" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:2</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_2" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:4</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_4" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:8</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_8" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:16</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_16" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:32</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_32" step="0.1" /><em>dB</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Splitter 1:64</span>
+                  <span class="cat3-input"><input type="number" id="configOpticalSplit_64" step="0.1" /><em>dB</em></span>
                 </label>
               </div>
             </section>
@@ -2565,7 +2627,7 @@
   <script src="js/persistence.js?v=20261005a" defer></script>
   <script src="js/sidebar-actions.js?v=20261006c" defer></script>
   <script src="js/project-safety.js?v=20261005a" defer></script>
-  <script src="js/catalog.js?v=20261006f" defer></script>
+  <script src="js/catalog.js?v=20261006g" defer></script>
   <script src="js/kml.js?v=20261006d" defer></script>
   <script src="js/bom.js?v=20261004e" defer></script>
   <script src="js/labor.js?v=20261004e" defer></script>
@@ -2580,7 +2642,8 @@
   <script src="js/fusion.js?v=20261006b" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
   <script src="js/clients.js?v=20261005e" defer></script>
-  <script src="js/project-check.js?v=20261006f" defer></script>
+  <script src="js/optical-budget.js?v=20261006g" defer></script>
+  <script src="js/project-check.js?v=20261006g" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
   <script src="js/marker-hover.js?v=20261005f" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
