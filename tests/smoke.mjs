@@ -959,6 +959,24 @@ const sel = await page.evaluate(() => {
 check(sel.picked === 'S-CTO,S-RT' && sel.barShown && sel.count === '2 selecionados' && sel.status === 'Troca/Nova'
   && sel.moved === 'pS1,pS1|2' && sel.left === 'S-LONGE' && sel.cleared, `seleção múltipla: retângulo, situação, mover e excluir (${JSON.stringify(sel)})`);
 
+//Tour pelo sistema e tecla "?" para os atalhos
+const tour = await page.evaluate(() => {
+  startTour();
+  const layer = document.getElementById('tourLayer');
+  const first = layer.querySelector('.tour-title').textContent;
+  const total = layer.querySelector('.tour-step').textContent;
+  layer.querySelector('[data-tour="next"]').click();
+  const second = layer.querySelector('.tour-title').textContent;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const closed = !document.getElementById('tourLayer');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+  const shortcuts = document.getElementById('accountModal').style.display !== 'none' && !document.querySelector('#accountModal [data-panel="preferences"]').hidden;
+  document.getElementById('accountModal').style.display = 'none';
+  return { first, total, second, closed, shortcuts, items: document.querySelectorAll('#accountModal .shortcut-list > div').length };
+});
+check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
+  `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

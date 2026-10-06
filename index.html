@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006m" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261006n" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -170,6 +170,7 @@
           <a href="#" data-account-tab="company" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span>Empresa</span></a>
           <a href="#" data-account-tab="team" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Equipe e convites</span></a>
           <a href="#" data-account-tab="preferences" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg><span>Preferências e atalhos</span></a>
+          <a href="#" id="userMenuTour" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard"></use></svg><span>Tour pelo sistema</span></a>
           <div class="dropdown-divider" role="separator"></div>
           <a href="#" id="themeToggleButton" role="menuitem" title="Alternar tema claro ou escuro">
             <span class="user-menu-theme-icons">
@@ -2290,15 +2291,20 @@
               </form>
               <h3>Atalhos do teclado</h3>
               <dl class="shortcut-list">
-                <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
-                <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela ou cancela a ferramenta</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd></dt><dd>Busca: caixa, cliente, código, cabo, endereço ou coordenada</dd></div>
                 <div><dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Salva o projeto selecionado (com o plano de fusão aberto, salva o plano)</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></dt><dd>Desfaz / refaz a última alteração do projeto (na régua e no polígono, o último ponto)</dd></div>
                 <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copia e cola itens da barra lateral</dd></div>
-                <div><dt>Clique direito na barra lateral</dt><dd>Abre as ações do projeto, pasta ou item</dd></div>
-                <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>Desfaz o último ponto na régua ou no polígono</dd></div>
-                <div><dt>Clique direito</dt><dd>Remove o ponto ao desenhar cabo, régua ou polígono</dd></div>
+                <div><dt><kbd>Shift</kbd> + arrastar no mapa</dt><dd>Seleciona vários marcadores (Ctrl + Shift soma à seleção)</dd></div>
+                <div><dt><kbd>Shift</kbd> + clique no marcador</dt><dd>Põe ou tira o marcador da seleção</dd></div>
+                <div><dt>Clique direito no mapa ou na barra lateral</dt><dd>Abre as ações do item (editar, plano de fusão, ver rota, excluir…)</dd></div>
+                <div><dt>Clique direito ao desenhar</dt><dd>Remove o ponto do cabo, da régua ou do polígono</dd></div>
+                <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
+                <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela, cancela a ferramenta ou limpa a seleção</dd></div>
                 <div><dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move o mapa enquanto desenha ou edita</dd></div>
+                <div><dt><kbd>?</kbd></dt><dd>Mostra esta lista de atalhos</dd></div>
               </dl>
+              <button type="button" class="btn btn-secondary" id="startTourButton">Fazer o tour pelo sistema</button>
             </section>
           </div>
         </div>
@@ -2706,6 +2712,7 @@
   <script src="js/box-templates.js?v=20261006k" defer></script>
   <script src="js/undo.js?v=20261006l" defer></script>
   <script src="js/map-selection.js?v=20261006m" defer></script>
+  <script src="js/tour.js?v=20261006n" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
   <script src="js/marker-hover.js?v=20261006i" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
