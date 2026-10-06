@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006c" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261006f" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -94,6 +94,8 @@
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="importKmlButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"></use></svg><span>Importar KML/KMZ</span></a>
             <a href="#" id="exportKmlButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg><span>Exportar para KML</span></a>
+            <div class="dropdown-divider" role="separator"></div>
+            <a href="#" id="projectCheckButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg><span>Verificar projeto</span></a>
           </div>
         </div>
         <div class="dropdown">
@@ -499,6 +501,11 @@
                   <span>Sobra por drop</span>
                   <span class="cat3-input"><input type="number" id="configDropSlack" min="0" step="1" value="15" /><em>m</em></span>
                   <small>Somada a cada cliente</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Drop máximo</span>
+                  <span class="cat3-input"><input type="number" id="configDropMaxLength" min="1" step="1" value="300" /><em>m</em></span>
+                  <small>Acima disso, avisa na verificação do projeto</small>
                 </label>
               </div>
             </section>
@@ -1800,6 +1807,22 @@
       </div>
     </div>
 
+    <div id="projectCheckBox" class="floating-box map-tool-box cable-route-box project-check-box hidden" role="dialog" aria-labelledby="projectCheckTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="projectCheckTitle">Verificação do projeto</h3>
+          <span class="map-tool-box__subtitle" id="projectCheckSubtitle"></span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeProjectCheckBox" title="Fechar" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body">
+        <div id="projectCheckBody"></div>
+        <button type="button" class="route-clear" id="rerunProjectCheckButton">Verificar de novo</button>
+      </div>
+    </div>
     <div id="cableRouteBox" class="floating-box map-tool-box cable-route-box hidden" role="dialog" aria-labelledby="cableRouteTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
@@ -2542,14 +2565,14 @@
   <script src="js/persistence.js?v=20261005a" defer></script>
   <script src="js/sidebar-actions.js?v=20261006c" defer></script>
   <script src="js/project-safety.js?v=20261005a" defer></script>
-  <script src="js/catalog.js?v=20261004e" defer></script>
+  <script src="js/catalog.js?v=20261006f" defer></script>
   <script src="js/kml.js?v=20261006d" defer></script>
   <script src="js/bom.js?v=20261004e" defer></script>
   <script src="js/labor.js?v=20261004e" defer></script>
   <script src="js/report.js?v=20261004e" defer></script>
   <script src="js/sketch.js?v=20261006d" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261006d" defer></script>
+  <script src="js/sidebar.js?v=20261006f" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261004b" defer></script>
   <script src="js/marker-panel.js?v=20261004b" defer></script>
@@ -2557,6 +2580,7 @@
   <script src="js/fusion.js?v=20261006b" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
   <script src="js/clients.js?v=20261005e" defer></script>
+  <script src="js/project-check.js?v=20261006f" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
   <script src="js/marker-hover.js?v=20261005f" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>

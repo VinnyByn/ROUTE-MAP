@@ -348,7 +348,8 @@ const DEFAULT_LANCAMENTO_CONFIG = {
     bapPerPole: 1,       //Abraçadeiras BAP por poste
     supaPerPole: 2,      //Suportes de ancoragem (SUPAS) por poste
     alcaPerSupa: 1,      //Alças preformadas por SUPA
-    dropSlack: 15        //Metros somados a cada drop de cliente (subida, reserva e acomodação)
+    dropSlack: 15,       //Metros somados a cada drop de cliente (subida, reserva e acomodação)
+    dropMaxLength: 300   //Drop mais longo que isso aparece na verificação do projeto (m)
 };
 
 const DEFAULT_LABOR_CONFIG = {
@@ -373,7 +374,8 @@ function normalizeLancamentoConfig(stored) {
         bapPerPole: n(src.bapPerPole, DEFAULT_LANCAMENTO_CONFIG.bapPerPole),
         supaPerPole: n(src.supaPerPole, DEFAULT_LANCAMENTO_CONFIG.supaPerPole),
         alcaPerSupa: n(src.alcaPerSupa, DEFAULT_LANCAMENTO_CONFIG.alcaPerSupa),
-        dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack)
+        dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack),
+        dropMaxLength: Number(src.dropMaxLength) > 0 ? Number(src.dropMaxLength) : DEFAULT_LANCAMENTO_CONFIG.dropMaxLength
     };
 }
 
@@ -950,6 +952,7 @@ function renderLancamentoConfigForm() {
     set('configSupaPerPole', lancamentoConfig.supaPerPole);
     set('configAlcaPerSupa', lancamentoConfig.alcaPerSupa);
     set('configDropSlack', lancamentoConfig.dropSlack);
+    set('configDropMaxLength', lancamentoConfig.dropMaxLength);
     set('configLaborHourlyRate', laborConfig.hourlyRate);
     set('configLaborHoursPerDay', laborConfig.hoursPerDay);
     set('configCablePerDay', laborConfig.cablePerDay);
@@ -1034,7 +1037,8 @@ async function saveLancamentoConfigHandler() {
         bapPerPole: num('configBapPerPole', 1),
         supaPerPole: num('configSupaPerPole', 2),
         alcaPerSupa: num('configAlcaPerSupa', 1),
-        dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack)
+        dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack),
+        dropMaxLength: num('configDropMaxLength', DEFAULT_LANCAMENTO_CONFIG.dropMaxLength) || DEFAULT_LANCAMENTO_CONFIG.dropMaxLength
     };
     const saved = await persistLancamentoConfig();
     if (typeof refreshClientDrops === 'function') refreshClientDrops();

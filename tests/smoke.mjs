@@ -699,6 +699,53 @@ const cascade = await page.evaluate(() => {
 check(cascade.down === 'K-CEO2,K-CTO1,K-CTO2,K-FEED' && cascade.up === 'K-CTO1,K-FEED',
   `rota passa por splitters em cascata e, subindo, não espalha pelas saídas do mesmo splitter (${JSON.stringify(cascade)})`);
 
+//Verificação do projeto: encontra pontas soltas, caixas sem plano, cabos fora do plano, fusões duplicadas/quebradas,
+//cliente sem porta, porta usada duas vezes e drop longo
+const projCheck = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projV" data-folder-name="Projeto V"></div><ul id="projV" class="subfolders"></ul></li>');
+  const prevFolder = activeFolderId; activeFolderId = 'projV';
+  const realDrop = window.getClientDropInfo;
+  window.getClientDropInfo = (c) => c.name === 'V-Longe' ? { length: 420 } : { length: 80 };
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const a = buildFusionCableCard({ name: 'V-1', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const old = buildFusionCableCard({ name: 'V-NOME-ANTIGO', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const sp = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Atendimento' });
+  const box = document.createElement('div'); box.append(a, old, sp);
+  const lines = [[fiber(a, 1), fiber(old, 1)], [fiber(a, 1), fiber(old, 2)], [fiber(a, 3), 'cable-SUMIU-fiber-1']];
+  const ceo = { folderId: 'projV', type: 'CEO', name: 'V-CEO', uid: 'v-ceo', fusionPlan: JSON.stringify({ version: 2, elements: box.innerHTML, svg: lines.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }) };
+  const cto = { folderId: 'projV', type: 'CTO', name: 'V-CTO', uid: 'v-cto', fusionPlan: '' };
+  const c1 = { folderId: 'projV', name: 'V-1', startAnchorUid: 'v-ceo', endAnchorUid: 'v-cto' };
+  const c2 = { folderId: 'projV', name: 'V-2', startAnchorUid: 'v-ceo', endAnchorUid: null };
+  const c3 = { folderId: 'projV', name: 'V-2', startAnchorUid: 'v-ceo', endAnchorUid: 'v-cto' };
+  const cli = (name, extra) => ({ folderId: 'projV', type: 'CLIENTE', name, client: { kind: 'residencial', status: 'ativo', ctoUid: 'v-cto', ...extra } });
+  const clients = [cli('V-SemPorta', {}), cli('V-P1', { ctoPort: 1 }), cli('V-P1b', { ctoPort: 1 }), cli('V-Longe', { ctoPort: 2 }), cli('V-Solto', { ctoUid: null })];
+  const items = [ceo, cto, ...clients];
+  markers.push(...items); savedCables.push(c1, c2, c3);
+  const scope = getActiveProjectScope();
+  const issues = runProjectCheck(scope);
+  openProjectCheck();
+  const panel = document.getElementById('projectCheckBody').textContent;
+  window.__checkCleanup = () => {
+    document.getElementById('projectCheckBox').classList.add('hidden');
+    items.forEach(i => markers.splice(markers.indexOf(i), 1));
+    [c1, c2, c3].forEach(c => savedCables.splice(savedCables.indexOf(c), 1));
+    document.querySelector('[data-folder-id="projV"]').closest('.folder').remove();
+    activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
+  };
+  return { titles: issues.map(i => `${i.level}:${i.title}`), panelHasCount: /erros?/.test(panel) && /avisos?/.test(panel) };
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.waitForTimeout(150);
+  await page.locator('#projectCheckBox').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'verificar-projeto.png') });
+}
+await page.evaluate(() => window.__checkCleanup());
+const expectCheck = ['erro:Nome de cabo repetido: V-2', 'erro:Cabo com ponta solta: V-2', 'aviso:CTO sem plano de fusão: V-CTO',
+  'erro:Cabo inexistente no plano de V-CEO', 'erro:Fusão duplicada em V-CEO', 'erro:Fusão quebrada em V-CEO', 'aviso:Splitter sem entrada em V-CEO',
+  'aviso:Cliente sem porta: V-SemPorta', 'erro:Porta usada duas vezes na V-CTO', 'aviso:Drop longo: V-Longe', 'aviso:Cliente sem CTO: V-Solto'];
+const missingCheck = expectCheck.filter(t => !projCheck.titles.includes(t));
+check(!missingCheck.length && projCheck.panelHasCount, `verificação do projeto encontra os problemas${missingCheck.length ? ` (faltou: ${missingCheck.join(' | ')})` : ''}`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');
