@@ -243,6 +243,23 @@ function openSidebarMenu(entity, x, y, anchorButton = null) {
     });
 }
 
+//Botão direito no marcador, cabo ou polígono do mapa: o mesmo menu da barra lateral, onde o clique foi
+function openMapItemMenu(kind, info, domEvent) {
+    if (domEvent) {
+        domEvent.preventDefault?.();
+        domEvent.stopPropagation?.();
+    }
+    if (!info || isDrawingCable || isDrawingPolygon || isAddingMarker) return;
+    if (typeof isSketchToolActive === 'function' && isSketchToolActive()) return;
+    const row = info.listItem || info.item || document.createElement('div');
+    if (kind === 'marker') selectSidebarMarker(info);
+    else if (kind === 'cable') selectSidebarCable(info);
+    if (typeof hideMarkerHoverCard === 'function') hideMarkerHoverCard(true);
+    const x = domEvent?.clientX ?? window.innerWidth / 2;
+    const y = domEvent?.clientY ?? window.innerHeight / 2;
+    openSidebarMenu({ kind, info, name: info.name, row }, x, y);
+}
+
 function openSidebarMenuFromButton(button) {
     const menu = document.getElementById('sidebarFolderContextMenu');
     const entity = getSidebarEntity(button);

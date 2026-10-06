@@ -885,6 +885,7 @@ function processKmlNode(kmlNode, parentSidebarId, importContext = {}) {
                 savedPolygons.push(polygonInfo);
                 refreshPolygonSidebarLabel(polygonInfo);
                 polygonObject.addListener('click', () => openPolygonEditor(polygonInfo));
+                polygonObject.addListener('rightclick', (e) => openMapItemMenu('polygon', polygonInfo, e?.domEvent));
                 nameSpan.addEventListener('click', () => openPolygonEditor(polygonInfo));
                 const visCb = li.querySelector('.ge-vis-checkbox');
                 if (visCb) wireItemVisibilityCheckbox(visCb, polygonObject);

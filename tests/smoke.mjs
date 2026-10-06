@@ -675,6 +675,34 @@ check(route.t1 === 'R-A#1,R-B#1|R-CTO:1|1' && route.t2 === 'R-A#2,R-B#2|0' && ro
 check(route.allRows === 2 && route.allHasCto && route.overlaysAll === 4, 'rota do cabo: "Todas as fibras" mostra cada fibra em uso e destaca no mapa');
 check(route.oneMode && route.oneHasSteps && route.overlaysOne === 2, 'rota do cabo: "Uma fibra" mostra o caminho passo a passo');
 
+//Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
+const mapMenu = await page.evaluate(() => {
+  const li = document.createElement('li');
+  const cto = { type: 'CTO', name: 'M-CTO', listItem: li };
+  const cable = { name: 'M-CABO', type: 'Cabo AS 80 FO-12', item: document.createElement('li') };
+  markers.push(cto); savedCables.push(cable);
+  const menu = document.getElementById('sidebarFolderContextMenu');
+  let prevented = false;
+  openMapItemMenu('marker', cto, { clientX: 300, clientY: 220, preventDefault: () => { prevented = true; }, stopPropagation() {} });
+  const markerActions = [...menu.querySelectorAll('[data-action]')].map(b => b.dataset.action);
+  const pos = { open: !menu.classList.contains('hidden'), left: menu.style.left };
+  hideSidebarFolderContextMenu();
+  openMapItemMenu('cable', cable, { clientX: 320, clientY: 240 });
+  const cableActions = [...menu.querySelectorAll('[data-action]')].map(b => b.dataset.action);
+  const head = menu.querySelector('.sb-menu__head').textContent;
+  hideSidebarFolderContextMenu();
+  isDrawingCable = true;
+  openMapItemMenu('marker', cto, { clientX: 300, clientY: 220 });
+  const blockedWhileDrawing = menu.classList.contains('hidden');
+  isDrawingCable = false;
+  markers.splice(markers.indexOf(cto), 1); savedCables.splice(savedCables.indexOf(cable), 1);
+  return { prevented, pos, markerActions, cableActions, head, blockedWhileDrawing };
+});
+check(mapMenu.pos.open && mapMenu.prevented && mapMenu.markerActions.includes('fusion') && mapMenu.markerActions.includes('open'),
+  `botão direito no marcador do mapa abre o menu de ações (${mapMenu.markerActions.join(',')})`);
+check(mapMenu.cableActions.includes('route') && mapMenu.cableActions.includes('open') && mapMenu.head.includes('M-CABO') && mapMenu.blockedWhileDrawing,
+  'botão direito no cabo do mapa abre o menu (e não atrapalha o desenho de cabo)');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

@@ -421,6 +421,7 @@ function finishPolygonSketch() {
 
 function wirePolygonInteractions(polygonInfo) {
     polygonInfo.polygonObject.addListener('click', () => openPolygonEditor(polygonInfo));
+    polygonInfo.polygonObject.addListener('rightclick', (e) => openMapItemMenu('polygon', polygonInfo, e?.domEvent));
     const nameEl = polygonInfo.listItem.querySelector('.item-name');
     if (nameEl) nameEl.addEventListener('click', () => openPolygonEditor(polygonInfo));
     const visCb = polygonInfo.listItem.querySelector('.ge-vis-checkbox');
