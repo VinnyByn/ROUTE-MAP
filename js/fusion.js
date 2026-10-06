@@ -57,7 +57,7 @@ function isLightColor(hex) {
 }
 
 function getPortCard(port) {
-    return port?.closest('.cable-element, .splitter-element') || null;
+    return port?.closest('.cable-element, .splitter-element, .equipment-element') || null;
 }
 
 //Só existem as colunas da esquerda e da direita. Planos antigos com splitter no meio vão para a direita
@@ -111,6 +111,7 @@ function describeFusionPort(port, { short = false } = {}) {
         const compactPort = portLabel.replace(/^Porta\s*/i, 'P');
         return short ? `SPL ${label} · ${compactPort}` : `Splitter ${label}, ${portLabel}`;
     }
+    if (card?.classList.contains('equipment-element')) return describeEquipmentPort(port, short);
     return 'Desconhecido';
 }
 
@@ -312,6 +313,7 @@ function buildFusionSplitterCard({ id, label, outputs, status, type, connector, 
 
 //Converte cartões salvos (de qualquer versão) para o formato atual, preservando ids e dados
 function upgradeFusionCard(card) {
+    if (card.classList.contains('equipment-element')) return rebuildFusionEquipmentCard(card);
     if (card.classList.contains('cable-element')) {
         const name = card.dataset.cableName || card.querySelector('.cable-header-name, .cable-header span')?.textContent || 'Cabo';
         const fiberIds = new Map();
@@ -365,7 +367,7 @@ function getCableOtherEndName(cable, role) {
 // ---------------------------------------------------------------
 
 function getFusionCards() {
-    return Array.from(getFusionStage()?.querySelectorAll('.cable-element, .splitter-element') || []);
+    return Array.from(getFusionStage()?.querySelectorAll('.cable-element, .splitter-element, .equipment-element') || []);
 }
 
 //Duas colunas encostadas nas bordas; o meio é o corredor das linhas
@@ -556,6 +558,10 @@ function renderFusionConnections() {
     decorateAtendimentoPorts();
     updateTubeCounters();
     updateFusionSummary();
+    if (activeMarkerForFusion?.type === 'POP' && typeof decoratePonReach === 'function') {
+        clearTimeout(renderFusionConnections.ponTimer);
+        renderFusionConnections.ponTimer = setTimeout(decoratePonReach, 250);
+    }
 }
 
 //Número de porta da CTO e cliente ligado em cada saída dos splitters de atendimento
@@ -811,7 +817,16 @@ function getFusionPortGroups() {
         if (card.classList.contains('cable-element')) {
             groups.push({ key: `cable:${card.dataset.cableName}`, label: `${card.dataset.cableName} (fibras)`, ports: Array.from(card.querySelectorAll('.fiber-row')) });
         } else {
-            groups.push({ key: `spl:${card.id}`, label: `Splitter ${getSplitterLabelText(card)} (saídas)`, ports: Array.from(card.querySelectorAll('.splitter-outputs .splitter-port-row')) });
+            if (card.classList.contains('equipment-element')) return;
+        groups.push({ key: `spl:${card.id}`, label: `Splitter ${getSplitterLabelText(card)} (saídas)`, ports: Array.from(card.querySelectorAll('.splitter-outputs .splitter-port-row')) });
+        }
+    });
+    getFusionStage()?.querySelectorAll('.equipment-element').forEach(card => {
+        const name = card.dataset.equipName;
+        if (card.dataset.equipKind === 'olt') groups.push({ key: `eq:${card.id}:pon`, label: `${name} (PONs)`, ports: Array.from(card.querySelectorAll('[data-side="pon"]')) });
+        if (card.dataset.equipKind === 'dgo') {
+            groups.push({ key: `eq:${card.id}:front`, label: `${name} (cordão)`, ports: Array.from(card.querySelectorAll('[data-side="front"]')) });
+            groups.push({ key: `eq:${card.id}:back`, label: `${name} (fusão)`, ports: Array.from(card.querySelectorAll('[data-side="back"]')) });
         }
     });
     const inputs = Array.from(getFusionStage()?.querySelectorAll('.splitter-input .splitter-port-row') || []);
@@ -1031,7 +1046,7 @@ function removeFusionCard(card) {
     const portIds = Array.from(card.querySelectorAll('.connectable')).map(p => p.id);
     const lines = getFusionLines().filter(l => portIds.includes(l.dataset.startId) || portIds.includes(l.dataset.endId));
     const isCable = card.classList.contains('cable-element');
-    const name = isCable ? card.dataset.cableName : `splitter ${getSplitterLabelText(card)}`;
+    const name = isCable ? card.dataset.cableName : card.classList.contains('equipment-element') ? card.dataset.equipName : `splitter ${getSplitterLabelText(card)}`;
     const doRemove = () => {
         lines.forEach(l => l.remove());
         card.remove();
@@ -1301,8 +1316,9 @@ function updateFusionModalTitle(markerInfo) {
         title.textContent = 'Plano de fusão';
         return;
     }
-    const kind = markerInfo.type === 'CEO' ? 'CEO' : 'CTO';
-    title.textContent = `Plano de fusão · ${kind} ${(markerInfo.name || '').trim() || 'sem nome'}`;
+    const kind = ['CEO', 'POP'].includes(markerInfo.type) ? markerInfo.type : 'CTO';
+    const name = (markerInfo.name || '').trim() || 'sem nome';
+    title.textContent = markerInfo.type === 'POP' ? `Plano do POP · ${name}` : `Plano de fusão · ${kind} ${name}`;
 }
 
 function populateFusionPlan(markerInfo) {
@@ -1313,7 +1329,7 @@ function populateFusionPlan(markerInfo) {
     updateFusionModalTitle(markerInfo);
     const stage = getFusionStage();
     const svg = getFusionSvg();
-    stage.querySelectorAll('.cable-element, .splitter-element').forEach(el => el.remove());
+    stage.querySelectorAll('.cable-element, .splitter-element, .equipment-element').forEach(el => el.remove());
     svg.innerHTML = '';
     const trayField = document.getElementById('trayKitContainer');
     const trayInput = document.getElementById('trayKitQuantity');
@@ -1323,7 +1339,7 @@ function populateFusionPlan(markerInfo) {
         try {
             const planData = JSON.parse(markerInfo.fusionPlan);
             const temp = parseStoredHtml(planData.elements || planData.canvas || '');
-            temp.querySelectorAll('.cable-element, .splitter-element').forEach(old => {
+            temp.querySelectorAll('.cable-element, .splitter-element, .equipment-element').forEach(old => {
                 const card = upgradeFusionCard(old);
                 stage.appendChild(card);
                 wireFusionCard(card);
@@ -1343,6 +1359,12 @@ function populateFusionPlan(markerInfo) {
         }
     }
     trayInput.dataset.oldValue = trayInput.value;
+    if (markerInfo.type === 'POP' && typeof syncPopEquipmentCards === 'function') syncPopEquipmentCards();
+    const popSection = document.getElementById('fusionPopEquipmentSection');
+    if (popSection) {
+        popSection.classList.toggle('hidden', markerInfo.type !== 'POP');
+        if (markerInfo.type === 'POP') popSection.parentElement.prepend(popSection);
+    }
     ensureFusionSvgDefs();
     fusionDirty = false;
     renderFusionConnections.hideFreeSignature = null;
@@ -1386,6 +1408,7 @@ function serializeFusionPlan() {
 function saveFusionPlan() {
     const markerInfo = activeMarkerForFusion;
     if (!markerInfo || !requireEdit('salvar planos de fusão')) return;
+    if (markerInfo.type === 'POP' && typeof popEquipmentFromCards === 'function') markerInfo.popEquipment = popEquipmentFromCards();
     markerInfo.fusionPlan = serializeFusionPlan();
     fusionDirty = false;
     closeFusionModal({ force: true });

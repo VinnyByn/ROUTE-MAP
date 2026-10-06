@@ -16,6 +16,7 @@ const fusionPlanCache = new WeakMap(); //markerInfo → { plan, data }
 //    lines: [{ id, startId, endId }],    //fusões
 //    connectedIds: Set,                  //portas/fibras com fusão
 //    cables: [{ name, fibers: [{ id, number, connected }], derivationKit }],
+//    equipment: [{ id, kind: 'olt'|'dgo'|'switch', name, ports: [{ id, side, slot, pon, port, connected }] }],  //POP
 //    splitters: [{ id, label, status, atendimento, outputs, inputIds, outputIds, olt: { olt, placa, pon } }],
 //  }
 function readFusionPlan(markerInfo) {
@@ -71,8 +72,19 @@ function parseFusionPlanText(planText) {
         olt: { olt: card.dataset.oltName || '', placa: card.dataset.placaNumber || '', pon: card.dataset.ponNumber || '' },
     }));
 
+    const equipment = Array.from(root.querySelectorAll('.equipment-element')).map(card => ({
+        id: card.id,
+        kind: card.dataset.equipKind,
+        name: card.dataset.equipName || '',
+        ports: Array.from(card.querySelectorAll('.equip-port-row')).map(r => ({
+            id: r.id, side: r.dataset.side, slot: r.dataset.slot || '', pon: r.dataset.pon || '', port: r.dataset.port || '',
+            connected: connectedIds.has(r.id),
+        })),
+    }));
+
     return {
         empty: !html,
+        equipment,
         trayQuantity: parseInt(planData.trayQuantity, 10) || 0,
         fromLegacyCanvas: !planData.elements && !!planData.canvas,
         lines,

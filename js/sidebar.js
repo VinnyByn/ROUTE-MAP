@@ -186,10 +186,10 @@ function buildSidebarMenuItems(entity) {
         const isClient = entity.kind === 'marker' && entity.info.type === 'CLIENTE';
         const noun = isClient ? 'cliente' : labels[entity.kind];
         items.push({ action: 'open', label: canEdit ? `Editar ${noun}` : `Ver ${noun}` });
-        if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO')) {
+        if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO' || entity.info.type === 'POP')) {
             items.push({ action: 'fusion', label: 'Plano de fusão' });
         }
-        if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Equipamentos do POP', hint: 'OLTs, placas, DGOs e switches' });
+        if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Cadastro de equipamentos', hint: 'OLTs, placas, DGOs e switches' });
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);

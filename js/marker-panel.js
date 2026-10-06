@@ -134,7 +134,7 @@ function configureMarkerPanel(type, mode) {
     const confirmButton = document.getElementById('confirmMarker');
     confirmButton.textContent = isEdit ? 'Salvar' : (isKmlAdjust ? 'Converter' : 'Posicionar no mapa');
 
-    if (type === 'CEO' || type === 'CTO') {
+    if (type === 'CEO' || type === 'CTO' || type === 'POP') {
         setFusionPlanButtonState({
             visible: true,
             enabled: isEdit,

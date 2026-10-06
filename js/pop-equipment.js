@@ -110,6 +110,13 @@ function savePopEquipment() {
     closePopEquipmentModal();
     if (typeof markProjectDirty === 'function') markProjectDirty();
     if (editingMarkerInfo === pop) updatePopEquipmentPanelSummary(pop);
+    //Plano do POP aberto: os cartões acompanham o cadastro
+    if (activeMarkerForFusion === pop && typeof syncPopEquipmentCards === 'function') {
+        syncPopEquipmentCards({ prune: true });
+        markFusionDirty();
+        repackAllElements();
+        renderFusionSidebar();
+    }
     showToast('Equipamentos salvos', `${pop.name}: ${describePopEquipment(pop.popEquipment)}. Salve o projeto para gravar.`);
 }
 

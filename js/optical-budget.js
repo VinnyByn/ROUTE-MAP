@@ -21,10 +21,23 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
     };
     const sources = [];
     markers.forEach(box => {
-        if (box.type !== 'CEO' && box.type !== 'CTO') return;
+        if (box.type !== 'CEO' && box.type !== 'CTO' && box.type !== 'POP') return;
         const plan = readFusionPlan(box);
         if (!plan) return;
         const key = (id) => `${ensureMarkerUid(box)}|${id}`;
+        (plan.equipment || []).forEach(eq => {
+            const dgo = new Map();
+            eq.ports.forEach(p => {
+                info.set(key(p.id), { kind: p.side === 'pon' ? 'olt-port' : 'equip-port', box });
+                if (p.side === 'pon' && p.connected) sources.push({ node: key(p.id), box, olt: { olt: eq.name, placa: p.slot, pon: p.pon } });
+                if (eq.kind === 'dgo') dgo.set(`${p.port}:${p.side}`, key(p.id));
+            });
+            if (eq.kind === 'dgo') eq.ports.filter(p => p.side === 'front').forEach(p => {
+                const back = dgo.get(`${p.port}:back`);
+                addEdge(key(p.id), back, cfg.lossConnector, 'dgo');
+                addEdge(back, key(p.id), cfg.lossConnector, 'dgo');
+            });
+        });
         plan.cables.forEach(c => c.fibers.forEach(f => {
             if (!f.number) return;
             info.set(key(f.id), { kind: 'fiber', box, cable: c.name, number: f.number });
