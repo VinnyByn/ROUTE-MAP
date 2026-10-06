@@ -16,7 +16,7 @@ const fusionPlanCache = new WeakMap(); //markerInfo → { plan, data }
 //    lines: [{ id, startId, endId }],    //fusões
 //    connectedIds: Set,                  //portas/fibras com fusão
 //    cables: [{ name, fibers: [{ id, number, connected }], derivationKit }],
-//    splitters: [{ id, label, status, atendimento, outputs, olt: { olt, placa, pon } }],
+//    splitters: [{ id, label, status, atendimento, outputs, inputIds, outputIds, olt: { olt, placa, pon } }],
 //  }
 function readFusionPlan(markerInfo) {
     const plan = markerInfo?.fusionPlan || '';
@@ -66,6 +66,8 @@ function parseFusionPlanText(planText) {
         status: card.dataset.status || '',
         atendimento: card.classList.contains('splitter-atendimento'),
         outputs: card.querySelectorAll('.splitter-outputs .splitter-port-row').length,
+        inputIds: Array.from(card.querySelectorAll('.splitter-input .splitter-port-row')).map(r => r.id).filter(Boolean),
+        outputIds: Array.from(card.querySelectorAll('.splitter-outputs .splitter-port-row')).map(r => r.id).filter(Boolean),
         olt: { olt: card.dataset.oltName || '', placa: card.dataset.placaNumber || '', pon: card.dataset.ponNumber || '' },
     }));
 

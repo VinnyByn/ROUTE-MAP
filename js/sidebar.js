@@ -139,7 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', 'drop-recalc': 'refresh', 'open-client': 'client',
+    'drop-edit': 'edit', route: 'branch', 'drop-recalc': 'refresh', 'open-client': 'client',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -187,6 +187,7 @@ function buildSidebarMenuItems(entity) {
         if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO')) {
             items.push({ action: 'fusion', label: 'Plano de fusão' });
         }
+        if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);
         if (canEdit && ((entity.kind === 'marker' && !isClient) || entity.kind === 'cable')) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
@@ -313,6 +314,10 @@ function handleSidebarMenuAction(action) {
         else if (kind === 'cable') focusMapToCable(info);
         else if (kind === 'polygon') focusMapToPolygon(info);
         else if (kind === 'drop') focusMapToClientDrop(info);
+        break;
+    case 'route':
+        selectSidebarCable(info);
+        showCableRoute(info);
         break;
     case 'drop-edit':
         editClientDropFromSidebar(info);

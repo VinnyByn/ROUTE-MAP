@@ -227,7 +227,7 @@ function wireCableSidebarClick(cableInfo) {
     }
     if (cableInfo.polyline && !cableInfo._mapClickEditorBound) {
         cableInfo._mapClickEditorBound = true;
-        cableInfo.polyline.addListener('click', () => openCableEditor(cableInfo));
+        cableInfo.polyline.addListener('click', () => (typeof isCableRouteOpen === 'function' && isCableRouteOpen() ? showCableRoute(cableInfo) : openCableEditor(cableInfo)));
     }
 }
 
