@@ -81,7 +81,16 @@ function buildProjectSheets(scope) {
         eq.switches.forEach(w => equipamentos.push([pop.name, 'Switch', w.name, w.model, w.ports, `${w.uplinks} uplink(s)`]));
     });
 
-    return { Caixas: caixas, Cabos: cabos, Clientes: clientes, 'Portas das CTOs': portas, Fibras: fibras, 'Equipamentos do POP': equipamentos };
+    const postes = [['Nome', 'Número / plaqueta', 'Situação', 'Altura (m)', 'Esforço (daN)', 'Material', 'Concessionária / dono', 'Ocupantes', 'Cabos no poste', 'Latitude', 'Longitude', 'Observação']];
+    boxes.filter(b => b.type === 'POSTE').forEach(p => {
+        const d = p.pole || {};
+        const pos = p.marker?.getPosition?.();
+        const near = pos && typeof google !== 'undefined' && google.maps?.geometry
+            ? scope.cables.filter(c => (c.path || []).some(pt => google.maps.geometry.spherical.computeDistanceBetween(pt, pos) < 3)).length : '';
+        postes.push([p.name, d.number || '', d.situation || '', d.height ?? '', d.effort ?? '', d.material || '', d.utility || '', d.occupants ?? '', near, ...getItemLatLng(p), d.notes || '']);
+    });
+
+    return { Caixas: caixas, Cabos: cabos, Clientes: clientes, 'Portas das CTOs': portas, Fibras: fibras, 'Equipamentos do POP': equipamentos, Postes: postes };
 }
 
 function exportProjectSpreadsheet() {

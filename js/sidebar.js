@@ -731,6 +731,7 @@ const FOLDER_STYLE_TYPES = [
     { type: 'RESERVA', label: 'Reserva' },
     { type: 'CORDOALHA', label: 'Cordoalha' },
     { type: 'POP', label: 'POP' },
+    { type: 'POSTE', label: 'Poste' },
 ];
 
 let folderStyleSession = null;

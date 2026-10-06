@@ -799,7 +799,7 @@ const sheets = await page.evaluate(() => {
     fibras: out.Fibras.length - 1,
   };
 });
-check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras,Equipamentos do POP' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
+check(sheets.tabs === 'Caixas,Cabos,Clientes,Portas das CTOs,Fibras,Equipamentos do POP,Postes' && sheets.caixa === 'X-CTO|CTO|8|1|7' && sheets.cabo === 'X-CABO|120|12'
   && sheets.cliente === 'X-Cli|C-9|X-CTO|3|55' && sheets.portas === 8 && sheets.porta3 === 'X-CTO|3|Ocupada|X-Cli|C-9' && sheets.fibras === 12,
   `exportar planilha monta as abas do projeto (${JSON.stringify(sheets)})`);
 
@@ -976,6 +976,30 @@ const tour = await page.evaluate(() => {
 });
 check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
   `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
+
+//Poste: painel com os dados, salvos no marcador, rótulo na barra lateral, busca e aba "Postes" na planilha
+const poste = await page.evaluate(() => {
+  openMarkerCreatePanel('POSTE');
+  const groupVisible = !document.getElementById('poleGroup').classList.contains('hidden');
+  const set = (id, v) => { document.getElementById(id).value = v; };
+  set('poleNumber', 'CEMIG-4521'); set('poleHeight', '11'); set('poleEffort', '300'); set('poleMaterial', 'Concreto');
+  set('poleUtility', 'Cemig'); set('poleOccupants', '2'); set('poleSituation', 'Existente');
+  const form = readMarkerPanelForm();
+  resetMarkerModal();
+  const icon = getMarkerIconDataUrl('POSTE', '#64748b');
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projPo" data-folder-name="Po"></div><ul id="projPo" class="subfolders"></ul></li>');
+  const prev = activeFolderId; activeFolderId = 'projPo';
+  const pole = { folderId: 'projPo', type: 'POSTE', name: 'P-01', pole: form.pole, position: { lat: -20, lng: -44 } };
+  markers.push(pole);
+  const sheet = buildProjectSheets(getActiveProjectScope()).Postes;
+  const found = searchMapItems('cemig-4521').map(r => r.title).join();
+  markers.splice(markers.indexOf(pole), 1);
+  document.querySelector('[data-folder-id="projPo"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { groupVisible, pole: form.pole, icon: icon.startsWith('data:image/svg'), row: sheet[1]?.slice(0, 8).join('|'), found, desc: describePole(form.pole) };
+});
+check(poste.groupVisible && poste.icon && poste.row === 'P-01|CEMIG-4521|Existente|11|300|Concreto|Cemig|2' && poste.found === 'P-01'
+  && poste.desc === 'nº CEMIG-4521 · 11 m · 300 daN · Concreto · Existente', `poste: cadastro, busca e aba "Postes" na planilha (${JSON.stringify(poste)})`);
 
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {

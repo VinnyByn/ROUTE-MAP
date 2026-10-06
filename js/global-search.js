@@ -11,7 +11,7 @@ function normalizeSearchText(value) {
     return String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
-const SEARCH_KIND_LABELS = { CEO: 'CEO', CTO: 'CTO', POP: 'POP', RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', CLIENTE: 'Cliente', Importado: 'Importado' };
+const SEARCH_KIND_LABELS = { CEO: 'CEO', CTO: 'CTO', POP: 'POP', POSTE: 'Poste', RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', CLIENTE: 'Cliente', Importado: 'Importado' };
 
 function searchMapItems(query, limit = 30) {
     const words = normalizeSearchText(query).split(/\s+/).filter(Boolean);
@@ -27,7 +27,8 @@ function searchMapItems(query, limit = 30) {
     markers.forEach(m => {
         const c = m.client || {};
         const label = SEARCH_KIND_LABELS[m.type] || m.type;
-        const extra = m.type === 'CLIENTE' ? [c.code, c.address, c.b2b?.company, findMarkerByUid(c.ctoUid)?.name].filter(Boolean) : [m.description];
+        const extra = m.type === 'CLIENTE' ? [c.code, c.address, c.b2b?.company, findMarkerByUid(c.ctoUid)?.name].filter(Boolean)
+            : m.type === 'POSTE' ? [m.pole?.number, m.pole?.utility, m.pole?.situation] : [m.description];
         consider('marker', m, m.name || label, [label, ...extra.filter(Boolean).slice(0, 2)].join(' · '), [m.name, label, ...extra].join(' '));
     });
     savedCables.forEach(c => consider('cable', c, c.name, ['Cabo', c.type, c.totalLength ? `${c.totalLength} m` : ''].filter(Boolean).join(' · '), [c.name, 'cabo', c.type].join(' ')));
