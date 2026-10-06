@@ -1510,6 +1510,10 @@ function wireMarkerDrawHoverCursor(marker, markerInfo) {
         if (typeof hideMarkerHoverCard === 'function') hideMarkerHoverCard();
     });
     marker.addListener("mousedown", () => { if (typeof hideMarkerHoverCard === 'function') hideMarkerHoverCard(true); });
+    marker.addListener("rightclick", (e) => {
+        if (isDrawingCable) return; //No desenho do cabo o botão direito desfaz pontos
+        openMapItemMenu('marker', markerInfo, e?.domEvent);
+    });
 }
 
 //Painel Locais — helpers estilo Google Earth Pro
@@ -3822,6 +3826,12 @@ function addCableEventListeners(polyline) {
         });
         showCableHoverCard(cableData, event?.domEvent);
         mapDiv.addEventListener('mousemove', updateInfoBoxPosition);
+    });
+    polyline.addListener('rightclick', function(event) {
+        const cableData = getCableInfoByPolyline(this);
+        if (!cableData || isDrawingCable) return;
+        hideMarkerHoverCard(true);
+        openMapItemMenu('cable', cableData, event?.domEvent);
     });
     polyline.addListener('mouseout', function() {
         this.setOptions(originalOptions);
