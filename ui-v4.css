@@ -1807,3 +1807,22 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 .mh-card__head div { min-width: 0; }
 .mh-card__head div strong { overflow-wrap: anywhere; }
 .mh-card section .mh-card__note { margin: 0 0 3px; }
+
+/* Caixa "Pontos do mapa" junto do seletor Mapa/Satélite do Google */
+.map-poi-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0 0;
+  height: 40px;
+  padding: 0 12px;
+  background: #fff;
+  color: #333;
+  border-radius: 0 2px 2px 0;
+  box-shadow: rgba(0, 0, 0, 0.3) 0 1px 4px -1px;
+  font: 400 15px Roboto, Arial, sans-serif;
+  cursor: pointer;
+  user-select: none;
+}
+.map-poi-control[hidden] { display: none; }
+.map-poi-control input { margin: 0; width: 15px; height: 15px; cursor: pointer; }

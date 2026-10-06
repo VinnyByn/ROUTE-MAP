@@ -533,6 +533,47 @@ await page.evaluate(() => hideMarkerHoverCard(true));
 check(cableCard.head === 'FO-06-CTO-03' && cableCard.sections.join() === 'Metragem,Fibras'
   && cableCard.text.includes('1 / 6') && cableCard.text.includes('1-2, 4-6') && cableCard.text.includes('330 m'), 'cabo ao passar o mouse usa o cartão dos marcadores (metragem e fibras)');
 
+//Modo Mapa: opção de esconder os pontos do Google (comércios etc.), mantendo o tema escuro
+const poi = await page.evaluate(() => {
+  const realMap = map;
+  let styles;
+  map = { setOptions: o => { styles = o.styles; } };
+  document.documentElement.setAttribute('data-theme', 'light');
+  setMapPoiVisible(false);
+  const hiddenLight = JSON.stringify(styles);
+  document.documentElement.setAttribute('data-theme', 'dark');
+  applyMapTheme();
+  const hiddenDark = styles.length === DARK_MAP_STYLES.length + HIDE_MAP_POI_STYLES.length;
+  setMapPoiVisible(true);
+  const shownDark = styles.length === DARK_MAP_STYLES.length;
+  document.documentElement.setAttribute('data-theme', 'light');
+  applyMapTheme();
+  const shownLight = styles === null;
+  map = realMap;
+  return { hidesPoi: hiddenLight.includes('"poi"') && hiddenLight.includes('off'), hiddenDark, shownDark, shownLight };
+});
+check(poi.hidesPoi && poi.hiddenDark && poi.shownDark && poi.shownLight, `modo Mapa: esconder/mostrar pontos do Google (${JSON.stringify(poi)})`);
+
+//Cabo importado do KML com pontas fora das caixas pode ser editado e salvo
+const looseCable = await page.evaluate(() => {
+  const prev = editingCableIndex;
+  const imported = { name: 'KML 1', type: 'Cabo Importado', isImported: true, fromKmlImport: true };
+  const drawn = { name: 'Normal', type: 'Cabo AS 80 12F' };
+  savedCables.push(imported, drawn);
+  editingCableIndex = savedCables.indexOf(imported);
+  const importedOk = isEditingLooseImportedCable();
+  imported.isImported = false; //depois do primeiro salvamento continua podendo
+  const afterSave = isEditingLooseImportedCable();
+  editingCableIndex = savedCables.indexOf(drawn);
+  const drawnBlocked = !isEditingLooseImportedCable();
+  editingCableIndex = null;
+  const newBlocked = !isEditingLooseImportedCable();
+  savedCables.splice(savedCables.indexOf(imported), 2);
+  editingCableIndex = prev;
+  return importedOk && afterSave && drawnBlocked && newBlocked;
+});
+check(looseCable, 'cabo importado salva sem as pontas nas caixas (cabo desenhado continua exigindo)');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

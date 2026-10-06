@@ -77,10 +77,39 @@ const DARK_MAP_STYLES = [
     { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#5d7f93' }] }
 ];
 
+//Modo Mapa: esconde os pontos do Google (comércios, igrejas, pontos de ônibus...), como "Rótulos" no Satélite
+const HIDE_MAP_POI_STYLES = [
+    { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+];
+let mapPoiVisible = (() => { try { return localStorage.getItem('routemap.mapPoi') !== 'off'; } catch (e) { return true; } })();
+
 function applyMapTheme() {
     if (typeof map === 'undefined' || !map) return;
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    map.setOptions({ styles: isDark ? DARK_MAP_STYLES : null });
+    const styles = [...(isDark ? DARK_MAP_STYLES : []), ...(mapPoiVisible ? [] : HIDE_MAP_POI_STYLES)];
+    map.setOptions({ styles: styles.length ? styles : null });
+}
+
+function setMapPoiVisible(visible) {
+    mapPoiVisible = visible;
+    try { localStorage.setItem('routemap.mapPoi', visible ? 'on' : 'off'); } catch (e) { /* sem armazenamento */ }
+    applyMapTheme();
+}
+
+//Caixa "Pontos do mapa" ao lado de Mapa/Satélite (só no modo Mapa; no Satélite o Google já tem "Rótulos")
+function setupMapPoiControl() {
+    const box = document.createElement('label');
+    box.className = 'map-poi-control';
+    box.title = 'Mostrar ou esconder comércios, igrejas, pontos de ônibus e outros locais do Google';
+    box.innerHTML = '<input type="checkbox"> <span>Pontos do mapa</span>';
+    const input = box.querySelector('input');
+    input.checked = mapPoiVisible;
+    input.addEventListener('change', () => setMapPoiVisible(input.checked));
+    const sync = () => { box.hidden = !['roadmap', 'terrain'].includes(map.getMapTypeId()); };
+    map.addListener('maptypeid_changed', sync);
+    sync();
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(box);
 }
 
 function uiIcon(name, extraClass) {
@@ -657,6 +686,7 @@ function initMap() {
         });
         disableMapRightDoubleClickZoomOut(map, mapElement);
         applyMapTheme();
+        setupMapPoiControl();
         resolveMapReady(map);
         scheduleMapResize();
         window.addEventListener('load', scheduleMapResize);
@@ -2677,6 +2707,12 @@ function undoCableVertex() {
     removeCableVertexAtIndex(cableMarkers.length - 1, { allowShort, showAlert: !allowShort });
 }
 
+//Cabo importado do KML pode ter as pontas fora das caixas: dá para editar e salvar mesmo assim
+function isEditingLooseImportedCable() {
+    const cable = editingCableIndex !== null ? savedCables[editingCableIndex] : null;
+    return !!(cable && (cable.isImported || cable.fromKmlImport));
+}
+
 //Painel do cabo: leituras, pontas e controles
 function updateCableDrawReadout() {
     const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -2701,7 +2737,7 @@ function updateCableDrawReadout() {
                 : 'Rota pronta. Arraste os pontos para ajustar ou clique em <strong>Salvar cabo</strong>.');
     }
     const saveButton = document.getElementById('saveCableButton');
-    if (saveButton) saveButton.disabled = !(startAnchor && endAnchor);
+    if (saveButton) saveButton.disabled = isEditingLooseImportedCable() ? cableMarkers.length < 2 : !(startAnchor && endAnchor);
     const undoButton = document.getElementById('undoCableVertexButton');
     if (undoButton) undoButton.disabled = !hasPoints;
     syncCablePanelControls();
@@ -2861,15 +2897,16 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
     }
     const { startAnchor, endAnchor } = snapCableDrawEndpointsToAnchors();
     updatePolylineFromMarkers();
-    if (!startAnchor) {
+    const looseImported = isEditingLooseImportedCable();
+    if (!startAnchor && !looseImported) {
         showAlert("Ponta A sem caixa", "O cabo deve começar em uma CEO, CTO, reserva ou POP.");
         return;
     }
-    if (!endAnchor) {
+    if (!endAnchor && !looseImported) {
         showAlert("Ponta B sem caixa", "Termine o cabo clicando em uma CEO, CTO, reserva ou POP antes de salvar.");
         return;
     }
-    if (isSameCableAnchorMarker(startAnchor, endAnchor)) {
+    if (startAnchor && endAnchor && isSameCableAnchorMarker(startAnchor, endAnchor)) {
         showAlert("Pontas iguais", "O cabo não pode começar e terminar na mesma caixa.");
         return;
     }
