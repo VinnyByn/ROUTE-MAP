@@ -2707,6 +2707,12 @@ function undoCableVertex() {
     removeCableVertexAtIndex(cableMarkers.length - 1, { allowShort, showAlert: !allowShort });
 }
 
+//Cabo importado do KML pode ter as pontas fora das caixas: dá para editar e salvar mesmo assim
+function isEditingLooseImportedCable() {
+    const cable = editingCableIndex !== null ? savedCables[editingCableIndex] : null;
+    return !!(cable && (cable.isImported || cable.fromKmlImport));
+}
+
 //Painel do cabo: leituras, pontas e controles
 function updateCableDrawReadout() {
     const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -2731,7 +2737,7 @@ function updateCableDrawReadout() {
                 : 'Rota pronta. Arraste os pontos para ajustar ou clique em <strong>Salvar cabo</strong>.');
     }
     const saveButton = document.getElementById('saveCableButton');
-    if (saveButton) saveButton.disabled = !(startAnchor && endAnchor);
+    if (saveButton) saveButton.disabled = isEditingLooseImportedCable() ? cableMarkers.length < 2 : !(startAnchor && endAnchor);
     const undoButton = document.getElementById('undoCableVertexButton');
     if (undoButton) undoButton.disabled = !hasPoints;
     syncCablePanelControls();
@@ -2891,15 +2897,16 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
     }
     const { startAnchor, endAnchor } = snapCableDrawEndpointsToAnchors();
     updatePolylineFromMarkers();
-    if (!startAnchor) {
+    const looseImported = isEditingLooseImportedCable();
+    if (!startAnchor && !looseImported) {
         showAlert("Ponta A sem caixa", "O cabo deve começar em uma CEO, CTO, reserva ou POP.");
         return;
     }
-    if (!endAnchor) {
+    if (!endAnchor && !looseImported) {
         showAlert("Ponta B sem caixa", "Termine o cabo clicando em uma CEO, CTO, reserva ou POP antes de salvar.");
         return;
     }
-    if (isSameCableAnchorMarker(startAnchor, endAnchor)) {
+    if (startAnchor && endAnchor && isSameCableAnchorMarker(startAnchor, endAnchor)) {
         showAlert("Pontas iguais", "O cabo não pode começar e terminar na mesma caixa.");
         return;
     }

@@ -554,6 +554,26 @@ const poi = await page.evaluate(() => {
 });
 check(poi.hidesPoi && poi.hiddenDark && poi.shownDark && poi.shownLight, `modo Mapa: esconder/mostrar pontos do Google (${JSON.stringify(poi)})`);
 
+//Cabo importado do KML com pontas fora das caixas pode ser editado e salvo
+const looseCable = await page.evaluate(() => {
+  const prev = editingCableIndex;
+  const imported = { name: 'KML 1', type: 'Cabo Importado', isImported: true, fromKmlImport: true };
+  const drawn = { name: 'Normal', type: 'Cabo AS 80 12F' };
+  savedCables.push(imported, drawn);
+  editingCableIndex = savedCables.indexOf(imported);
+  const importedOk = isEditingLooseImportedCable();
+  imported.isImported = false; //depois do primeiro salvamento continua podendo
+  const afterSave = isEditingLooseImportedCable();
+  editingCableIndex = savedCables.indexOf(drawn);
+  const drawnBlocked = !isEditingLooseImportedCable();
+  editingCableIndex = null;
+  const newBlocked = !isEditingLooseImportedCable();
+  savedCables.splice(savedCables.indexOf(imported), 2);
+  editingCableIndex = prev;
+  return importedOk && afterSave && drawnBlocked && newBlocked;
+});
+check(looseCable, 'cabo importado salva sem as pontas nas caixas (cabo desenhado continua exigindo)');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;
