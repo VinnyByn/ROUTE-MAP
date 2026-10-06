@@ -12,3 +12,12 @@ create function auth.jwt() returns jsonb language sql stable as $$ select coales
 create function auth.uid() returns uuid language sql stable as $$ select nullif(auth.jwt()->>'sub', '')::uuid $$;
 grant execute on function auth.jwt(), auth.uid() to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
+-- Realtime (canais privados): tabela de mensagens e o tópico do canal atual
+create schema if not exists realtime;
+create table realtime.messages (id bigserial primary key, topic text not null, extension text not null, event text, payload jsonb, private boolean default true);
+alter table realtime.messages enable row level security;
+create function realtime.topic() returns text language sql stable as $$ select nullif(current_setting('realtime.topic', true), '') $$;
+grant usage on schema realtime to authenticated;
+grant select, insert on realtime.messages to authenticated;
+grant usage on sequence realtime.messages_id_seq to authenticated;
+grant execute on function realtime.topic() to authenticated;

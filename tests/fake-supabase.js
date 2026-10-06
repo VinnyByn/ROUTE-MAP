@@ -72,7 +72,35 @@ window.supabase = { createClient() {
       : name === 'project_facets' ? ok({ total: 0, trash: Object.values(db.projects).filter(p => p.deleted_at).length, types: [], cities: [] })
       : ok(null),
     from: (table) => query(table),
-    channel() { return { on() { return this; }, subscribe() { return this; } }; },
-    removeChannel() {},
+    //Realtime simulado entre abas do mesmo navegador (BroadcastChannel): broadcast e presença por tópico
+    channel(topic, opts = {}) {
+      const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('fake-realtime') : null;
+      const key = opts?.config?.presence?.key || Math.random().toString(36).slice(2);
+      const handlers = { broadcast: [], sync: [] };
+      const peers = {};
+      let mine = null;
+      const fireSync = () => handlers.sync.forEach(cb => cb());
+      const ch = {
+        on(type, filter, cb) { if (type === 'broadcast') handlers.broadcast.push(cb); if (type === 'presence') handlers.sync.push(cb); return ch; },
+        subscribe(cb) { setTimeout(() => cb && cb('SUBSCRIBED'), 30); return ch; },
+        send({ payload }) { bc?.postMessage({ topic, kind: 'broadcast', payload }); return Promise.resolve('ok'); },
+        track(meta) { mine = meta; peers[key] = [meta]; bc?.postMessage({ topic, kind: 'join', key, meta }); fireSync(); return Promise.resolve('ok'); },
+        presenceState() { return { ...peers }; },
+        _close() { bc?.postMessage({ topic, kind: 'leave', key }); bc?.close(); },
+      };
+      if (bc) bc.onmessage = ({ data }) => {
+        if (data.topic !== topic) return;
+        if (data.kind === 'broadcast') handlers.broadcast.forEach(cb => cb({ payload: data.payload }));
+        if (data.kind === 'join') {
+          const isNew = !peers[data.key];
+          peers[data.key] = [data.meta];
+          if (isNew && mine) bc.postMessage({ topic, kind: 'join', key, meta: mine }); //Responde para quem chegou
+          fireSync();
+        }
+        if (data.kind === 'leave') { delete peers[data.key]; fireSync(); }
+      };
+      return ch;
+    },
+    removeChannel(ch) { ch?._close?.(); },
   };
 } };

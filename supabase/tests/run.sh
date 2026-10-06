@@ -12,7 +12,7 @@ for f in migrations/*.sql; do
   psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$f" 2>&1 | grep -v NOTICE || true
   test "${PIPESTATUS[0]}" -eq 0
 done
-for t in tests/seguranca.sql tests/versoes.sql tests/modelos.sql; do
+for t in tests/seguranca.sql tests/versoes.sql tests/modelos.sql tests/ao_vivo.sql; do
   echo "== $(basename "$t")"
   psql -v ON_ERROR_STOP=1 -q -At -d "$DB" -f "$t" | grep -E "^(ok|FALHA)"
   test "${PIPESTATUS[0]}" -eq 0

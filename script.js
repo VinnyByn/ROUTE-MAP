@@ -1370,6 +1370,7 @@ async function projectExistsInDatabase(projectId) {
 //Fecha o projeto na tela (continua salvo no banco)
 function closeProject(projectId, projectElement, projectName) {
     showConfirm('Fechar projeto', `Fechar "${projectName}"? Alterações não salvas serão perdidas. O projeto continua disponível em Projeto → Carregar Projeto.`, () => {
+        if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
         removeProjectFromWorkspace(projectId, projectElement);
     });
 }
