@@ -609,6 +609,72 @@ check(rename.names === 'CAB 1,CAB-2' && rename.uniqueIds && rename.linksKept && 
   `renomear cabo atualiza o plano de fusão sem ids repetidos (${JSON.stringify(rename)})`);
 check(rename.client === 'CAB-2' && rename.usage, 'renomear cabo atualiza o cliente ligado no cabo e o uso nas fusões');
 
+//Rota do cabo: segue as fusões de caixa em caixa (todas as fibras ou uma fibra)
+const route = await page.evaluate(() => {
+  const realGoogle = window.google; const realMap = map;
+  const overlays = [];
+  window.google = { maps: {
+    Polyline: function (o) { this.o = o; overlays.push(this); this.setMap = (m) => { this.o.map = m; }; },
+    LatLngBounds: function () { let n = 0; this.extend = () => { n++; }; this.isEmpty = () => n === 0; },
+  } };
+  map = { fitBounds: () => {} };
+  const makePlan = (cards, links) => {
+    const box = document.createElement('div'); cards.forEach(c => box.appendChild(c));
+    return JSON.stringify({ version: 2, elements: box.innerHTML, svg: links.map(([a, b]) => `<path class="fusion-line" data-start-id="${a}" data-end-id="${b}"></path>`).join('') });
+  };
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const aIn = buildFusionCableCard({ name: 'R-A', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+  const bOut = buildFusionCableCard({ name: 'R-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const bIn = buildFusionCableCard({ name: 'R-B', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const sp = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, status: 'Novo', type: 'Atendimento', connector: 'APC', olt: { olt: 'OLT-9', placa: '1', pon: '3' } });
+  const ceo = { type: 'CEO', name: 'R-CEO', uid: 'r-ceo', fusionPlan: makePlan([aIn, bOut], [[fiber(aIn, 1), fiber(bOut, 1)], [fiber(aIn, 2), fiber(bOut, 2)]]) };
+  const cto = { type: 'CTO', name: 'R-CTO', uid: 'r-cto', fusionPlan: makePlan([bIn, sp], [[fiber(bIn, 1), 'splitter-1-input-port']]) };
+  const client = { type: 'CLIENTE', name: 'R-Cli', client: { ctoUid: 'r-cto', status: 'ativo' } };
+  const pole = { lat: () => 0, lng: () => 0 };
+  const cA = { name: 'R-A', type: 'Cabo AS 80 FO-12', path: [pole, pole], width: 4, polyline: { get: () => 1, setOptions() {}, getVisible: () => true } };
+  const cB = { name: 'R-B', type: 'Cabo AS 80 FO-06', path: [pole, pole], width: 4, polyline: { get: () => 1, setOptions() {}, getVisible: () => true } };
+  markers.push(ceo, cto, client); savedCables.push(cA, cB);
+  const graph = buildFiberGraph();
+  const t1 = traceFiberRoute(graph, 'R-A', 1);
+  const t2 = traceFiberRoute(graph, 'R-A', 2);
+  const back = traceFiberRoute(graph, 'R-B', 1);
+  showCableRoute(cA);
+  const box = document.getElementById('cableRouteBox');
+  const allRows = box.querySelectorAll('.route-legend li').length;
+  const allText = box.querySelector('#cableRouteBody').textContent;
+  const overlaysAll = overlays.filter(o => o.o.map).length;
+  box.querySelector('[data-route-fiber="1"]').click();
+  const oneText = box.querySelector('#cableRouteBody').textContent;
+  const oneMode = box.querySelector('[data-route-mode="one"]').classList.contains('is-active');
+  const overlaysOne = overlays.filter(o => o.o.map).length;
+  const out = {
+    t1: t1.segments.map(s => `${s.cable}#${s.number}`).sort().join() + '|' + t1.ctos.map(c => `${c.box.name}:${c.clients}`).join() + '|' + t1.olts.length,
+    t2: t2.segments.map(s => `${s.cable}#${s.number}`).sort().join() + '|' + t2.ctos.length,
+    back: back.segments.map(s => `${s.cable}#${s.number}`).sort().join(),
+    allRows, allHasCto: allText.includes('R-CTO · 1 cliente'), overlaysAll,
+    oneMode, overlaysOne, oneHasSteps: oneText.includes('R-CEO') && oneText.includes('OLT') && oneText.includes('R-CTO'),
+  };
+  window.__routeCleanup = () => {
+    closeCableRoute();
+    markers.splice(markers.indexOf(ceo), 3); savedCables.splice(savedCables.indexOf(cA), 2);
+    window.google = realGoogle; map = realMap;
+  };
+  return out;
+});
+if (process.env.SMOKE_SHOTS) {
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.waitForTimeout(200);
+  await page.locator('#cableRouteBox').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'rota-uma.png') });
+  await page.evaluate(() => document.querySelector('[data-route-mode="all"]').click());
+  await page.waitForTimeout(100);
+  await page.locator('#cableRouteBox').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'rota-todas.png') });
+}
+await page.evaluate(() => window.__routeCleanup());
+check(route.t1 === 'R-A#1,R-B#1|R-CTO:1|1' && route.t2 === 'R-A#2,R-B#2|0' && route.back === 'R-A#1,R-B#1',
+  `rota da fibra segue as fusões de caixa em caixa (${JSON.stringify(route)})`);
+check(route.allRows === 2 && route.allHasCto && route.overlaysAll === 4, 'rota do cabo: "Todas as fibras" mostra cada fibra em uso e destaca no mapa');
+check(route.oneMode && route.oneHasSteps && route.overlaysOne === 2, 'rota do cabo: "Uma fibra" mostra o caminho passo a passo');
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;
