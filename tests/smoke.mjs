@@ -925,6 +925,40 @@ const undoRes = await page.evaluate(async () => {
 check(undoRes.before === 'Pasta 1,Pasta 2' && undoRes.undo1 === 'Pasta 1' && undoRes.undo2 === '' && undoRes.redo1 === 'Pasta 1'
   && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X', `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
 
+//Seleção múltipla: retângulo seleciona os marcadores do projeto; muda situação, move de pasta e exclui
+const sel = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projS', name: 'Projeto S', isProject: true, type: 'TCR', children: [{ id: 'pS1', name: 'Pasta 1', children: [] }] }], sidebar);
+  const prev = activeFolderId; setActiveFolder('projS');
+  const pos = (lat, lng) => ({ lat: () => lat, lng: () => lng });
+  const mk = (type, name, lat, lng) => {
+    const li = document.createElement('li'); document.getElementById('projS').appendChild(li);
+    return { type, name, folderId: 'projS', listItem: li, ctoStatus: 'Nova', reservaStatus: 'Nova', marker: { getPosition: () => pos(lat, lng), getVisible: () => true, setMap() {}, setVisible() {} } };
+  };
+  const a = mk('CTO', 'S-CTO', 1, 1), b = mk('RESERVA', 'S-RT', 2, 2), far = mk('CTO', 'S-LONGE', 50, 50);
+  markers.push(a, b, far);
+  const realAppearance = window.updateMarkerAppearance; window.updateMarkerAppearance = () => {};
+  selectMarkersInBounds({ contains: (p) => p.lat() < 10 });
+  const picked = [...mapSelection.items].map(m => m.name).sort().join();
+  const barShown = !document.getElementById('mapSelectionBar').classList.contains('hidden');
+  const count = document.getElementById('mapSelectionCount').textContent;
+  applySelectionStatus('Troca');
+  const status = `${a.ctoStatus}/${b.reservaStatus}`;
+  moveSelectionToFolder('pS1');
+  const moved = `${a.folderId},${b.folderId}` + '|' + document.getElementById('pS1').children.length;
+  deleteSelection();
+  document.getElementById('confirmModalConfirmButton').click();
+  const left = markers.filter(m => [a, b, far].includes(m)).map(m => m.name).join();
+  const cleared = document.getElementById('mapSelectionBar').classList.contains('hidden');
+  markers.splice(markers.indexOf(far), 1);
+  window.updateMarkerAppearance = realAppearance;
+  document.querySelector('.folder-title[data-folder-id="projS"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { picked, barShown, count, status, moved, left, cleared };
+});
+check(sel.picked === 'S-CTO,S-RT' && sel.barShown && sel.count === '2 selecionados' && sel.status === 'Troca/Nova'
+  && sel.moved === 'pS1,pS1|2' && sel.left === 'S-LONGE' && sel.cleared, `seleção múltipla: retângulo, situação, mover e excluir (${JSON.stringify(sel)})`);
+
 //Botão direito no mapa (marcador/cabo): abre o mesmo menu da barra lateral onde o clique foi
 const mapMenu = await page.evaluate(() => {
   const li = document.createElement('li');

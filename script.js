@@ -3360,7 +3360,12 @@ function addCustomMarker(location, importedData = null) {
     }
     wireMarkerDrawHoverCursor(marker, markerInfo);
     //Evento de clique no marcador
-    marker.addListener("click", () => {
+    marker.addListener("click", (e) => {
+        //Shift + clique: entra ou sai da seleção múltipla (js/map-selection.js)
+        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelection === 'function') {
+            toggleMapSelection(markerInfo);
+            return;
+        }
         if (handleSketchMarkerClick(markerInfo)) return;
         if (!isDrawingCable) {
             openMarkerFromUserAction(markerInfo);

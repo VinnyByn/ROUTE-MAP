@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261006l" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261006m" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -2409,6 +2409,17 @@
       </li>
     </template>
 
+    <div id="mapSelectionBar" class="map-selection-bar hidden" role="toolbar" aria-label="Itens selecionados">
+      <div class="map-selection-bar__info"><strong id="mapSelectionCount"></strong><small id="mapSelectionKinds"></small></div>
+      <select id="mapSelectionStatus" data-sel-edit title="Situação">
+        <option value="">Situação…</option><option>Nova</option><option>Existente</option><option>Troca</option>
+      </select>
+      <select id="mapSelectionFolder" data-sel-edit title="Mover para pasta"></select>
+      <button type="button" id="mapSelectionHide">Ocultar</button>
+      <button type="button" id="mapSelectionDelete" class="is-danger" data-sel-edit>Excluir</button>
+      <button type="button" id="mapSelectionClear" title="Limpar seleção (Esc)" aria-label="Limpar seleção">&times;</button>
+    </div>
+
     <div id="globalSearch" class="global-search hidden" role="dialog" aria-label="Busca">
       <div class="global-search__panel">
         <div class="global-search__field">
@@ -2668,8 +2679,8 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261006j" defer></script>
-  <script src="js/persistence.js?v=20261006l" defer></script>
+  <script src="script.js?v=20261006m" defer></script>
+  <script src="js/persistence.js?v=20261006m" defer></script>
   <script src="js/sidebar-actions.js?v=20261006c" defer></script>
   <script src="js/project-safety.js?v=20261005a" defer></script>
   <script src="js/catalog.js?v=20261006g" defer></script>
@@ -2694,6 +2705,7 @@
   <script src="js/global-search.js?v=20261006j" defer></script>
   <script src="js/box-templates.js?v=20261006k" defer></script>
   <script src="js/undo.js?v=20261006l" defer></script>
+  <script src="js/map-selection.js?v=20261006m" defer></script>
   <script src="js/cable-route.js?v=20261006e" defer></script>
   <script src="js/marker-hover.js?v=20261006i" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
