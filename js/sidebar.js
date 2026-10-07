@@ -139,7 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -176,6 +176,7 @@ function buildSidebarMenuItems(entity) {
             items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
             items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
             items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
+            items.push({ action: 'export-fusion', label: 'Exportar plano de fusão (PDF)', hint: 'Todas as caixas com as fusões' });
             items.push({ action: 'close', label: 'Fechar projeto', hint: 'Continua salvo no banco' });
             if (canEdit) items.push({ action: 'delete', label: 'Excluir projeto', hint: 'Vai para a lixeira por 30 dias', danger: true });
         } else if (canEdit) {
@@ -349,6 +350,10 @@ function handleSidebarMenuAction(action) {
     case 'pop-equipment':
         selectSidebarMarker(info);
         openPopEquipmentModal(info);
+        break;
+    case 'export-fusion':
+        setActiveFolder(entity.folderId);
+        exportProjectFusionPlans();
         break;
     case 'export-xlsx':
         setActiveFolder(entity.folderId);

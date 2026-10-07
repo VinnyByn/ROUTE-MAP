@@ -1216,6 +1216,11 @@ check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${ligh
   await sp.addInitScript(() => { try { localStorage.setItem('routeMapTourDone', '1'); } catch (e) {} });
   await sp.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
   await sp.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+  //Sem acesso às CDNs: SMOKE_LIBS aponta para cópias locais do jsPDF (mesmos arquivos, passam na integridade)
+  if (process.env.SMOKE_LIBS) {
+    await sp.route('**/jspdf@2.5.1/dist/jspdf.umd.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'jspdf-2.5.1/dist/jspdf.umd.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+    await sp.route('**/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'jspdf-autotable-3.8.2/dist/jspdf.plugin.autotable.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+  }
   await sp.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
   await sp.goto(baseUrl + '/index.html');
   await sp.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
@@ -1296,6 +1301,51 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(dup.uidAfterBackfill === 'du-k2' && dup.usage1 === '' && dup.usage2 === '1' && dup.route1 === 0 && dup.route2 === 'du-c2'
     && dup.inPlan1 === false && dup.inPlan2 === 'du-c2' && dup.conn === 'true,false,true' && dup.planAfterRename === 'FO-12-CTO',
     `cabos e caixas com o mesmo nome ligados pelo identificador (${JSON.stringify(dup)})`);
+
+  //Exportar plano de fusão do projeto (PDF): todas as caixas, fusões em ordem de cabo/fibra
+  const hasPdf = (process.env.CI || process.env.SMOKE_LIBS)
+    ? await sp.waitForFunction(() => !!window.jspdf?.jsPDF?.API?.autoTable, null, { timeout: 20000 }).then(() => true, () => false)
+    : await sp.evaluate(() => !!window.jspdf?.jsPDF?.API?.autoTable);
+  const fx = await sp.evaluate((hasPdf) => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projFX', name: 'Projeto FX', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const prev = activeFolderId; setActiveFolder('projFX');
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projFX', ceoStatus: 'Novo', marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+    const ceo = mk('CEO', 'CEO-FX', 'fx-ceo', -22, -44), cto = mk('CTO', 'CTO-FX', 'fx-cto', -22, -43.99);
+    markers.push(ceo, cto);
+    rebuildCable({ uid: 'fx-a', folderId: 'projFX', name: 'CAB-A', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -22.01, lng: -44 }, { lat: -22, lng: -44 }], endAnchorUid: 'fx-ceo' });
+    rebuildCable({ uid: 'fx-b', folderId: 'projFX', name: 'CAB-B', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -22, lng: -44 }, { lat: -22, lng: -43.99 }], startAnchorUid: 'fx-ceo', endAnchorUid: 'fx-cto' });
+    const a = buildFusionCableCard({ name: 'CAB-A', uid: 'fx-a', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const b = buildFusionCableCard({ name: 'CAB-B', uid: 'fx-b', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+    const sp1 = buildFusionSplitterCard({ id: 'splitter-fx', label: '1:8', outputs: 8, type: 'Fusão' });
+    const h = document.createElement('div'); h.append(a, b, sp1);
+    const f = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+    const links = [[f(b, 2), f(a, 2)], [f(a, 1), f(b, 1)], ['splitter-fx-input-port', f(a, 3)]];
+    ceo.fusionPlan = JSON.stringify({ version: 2, elements: h.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') });
+    const boxes = buildProjectFusionExport(getActiveProjectScope());
+    const c = boxes.find(x => x.name === 'CEO-FX');
+    const doc = hasPdf ? drawFusionExportPdf('Projeto FX', boxes) : null;
+    const out = {
+      order: boxes.map(x => x.name).join(), ctoEmpty: boxes.find(x => x.name === 'CTO-FX').empty,
+      fusions: c.fusions.map(x => `${x.a.text}>${x.b.text}`).join(' | '), color: c.fusions[0].a.colorName,
+      cables: c.cables.map(x => `${x.name}:${x.role}:${x.used}`).join(), pages: doc ? doc.internal.getNumberOfPages() : 3,
+      size: doc ? doc.output('arraybuffer').byteLength : 9999,
+    };
+    window.__fxPdf = doc ? doc.output('datauristring') : '';
+    savedCables.filter(x => x.folderId === 'projFX').forEach(x => { x.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(x), 1); });
+    [ceo, cto].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projFX"]').closest('.folder').remove();
+    activeFolderId = prev;
+    return out;
+  }, hasPdf);
+  check(fx.order === 'CEO-FX,CTO-FX' && fx.ctoEmpty && fx.fusions === 'CAB-A F1>CAB-B F1 | CAB-A F2>CAB-B F2 | CAB-A F3>Splitter 1:8 · entrada'
+    && fx.color === 'Verde' && fx.cables === 'CAB-A:Entrada:3,CAB-B:Saída:2' && fx.pages === 3 && fx.size > 3000,
+    `exportar plano de fusão do projeto em PDF (${JSON.stringify(fx)})`);
+  if (process.env.SMOKE_SHOTS && hasPdf) {
+    const uri = await sp.evaluate(() => window.__fxPdf);
+    fs.writeFileSync(path.join(process.env.SMOKE_SHOTS, 'plano-de-fusao.pdf'), Buffer.from(uri.split(',')[1], 'base64'));
+  }
   await spCtx.close();
 }
 
