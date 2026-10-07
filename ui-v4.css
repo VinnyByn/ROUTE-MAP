@@ -1996,3 +1996,6 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 .marker-panel__chips .map-tool-chip:has(input:checked) .chip-switch { background: var(--accent, #22c55e); }
 .marker-panel__chips .map-tool-chip:has(input:checked) .chip-switch::after { transform: translateX(14px); }
 .marker-panel__chips .map-tool-chip:has(input:focus-visible) { outline: 2px solid var(--accent, #22c55e); outline-offset: 2px; }
+/* Amostras sempre circulares, mesmo dentro de grids/form genéricos */
+.color-swatches { display: flex !important; grid-template-columns: none !important; }
+.color-swatches .color-swatch { flex: none !important; width: 26px !important; height: 26px !important; min-width: 0 !important; min-height: 0 !important; border-radius: 50% !important; padding: 0 !important; }
