@@ -1206,6 +1206,58 @@ const lightBlocks = await page.evaluate(() => {
 });
 check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${lightBlocks.length ? ': ' + lightBlocks.slice(0, 5).join(', ') : ''}`);
 
+{
+  const spCtx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
+  const sp = await spCtx.newPage();
+  await sp.addInitScript(() => { try { localStorage.setItem('routeMapTourDone', '1'); } catch (e) {} });
+  await sp.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+  await sp.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+  await sp.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
+  await sp.goto(baseUrl + '/index.html');
+  await sp.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
+  await sp.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
+  await sp.evaluate(() => { if (!map) map = new google.maps.Map(document.getElementById('map'), {}); });
+//Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
+const split = await sp.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projSP', name: 'Projeto SP', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+  const mk = (type, name, uid, lat, lng, fusionPlan) => ({ type, name, uid, folderId: 'projSP', fusionPlan,
+    marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+  const card = buildFusionCableCard({ name: 'FO-12-CTO-B', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+  const holder = document.createElement('div'); holder.append(card);
+  const ceoA = mk('CEO', 'CEO-A', 'sp-a', -20, -44, JSON.stringify({ version: 2, elements: holder.innerHTML, svg: '' }));
+  const ctoB = mk('CTO', 'CTO-B', 'sp-b', -20, -43.99, JSON.stringify({ version: 2, elements: holder.innerHTML, svg: '' }));
+  const mid = mk('CEO', 'CEO-M', 'sp-m', -20.00005, -43.995);
+  const off = mk('CTO', 'CTO-LONGE', 'sp-x', -20.01, -43.995);
+  markers.push(ceoA, ctoB, mid, off);
+  rebuildCable({ folderId: 'projSP', name: 'FO-12-CTO-B', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -20, lng: -44 }, { lat: -20, lng: -43.99 }],
+    startAnchorUid: 'sp-a', endAnchorUid: 'sp-b', startAnchorMarkerName: 'CEO-A', endAnchorMarkerName: 'CTO-B' });
+  const cable = savedCables[savedCables.length - 1];
+  const passing = getCablesPassingThroughMarker(mid).map(c => c.name).join();
+  const notPassing = getCablesPassingThroughMarker(off).length + getCablesPassingThroughMarker(ceoA).length;
+  const menu = buildSidebarMenuItems({ kind: 'marker', info: mid, row: document.createElement('li') }).some(i => i.label === 'Dividir cabo FO-12-CTO-B aqui');
+  const res = splitCableAtMarker(cable, mid);
+  const names = savedCables.filter(c => c.folderId === 'projSP').map(c => c.name).join();
+  const first = res.first, second = res.second;
+  const out = {
+    passing, notPassing, menu, names,
+    firstEnds: `${first.startAnchorUid}>${first.endAnchorUid}`, secondEnds: `${second.startAnchorUid}>${second.endAnchorUid}`,
+    meet: Math.abs(first.path[first.path.length - 1].lng() - second.path[0].lng()) < 1e-9,
+    planA: readFusionPlan(ceoA).cables.map(c => c.name).join(), planB: readFusionPlan(ctoB).cables.map(c => c.name).join(),
+    oldGone: !savedCables.includes(cable), rows: document.getElementById('projSP').querySelectorAll('.ge-pro-item').length,
+  };
+  [first, second].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+  [ceoA, ctoB, mid, off].forEach(m => markers.splice(markers.indexOf(m), 1));
+  document.querySelector('.folder-title[data-folder-id="projSP"]').closest('.folder').remove();
+  return out;
+});
+check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu && split.names === 'FO-12-CEO-M,FO-12-CTO-B'
+  && split.firstEnds === 'sp-a>sp-m' && split.secondEnds === 'sp-m>sp-b' && split.meet && split.planA === 'FO-12-CEO-M'
+  && split.planB === 'FO-12-CTO-B' && split.oldGone && split.rows === 2, `dividir cabo no marcador do meio (${JSON.stringify(split)})`);
+  await spCtx.close();
+}
+
 //Edição simultânea ao vivo: duas abas no mesmo projeto (Realtime simulado entre abas) e uma terceira que entra depois
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
