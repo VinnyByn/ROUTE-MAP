@@ -1365,6 +1365,37 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const big = await sp.evaluate(() => window.__fxBig);
     fs.writeFileSync(path.join(process.env.SMOKE_SHOTS, 'plano-de-fusao-grande.pdf'), Buffer.from(big.split(',')[1], 'base64'));
   }
+
+  //Rota da fibra sobe até o POP, mesmo sem fusões no plano do POP; reserva técnica no meio também divide o cabo
+  const toPop = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projRP', name: 'Projeto RP', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projRP', marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+    const pop = mk('POP', 'POP-RP', 'rp-pop', -23, -44), ceo = mk('CEO', 'CEO-RP', 'rp-ceo', -23, -43.99), cto = mk('CTO', 'CTO-RP', 'rp-cto', -23, -43.98);
+    const res = mk('RESERVA', 'RT-RP', 'rp-rt', -23, -43.985);
+    markers.push(pop, ceo, cto, res);
+    rebuildCable({ uid: 'rp-feed', folderId: 'projRP', name: 'FEED', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -23, lng: -44 }, { lat: -23, lng: -43.99 }], startAnchorUid: 'rp-pop', endAnchorUid: 'rp-ceo' });
+    rebuildCable({ uid: 'rp-drop', folderId: 'projRP', name: 'DIST', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -23, lng: -43.99 }, { lat: -23, lng: -43.98 }], startAnchorUid: 'rp-ceo', endAnchorUid: 'rp-cto' });
+    const feed = buildFusionCableCard({ name: 'FEED', uid: 'rp-feed', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const dist = buildFusionCableCard({ name: 'DIST', uid: 'rp-drop', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+    const h = document.createElement('div'); h.append(feed, dist);
+    const f = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+    ceo.fusionPlan = JSON.stringify({ version: 2, elements: h.innerHTML, svg: `<path class="fusion-line" data-start-id="${f(feed, 1)}" data-end-id="${f(dist, 1)}"></path>` });
+    const distCable = savedCables.find(c => c.uid === 'rp-drop');
+    const trace = traceFiberRoute(buildFiberGraph(), distCable, 1);
+    const out = { pops: trace.pops.map(p => p.box.name).join(), ends: describeRouteEnds(trace), segs: trace.segments.map(x => x.cable).sort().join() };
+    out.reservaPassing = getCablesPassingThroughMarker(res).map(c => c.name).join();
+    const reserveBefore = distCable.reserva;
+    const parts = splitCableAtMarker(distCable, res);
+    out.reserva = `${reserveBefore}>${parts.first.reserva}+${parts.second.reserva}`;
+    savedCables.filter(c => c.folderId === 'projRP').forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    [pop, ceo, cto, res].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projRP"]').closest('.folder').remove();
+    return out;
+  });
+  check(toPop.pops === 'POP-RP' && toPop.ends.includes('POP-RP') && toPop.segs === 'DIST,FEED', `rota da fibra chega até o POP (${JSON.stringify(toPop)})`);
+  check(toPop.reservaPassing === 'DIST' && toPop.reserva === '30>50+5', `dividir cabo na reserva técnica, reserva contada uma vez (${JSON.stringify(toPop)})`);
   await spCtx.close();
 }
 

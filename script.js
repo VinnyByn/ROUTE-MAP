@@ -2509,6 +2509,9 @@ function getReserveForCableEndpoint(cable, isStart) {
     const point = isStart ? cable.path[0] : cable.path[cable.path.length - 1];
     const markerInfo = resolveCableEndAnchor(cable, isStart)
         || getAnchorMarkerAtPoint(point, 1, getAnchorMarkerCandidatesForFolder(cable.folderId));
+    //Cabo dividido numa reserva técnica: a sobra é uma só, contada no trecho que chega nela (ponta B)
+    if (isStart && markerInfo?.type === 'RESERVA' && markerInfo.uid
+        && savedCables.some(c => c !== cable && c.endAnchorUid === markerInfo.uid)) return 0;
     return getReserveForMarker(markerInfo);
 }
 

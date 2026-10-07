@@ -1,10 +1,10 @@
-// Dividir cabo num marcador: quando uma caixa (CEO, CTO ou POP) fica no meio de um cabo, o cabo vira dois.
+// Dividir cabo num marcador: quando uma caixa (CEO, CTO, POP) ou uma reserva técnica fica no meio de um cabo, o cabo vira dois.
 // Trecho A: ponta A original → marcador (nome novo "tipo-marcador"); trecho B: marcador → ponta B original
 // (fica com o nome antigo). Os planos de fusão das caixas do trecho A passam a usar o nome novo.
 // Depende de script.js, js/persistence.js (serializeCable/rebuildCable) e js/fusion-plan.js.
 
 const CABLE_SPLIT_MAX_DISTANCE_M = 25; //Distância máxima do marcador até a linha do cabo
-const CABLE_SPLIT_TYPES = ['CEO', 'CTO', 'POP'];
+const CABLE_SPLIT_TYPES = ['CEO', 'CTO', 'POP', 'RESERVA'];
 
 //Distância em metros (aproximação plana, suficiente para poucos metros)
 function splitMetersXY(lat0) {
