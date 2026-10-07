@@ -911,8 +911,12 @@ const undoRes = await page.evaluate(async () => {
   appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); refreshBomAfterProjectChange(); await wait(450);
   appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); refreshBomAfterProjectChange(); await wait(450);
   const before = folders();
+  const isOpen = (id) => !document.getElementById(id).classList.contains('hidden');
+  if (!isOpen('projU')) toggleFolder('projU');
+  if (!isOpen('pU1')) toggleFolder('pU1');
   const key = (k, extra = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, ...extra }));
   key('z'); const undo1 = folders();
+  const keptOpen = isOpen('projU') && isOpen('pU1');
   key('z'); const undo2 = folders();
   key('y'); const redo1 = folders();
   const stillProject = !!document.querySelector('.folder-title[data-folder-id="projU"]');
@@ -920,10 +924,10 @@ const undoRes = await page.evaluate(async () => {
   key('y'); const afterNewChange = folders(); //refazer some depois de uma alteração nova
   document.querySelector('.folder-title[data-folder-id="projU"]').closest('.folder').remove();
   activeFolderId = prev;
-  return { before, undo1, undo2, redo1, stillProject, afterNewChange };
+  return { before, undo1, undo2, redo1, stillProject, afterNewChange, keptOpen };
 });
 check(undoRes.before === 'Pasta 1,Pasta 2' && undoRes.undo1 === 'Pasta 1' && undoRes.undo2 === '' && undoRes.redo1 === 'Pasta 1'
-  && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X', `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
+  && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X' && undoRes.keptOpen, `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
 
 //Seleção múltipla: retângulo seleciona os marcadores do projeto; muda situação, move de pasta e exclui
 const sel = await page.evaluate(() => {

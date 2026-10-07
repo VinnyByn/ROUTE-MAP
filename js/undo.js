@@ -64,6 +64,10 @@ function restoreProjectSnapshot(projectId, json) {
     const next = root.nextSibling;
     const revision = getProjectRevision(root);
     const wasActive = activeFolderId && getAllDescendantFolderIds(projectId).includes(activeFolderId) ? activeFolderId : null;
+    //Pastas abertas/fechadas e rolagem da barra lateral continuam como estavam
+    const openState = new Map(getAllDescendantFolderIds(projectId).map(id => [id, !document.getElementById(id)?.classList.contains('hidden')]));
+    const scroller = document.getElementById('sidebar');
+    const scrollTop = scroller?.scrollTop || 0;
     undoRestoring = true;
     try {
         clearTimeout(undoSnapshotTimer);
@@ -73,9 +77,14 @@ function restoreProjectSnapshot(projectId, json) {
         const rebuilt = document.getElementById(projectId)?.closest('.folder');
         if (rebuilt && parent) parent.insertBefore(rebuilt, next && next.parentElement === parent ? next : null);
         setProjectRevision(rebuilt, revision);
+        openState.forEach((open, id) => {
+            const ul = document.getElementById(id);
+            if (ul && ul.classList.contains('hidden') === open) toggleFolder(id);
+        });
         if (wasActive && document.getElementById(wasActive)) setActiveFolder(wasActive);
         else setActiveFolder(projectId);
         refreshBomAfterProjectChange();
+        if (scroller) scroller.scrollTop = scrollTop;
     } finally {
         undoRestoring = false;
     }
