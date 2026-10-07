@@ -1396,6 +1396,31 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(toPop.pops === 'POP-RP' && toPop.ends.includes('POP-RP') && toPop.segs === 'DIST,FEED', `rota da fibra chega até o POP (${JSON.stringify(toPop)})`);
   check(toPop.reservaPassing === 'DIST' && toPop.reserva === '30>50+5', `dividir cabo na reserva técnica, reserva contada uma vez (${JSON.stringify(toPop)})`);
+
+  //Editor de cabo aberto: clicar em outro cabo troca o editor (com alterações, pergunta antes)
+  const swap = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projSW', name: 'Projeto SW', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projSW');
+    const mkc = (uid, name, lat) => { rebuildCable({ uid, folderId: 'projSW', name, type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat, lng: -44 }, { lat, lng: -43.99 }] }); return savedCables[savedCables.length - 1]; };
+    const a = mkc('sw-a', 'SW-A', -24), b = mkc('sw-b', 'SW-B', -24.01);
+    openCableEditor(a);
+    const first = document.getElementById('cableName').value;
+    openCableEditor(b);
+    const switched = document.getElementById('cableName').value;
+    document.getElementById('cableName').value = 'SW-B mexido';
+    openCableEditor(a);
+    const asked = getComputedStyle(document.getElementById('confirmModal')).display !== 'none';
+    const stillB = savedCables[editingCableIndex] === b;
+    document.getElementById('confirmModalConfirmButton').click();
+    const afterConfirm = document.getElementById('cableName').value;
+    cancelCableDrawingSession();
+    [a, b].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    document.querySelector('.folder-title[data-folder-id="projSW"]').closest('.folder').remove();
+    return { first, switched, asked, stillB, afterConfirm };
+  });
+  check(swap.first === 'SW-A' && swap.switched === 'SW-B' && swap.asked && swap.stillB && swap.afterConfirm === 'SW-A',
+    `editor do cabo acompanha o cabo clicado (${JSON.stringify(swap)})`);
   await spCtx.close();
 }
 
