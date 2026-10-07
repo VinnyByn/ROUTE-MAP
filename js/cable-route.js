@@ -121,7 +121,21 @@ function traceRouteFromNodes(graph, start, first) {
         const cable = findClientCable(m);
         return segments.has(`${cable ? cableKeyOf(cable) : `nome:${m.client.cableName}`}#${Number(m.client.cableFiber)}`);
     });
-    return { segments: Array.from(segments.values()), steps, olts, ctos: Array.from(ctos.values()), b2b };
+    //POP alcançado: pelo plano do POP ou por um cabo do caminho com a ponta no POP (mesmo sem fusões lá)
+    const pops = new Map();
+    visited.forEach(k => {
+        const i = graph.info.get(k);
+        if (i?.box?.type === 'POP') pops.set(i.box, { box: i.box, olts: [] });
+    });
+    segments.forEach(seg => {
+        const cable = savedCables.find(c => c.uid === seg.cableKey) || savedCables.find(c => c.name === seg.cable);
+        [cable?.startAnchorUid, cable?.endAnchorUid].forEach(uid => {
+            const m = uid && markers.find(x => x.uid === uid);
+            if (m?.type === 'POP' && !pops.has(m)) pops.set(m, { box: m, olts: [] });
+        });
+    });
+    olts.forEach(o => { if (pops.has(o.box)) pops.get(o.box).olts.push(o.splitter.olt); });
+    return { segments: Array.from(segments.values()), steps, olts, ctos: Array.from(ctos.values()), b2b, pops: Array.from(pops.values()) };
 }
 
 function getCableFiberTotal(cable) {
@@ -181,10 +195,16 @@ function describeRoutePort(p) {
     return `splitter ${escapeHtml(p.splitter.label)} porta ${p.port}`;
 }
 
+function describeRoutePop(p) {
+    const olt = p.olts.map(o => formatSplitterOltSummary(o.olt, o.placa, o.pon, { compact: true })).join(', ');
+    return `${escapeHtml(p.box.name)}${olt ? ` (${escapeHtml(olt)})` : ''}`;
+}
+
 function describeRouteEnds(trace) {
+    const pop = (trace.pops || []).map(p => `↑ ${describeRoutePop(p)}`);
     const parts = trace.ctos.map(c => `${escapeHtml(c.box.name)} · ${c.clients} cliente${c.clients === 1 ? '' : 's'}`);
     trace.b2b.forEach(m => parts.push(`${escapeHtml(m.name)} (B2B)`));
-    return parts.join(' · ');
+    return [...pop, ...parts].join(' · ');
 }
 
 function renderCableRouteBox() {
@@ -227,6 +247,8 @@ function renderCableRouteBox() {
     const trace = traceFiberRoute(graph, cable, fiber);
     drawCableRouteHighlight([{ number: fiber, trace }]);
     const items = [];
+    //Começo da rota: o POP (com a OLT, quando ligada no plano do POP ou no splitter)
+    (trace.pops || []).filter(p => !trace.olts.some(o => o.box === p.box)).forEach(p => items.push(`<li><i style="--fiber:#64748b"></i><span><b>POP ${escapeHtml(p.box.name)}</b> · cabo chega no POP${p.box.fusionPlan ? '' : ' (sem plano de fusão)'}</span></li>`));
     trace.olts.forEach(o => items.push(`<li><i style="--fiber:#64748b"></i><span><b>${escapeHtml(formatSplitterOltSummary(o.splitter.olt.olt, o.splitter.olt.placa, o.splitter.olt.pon))}</b> · em ${escapeHtml(o.box.name)}</span></li>`));
     trace.segments.forEach(seg => {
         const c = savedCables.find(x => x.uid === seg.cableKey) || savedCables.find(x => x.name === seg.cable);

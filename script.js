@@ -2509,6 +2509,9 @@ function getReserveForCableEndpoint(cable, isStart) {
     const point = isStart ? cable.path[0] : cable.path[cable.path.length - 1];
     const markerInfo = resolveCableEndAnchor(cable, isStart)
         || getAnchorMarkerAtPoint(point, 1, getAnchorMarkerCandidatesForFolder(cable.folderId));
+    //Cabo dividido numa reserva técnica: a sobra é uma só, contada no trecho que chega nela (ponta B)
+    if (isStart && markerInfo?.type === 'RESERVA' && markerInfo.uid
+        && savedCables.some(c => c !== cable && c.endAnchorUid === markerInfo.uid)) return 0;
     return getReserveForMarker(markerInfo);
 }
 
@@ -3021,6 +3024,19 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
     showToast('Cabo salvo', `"${name}" · ${newCableInfo.totalLength} m`);
 });
 
+//O cabo aberto no editor foi mexido (traçado ou dados) desde que abriu?
+function isEditingCableDirty() {
+    const cabo = editingCableIndex !== null ? savedCables[editingCableIndex] : null;
+    if (!cabo) return false;
+    const path = cableMarkers.map(m => m.getPosition());
+    const samePath = path.length === cabo.path.length && path.every((p, i) => p.equals(cabo.path[i]));
+    const value = (id) => document.getElementById(id)?.value;
+    const typeMatches = !getFiberType(cabo.type) || getFiberType(cabo.type) === value('cableType');
+    return !samePath || value('cableName') !== cabo.name || !typeMatches
+        || String(value('cableWidth')) !== String(cabo.width || getDefaultCableWidthForStatus(cabo.status))
+        || value('cableStatusSelect') !== (cabo.status || 'Novo');
+}
+
 function openCableEditor(cabo) {
     const index = savedCables.indexOf(cabo);
     if (index === -1) {
@@ -3036,7 +3052,19 @@ function openCableEditor(cabo) {
     //Não troca de cabo no meio de um desenho: isso fazia o cabo em edição sumir
     if (isDrawingCable) {
         if (editingCableIndex === index) return;
-        showToast('Cabo em edição', 'Salve ou cancele o cabo atual antes de abrir outro.', 'progress');
+        //Editando outro cabo (clique na barra lateral ou no mapa): troca para o novo.
+        //Sem alterações, troca direto; com alterações, pergunta antes de descartar.
+        if (editingCableIndex !== null) {
+            const switchTo = () => { cancelCableDrawingSession(); openCableEditor(cabo); };
+            if (!isEditingCableDirty()) {
+                switchTo();
+            } else {
+                const current = savedCables[editingCableIndex];
+                showConfirm('Trocar de cabo', `O cabo "${current?.name || ''}" tem alterações não salvas. Descartar e abrir "${cabo.name}"?`, switchTo);
+            }
+            return;
+        }
+        showToast('Cabo em desenho', 'Salve ou cancele o cabo novo antes de abrir outro.', 'progress');
         return;
     }
     if (isAddingMarker || isSketchToolActive()) return;

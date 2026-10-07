@@ -31,7 +31,7 @@
     LatLng, MVCArray, LatLngBounds, Marker, Polyline: Poly, Polygon: Poly, Rectangle: generic(), Circle: generic(), InfoWindow: generic(), Map: generic(),
     Size: function (w, h) { this.width = w; this.height = h; }, Point: function (x, y) { this.x = x; this.y = y; },
     SymbolPath: { CIRCLE: 0, FORWARD_CLOSED_ARROW: 1 }, Animation: { DROP: 1, BOUNCE: 2 }, ControlPosition: { TOP_LEFT: 1 },
-    event: { addListener: () => ({ remove() {} }), addListenerOnce: () => ({ remove() {} }), removeListener() {}, clearInstanceListeners() {}, trigger() {} },
+    event: { addListener: () => ({ remove() {} }), addListenerOnce: () => ({ remove() {} }), removeListener() {}, clearInstanceListeners() {}, clearListeners() {}, trigger() {} },
     geometry: { spherical: {
       computeDistanceBetween: (a, b) => dist(toLL(a), toLL(b)),
       computeLength: (path) => { const a = path.getArray ? path.getArray() : path; let s = 0; for (let i = 1; i < a.length; i++) s += dist(toLL(a[i - 1]), toLL(a[i])); return s; },
