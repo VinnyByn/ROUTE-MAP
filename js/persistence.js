@@ -384,6 +384,7 @@ function serializeCable(cableInfo) {
         totalLength: cableInfo.totalLength,
         path: cableInfo.path.map(latLng => ({ lat: latLng.lat(), lng: latLng.lng() })),
         surchargePercent: cableInfo.surchargePercent || 0,
+        conduit: cableInfo.conduit || [],
         startAnchorUid: cableInfo.startAnchorUid || null,
         endAnchorUid: cableInfo.endAnchorUid || null,
         startAnchorMarkerName: cableInfo.startAnchorMarkerName || null,

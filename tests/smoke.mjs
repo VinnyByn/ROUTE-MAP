@@ -784,6 +784,55 @@ check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows ==
 check(Math.abs(optical.sigPort + 17.55) < 0.001 && Math.abs(optical.sigIn + 6.55) < 0.001 && optical.sigNone === false && optical.hoverSig,
   `cartão da caixa mostra o sinal estimado (porta ${optical.sigPort?.toFixed(2)}, entrada ${optical.sigIn?.toFixed(2)})`);
 
+//Trecho tubulado: o que vai em duto sai da conta de postes (plaqueta, BAP, SUPA, alça); o cabo continua inteiro
+const conduit = await page.evaluate(() => {
+  const realGoogle = window.google;
+  class LatLng { constructor(a, b) { this._a = a; this._b = b; } lat() { return this._a; } lng() { return this._b; } equals(o) { return !!o && o.lat() === this._a && o.lng() === this._b; } toJSON() { return { lat: this._a, lng: this._b }; } }
+  const R = 6378137, rad = d => d * Math.PI / 180;
+  const dist = (p, q) => { const dLat = rad(q.lat() - p.lat()), dLng = rad(q.lng() - p.lng()); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p.lat())) * Math.cos(rad(q.lat())) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  const lines = [];
+  window.google = { maps: { LatLng, Polyline: function (o) { this.o = o; lines.push(this); this.setMap = (m) => { this.o.map = m; }; }, geometry: { spherical: {
+    computeDistanceBetween: dist,
+    computeLength: path => { const pts = Array.isArray(path) ? path : path.getArray(); let t = 0; for (let i = 1; i < pts.length; i++) t += dist(pts[i - 1], pts[i]); return t; },
+  } } } };
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><span class="folder-title" data-folder-id="projT">P</span><ul id="projT"></ul></li>');
+  const previousFolder = activeFolderId;
+  activeFolderId = 'projT';
+  const cable = { folderId: 'projT', name: 'CABO-T', type: 'Cabo AS 80 FO-12', status: 'Novo', path: [new LatLng(-20, -44), new LatLng(-20.009, -44)] };
+  savedCables.push(cable);
+  const qty = name => Object.values(bomState).find(i => i.materialName === name)?.quantity || 0;
+  const measure = calculateCableMeasurement(cable);
+  const exact = google.maps.geometry.spherical.computeLength(cable.path);
+  cable.lancamento = measure.lancamento; cable.reserva = measure.reserva; cable.totalLength = measure.total;
+  const per = Number(lancamentoConfig.bapPerPole) || 0;
+  const span = getPoleSpanDistance();
+  calculateBomState();
+  const before = { bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR') };
+  //Metade do cabo em duto
+  setCableConduitRanges(cable, [{ from: 0, to: 500 }]);
+  const half = { meters: Math.round(getCableConduitMeters(cable)), bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), stored: cable.conduit.length, report: getProjectConduitMeters('projT') > 0 };
+  //Dois trechos que se tocam viram um só; fora do cabo é cortado
+  setCableConduitRanges(cable, [{ from: 0, to: 300 }, { from: 250, to: 600 }, { from: -20, to: 5 }]);
+  const merged = getCableConduitRanges(cable).map(r => `${Math.round(r.from)}-${Math.round(r.to)}`).join();
+  //Dividir: cada pedaço leva só a parte dele
+  setCableConduitRanges(cable, [{ from: 100, to: 700 }]);
+  const parts = splitCableConduit(cable, 400);
+  const all = (setCableConduitRanges(cable, [{ from: 0, to: 5000 }]), { flag: cable.conduit[0]?.all === true, bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR') });
+  setCableConduitRanges(cable, []);
+  const back = qty('ABRAÇADEIRA BAP 3');
+  savedCables.splice(savedCables.indexOf(cable), 1);
+  activeFolderId = previousFolder; bomState = {};
+  document.querySelector('[data-folder-id="projT"]').closest('li').remove();
+  window.google = realGoogle;
+  return { per, span, exact, drawn: measure.lancamento, before, half, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back,
+    expectHalf: Math.ceil(before.cabo * (1 - 500 / exact) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
+});
+check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.half.meters === 500 && conduit.half.bap === conduit.expectHalf && conduit.half.bap < conduit.before.bap
+  && conduit.half.cabo === conduit.before.cabo && conduit.half.report,
+  `trecho tubulado tira as ferragens de poste e mantém o cabo (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
+check(conduit.merged === '0-600' && conduit.parts === '1|1' && conduit.all.flag && conduit.all.bap === 0 && conduit.all.cabo === conduit.before.cabo && conduit.back === conduit.before.bap,
+  `trechos se juntam, cabo todo tubulado zera as ferragens e limpar volta ao normal (${conduit.merged} | ${conduit.parts} | ${JSON.stringify(conduit.all)} | ${conduit.back})`);
+
 //Redundância e impacto: CEO com OLT alimenta duas CTOs por cabos diferentes. Cortar um cabo derruba só a CTO dele;
 //cortar a CEO derruba as duas. Na topologia, o anel não tem ponte e o cabo isolado é ponte (sem rota alternativa).
 const impact = await page.evaluate(async () => {

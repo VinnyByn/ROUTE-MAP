@@ -2854,7 +2854,9 @@ function updateCableDrawReadout() {
     setText('cableTotalDistance', `${cableDistance.total || 0} m`);
     setText('cableDrawnDistance', `${cableDistance.lancamento || 0} m`);
     setText('cableReserveDistance', `${cableDistance.reserva || 0} m`);
-    setText('cablePoleEstimate', String(cableDistance.lancamento ? Math.ceil(cableDistance.lancamento / getPoleSpanDistance()) + 1 : 0));
+    const editedCable = editingCableIndex !== null ? savedCables[editingCableIndex] : null;
+    const aerialDistance = Math.max(0, (cableDistance.lancamento || 0) - (editedCable && typeof getCableConduitMeters === 'function' ? getCableConduitMeters(editedCable) : 0));
+    setText('cablePoleEstimate', String(aerialDistance ? Math.ceil(aerialDistance / getPoleSpanDistance()) + 1 : 0));
     setText('cableVertexCount', `${cableMarkers.length} ponto${cableMarkers.length === 1 ? '' : 's'}`);
     setText('cableEndAName', startAnchor ? startAnchor.name : 'Clique em uma caixa');
     setText('cableEndBName', endAnchor ? endAnchor.name : (cableMarkers.length > 1 ? 'Clique na caixa de destino' : '—'));
@@ -3897,8 +3899,10 @@ function updateCableSidebarLabel(cable) {
     const kind = (cable.isImported || cable.type === 'Cabo Importado')
         ? 'Importado'
         : String(cable.type || '').replace(/^Cabo\s+/i, '');
-    setSidebarItemLabel(cable.item, cable.name, [kind, statusLabel, length].filter(Boolean).join(' · '));
+    const tubed = typeof getCableConduitMeters === 'function' && cable.conduit?.length ? Math.round(getCableConduitMeters(cable)) : 0;
+    setSidebarItemLabel(cable.item, cable.name, [kind, statusLabel, length, tubed ? `${tubed.toLocaleString('pt-BR')} m tubulados` : ''].filter(Boolean).join(' · '));
     applyCableSidebarColorStyles(cable);
+    if (typeof syncCableConduitOverlays === 'function') syncCableConduitOverlays(cable);
 }
 
 function setCableInfrastructureStatus(cable, status) {
