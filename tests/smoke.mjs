@@ -167,7 +167,7 @@ const bom = await page.evaluate(() => {
   return { count: items.length, typedPrice: typed?.unitPrice, typedCategory: typed?.category,
     ferragem: round(totals.ferragemTotal), fusao: round(totals.fusaoTotal), datacenter: round(totals.datacenterTotal), total: round(totals.grandTotal) };
 });
-check(bom.count === 23 && bom.ferragem === 719.94 && bom.fusao === 403.29 && bom.datacenter === 23050.5 && bom.total === 24173.73,
+check(bom.count === 22 && bom.ferragem === 719.94 && bom.fusao === 396.79 && bom.datacenter === 23050.5 && bom.total === 24167.23,
   `lista de materiais do projeto de exemplo (${bom.count} itens, total R$ ${bom.total})`);
 check(bom.typedPrice === 45.5 && bom.typedCategory === 'Data Center', 'equipamento digitado do cliente B2B entra com o valor informado, em Data Center');
 
@@ -1087,6 +1087,19 @@ const popPlan = await page.evaluate(async () => {
   const route = traceFiberRoute(graph, 'T-POP-CTO', 1);
   const port = getOpticalBudgetByCto([cto]).get(cto)?.worstPort;
   const plan = readFusionPlan(pop);
+  //Splitter da CTO ligado na PON pelo caminho: OLT/placa/PON automáticos
+  autoLinkSplitterOlts([cto]);
+  const autoOlt = readFusionPlan(cto).splitters.map(sp => `${sp.olt.olt}/${sp.olt.placa}/${sp.olt.pon}`).join();
+  //Seleção de várias fusões e exclusão de uma vez
+  const lA = createFusionLine(stage.querySelector('.fx-equipment--dgo .equip-port-row[data-side="back"][data-port="2"]'), [...out.querySelectorAll('.fiber-row')][1]);
+  renderFusionConnections();
+  const before = getFusionLines().length;
+  toggleFusionLineSelection(lA); toggleFusionLineSelection(getFusionLines()[0]);
+  const selected = getSelectedFusionLines().length;
+  const barShown = !document.getElementById('fusionSelectionBar').classList.contains('hidden');
+  deleteSelectedFusionLines();
+  document.getElementById('confirmModalConfirmButton').click();
+  const afterDelete = getFusionLines().length;
   reset(); activeMarkerForFusion = prevActive;
   [pop, cto, client].forEach(m => markers.splice(markers.indexOf(m), 1)); savedCables.splice(savedCables.indexOf(cable), 1);
   return {
@@ -1096,12 +1109,29 @@ const popPlan = await page.evaluate(async () => {
     ctos: route.ctos.map(c => c.box.name).join(),
     port: port == null ? null : Math.round(port * 100) / 100,
     equip: `${equipFromCards.olts.length}/${equipFromCards.dgos.length}/${equipFromCards.switches.length}`,
+    autoOlt, multi: `${before}>${selected}>${barShown}>${afterDelete}`,
   };
 });
 check(popPlan.added === 3 && popPlan.kinds === 'olt:16,dgo:48,switch:10' && popPlan.desc === 'OLT-01 · S1 PON 1' && popPlan.equip === '1/1/1',
   `plano do POP: OLT, DGO e switch viram cartões (${JSON.stringify(popPlan)})`);
 check(popPlan.oltFound === 'OLT-01/1/1' && popPlan.ctos === 'T-CTO' && popPlan.port === -7.65 && /1 CTO · 1 cli/.test(popPlan.ponDest),
   `plano do POP: rota acha a OLT pelo caminho, potência −7,65 dBm e a PON mostra o alcance (${popPlan.ponDest})`);
+check(popPlan.autoOlt === 'OLT-01/1/1', `splitter ligado na PON pelo caminho recebe OLT, placa e PON automáticos (${popPlan.autoOlt})`);
+check(popPlan.multi === '3>2>true>1', `plano de fusão: selecionar várias fusões e excluir de uma vez (${popPlan.multi})`);
+
+//Lista de materiais do cliente: PTO só se marcada; equipamento só se escolhido
+const cliBom = await page.evaluate(() => {
+  const items = [];
+  const add = (name) => items.push(name);
+  const mk = (extra) => ({ type: 'CLIENTE', name: 'C', client: { status: 'ativo', ...extra } });
+  addClientMaterialsToBom([mk({ equipments: [{ type: 'ONU/ONT' }] })], add);
+  const plain = items.splice(0).join('|');
+  addClientMaterialsToBom([mk({ pto: true, equipments: [{ type: 'ONU/ONT', model: 'F670L' }] })], add);
+  const withPto = items.splice(0).join('|');
+  return { plain, withPto };
+});
+check(!/PTO|TERMINAÇÃO/.test(cliBom.plain) && !/ONU|F670/.test(cliBom.plain) && /PTO/.test(cliBom.withPto) && /F670|ONU/.test(cliBom.withPto),
+  `cliente: PTO e equipamentos só entram na lista de materiais quando escolhidos (${JSON.stringify(cliBom)})`);
 
 if (process.env.SMOKE_SHOTS) {
   await page.evaluate(() => {
