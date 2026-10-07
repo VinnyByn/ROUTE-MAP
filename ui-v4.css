@@ -1808,24 +1808,19 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 .mh-card__head div strong { overflow-wrap: anywhere; }
 .mh-card section .mh-card__note { margin: 0 0 3px; }
 
-/* Caixa "Pontos do mapa" junto do seletor Mapa/Satélite do Google */
-.map-poi-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px 0 0 0;
-  height: 40px;
-  padding: 0 12px;
-  background: #fff;
-  color: #333;
-  border-radius: 0 2px 2px 0;
-  box-shadow: rgba(0, 0, 0, 0.3) 0 1px 4px -1px;
-  font: 400 15px Roboto, Arial, sans-serif;
-  cursor: pointer;
-  user-select: none;
-}
-.map-poi-control[hidden] { display: none; }
-.map-poi-control input { margin: 0; width: 15px; height: 15px; cursor: pointer; }
+/* Seletor Mapa/Satélite com opções em menu (Pontos do mapa, Terreno, Rótulos) */
+.map-type-control { display: flex; margin: 10px; font: 400 15px Roboto, Arial, sans-serif; box-shadow: rgba(0,0,0,.3) 0 1px 4px -1px; border-radius: 2px; }
+.mtc-item { position: relative; }
+.mtc-btn { height: 40px; padding: 0 17px; border: 0; background: #fff; color: #565656; font: inherit; cursor: pointer; }
+.mtc-item:first-child .mtc-btn { border-radius: 2px 0 0 2px; }
+.mtc-item:last-child .mtc-btn { border-radius: 0 2px 2px 0; }
+.mtc-item.is-active .mtc-btn { color: #000; font-weight: 500; }
+.mtc-btn:hover { background: #ebebeb; }
+.mtc-menu { display: none; position: absolute; top: 100%; left: 0; min-width: 100%; background: #fff; box-shadow: rgba(0,0,0,.3) 0 1px 4px -1px; border-radius: 0 0 2px 2px; padding: 4px 0; z-index: 2; }
+.mtc-item:hover .mtc-menu, .mtc-item:focus-within .mtc-menu { display: block; }
+.mtc-menu label { display: flex; align-items: center; gap: 8px; padding: 7px 12px; white-space: nowrap; color: #333; font-size: 14px; cursor: pointer; }
+.mtc-menu label:hover { background: #ebebeb; }
+.mtc-menu input { margin: 0; width: 15px; height: 15px; cursor: pointer; }
 
 /* Rota do cabo pelas fusões */
 .cable-route-box { width: 330px; }
