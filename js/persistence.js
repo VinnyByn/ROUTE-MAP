@@ -525,8 +525,8 @@ function rebuildMarker(data) {
     //Define o comportamento do clique no marcador, com o modo desenho
     marker.addListener("click", (e) => {
         //Shift + clique: entra ou sai da seleção múltipla (js/map-selection.js)
-        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelection === 'function') {
-            toggleMapSelection(markerInfo);
+        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelectionFromMap === 'function') {
+            toggleMapSelectionFromMap(markerInfo);
             return;
         }
         if (handleSketchMarkerClick(markerInfo)) return;

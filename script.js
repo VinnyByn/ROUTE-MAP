@@ -3514,8 +3514,8 @@ function addCustomMarker(location, importedData = null) {
     //Evento de clique no marcador
     marker.addListener("click", (e) => {
         //Shift + clique: entra ou sai da seleção múltipla (js/map-selection.js)
-        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelection === 'function') {
-            toggleMapSelection(markerInfo);
+        if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelectionFromMap === 'function') {
+            toggleMapSelectionFromMap(markerInfo);
             return;
         }
         if (handleSketchMarkerClick(markerInfo)) return;

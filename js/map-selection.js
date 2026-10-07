@@ -37,7 +37,7 @@ function findSelectableByRow(row) {
 function selectionOutlineFor(item, kind) {
     if (kind === 'marker') return item.marker?.getPosition ? selectionRingFor(item) : null;
     if (kind === 'cable' && item.polyline?.getPath && google.maps.Polyline) {
-        return new google.maps.Polyline({ map, path: item.polyline.getPath(), clickable: false, zIndex: 0, strokeColor: '#2563eb', strokeOpacity: 0.45, strokeWeight: 11 });
+        return new google.maps.Polyline({ map, path: item.polyline.getPath(), clickable: false, zIndex: 0, strokeColor: '#2563eb', strokeOpacity: 0.5, strokeWeight: (item.polyline.get?.('strokeWeight') || item.width || 4) + 8 });
     }
     if (kind === 'polygon' && item.polygonObject?.getPaths && google.maps.Polygon) {
         return new google.maps.Polygon({ map, paths: item.polygonObject.getPaths(), clickable: false, zIndex: 0, strokeColor: '#2563eb', strokeOpacity: 0.9, strokeWeight: 4, fillOpacity: 0 });
@@ -90,6 +90,14 @@ function setupSidebarMultiSelect() {
             mapSelection.sidebarAnchor = info;
         }
     }, true);
+}
+
+//Shift+clique no mapa: o mesmo item pode chegar pelo clique dele e pelo clique no mapa; conta uma vez só
+function toggleMapSelectionFromMap(item) {
+    const now = Date.now();
+    if (mapSelection.lastToggle?.item === item && now - mapSelection.lastToggle.at < 400) return;
+    mapSelection.lastToggle = { item, at: now };
+    toggleMapSelection(item);
 }
 
 function toggleMapSelection(markerInfo) {
@@ -240,12 +248,39 @@ function deleteSelection() {
 // Retângulo (Shift + arrastar)
 // ---------------------------------------------------------------
 
+//Item mais perto do ponto (cabo até 10 px da linha, marcador até 16 px), no projeto ativo e visível
+function findNearestMapItem(latLng) {
+    const mpp = typeof getMetersPerPixelAt === 'function' ? getMetersPerPixelAt(latLng) : 1;
+    let best = null;
+    const consider = (item, distPx, limit) => { if (distPx <= limit && (!best || distPx < best.d)) best = { item, d: distPx }; };
+    getSelectionScopeMarkers().forEach(m => {
+        if (m.marker?.getVisible?.() === false || !m.marker?.getPosition) return;
+        const p = m.marker.getPosition();
+        consider(m, projectOnCablePath([p, p], latLng).dist / mpp, 16);
+    });
+    if (best) return best.item; //Marcador tem prioridade sobre o cabo que chega nele
+    getSelectionScopeMarkers(savedCables).forEach(c => {
+        if (c.polyline?.getVisible?.() === false || !c.path || c.path.length < 2) return;
+        const path = c.polyline?.getPath?.().getArray?.() || c.path;
+        const q = projectOnCablePath(path, latLng);
+        if (q) consider(c, q.dist / mpp, 10);
+    });
+    return best?.item || null;
+}
+
+function toggleNearestMapItem(latLng) {
+    if (typeof projectOnCablePath !== 'function') return;
+    const item = findNearestMapItem(latLng);
+    if (item) toggleMapSelectionFromMap(item);
+}
+
 function setupMapSelectionDrag() {
     if (typeof map === 'undefined' || !map) return;
     let rect = null;
     map.addListener('mousedown', (e) => {
         if (!e.domEvent?.shiftKey || isMapSelectionBusy()) return;
         mapSelection.drag = { start: e.latLng, add: e.domEvent.ctrlKey || e.domEvent.metaKey };
+        mapSelection.dragStart = e.latLng;
         map.setOptions({ draggable: false, gestureHandling: 'none' });
         rect = new google.maps.Rectangle({ map, clickable: false, strokeColor: '#2563eb', strokeWeight: 1.5, fillColor: '#2563eb', fillOpacity: 0.08,
             bounds: new google.maps.LatLngBounds(e.latLng, e.latLng) });
@@ -265,7 +300,10 @@ function setupMapSelectionDrag() {
         map.setOptions({ draggable: true, gestureHandling: 'auto' });
         const add = mapSelection.drag.add;
         mapSelection.drag = null;
+        const start = mapSelection.dragStart;
+        mapSelection.dragStart = null;
         if (bounds && !bounds.getNorthEast().equals(bounds.getSouthWest())) selectMarkersInBounds(bounds, { add });
+        else if (start) toggleNearestMapItem(start); //Shift+clique sem arrastar: o mapa travado pode engolir o clique no cabo
     };
     map.addListener('mouseup', finish);
     document.addEventListener('mouseup', finish);
