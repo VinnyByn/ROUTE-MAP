@@ -959,6 +959,31 @@ const sel = await page.evaluate(() => {
 check(sel.picked === 'S-CTO,S-RT' && sel.barShown && sel.count === '2 selecionados' && sel.status === 'Troca/Nova'
   && sel.moved === 'pS1,pS1|2' && sel.left === 'S-LONGE' && sel.cleared, `seleção múltipla: retângulo, situação, mover e excluir (${JSON.stringify(sel)})`);
 
+//Seleção múltipla pela barra lateral: Ctrl+clique e Shift+clique (intervalo)
+const sbSel = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  const ul = document.createElement('ul'); sidebar.appendChild(ul);
+  const list = ['B1', 'B2', 'B3', 'B4'].map(name => {
+    const li = document.createElement('li'); li.className = 'ge-pro-item'; li.textContent = name; ul.appendChild(li);
+    const m = { type: 'CTO', name, listItem: li, marker: { getPosition: () => ({ lat: () => 0, lng: () => 0 }) } };
+    markers.push(m); return m;
+  });
+  const click = (m, opts) => m.listItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...opts }));
+  const names = () => [...mapSelection.items].map(m => m.name).sort().join();
+  click(list[0], { ctrlKey: true }); click(list[2], { ctrlKey: true });
+  const ctrl = names();
+  click(list[2], { ctrlKey: true });
+  const toggled = names();
+  click(list[3], { shiftKey: true });
+  const range = names();
+  const highlighted = ul.querySelectorAll('.is-multi-selected').length;
+  clearMapSelection();
+  list.forEach(m => markers.splice(markers.indexOf(m), 1)); ul.remove();
+  return { ctrl, toggled, range, highlighted };
+});
+check(sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
+  `seleção múltipla pela barra lateral com Ctrl e Shift (${JSON.stringify(sbSel)})`);
+
 //Tour pelo sistema e tecla "?" para os atalhos
 const tour = await page.evaluate(() => {
   startTour();
