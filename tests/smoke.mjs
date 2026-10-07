@@ -1421,6 +1421,30 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(swap.first === 'SW-A' && swap.switched === 'SW-B' && swap.asked && swap.stillB && swap.afterConfirm === 'SW-A',
     `editor do cabo acompanha o cabo clicado (${JSON.stringify(swap)})`);
+
+  //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
+  const midEdit = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projME', name: 'Projeto ME', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projME');
+    map.setZoom(18);
+    rebuildCable({ uid: 'me-a', folderId: 'projME', name: 'ME-A', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -25, lng: -44 }, { lat: -25, lng: -43.99 }] });
+    const cab = savedCables[savedCables.length - 1];
+    openCableEditor(cab);
+    const handles1 = cableMidHandles.length, hit = !!cableHitPolyline;
+    const near = new google.maps.LatLng(-25.00004, -43.995); //~4 m do traçado
+    const far = new google.maps.LatLng(-25.0005, -43.995); //~55 m do traçado
+    const farOk = insertCableVertexFromClick(far);
+    const nearOk = insertCableVertexFromClick(near);
+    const out = { handles1, hit, farOk, nearOk, points: cableMarkers.length, handles2: cableMidHandles.length };
+    cancelCableDrawingSession();
+    out.cleared = !cableHitPolyline && cableMidHandles.length === 0;
+    cab.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(cab), 1);
+    document.querySelector('.folder-title[data-folder-id="projME"]').closest('.folder').remove();
+    return out;
+  });
+  check(midEdit.handles1 === 1 && midEdit.hit && !midEdit.farOk && midEdit.nearOk && midEdit.points === 3 && midEdit.handles2 === 2 && midEdit.cleared,
+    `edição do cabo: pontos-fantasma e clique no meio do cabo (${JSON.stringify(midEdit)})`);
   await spCtx.close();
 }
 
