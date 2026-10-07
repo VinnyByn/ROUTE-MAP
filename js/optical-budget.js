@@ -143,3 +143,74 @@ function getOpticalBudgetByCto(scopeMarkers) {
 function formatDbm(v) {
     return v == null ? '—' : `${v.toFixed(1).replace('.', ',')} dBm`;
 }
+
+//Potência em cada elemento (fibra, porta de splitter, porta de equipamento) de uma caixa: Map(id do elemento → dBm)
+function getBoxOpticalPower(box, computed = null) {
+    const { power } = computed || computeOpticalPower();
+    const prefix = `${ensureMarkerUid(box)}|`;
+    const result = new Map();
+    power.forEach((dbm, node) => {
+        if (node.startsWith(prefix) && !node.startsWith(`${prefix}pass|`)) result.set(node.slice(prefix.length), dbm);
+    });
+    return result;
+}
+
+//Resumo do sinal da caixa para o cartão do mapa: entrada de cada splitter e portas de atendimento
+function getBoxSignalSummary(box) {
+    const plan = readFusionPlan(box);
+    if (!plan || plan.empty) return null;
+    const cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_CONFIG;
+    const byId = getBoxOpticalPower(box);
+    if (!byId.size) return { reached: false };
+    const splitters = plan.splitters.map(sp => {
+        const ins = sp.inputIds.map(id => byId.get(id)).filter(v => v != null);
+        return { label: sp.label || 'Splitter', atendimento: sp.atendimento, input: ins.length ? Math.max(...ins) : null };
+    });
+    const ports = [];
+    plan.splitters.filter(sp => sp.atendimento).forEach(sp => sp.outputIds.forEach(id => {
+        if (byId.has(id)) ports.push(byId.get(id) - cfg.lossConnector); //Adaptador da porta da CTO
+    }));
+    const fibers = plan.cables.flatMap(c => c.fibers).map(f => byId.get(f.id)).filter(v => v != null);
+    return {
+        reached: true,
+        splitters,
+        worstPort: ports.length ? Math.min(...ports) : null,
+        bestPort: ports.length ? Math.max(...ports) : null,
+        fibers: fibers.length,
+        bestFiber: fibers.length ? Math.max(...fibers) : null,
+    };
+}
+
+//Plano de fusão aberto: mostra a potência ao lado de cada porta com sinal (vale o que está na tela)
+function decorateFusionSignal() {
+    const box = activeMarkerForFusion;
+    const stage = getFusionStage?.();
+    if (!box || !stage) return;
+    stage.querySelectorAll('.fx-port__signal').forEach(n => n.remove());
+    const saved = box.fusionPlan;
+    let byId;
+    try {
+        box.fusionPlan = serializeFusionPlan();
+        byId = getBoxOpticalPower(box);
+    } catch (e) {
+        console.error('Plano de fusão: não foi possível calcular o sinal', e);
+        return;
+    } finally {
+        box.fusionPlan = saved;
+    }
+    const cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_CONFIG;
+    byId.forEach((dbm, id) => {
+        const row = document.getElementById(id);
+        if (!row || !stage.contains(row)) return;
+        const isFiber = row.classList.contains('fiber-row');
+        if (isFiber && !row.classList.contains('is-connected')) return; //Fibra solta: não polui a lista
+        const atendimento = row.closest('.splitter-atendimento') && row.closest('.splitter-outputs');
+        const value = atendimento ? dbm - cfg.lossConnector : dbm;
+        const badge = document.createElement('span');
+        badge.className = `fx-port__signal is-${classifyOpticalPower(value, cfg)}`;
+        badge.textContent = formatDbm(value).replace(' dBm', '');
+        badge.title = `Sinal estimado: ${formatDbm(value)}${atendimento ? ' na porta de atendimento' : ''}`;
+        const dot = row.querySelector('.fx-port__dot');
+        row.insertBefore(badge, dot || null);
+    });
+}

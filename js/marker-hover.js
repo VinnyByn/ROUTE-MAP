@@ -46,7 +46,27 @@ function buildMarkerHoverHtml(markerInfo) {
         const occupied = Math.min(s.ports, clients);
         body += `<section><h5>Vagas de atendimento</h5>${row('Livres', s.ports - occupied, 'is-free')}${row('Ocupadas', occupied, 'is-busy')}${row('Total', s.ports, 'is-total')}</section>`;
     }
+    body += buildSignalHoverSection(markerInfo, row);
     return head + `<div class="mh-card__body">${body}</div>`;
+}
+
+//Sinal estimado (orçamento óptico): portas de atendimento na CTO, entrada dos splitters e fibras na CEO
+function buildSignalHoverSection(markerInfo, row) {
+    if (typeof getBoxSignalSummary !== 'function') return '';
+    let sig;
+    try { sig = getBoxSignalSummary(markerInfo); } catch (e) { return ''; }
+    if (!sig) return '';
+    if (!sig.reached) return `<section><h5>Sinal</h5><p class="mh-card__note">Sem sinal: a caixa não está ligada a uma PON pelas fusões</p></section>`;
+    const val = (dbm) => `<span class="mh-signal is-${classifyOpticalPower(dbm)}">${formatDbm(dbm)}</span>`;
+    let html = '';
+    if (sig.worstPort != null) {
+        html += sig.worstPort === sig.bestPort
+            ? row('Nas portas', val(sig.worstPort))
+            : row('Pior porta', val(sig.worstPort)) + row('Melhor porta', val(sig.bestPort));
+    }
+    sig.splitters.filter(sp => sp.input != null).forEach(sp => { html += row(`Entrada ${escapeHtml(sp.label)}`, val(sp.input)); });
+    if (!html && sig.bestFiber != null) html += row(`Fibras com sinal (${sig.fibers})`, val(sig.bestFiber));
+    return html ? `<section><h5>Sinal estimado</h5>${html}</section>` : '';
 }
 
 function positionMarkerHoverCard(x, y) {

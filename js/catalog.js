@@ -319,6 +319,21 @@ Object.keys(MATERIAL_RENAMES).forEach(oldName => {
     if (!(newName in MATERIAL_PRICES_BASE)) MATERIAL_PRICES_BASE[newName] = MATERIAL_PRICES_BASE[oldName];
     delete MATERIAL_PRICES_BASE[oldName];
 });
+//Splitter da lista de materiais: usa o item da planilha que bate com o tipo do plano de fusão
+//(atendimento → conectorizado com o conector certo; fusão → splitter de fusão). Se a planilha não
+//tiver o item exato, cai no nome antigo (que é trocado pelo substituto).
+function resolveSplitterMaterialName(ratio, atendimento, connector = 'APC') {
+    const fallback = atendimento ? `Splitter 1/${ratio} ${connector}` : `Splitter 1/${ratio}`;
+    const names = Object.keys(MATERIAL_PRICES_BASE);
+    const norm = n => normalizeMaterialName(n);
+    const ratioRe = new RegExp(`(^| )1 ${ratio}( |$)`);
+    const candidates = names.filter(n => /^SPLITTER /.test(norm(n)) && ratioRe.test(norm(n)));
+    const pick = atendimento
+        ? candidates.find(n => /CONECTORIZADO|ATENDIMENTO/.test(norm(n)) && new RegExp(`(^| )(SC )?${connector}( |$)`).test(norm(n)))
+            || candidates.find(n => /CONECTORIZADO|ATENDIMENTO/.test(norm(n)) && !/ (APC|UPC)( |$)/.test(norm(n)))
+        : candidates.find(n => /FUSAO/.test(norm(n)));
+    return pick || fallback;
+}
 const materialPriceKey = (key) => (typeof key === 'string' ? resolveMaterialName(key) : key);
 const MATERIAL_PRICES = new Proxy(MATERIAL_PRICES_BASE, {
     get: (target, key) => target[materialPriceKey(key)],

@@ -565,6 +565,10 @@ function renderFusionConnections() {
         clearTimeout(renderFusionConnections.ponTimer);
         renderFusionConnections.ponTimer = setTimeout(decoratePonReach, 250);
     }
+    if (typeof decorateFusionSignal === 'function') {
+        clearTimeout(renderFusionConnections.signalTimer);
+        renderFusionConnections.signalTimer = setTimeout(decorateFusionSignal, 300);
+    }
 }
 
 //Número de porta da CTO e cliente ligado em cada saída dos splitters de atendimento
@@ -1459,6 +1463,7 @@ function serializeFusionPlan() {
         clone.style.transform = '';
         clone.classList.remove('is-dragging', 'fx-flash');
         clone.querySelectorAll('.fusion-dynamic').forEach(n => { n.textContent = ''; n.removeAttribute('title'); });
+        clone.querySelectorAll('.fx-port__signal').forEach(n => n.remove());
         clone.querySelectorAll('.connection-source, .fx-target, .fx-busy, .port-highlighted, .is-connected, .has-client, .port-selected').forEach(n => {
             n.classList.remove('connection-source', 'fx-target', 'fx-busy', 'port-highlighted', 'is-connected', 'has-client', 'port-selected');
         });

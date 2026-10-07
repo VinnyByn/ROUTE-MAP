@@ -768,12 +768,31 @@ const optical = await page.evaluate(() => {
   const margin = classifyOpticalPower(port, { ...cfg, onuSensitivity: -19 });
   const scope = { markers: [ceo, cto, cto2], cables: [cable] };
   const budget = getProjectOpticalBudget(scope);
+  const sig = getBoxSignalSummary(cto);
+  const sigNone = getBoxSignalSummary(cto2);
+  const hover = buildMarkerHoverHtml(cto);
   markers.splice(markers.indexOf(ceo), 3); savedCables.splice(savedCables.indexOf(cable), 1);
-  return { port, status: byCto.get(cto)?.status, noSource: byCto.has(cto2), strict, margin, rows: budget.rows.map(r => `${r.cto.name}:${r.dbm == null ? 'sem' : r.dbm.toFixed(2)}`).join() };
+  return { sigPort: sig?.worstPort, sigIn: sig?.splitters[0]?.input, sigNone: sigNone?.reached, hoverSig: /Sinal estimado/.test(hover) && /mh-signal is-ok/.test(hover),
+    port, status: byCto.get(cto)?.status, noSource: byCto.has(cto2), strict, margin, rows: budget.rows.map(r => `${r.cto.name}:${r.dbm == null ? 'sem' : r.dbm.toFixed(2)}`).join() };
 });
 check(Math.abs(optical.port + 17.55) < 0.001 && optical.status === 'ok' && !optical.noSource,
   `orçamento óptico soma as perdas do caminho (porta da CTO: ${optical.port?.toFixed(2)} dBm)`);
 check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows === 'O-CTO2:sem,O-CTO:-17.55', `orçamento óptico classifica erro/margem e aponta CTO sem OLT (${optical.rows})`);
+
+//Sinal na caixa: cartão do mapa mostra a pior porta e a entrada do splitter (−17,05 antes do conector da porta)
+check(Math.abs(optical.sigPort + 17.55) < 0.001 && Math.abs(optical.sigIn + 6.55) < 0.001 && optical.sigNone === false && optical.hoverSig,
+  `cartão da caixa mostra o sinal estimado (porta ${optical.sigPort?.toFixed(2)}, entrada ${optical.sigIn?.toFixed(2)})`);
+
+//Splitter na lista de materiais: segue o tipo do plano (atendimento → conectorizado da planilha, se existir)
+const splitterNames = await page.evaluate(() => {
+  const before = resolveSplitterMaterialName(4, true, 'APC');
+  MATERIAL_PRICES['SPLITTER CONECTORIZADO 1/4 SC/APC'] = { price: 40, unit: 'un', category: 'Fusão' };
+  const after = resolveSplitterMaterialName(4, true, 'APC');
+  delete MATERIAL_PRICES['SPLITTER CONECTORIZADO 1/4 SC/APC'];
+  return [before, after, resolveSplitterMaterialName(4, false), resolveSplitterMaterialName(8, true, 'UPC'), resolveSplitterMaterialName(16, false)].join(' | ');
+});
+check(splitterNames === 'Splitter 1/4 APC | SPLITTER CONECTORIZADO 1/4 SC/APC | SPLITTER FUSÃO 1/4 | SPLITTER CONECTORIZADO 1/8 SC/UPC | Splitter 1/16',
+  `splitter de atendimento usa o conectorizado da planilha (${splitterNames})`);
 
 //Exportar planilha: abas e linhas do projeto ativo
 const sheets = await page.evaluate(() => {
