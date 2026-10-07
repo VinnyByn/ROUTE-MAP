@@ -164,6 +164,7 @@ function buildSidebarMenuItems(entity) {
         const expanded = ul && !ul.classList.contains('hidden');
         if (canEdit) items.push({ action: 'edit', label: isProject ? 'Editar projeto' : 'Renomear pasta', hint: isProject ? 'Nome, cidade, bairro e tipo' : '' });
         if (canEdit) items.push({ action: 'new-folder', label: isProject ? 'Nova pasta' : 'Nova subpasta' });
+        if (canEdit) items.push({ action: 'copy', label: isProject ? 'Copiar projeto' : 'Copiar pasta', hint: 'Com subpastas, marcadores, cabos e polígonos', kbd: 'Ctrl+C' });
         if (canEdit && sidebarClipboard) items.push({ action: 'paste', label: 'Colar aqui', kbd: 'Ctrl+V' });
         if (canEdit) items.push({ action: 'style', label: 'Padronizar estilo', hint: 'Cores e tamanho dos marcadores, espessura dos cabos' });
         items.push({ divider: true });
@@ -200,7 +201,7 @@ function buildSidebarMenuItems(entity) {
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);
-        if (canEdit && ((entity.kind === 'marker' && !isClient) || entity.kind === 'cable')) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
+        if (canEdit) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
         if (canEdit) {
             items.push({ divider: true });
             items.push({ action: 'delete', label: `Excluir ${noun}`, danger: true });
@@ -419,11 +420,20 @@ function handleSidebarMenuAction(action) {
         populateFusionPlan(info);
         document.getElementById('fusionModal').style.display = 'flex';
         break;
-    case 'copy':
-        if (kind === 'cable') selectSidebarCable(info);
-        else selectSidebarMarker(info);
-        if (copySidebarSelection()) showToast('Copiado', `"${info.name}" copiado. Escolha uma pasta e use Ctrl+V ou "Colar aqui".`);
+    case 'copy': {
+        //Item que faz parte da seleção múltipla: copia a seleção inteira
+        const inMulti = typeof mapSelection !== 'undefined' && mapSelection.items.size > 1 && mapSelection.items.has(info);
+        if (kind === 'project' || kind === 'folder') selectedSidebarCopyTarget = { type: 'folder', folderId: entity.folderId };
+        else if (inMulti) selectedSidebarCopyTarget = null;
+        else {
+            if (typeof clearMapSelection === 'function' && mapSelection.items.size) clearMapSelection();
+            if (kind === 'cable') selectSidebarCable(info);
+            else if (kind === 'polygon') selectedSidebarCopyTarget = { type: 'polygon', polygonInfo: info };
+            else selectSidebarMarker(info);
+        }
+        if (copySidebarSelection()) showToast('Copiado', `${describeClipboard()} copiado. Escolha uma pasta e use Ctrl+V ou "Colar aqui".`);
         break;
+    }
     default:
         break;
     }

@@ -57,19 +57,33 @@ function wireMarkerSidebarSelection(markerInfo) {
     });
 }
 
+//Pasta (ou projeto) com subpastas, marcadores, cabos e polígonos
 function serializeFolderForClipboard(folderId) {
     const ul = document.getElementById(folderId);
     if (!ul) return null;
     const titleDiv = ul.previousElementSibling;
     if (!titleDiv) return null;
-    const descendantIds = getAllDescendantFolderIds(folderId);
+    const ids = new Set(getAllDescendantFolderIds(folderId));
     return {
         type: 'folder',
         sourceFolderId: folderId,
         name: titleDiv.dataset.folderName,
-        structure: getSidebarStructureAsJSON(ul),
-        markers: markers.filter((m) => descendantIds.includes(m.folderId)).map(serializeMarker)
+        structure: getSidebarStructureAsJSON(ul).map(n => ({ ...n, isProject: false, type: 'folder' })),
+        markers: markers.filter((m) => ids.has(m.folderId)).map(serializeMarker),
+        cables: savedCables.filter((c) => ids.has(c.folderId)).map(serializeCable),
+        polygons: savedPolygons.filter((p) => ids.has(p.folderId)).map(serializePolygon),
     };
+}
+
+//Vários itens soltos (seleção múltipla, ou um só)
+function serializeItemsForClipboard(items) {
+    const bundle = { type: 'items', markers: [], cables: [], polygons: [] };
+    items.forEach(item => {
+        if (markers.includes(item)) bundle.markers.push(serializeMarker(item));
+        else if (savedCables.includes(item)) bundle.cables.push(serializeCable(item));
+        else if (savedPolygons.includes(item)) bundle.polygons.push(serializePolygon(item));
+    });
+    return bundle.markers.length + bundle.cables.length + bundle.polygons.length ? bundle : null;
 }
 
 function buildFolderIdMap(sourceFolderId, structure) {
@@ -117,97 +131,115 @@ function appendFolderToParent(parentUl, folderName, folderId) {
 }
 
 function copySidebarSelection() {
-    if (selectedSidebarCopyTarget?.type === 'marker') {
-        sidebarClipboard = {
-            type: 'marker',
-            data: serializeMarker(selectedSidebarCopyTarget.markerInfo)
-        };
-        return true;
-    }
-    if (selectedSidebarCopyTarget?.type === 'cable') {
-        sidebarClipboard = {
-            type: 'cable',
-            data: serializeCable(selectedSidebarCopyTarget.cableInfo)
-        };
-        return true;
-    }
-    if (selectedSidebarCopyTarget?.type === 'folder') {
-        const payload = serializeFolderForClipboard(selectedSidebarCopyTarget.folderId);
-        if (payload) {
-            sidebarClipboard = payload;
-            return true;
-        }
-    }
-    return false;
-}
-
-function pasteMarkerFromClipboard(targetFolderId) {
-    const clip = sidebarClipboard;
-    if (!clip || clip.type !== 'marker' || !clip.data) return false;
-    const parentUl = document.getElementById(targetFolderId);
-    if (!parentUl) return false;
-
-    const data = { ...clip.data };
-    data.folderId = targetFolderId;
-    data.name = `${data.name} (cópia)`;
-    rebuildMarker(data);
+    //Seleção múltipla (Ctrl/Shift + clique ou retângulo no mapa) tem prioridade
+    const multi = typeof mapSelection !== 'undefined' ? [...mapSelection.items] : [];
+    let payload = null;
+    if (multi.length > 1) payload = serializeItemsForClipboard(multi);
+    else if (selectedSidebarCopyTarget?.type === 'marker') payload = serializeItemsForClipboard([selectedSidebarCopyTarget.markerInfo]);
+    else if (selectedSidebarCopyTarget?.type === 'cable') payload = serializeItemsForClipboard([selectedSidebarCopyTarget.cableInfo]);
+    else if (selectedSidebarCopyTarget?.type === 'polygon') payload = serializeItemsForClipboard([selectedSidebarCopyTarget.polygonInfo]);
+    else if (selectedSidebarCopyTarget?.type === 'folder') payload = serializeFolderForClipboard(selectedSidebarCopyTarget.folderId);
+    else if (multi.length === 1) payload = serializeItemsForClipboard(multi);
+    if (!payload) return false;
+    sidebarClipboard = payload;
     return true;
 }
 
-function pasteCableFromClipboard(targetFolderId) {
-    const clip = sidebarClipboard;
-    if (!clip || clip.type !== 'cable' || !clip.data) return false;
-    if (!document.getElementById(targetFolderId)) return false;
-    const data = { ...clip.data, path: clip.data.path.map(p => ({ ...p })) };
-    data.folderId = targetFolderId;
-    data.name = `${data.name} (cópia)`;
-    delete data.order;
-    rebuildCable(data);
-    return true;
+function describeClipboard(clip = sidebarClipboard) {
+    if (!clip) return '';
+    if (clip.type === 'folder') return `pasta "${clip.name}"`;
+    const n = clip.markers.length + clip.cables.length + clip.polygons.length;
+    if (n === 1) return `"${(clip.markers[0] || clip.cables[0] || clip.polygons[0]).name}"`;
+    return `${n} itens`;
 }
 
-function pasteFolderFromClipboard(targetFolderId) {
+function newCopyUid(prefix) {
+    return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+}
+
+//Cola o conteúdo copiado na pasta: ids novos para tudo (pastas, marcadores, cabos, polígonos) e os vínculos
+//entre itens copiados juntos (cabo ↔ caixa, cliente ↔ CTO/cabo, plano de fusão ↔ cabo) passam para as cópias
+function pasteClipboardInto(targetFolderId) {
     const clip = sidebarClipboard;
-    if (!clip || clip.type !== 'folder') return false;
     const parentUl = document.getElementById(targetFolderId);
-    if (!parentUl) return false;
-
-    const idMap = buildFolderIdMap(clip.sourceFolderId, clip.structure);
-    const newRootId = idMap[clip.sourceFolderId];
-    appendFolderToParent(parentUl, `${clip.name} (cópia)`, newRootId);
-
-    if (clip.structure.length > 0) {
-        const remappedStructure = remapSidebarStructureIds(clip.structure, idMap);
-        const rootUl = document.getElementById(newRootId);
-        rebuildSidebarFromJSON(remappedStructure, rootUl);
+    if (!clip || !parentUl) return false;
+    const idMap = new Map();
+    let rootId = null;
+    if (clip.type === 'folder') {
+        const folderMap = buildFolderIdMap(clip.sourceFolderId, clip.structure);
+        Object.entries(folderMap).forEach(([a, b]) => idMap.set(a, b));
+        rootId = folderMap[clip.sourceFolderId];
     }
-
-    clip.markers.forEach((markerData) => {
-        const mappedFolderId = idMap[markerData.folderId];
-        if (!mappedFolderId) return;
-        const newData = { ...markerData };
-        newData.folderId = mappedFolderId;
-        newData.name = `${markerData.name} (cópia)`;
-        rebuildMarker(newData);
+    [...clip.markers, ...clip.cables, ...clip.polygons].forEach(item => {
+        if (!item.uid) return;
+        idMap.set(item.uid, newCopyUid(item.uid.startsWith('mk_') ? 'mk' : (item.uid.startsWith('pg_') ? 'pg' : 'cb')));
     });
+    //Troca todos os ids antigos pelos novos (são aleatórios e únicos, então a troca no texto é segura)
+    let text = JSON.stringify({ structure: clip.structure || [], markers: clip.markers, cables: clip.cables, polygons: clip.polygons });
+    idMap.forEach((to, from) => { text = text.split(from).join(to); });
+    const data = JSON.parse(text);
+    const known = new Set(idMap.values());
+    const intoFolder = (d) => ({ ...d, folderId: known.has(d.folderId) ? d.folderId : targetFolderId });
+    //Itens soltos ganham "(cópia)" no nome; dentro de uma pasta copiada ficam com o nome original
+    const rename = clip.type !== 'folder';
+    const copyName = (name) => (rename ? `${name} (cópia)` : name);
 
-    setActiveFolder(newRootId);
+    if (rootId) {
+        appendFolderToParent(parentUl, `${clip.name} (cópia)`, rootId);
+        if (data.structure.length) rebuildSidebarFromJSON(data.structure, document.getElementById(rootId));
+    }
+    const newMarkers = [];
+    data.markers.forEach(d => {
+        const m = intoFolder({ ...d, name: copyName(d.name) });
+        delete m.order;
+        if (m.type === 'CLIENTE' && m.client) {
+            m.client = { ...m.client };
+            //Cliente copiado sem a CTO: não ocupa a mesma porta do original
+            if (m.client.ctoUid && !known.has(m.client.ctoUid)) { m.client.ctoPort = null; m.client.ctoUid = null; }
+            if (m.client.cableUid && !known.has(m.client.cableUid)) { m.client.cableUid = null; m.client.cableName = null; m.client.cableFiber = null; }
+        }
+        rebuildMarker(m);
+        newMarkers.push(markers[markers.length - 1]);
+    });
+    const renamedCables = [];
+    data.cables.forEach(d => {
+        const c = intoFolder({ ...d, name: copyName(d.name), path: d.path.map(p => ({ ...p })) });
+        delete c.order;
+        ['start', 'end'].forEach(side => {
+            const uid = c[`${side}AnchorUid`];
+            const anchor = uid && known.has(uid) ? newMarkers.find(m => m.uid === uid) : null;
+            if (anchor) {
+                c[`${side}AnchorMarkerName`] = anchor.name;
+                c[`${side}AnchorMarkerFolderId`] = anchor.folderId;
+            }
+        });
+        rebuildCable(c);
+        const cable = savedCables[savedCables.length - 1];
+        if (rename) renamedCables.push({ cable, oldName: d.name });
+    });
+    data.polygons.forEach(d => {
+        const p = intoFolder({ ...d, name: copyName(d.name) });
+        delete p.order;
+        rebuildPolygon(p);
+    });
+    //Cabo renomeado: planos de fusão e clientes copiados junto passam a mostrar o nome novo
+    renamedCables.forEach(({ cable, oldName }) => {
+        newMarkers.forEach(box => {
+            if (box.fusionPlan && typeof renameCableInBoxPlan === 'function') renameCableInBoxPlan(box, oldName, cable.name, cable, cable.uid);
+            if (box.client?.cableUid === cable.uid) box.client.cableName = cable.name;
+        });
+    });
+    if (rootId) setActiveFolder(rootId);
+    if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+    if (typeof refreshClientDrops === 'function') refreshClientDrops({ recompute: true });
+    if (typeof refreshBomAfterProjectChange === 'function') refreshBomAfterProjectChange();
     return true;
 }
 
 function pasteSidebarClipboard() {
     if (!AppSession.canEdit) return false;
     if (!sidebarClipboard || !activeFolderId) return false;
-    if (sidebarClipboard.type === 'marker') {
-        return pasteMarkerFromClipboard(activeFolderId);
-    }
-    if (sidebarClipboard.type === 'cable') {
-        return pasteCableFromClipboard(activeFolderId);
-    }
-    if (sidebarClipboard.type === 'folder') {
-        return pasteFolderFromClipboard(activeFolderId);
-    }
-    return false;
+    return pasteClipboardInto(activeFolderId);
 }
 
 function wireCableSidebarClick(cableInfo) {
@@ -491,11 +523,7 @@ function setActiveFolder(id) {
         const title = ul.previousElementSibling;
         if (title) {
             title.classList.add("active");
-            if (title.dataset.isProject === 'true') {
-                selectedSidebarCopyTarget = null;
-            } else {
-                selectedSidebarCopyTarget = { type: 'folder', folderId: id };
-            }
+            selectedSidebarCopyTarget = { type: 'folder', folderId: id }; //Projeto ou pasta: Ctrl+C copia tudo dentro
         }
     } else {
         selectedSidebarCopyTarget = null;

@@ -1525,6 +1525,64 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(passRes.ctos === 'CTO-PR' && passRes.segs === 'PR-A,PR-B' && passRes.rtSteps === 0 && passRes.usedA === '3',
     `rota passa direto pela reserva técnica (${JSON.stringify(passRes)})`);
+  //Copiar e colar: pasta inteira (subpasta, marcadores, cabos, polígonos), cliente sozinho e seleção múltipla
+  const copyRes = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projCP', name: 'Projeto CP', isProject: true, type: 'TCR', children: [{ id: 'cpA', name: 'Pasta A', isProject: false, type: 'folder', children: [{ id: 'cpSub', name: 'Sub', isProject: false, type: 'folder', children: [] }] }] }], sidebar);
+    rebuildMarker({ uid: 'mk_cpceo', folderId: 'cpA', type: 'CEO', name: 'CEO-CP', color: '#f00', position: { lat: -27, lng: -44 } });
+    const cardC = buildFusionCableCard({ name: 'CP-1', uid: 'cb_cp1', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const h = document.createElement('div'); h.append(cardC);
+    rebuildMarker({ uid: 'mk_cpcto', folderId: 'cpSub', type: 'CTO', name: 'CTO-CP', color: '#f00', position: { lat: -27, lng: -43.99 }, fusionPlan: JSON.stringify({ version: 2, elements: h.innerHTML, svg: '' }) });
+    rebuildMarker({ uid: 'mk_cpcli', folderId: 'cpSub', type: 'CLIENTE', name: 'CLI-CP', color: '#f00', position: { lat: -27.0005, lng: -43.99 }, client: { kind: 'residencial', status: 'ativo', ctoUid: 'mk_cpcto', ctoPort: 2 } });
+    rebuildCable({ uid: 'cb_cp1', folderId: 'cpA', name: 'CP-1', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -27, lng: -44 }, { lat: -27, lng: -43.99 }], startAnchorUid: 'mk_cpceo', endAnchorUid: 'mk_cpcto' });
+    rebuildPolygon({ uid: 'pg_cp1', folderId: 'cpSub', name: 'Área CP', color: '#0f0', path: [{ lat: -27, lng: -44 }, { lat: -27.01, lng: -44 }, { lat: -27.01, lng: -43.99 }] });
+    const before = { m: markers.length, c: savedCables.length, p: savedPolygons.length };
+    //Pasta → colar no projeto
+    setActiveFolder('cpA');
+    const copiedFolder = copySidebarSelection();
+    setActiveFolder('projCP');
+    const pastedFolder = pasteSidebarClipboard();
+    const newCto = markers.find(m => m.name === 'CTO-CP' && m.uid !== 'mk_cpcto');
+    const newCli = markers.find(m => m.name === 'CLI-CP' && m.uid !== 'mk_cpcli');
+    const newCable = savedCables.find(c => c.name === 'CP-1' && c.uid !== 'cb_cp1');
+    const newPoly = savedPolygons.find(p => p.name === 'Área CP' && p.uid !== 'pg_cp1');
+    const rootTitle = [...document.querySelectorAll('#projCP > .folder-wrapper > .folder-title')].map(t => t.dataset.folderName).join();
+    const folder = {
+      copiedFolder, pastedFolder, rootTitle,
+      added: [markers.length - before.m, savedCables.length - before.c, savedPolygons.length - before.p].join(),
+      ctoInNewSub: !!newCto && newCto.folderId !== 'cpSub' && document.getElementById(newCto.folderId)?.closest('#projCP') != null,
+      cableAnchors: newCable?.startAnchorUid !== 'mk_cpceo' && newCable?.endAnchorUid === newCto?.uid,
+      cliCto: newCli?.client.ctoUid === newCto?.uid && newCli?.client.ctoPort === 2,
+      planUid: readFusionPlan(newCto)?.cables[0]?.uid === newCable?.uid,
+      poly: !!newPoly && newPoly.folderId !== 'cpSub',
+    };
+    //Cliente sozinho: não ocupa a porta do original
+    const cli = markers.find(m => m.uid === 'mk_cpcli');
+    selectSidebarMarker(cli);
+    copySidebarSelection(); setActiveFolder('projCP'); pasteSidebarClipboard();
+    const cliCopy = markers.find(m => m.name === 'CLI-CP (cópia)');
+    const single = { name: !!cliCopy, port: cliCopy?.client.ctoPort ?? null, cto: cliCopy?.client.ctoUid ?? null };
+    //Seleção múltipla: CTO + cabo → nomes com (cópia) e o plano da CTO copiada usa o cabo copiado
+    setMapSelection([markers.find(m => m.uid === 'mk_cpcto'), savedCables.find(c => c.uid === 'cb_cp1')]);
+    copySidebarSelection(); clearMapSelection(); setActiveFolder('projCP'); pasteSidebarClipboard();
+    const mCto = markers.find(m => m.name === 'CTO-CP (cópia)'), mCab = savedCables.find(c => c.name === 'CP-1 (cópia)');
+    const plan = readFusionPlan(mCto)?.cables[0];
+    const multi = { both: !!mCto && !!mCab, plan: plan?.uid === mCab?.uid && plan?.name === 'CP-1 (cópia)', anchor: mCab?.endAnchorUid === mCto?.uid && mCab?.startAnchorUid === 'mk_cpceo' };
+    //Limpeza
+    const ids = new Set(getAllDescendantFolderIds('projCP'));
+    markers.filter(m => ids.has(m.folderId)).forEach(m => { m.marker.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    savedCables.filter(c => ids.has(c.folderId)).forEach(c => { c.polyline.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    savedPolygons.filter(p => ids.has(p.folderId)).forEach(p => { p.polygonObject.setMap(null); savedPolygons.splice(savedPolygons.indexOf(p), 1); });
+    document.querySelector('.folder-title[data-folder-id="projCP"]').closest('.folder').remove();
+    sidebarClipboard = null;
+    return { folder, single, multi };
+  });
+  const cf = copyRes.folder;
+  check(cf.copiedFolder && cf.pastedFolder && cf.rootTitle === 'Pasta A,Pasta A (cópia)' && cf.added === '3,1,1' && cf.ctoInNewSub && cf.cableAnchors && cf.cliCto && cf.planUid && cf.poly,
+    `copiar/colar pasta leva subpastas, marcadores, cabos e polígonos com vínculos novos (${JSON.stringify(cf)})`);
+  check(copyRes.single.name && copyRes.single.port === null && copyRes.single.cto === null && copyRes.multi.both && copyRes.multi.plan && copyRes.multi.anchor,
+    `copiar/colar cliente sozinho e seleção múltipla (${JSON.stringify(copyRes)})`);
+
   await spCtx.close();
 }
 
