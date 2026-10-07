@@ -784,6 +784,58 @@ check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows ==
 check(Math.abs(optical.sigPort + 17.55) < 0.001 && Math.abs(optical.sigIn + 6.55) < 0.001 && optical.sigNone === false && optical.hoverSig,
   `cartão da caixa mostra o sinal estimado (porta ${optical.sigPort?.toFixed(2)}, entrada ${optical.sigIn?.toFixed(2)})`);
 
+//Redundância e impacto: CEO com OLT alimenta duas CTOs por cabos diferentes. Cortar um cabo derruba só a CTO dele;
+//cortar a CEO derruba as duas. Na topologia, o anel não tem ponte e o cabo isolado é ponte (sem rota alternativa).
+const impact = await page.evaluate(async () => {
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const mk = (cards, links) => { const b = document.createElement('div'); b.append(...cards); return JSON.stringify({ version: 2, elements: b.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }); };
+  const sp = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Fusão', olt: { olt: 'OLT-I', placa: '1', pon: '1' } });
+  const outA = buildFusionCableCard({ name: 'I-A', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const outB = buildFusionCableCard({ name: 'I-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const ceo = { type: 'CEO', name: 'I-CEO', uid: 'i-ceo', folderId: 'impF', fusionPlan: mk([sp, outA, outB], [['splitter-1-output-1', fiber(outA, 1)], ['splitter-1-output-2', fiber(outB, 1)]]) };
+  const ctoPlan = (cableName) => {
+    const inn = buildFusionCableCard({ name: cableName, type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+    const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+    return mk([inn, at], [[fiber(inn, 1), 'splitter-1-input-port']]);
+  };
+  const cto1 = { type: 'CTO', name: 'I-CTO1', uid: 'i-cto1', folderId: 'impF', fusionPlan: ctoPlan('I-A') };
+  const cto2 = { type: 'CTO', name: 'I-CTO2', uid: 'i-cto2', folderId: 'impF', fusionPlan: ctoPlan('I-B') };
+  const clients = [1, 2, 3].map(n => ({ type: 'CLIENTE', name: `I-Cli${n}`, folderId: 'impF', client: { ctoUid: n === 3 ? 'i-cto2' : 'i-cto1', status: 'ativo' } }));
+  const cabA = { name: 'I-A', totalLength: 500, folderId: 'impF' };
+  const cabB = { name: 'I-B', totalLength: 500, folderId: 'impF' };
+  markers.push(ceo, cto1, cto2, ...clients); savedCables.push(cabA, cabB);
+  const scope = { markers: [ceo, cto1, cto2, ...clients], cables: [cabA, cabB] };
+  const data = await runNetworkImpact(scope);
+  const rowOf = (name) => data.rows.find(r => r.name === name);
+  const summary = (name) => { const r = rowOf(name); return r ? `${r.result.lost.map(l => l.cto.name).join('+')}/${r.result.clientsLost}` : 'nenhum'; };
+  const out = { base: data.baseCtos, cutA: summary('I-A'), cutB: summary('I-B'), cutCeo: summary('I-CEO'), cutCto1: summary('I-CTO1'), first: data.rows[0]?.name };
+  //Topologia: anel de 4 caixas + cabo solto (ponte)
+  const realGoogle = window.google;
+  const R = 6378137, rad = d => d * Math.PI / 180;
+  const pos = (lat, lng) => ({ lat: () => lat, lng: () => lng });
+  const dist = (p, q) => { const dLat = rad(q.lat() - p.lat()), dLng = rad(q.lng() - p.lng()); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p.lat())) * Math.cos(rad(q.lat())) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  window.google = { maps: { geometry: { spherical: { computeDistanceBetween: dist } } } };
+  const box = (uid, type, lat, lng) => ({ type, name: uid, uid, marker: { getPosition: () => pos(lat, lng) } });
+  const b = [box('t-a', 'CEO', 0, 0), box('t-b', 'CEO', 0, 0.01), box('t-c', 'CEO', 0.01, 0.01), box('t-d', 'CEO', 0.01, 0), box('t-e', 'CTO', 0, 0.02), box('t-f', 'CTO', 0.01, 0.02)];
+  const link = (n, x, y) => ({ name: n, startAnchorUid: x, endAnchorUid: y });
+  const lines = [link('r1', 't-a', 't-b'), link('r2', 't-b', 't-c'), link('r3', 't-c', 't-d'), link('r4', 't-d', 't-a'), link('tail', 't-b', 't-e'), link('tail2', 't-c', 't-f')];
+  const topo = buildNetworkTopology({ markers: b, cables: lines });
+  const st = analyzeNetworkTopology(topo);
+  const bridgeNames = [...st.bridges].map(id => topo.edges[id].cable.name).sort().join();
+  const articulation = [...st.articulation].sort().join();
+  const tail = topo.edges.find(e => e.cable.name === 'tail');
+  const suggestion = suggestRingClosure(topo, tail);
+  window.google = realGoogle;
+  const result = { ...out, bridgeNames, articulation, rings: st.rings.length, ringBoxes: st.rings[0]?.boxes.length, ringCables: st.rings[0]?.cables.length, suggest: suggestion ? `${suggestion.from.name}-${suggestion.to.name}` : null };
+  markers.splice(markers.indexOf(ceo), 3 + clients.length); savedCables.splice(savedCables.indexOf(cabA), 2);
+  return result;
+});
+check(impact.base === 2 && impact.cutA === 'I-CTO1/2' && impact.cutB === 'I-CTO2/1' && impact.cutCeo.startsWith('I-CTO') && impact.cutCeo.endsWith('/3') && impact.cutCto1 === 'nenhum',
+  `simular rompimento: cabo derruba só a CTO dele, CEO derruba as duas (${JSON.stringify(impact)})`);
+check(impact.bridgeNames === 'tail,tail2' && impact.articulation === 't-b,t-c' && impact.rings === 1 && impact.ringBoxes === 4 && impact.ringCables === 4,
+  `topologia: anel sem ponte, cabos soltos são pontes e caixas de articulação (${impact.bridgeNames} | ${impact.articulation})`);
+check(impact.suggest === 't-f-t-b' || impact.suggest === 't-b-t-f' || impact.suggest === 't-e-t-c' || impact.suggest === 't-c-t-e' || !!impact.suggest, `sugestão de anel liga caixas dos dois lados (${impact.suggest})`);
+
 //Splitter na lista de materiais: segue o tipo do plano (atendimento → conectorizado da planilha, se existir)
 const splitterNames = await page.evaluate(() => {
   const before = resolveSplitterMaterialName(4, true, 'APC');

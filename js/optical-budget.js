@@ -15,9 +15,9 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
     const edges = new Map(); //nó → [{ to, loss, kind }]
     const info = new Map();
     const fiberNodes = new Map();
-    const addEdge = (a, b, loss, kind) => {
+    const addEdge = (a, b, loss, kind, cuts = null) => {
         if (!edges.has(a)) edges.set(a, []);
-        edges.get(a).push({ to: b, loss, kind });
+        edges.get(a).push({ to: b, loss, kind, cuts });
     };
     const sources = [];
     markers.forEach(box => {
@@ -74,46 +74,82 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
                 fiberNodes.get(fk).push(k);
                 return k;
             });
-            keys.forEach(a => keys.forEach(b => { if (a !== b) addEdge(a, b, 0, 'reserva'); }));
+            const cuts = cables.map(cableKeyOf);
+            keys.forEach(a => keys.forEach(b => { if (a !== b) addEdge(a, b, 0, 'reserva', cuts); }));
         }
     });
     fiberNodes.forEach((nodes, fk) => {
         const ck = fk.slice(0, fk.lastIndexOf('#'));
         const cable = savedCables.find(c => c.uid === ck) || savedCables.find(c => `nome:${c.name}` === ck);
         const loss = ((Number(cable?.totalLength) || 0) / 1000) * cfg.lossPerKm;
-        nodes.forEach(a => nodes.forEach(b => { if (a !== b) addEdge(a, b, loss, 'cable'); }));
+        nodes.forEach(a => nodes.forEach(b => { if (a !== b) addEdge(a, b, loss, 'cable', [ck]); }));
     });
-    //Maior potência que chega em cada nó (Dijkstra com a perda como custo)
-    const power = new Map();
-    const queue = [];
-    const seed = (node) => {
-        const p = cfg.oltPower - cfg.lossConnector; //Conector da OLT / DIO
-        if (!power.has(node) || power.get(node) < p) { power.set(node, p); queue.push([p, node]); }
-    };
-    const run = () => {
-        while (queue.length) {
-            queue.sort((a, b) => b[0] - a[0]);
-            const [p, node] = queue.shift();
+    //Maior potência que chega em cada nó (Dijkstra com a perda como custo). "cut" simula falhas:
+    //{ cables: Set(chave do cabo), boxes: Set(uid da caixa) } — nada passa por esses cabos e caixas.
+    const propagate = (seedNodes, cut = null) => {
+        const power = new Map();
+        const heap = [];
+        const push = (item) => {
+            heap.push(item);
+            let i = heap.length - 1;
+            while (i > 0) {
+                const parent = (i - 1) >> 1;
+                if (heap[parent][0] >= heap[i][0]) break;
+                [heap[parent], heap[i]] = [heap[i], heap[parent]];
+                i = parent;
+            }
+        };
+        const pop = () => {
+            const top = heap[0];
+            const last = heap.pop();
+            if (heap.length) {
+                heap[0] = last;
+                let i = 0;
+                for (;;) {
+                    const l = 2 * i + 1, r = l + 1;
+                    let m = i;
+                    if (l < heap.length && heap[l][0] > heap[m][0]) m = l;
+                    if (r < heap.length && heap[r][0] > heap[m][0]) m = r;
+                    if (m === i) break;
+                    [heap[m], heap[i]] = [heap[i], heap[m]];
+                    i = m;
+                }
+            }
+            return top;
+        };
+        const cutBox = (node) => !!cut?.boxes?.size && cut.boxes.has(node.slice(0, node.indexOf('|')));
+        const p0 = cfg.oltPower - cfg.lossConnector; //Conector da OLT / DIO
+        seedNodes.forEach(node => {
+            if (cutBox(node)) return;
+            if (!power.has(node) || power.get(node) < p0) { power.set(node, p0); push([p0, node]); }
+        });
+        while (heap.length) {
+            const [p, node] = pop();
             if (p < power.get(node)) continue;
             const here = info.get(node);
             (edges.get(node) || []).forEach(e => {
+                if (cut) {
+                    if (e.cuts && cut.cables?.size && e.cuts.some(k => cut.cables.has(k))) return;
+                    if (cutBox(e.to)) return;
+                }
                 //Não sobe da saída para a entrada do splitter (o sinal não volta)
                 if (here?.kind === 'split-out' && info.get(e.to)?.kind === 'split-in' && info.get(e.to).splitter === here.splitter) return;
                 const np = p - e.loss;
                 if (!power.has(e.to) || np > power.get(e.to) + 1e-9) {
                     power.set(e.to, np);
-                    queue.push([np, e.to]);
+                    push([np, e.to]);
                 }
             });
         }
+        return power;
     };
     //1º: PONs ligadas no plano do POP. O sinal desce pelas fusões, cabos e splitters, perdendo em cada um.
-    sources.filter(s => !s.splitter).forEach(s => seed(s.node));
-    run();
+    const seeds = sources.filter(s => !s.splitter).map(s => s.node);
+    const firstPass = propagate(seeds);
     //2º: splitter com OLT/PON preenchida que não recebe sinal de nenhuma PON (rede sem POP desenhado).
     //Um splitter que já recebe sinal pelo caminho não vira origem (senão começaria de novo com a potência da OLT).
     //Splitter em cascata abaixo de outro que também vira origem não conta como origem.
-    const fallback = sources.filter(s => s.splitter && !power.has(s.node));
+    const fallback = sources.filter(s => s.splitter && !firstPass.has(s.node));
     const downstream = new Set();
     fallback.forEach(src => {
         const seen = new Set([src.node]);
@@ -130,9 +166,11 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
         }
         fallback.forEach(o => { if (o !== src && seen.has(o.node)) downstream.add(o.node); });
     });
-    fallback.filter(s => !downstream.has(s.node)).forEach(s => seed(s.node));
-    run();
-    return { power, info, sources };
+    fallback.filter(s => !downstream.has(s.node)).forEach(s => seeds.push(s.node));
+    const power = fallback.length ? propagate(seeds) : firstPass;
+    //simulate(cut): mesma rede e mesmas origens, sem os cabos/caixas cortados (análise de impacto)
+    const simulate = (cut) => propagate(seeds, cut);
+    return { power, info, sources, simulate };
 }
 
 function classifyOpticalPower(dbm, cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_CONFIG) {
