@@ -1583,6 +1583,28 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(copyRes.single.name && copyRes.single.port === null && copyRes.single.cto === null && copyRes.multi.both && copyRes.multi.plan && copyRes.multi.anchor,
     `copiar/colar cliente sozinho e seleção múltipla (${JSON.stringify(copyRes)})`);
 
+  //Shift+clique no mapa perto de um cabo: marca o cabo (uma vez só, mesmo se o clique do cabo também chegar)
+  const shiftRes = await sp.evaluate(() => {
+    rebuildSidebarFromJSON([{ id: 'projSH', name: 'Projeto SH', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
+    setActiveFolder('projSH');
+    rebuildCable({ uid: 'cb_sh', folderId: 'projSH', name: 'SH-1', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -28, lng: -44 }, { lat: -28, lng: -43.99 }] });
+    const cab = savedCables.find(c => c.uid === 'cb_sh');
+    map.setZoom?.(17);
+    toggleNearestMapItem(new google.maps.LatLng(-28.00001, -43.995)); //~1 m da linha
+    const sel1 = mapSelection.items.has(cab);
+    toggleMapSelectionFromMap(cab); //Clique do próprio cabo logo em seguida: não desmarca
+    const sel2 = mapSelection.items.has(cab);
+    const row = cab.item.classList.contains('is-multi-selected');
+    mapSelection.lastToggle = null;
+    toggleNearestMapItem(new google.maps.LatLng(-28.01, -43.995)); //~1 km: nada
+    const far = mapSelection.items.size;
+    clearMapSelection();
+    cab.polyline.setMap(null); savedCables.splice(savedCables.indexOf(cab), 1);
+    document.querySelector('.folder-title[data-folder-id="projSH"]').closest('.folder').remove();
+    return { sel1, sel2, row, far };
+  });
+  check(shiftRes.sel1 && shiftRes.sel2 && shiftRes.row && shiftRes.far === 1, `Shift+clique no mapa marca o cabo (${JSON.stringify(shiftRes)})`);
+
   await spCtx.close();
 }
 
