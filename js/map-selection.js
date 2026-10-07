@@ -1,5 +1,5 @@
-// Seleção múltipla no mapa: Shift + arrastar desenha um retângulo e seleciona os marcadores do projeto
-// ativo; Shift + clique adiciona ou tira um marcador.
+// Seleção múltipla no mapa: Shift + arrastar desenha um retângulo e seleciona marcadores, cabos e
+// polígonos do projeto ativo; Shift + clique adiciona ou tira um marcador.
 // Na barra lateral: Ctrl + clique e Shift + clique (intervalo). Barra de ações: situação, mover para pasta,
 // ocultar/mostrar, excluir. Depende de script.js e js/sidebar.js.
 
@@ -17,12 +17,43 @@ function selectionRingFor(markerInfo) {
     });
 }
 
+//A seleção guarda marcadores, cabos e polígonos
+function selectionKind(item) {
+    if (markers.includes(item)) return 'marker';
+    if (savedCables.includes(item)) return 'cable';
+    if (savedPolygons.includes(item)) return 'polygon';
+    return null;
+}
+
+function selectionRow(item) {
+    return item.listItem || item.item || null;
+}
+
+function findSelectableByRow(row) {
+    return markers.find(m => m.listItem === row) || savedCables.find(c => c.item === row) || savedPolygons.find(p => p.listItem === row) || null;
+}
+
+//Destaque azul por baixo do cabo/polígono selecionado
+function selectionOutlineFor(item, kind) {
+    if (kind === 'marker') return item.marker?.getPosition ? selectionRingFor(item) : null;
+    if (kind === 'cable' && item.polyline?.getPath && google.maps.Polyline) {
+        return new google.maps.Polyline({ map, path: item.polyline.getPath(), clickable: false, zIndex: 0, strokeColor: '#2563eb', strokeOpacity: 0.45, strokeWeight: 11 });
+    }
+    if (kind === 'polygon' && item.polygonObject?.getPaths && google.maps.Polygon) {
+        return new google.maps.Polygon({ map, paths: item.polygonObject.getPaths(), clickable: false, zIndex: 0, strokeColor: '#2563eb', strokeOpacity: 0.9, strokeWeight: 4, fillOpacity: 0 });
+    }
+    return null;
+}
+
 function setMapSelection(list) {
     mapSelection.rings.forEach(r => r.setMap(null));
     mapSelection.rings.clear();
-    mapSelection.items = new Set(list.filter(m => markers.includes(m)));
+    mapSelection.items = new Set(list.filter(selectionKind));
     if (typeof google !== 'undefined' && google.maps?.Marker) {
-        mapSelection.items.forEach(m => { if (m.marker?.getPosition) mapSelection.rings.set(m, selectionRingFor(m)); });
+        mapSelection.items.forEach(m => {
+            const outline = selectionOutlineFor(m, selectionKind(m));
+            if (outline) mapSelection.rings.set(m, outline);
+        });
     }
     syncSidebarSelection();
     renderMapSelectionBar();
@@ -31,7 +62,7 @@ function setMapSelection(list) {
 //Destaca na barra lateral as linhas dos marcadores selecionados
 function syncSidebarSelection() {
     document.querySelectorAll('.ge-pro-item.is-multi-selected').forEach(li => li.classList.remove('is-multi-selected'));
-    mapSelection.items.forEach(m => m.listItem?.classList.add('is-multi-selected'));
+    mapSelection.items.forEach(m => selectionRow(m)?.classList.add('is-multi-selected'));
 }
 
 //Barra lateral: Ctrl+clique adiciona/tira, Shift+clique seleciona o intervalo desde o último clicado
@@ -42,16 +73,16 @@ function setupSidebarMultiSelect() {
         if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return;
         if (e.target.closest('input, button, .sb-menu-button')) return;
         const li = e.target.closest('.ge-pro-item');
-        const info = li && markers.find(m => m.listItem === li);
+        const info = li && findSelectableByRow(li);
         if (!info) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         const anchor = mapSelection.sidebarAnchor;
-        if (e.shiftKey && anchor?.listItem?.isConnected) {
-            const rows = [...sidebar.querySelectorAll('.ge-pro-item')].filter(r => r.offsetParent !== null || r === li || r === anchor.listItem);
-            const a = rows.indexOf(anchor.listItem), b = rows.indexOf(li);
-            const range = rows.slice(Math.min(a, b), Math.max(a, b) + 1)
-                .map(r => markers.find(m => m.listItem === r)).filter(Boolean);
+        if (e.shiftKey && anchor && selectionRow(anchor)?.isConnected) {
+            const anchorRow = selectionRow(anchor);
+            const rows = [...sidebar.querySelectorAll('.ge-pro-item')].filter(r => r.offsetParent !== null || r === li || r === anchorRow);
+            const a = rows.indexOf(anchorRow), b = rows.indexOf(li);
+            const range = rows.slice(Math.min(a, b), Math.max(a, b) + 1).map(findSelectableByRow).filter(Boolean);
             const base = (e.ctrlKey || e.metaKey) ? [...mapSelection.items] : [];
             setMapSelection([...new Set([...base, ...range])]);
         } else {
@@ -72,15 +103,26 @@ function clearMapSelection() {
     setMapSelection([]);
 }
 
-function getSelectionScopeMarkers() {
+function getSelectionScopeMarkers(list = markers) {
     const projectId = getActiveProjectId();
-    if (!projectId) return markers;
+    if (!projectId) return list;
     const ids = new Set(getAllDescendantFolderIds(projectId));
-    return markers.filter(m => ids.has(m.folderId));
+    return list.filter(m => ids.has(m.folderId));
+}
+
+//Cabos e polígonos entram quando estão inteiros dentro do retângulo
+function shapeInsideBounds(shape, bounds) {
+    if (!shape || shape.getVisible?.() === false || !shape.getPath) return false;
+    const points = shape.getPath().getArray?.() || [];
+    return points.length > 0 && points.every(p => bounds.contains(p));
 }
 
 function selectMarkersInBounds(bounds, { add = false } = {}) {
-    const inside = getSelectionScopeMarkers().filter(m => m.marker?.getVisible?.() !== false && m.marker?.getPosition && bounds.contains(m.marker.getPosition()));
+    const inside = [
+        ...getSelectionScopeMarkers().filter(m => m.marker?.getVisible?.() !== false && m.marker?.getPosition && bounds.contains(m.marker.getPosition())),
+        ...getSelectionScopeMarkers(savedCables).filter(c => shapeInsideBounds(c.polyline, bounds)),
+        ...getSelectionScopeMarkers(savedPolygons).filter(p => shapeInsideBounds(p.polygonObject, bounds)),
+    ];
     setMapSelection(add ? [...new Set([...mapSelection.items, ...inside])] : inside);
 }
 
@@ -97,7 +139,11 @@ function renderMapSelectionBar() {
     bar.classList.toggle('hidden', !items.length);
     if (!items.length) return;
     const counts = {};
-    items.forEach(m => { const k = m.type === 'CLIENTE' ? 'Cliente' : m.type; counts[k] = (counts[k] || 0) + 1; });
+    items.forEach(m => {
+        const kind = selectionKind(m);
+        const k = kind === 'cable' ? 'Cabo' : kind === 'polygon' ? 'Polígono' : m.type === 'CLIENTE' ? 'Cliente' : m.type;
+        counts[k] = (counts[k] || 0) + 1;
+    });
     document.getElementById('mapSelectionCount').textContent = `${items.length} selecionado${items.length === 1 ? '' : 's'}`;
     document.getElementById('mapSelectionKinds').textContent = Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(' · ');
     const projectId = getActiveProjectId();
@@ -109,14 +155,14 @@ function renderMapSelectionBar() {
     }).join('');
     const canEdit = AppSession.canEdit;
     bar.querySelectorAll('[data-sel-edit]').forEach(el => { el.disabled = !canEdit; });
-    document.getElementById('mapSelectionStatus').disabled = !canEdit || !items.some(m => SELECTION_STATUS_TYPES.includes(m.type));
+    document.getElementById('mapSelectionStatus').disabled = !canEdit || !items.some(m => selectionKind(m) === 'marker' && SELECTION_STATUS_TYPES.includes(m.type));
 }
 
 function applySelectionStatus(status) {
     if (!status || !requireEdit('alterar a situação')) return;
     let changed = 0;
     mapSelection.items.forEach(m => {
-        if (!SELECTION_STATUS_TYPES.includes(m.type)) return;
+        if (selectionKind(m) !== 'marker' || !SELECTION_STATUS_TYPES.includes(m.type)) return;
         if (status === 'Troca' && !['CTO', 'CEO'].includes(m.type)) return; //Troca só existe para caixas
         applyMarkerInfrastructureStatus(m, status);
         updateMarkerAppearance(m);
@@ -131,7 +177,8 @@ function moveSelectionToFolder(folderId) {
     if (!ul || !requireEdit('mover itens')) return;
     mapSelection.items.forEach(m => {
         m.folderId = folderId;
-        if (m.listItem) ul.appendChild(m.listItem);
+        const row = selectionRow(m);
+        if (row) ul.appendChild(row);
     });
     updateSidebarCounts();
     refreshBomAfterProjectChange();
@@ -141,12 +188,12 @@ function moveSelectionToFolder(folderId) {
 
 function setSelectionVisible(visible) {
     mapSelection.items.forEach(m => {
-        const checkbox = m.listItem?.querySelector(':scope > .ge-vis-checkbox');
+        const checkbox = selectionRow(m)?.querySelector(':scope > .ge-vis-checkbox');
         if (checkbox) {
             checkbox.checked = visible;
             checkbox.dispatchEvent(new Event('change', { bubbles: true }));
         } else {
-            m.marker?.setVisible(visible);
+            (m.marker || m.polyline || m.polygonObject)?.setVisible?.(visible);
         }
     });
     if (!visible) clearMapSelection();
@@ -154,17 +201,36 @@ function setSelectionVisible(visible) {
 
 function deleteSelection() {
     if (!requireEdit('excluir itens')) return;
-    const items = [...mapSelection.items];
-    showConfirm('Excluir selecionados', `Excluir ${items.length} item(ns) do mapa? Esta ação pode ser desfeita com Ctrl+Z.`, () => {
-        items.forEach(m => {
-            if (focusedMapMarkerInfo === m) clearMapMarkerHighlight();
-            m.marker?.setMap(null);
-            m.listItem?.remove();
+    const all = [...mapSelection.items];
+    //Cabo com fusões não sai (igual à exclusão individual)
+    const blocked = all.filter(c => selectionKind(c) === 'cable' && checkCableUsageInFusionPlans(c).hasFusions);
+    const items = all.filter(it => !blocked.includes(it));
+    const blockedNote = blocked.length ? ` ${blocked.length} cabo(s) com fusões ficam: ${blocked.map(c => c.name).join(', ')}.` : '';
+    if (!items.length) {
+        showAlert('Ação bloqueada', `Os cabos selecionados têm fusões. Remova as fusões no plano de fusão antes de excluir.`);
+        return;
+    }
+    showConfirm('Excluir selecionados', `Excluir ${items.length} item(ns) do mapa? Esta ação pode ser desfeita com Ctrl+Z.${blockedNote}`, () => {
+        items.forEach(it => {
+            const kind = selectionKind(it);
+            if (kind === 'marker') {
+                if (focusedMapMarkerInfo === it) clearMapMarkerHighlight();
+                it.marker?.setMap(null);
+            } else if (kind === 'cable') {
+                const usage = checkCableUsageInFusionPlans(it);
+                if (usage.isInPlan) removeCableFromSavedFusionPlans(it.name, usage.locations);
+                it.polyline?.setMap(null);
+            } else if (kind === 'polygon') {
+                it.polygonObject?.setMap(null);
+            }
+            selectionRow(it)?.remove();
         });
         markers = markers.filter(m => !items.includes(m));
-        clearMapSelection();
+        savedCables = savedCables.filter(c => !items.includes(c));
+        savedPolygons = savedPolygons.filter(p => !items.includes(p));
+        setMapSelection(blocked);
         updateSidebarCounts();
-        refreshClientDrops();
+        refreshClientDrops({ recompute: true });
         refreshBomAfterProjectChange();
         showToast('Itens excluídos', `${items.length} item(ns) removido(s).`);
     });

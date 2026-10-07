@@ -8,7 +8,7 @@ const TOUR_STEPS = [
     { target: '#materialsMenuButton', title: 'Materiais', text: 'Lista de materiais e custos do projeto, catálogo de preços e configurações de lançamento e orçamento óptico.' },
     { target: '#projectReportButton', title: 'Relatório', text: 'Relatório completo do projeto para imprimir ou gerar PDF.' },
     { target: '#openSearchModalButton', title: 'Busca (Ctrl+K)', text: 'Encontre qualquer caixa, cliente, código, cabo, endereço ou coordenada.' },
-    { target: '#map', title: 'Mapa', text: 'Clique num item para editar, botão direito para as ações. Shift + arrastar seleciona vários marcadores de uma vez (na barra lateral: Ctrl + clique ou Shift + clique).' },
+    { target: '#map', title: 'Mapa', text: 'Clique num item para editar, botão direito para as ações. Shift + arrastar seleciona vários marcadores, cabos e polígonos de uma vez (na barra lateral: Ctrl + clique ou Shift + clique).' },
     { target: '#userMenuButton', title: 'Conta', text: 'Perfil, segurança, equipe, preferências e a lista de atalhos. O tour fica aqui para ver de novo.' },
 ];
 const TOUR_DONE_KEY = 'routeMapTourDone';
