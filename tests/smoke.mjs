@@ -981,6 +981,25 @@ const sbSel = await page.evaluate(() => {
   list.forEach(m => markers.splice(markers.indexOf(m), 1)); ul.remove();
   return { ctrl, toggled, range, highlighted };
 });
+//Cabos e polígonos também entram na seleção pela barra lateral e são excluídos juntos
+const sbMix = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  const ul = document.createElement('ul'); sidebar.appendChild(ul);
+  const row = (name) => { const li = document.createElement('li'); li.className = 'ge-pro-item'; li.textContent = name; ul.appendChild(li); return li; };
+  const cable = { name: 'C-MIX', item: row('C-MIX'), polyline: { setMap() {} } };
+  const poly = { name: 'P-MIX', listItem: row('P-MIX'), polygonObject: { setMap() {} } };
+  savedCables.push(cable); savedPolygons.push(poly);
+  const click = (li) => li.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
+  click(cable.item); click(poly.listItem);
+  const kinds = document.getElementById('mapSelectionKinds').textContent;
+  deleteSelection();
+  document.getElementById('confirmModalConfirmButton').click();
+  const gone = !savedCables.includes(cable) && !savedPolygons.includes(poly) && !ul.children.length;
+  ul.remove();
+  return { kinds, gone };
+});
+check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone, `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
+
 check(sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
   `seleção múltipla pela barra lateral com Ctrl e Shift (${JSON.stringify(sbSel)})`);
 

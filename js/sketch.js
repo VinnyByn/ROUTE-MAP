@@ -420,7 +420,7 @@ function finishPolygonSketch() {
 }
 
 function wirePolygonInteractions(polygonInfo) {
-    polygonInfo.polygonObject.addListener('click', () => openPolygonEditor(polygonInfo));
+    polygonInfo.polygonObject.addListener('click', (e) => (e?.domEvent?.shiftKey && typeof toggleMapSelection === 'function') ? toggleMapSelection(polygonInfo) : openPolygonEditor(polygonInfo));
     polygonInfo.polygonObject.addListener('rightclick', (e) => openMapItemMenu('polygon', polygonInfo, e?.domEvent));
     const nameEl = polygonInfo.listItem.querySelector('.item-name');
     if (nameEl) nameEl.addEventListener('click', () => openPolygonEditor(polygonInfo));
