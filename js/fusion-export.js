@@ -48,7 +48,7 @@ function buildBoxFusionExport(box) {
 
     const cables = plan.cables.map(card => {
         const cable = resolvePlanCable(card, box);
-        const role = cable ? getCableRoleAtMarker(cable, box.marker?.getPosition?.(), box) : '';
+        const role = (cable && box.marker?.getPosition ? getCableRoleAtMarker(cable, box.marker.getPosition(), box) : null) || card.role || '';
         return {
             name: cable?.name || card.name,
             role: role === 'saida' ? 'Saída' : role === 'entrada' ? 'Entrada' : '',
@@ -82,7 +82,64 @@ function buildBoxFusionExport(box) {
             .map(c => ({ port: c.client.ctoPort, client: c.name || '', code: c.client.code || '' }))
         : [];
 
-    return { ...base, empty: false, cables, fusions, splitters, ports };
+    return { ...base, empty: false, cables, fusions, splitters, ports, diagram: buildBoxDiagram(box, plan, cables) };
+}
+
+// ---------------------------------------------------------------
+// Diagrama: entradas à esquerda, saídas à direita, splitters e equipamentos no meio
+// ---------------------------------------------------------------
+
+function freeRangesLabel(numbers) {
+    return numbers.length ? `F${formatFiberRanges(numbers).replace(/, /g, ', F').replace(/-/g, '–F')} livre${numbers.length === 1 ? '' : 's'}` : '';
+}
+
+function buildBoxDiagram(box, plan, cableRows) {
+    const left = [], right = [], middle = [];
+    plan.cables.forEach((card, i) => {
+        const info = cableRows[i];
+        const rows = [];
+        const free = [];
+        card.fibers.forEach(f => {
+            if (!f.number) return;
+            if (f.connected) rows.push({ id: f.id, label: `F${f.number}`, color: getFiberColor(f.number) });
+            else free.push(f.number);
+        });
+        if (free.length) rows.push({ label: freeRangesLabel(free), free: true });
+        const block = { title: info.name, sub: [info.role, info.type].filter(Boolean).join(' · '), rows };
+        (info.role === 'Saída' ? right : left).push(block);
+    });
+    //Portas da CTO: numeradas em sequência pelas saídas dos splitters de atendimento
+    const clientsByPort = new Map();
+    if (box.type === 'CTO' && typeof getCtoClients === 'function') {
+        getCtoClients(box).forEach(c => { if (c.client?.ctoPort) clientsByPort.set(Number(c.client.ctoPort), c.name || ''); });
+    }
+    let portNumber = 0;
+    plan.splitters.forEach(sp => {
+        const rows = sp.inputIds.map(id => ({ id, label: 'Entrada', side: 'in' }));
+        sp.outputIds.forEach((id, i) => {
+            const row = { id, label: `S${i + 1}`, side: 'out' };
+            if (sp.atendimento) {
+                portNumber++;
+                const client = clientsByPort.get(portNumber);
+                row.note = `Porta ${portNumber}${client ? ` · ${client}` : ''}`;
+            }
+            rows.push(row);
+        });
+        const olt = sp.olt?.olt ? formatSplitterOltSummary(sp.olt.olt, sp.olt.placa, sp.olt.pon, { compact: true }) : '';
+        middle.push({ title: `Splitter ${sp.label}`, sub: [sp.atendimento ? 'Atendimento' : 'Fusão', olt].filter(Boolean).join(' · '), rows, splitter: true });
+    });
+    (plan.equipment || []).forEach(eq => {
+        const rows = eq.ports.filter(p => p.connected).map(p => ({
+            id: p.id, side: p.side === 'front' ? 'out' : 'in',
+            label: p.side === 'pon' ? `Placa ${p.slot} PON ${p.pon}` : `Porta ${p.port}${p.side === 'front' ? ' (cordão)' : ''}`,
+        }));
+        if (rows.length) middle.push({ title: eq.name, sub: eq.kind === 'olt' ? 'OLT' : eq.kind === 'dgo' ? 'DGO' : 'Equipamento', rows });
+    });
+    //Cor de cada fusão: a da fibra (de qualquer uma das pontas)
+    const fiberColor = new Map();
+    plan.cables.forEach(card => card.fibers.forEach(f => { if (f.number) fiberColor.set(f.id, getFiberColor(f.number)); }));
+    const links = plan.lines.map(l => ({ a: l.startId, b: l.endId, color: fiberColor.get(l.startId) || fiberColor.get(l.endId) || '#64748b' }));
+    return { left, right, middle, links };
 }
 
 function buildProjectFusionExport(scope) {
@@ -100,6 +157,103 @@ function buildProjectFusionExport(scope) {
 function hexToRgb(hex) {
     const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
     return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [148, 163, 184];
+}
+
+//Posições (sem desenhar): coluna esquerda e direita no topo; o meio começa abaixo das fusões diretas
+//entre cabos, para essas linhas não passarem por cima dos splitters
+const FD = { ROW: 4.4, HEAD: 8, GAP: 4 };
+
+function layoutFusionDiagram(d) {
+    const rowY = new Map(); //id → y relativo
+    const stack = (blocks, start) => {
+        let y = start;
+        const placed = blocks.map(b => {
+            const top = y;
+            b.rows.forEach((r, i) => { if (r.id) rowY.set(r.id, top + FD.HEAD + i * FD.ROW + FD.ROW / 2); });
+            y += FD.HEAD + b.rows.length * FD.ROW + FD.GAP;
+            return top;
+        });
+        return { tops: placed, bottom: y };
+    };
+    const left = stack(d.left, 0), right = stack(d.right, 0);
+    const sideIds = new Set([...d.left, ...d.right].flatMap(b => b.rows.map(r => r.id).filter(Boolean)));
+    let middleStart = 0;
+    d.links.forEach(l => {
+        if (sideIds.has(l.a) && sideIds.has(l.b)) middleStart = Math.max(middleStart, rowY.get(l.a) + FD.ROW, rowY.get(l.b) + FD.ROW);
+    });
+    const middle = stack(d.middle, middleStart);
+    return { left: left.tops, right: right.tops, middle: middle.tops, height: Math.max(left.bottom, right.bottom, middle.bottom, 10) };
+}
+
+function measureFusionDiagram(d) {
+    return layoutFusionDiagram(d).height;
+}
+
+function drawFusionDiagram(doc, d, x0, y0, w, scale) {
+    const ROW = FD.ROW * scale, HEAD = FD.HEAD * scale;
+    const colW = Math.min(52, w * 0.27), midW = Math.min(46, w * 0.26);
+    const xL = x0, xR = x0 + w - colW, xM = x0 + (w - midW) / 2;
+    const layout = layoutFusionDiagram(d);
+    const pos = new Map(); //id da porta → { x, y, side }
+    const fs = (n) => doc.setFontSize(Math.max(4, n * scale));
+    const ink = [22, 50, 63], muted = [91, 116, 131];
+
+    const drawColumn = (blocks, tops, x, width, side) => {
+        blocks.forEach((b, bi) => {
+            const y = y0 + tops[bi] * scale;
+            const h = HEAD + b.rows.length * ROW;
+            doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.25);
+            doc.setFillColor(b.splitter ? 255 : 248, b.splitter ? 251 : 250, b.splitter ? 235 : 252);
+            doc.roundedRect(x, y, width, h, 1.2, 1.2, 'FD');
+            doc.setFillColor(23, 63, 78); doc.rect(x, y, width, HEAD * 0.62, 'F');
+            doc.setFont('helvetica', 'bold'); fs(7); doc.setTextColor(255, 255, 255);
+            doc.text(pdfText(b.title), x + 1.5, y + HEAD * 0.45, { maxWidth: width - 3 });
+            doc.setFont('helvetica', 'normal'); fs(5.6); doc.setTextColor(...muted);
+            doc.text(pdfText(b.sub || ''), x + 1.5, y + HEAD * 0.9, { maxWidth: width - 3 });
+            b.rows.forEach((r, i) => {
+                const ry = y + HEAD + i * ROW + ROW / 2;
+                if (r.free) {
+                    doc.setFont('helvetica', 'italic'); fs(5.8); doc.setTextColor(...muted);
+                    doc.text(pdfText(r.label), x + 1.5, ry + 1, { maxWidth: width - 3 });
+                    return;
+                }
+                const portSide = side === 'left' ? 'right' : side === 'right' ? 'left' : (r.side === 'out' ? 'right' : 'left');
+                const px = portSide === 'right' ? x + width : x;
+                if (r.color) {
+                    const [cr, cg, cb] = hexToRgb(r.color);
+                    doc.setFillColor(cr, cg, cb); doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.15);
+                    const sx = portSide === 'right' ? x + width - 7 * scale : x + 1.2;
+                    doc.rect(sx, ry - ROW * 0.32, 5.8 * scale, ROW * 0.64, 'FD');
+                }
+                doc.setFont('helvetica', 'normal'); fs(6.4); doc.setTextColor(...ink);
+                const label = pdfText(r.label);
+                if (portSide === 'right') doc.text(label, r.color ? x + width - 8.2 * scale : x + width - 1.5, ry + 1, { align: 'right' });
+                else doc.text(label, r.color ? x + 8.2 * scale : x + 1.5, ry + 1);
+                if (r.note) {
+                    fs(5.4); doc.setTextColor(...muted);
+                    doc.text(pdfText(r.note), x + width + 1.5, ry + 1, { maxWidth: Math.max(10, xR - (x + width) - 3) });
+                }
+                doc.setFillColor(71, 85, 105); doc.circle(px, ry, 0.55 * Math.max(scale, 0.6), 'F');
+                if (r.id) pos.set(r.id, { x: px, y: ry, side: portSide });
+            });
+        });
+    };
+    drawColumn(d.left, layout.left, xL, colW, 'left');
+    drawColumn(d.right, layout.right, xR, colW, 'right');
+    drawColumn(d.middle, layout.middle, xM, midW, 'middle');
+
+    //Fusões: curvas na cor da fibra (branco vira cinza claro para aparecer)
+    d.links.forEach(l => {
+        const a = pos.get(l.a), b = pos.get(l.b);
+        if (!a || !b) return;
+        let [r, g, bl] = hexToRgb(l.color);
+        if (r > 235 && g > 235 && bl > 235) [r, g, bl] = [180, 190, 200];
+        doc.setDrawColor(r, g, bl); doc.setLineWidth(0.55 * Math.max(scale, 0.7));
+        const dir = (p) => (p.side === 'right' ? 1 : -1);
+        const k = Math.max(8, Math.abs(b.x - a.x) * 0.4);
+        const c1 = [a.x + dir(a) * k, a.y], c2 = [b.x + dir(b) * k, b.y];
+        doc.lines([[c1[0] - a.x, c1[1] - a.y, c2[0] - a.x, c2[1] - a.y, b.x - a.x, b.y - a.y]], a.x, a.y, [1, 1], 'S');
+    });
 }
 
 function drawFusionExportPdf(projectName, boxes) {
@@ -135,7 +289,11 @@ function drawFusionExportPdf(projectName, boxes) {
     });
 
     boxes.forEach(b => {
-        doc.addPage();
+        //Diagrama que não cabe numa A4 (nem reduzido a 60%): a página da caixa já nasce comprida
+        const natural = b.empty ? 0 : measureFusionDiagram(b.diagram);
+        const tall = !b.empty && natural * 0.6 > 297 - 18 - 32;
+        if (tall) doc.addPage([210, natural + 52], 'portrait');
+        else doc.addPage('a4', 'portrait');
         heading(`${b.type} · ${b.name}`, 20, 14);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
         const info = [b.status && `Situação: ${b.status}`, b.folder && `Pasta: ${b.folder}`, b.latLng[0] !== '' && `Coordenadas: ${b.latLng.join(', ')}`].filter(Boolean).join('   ·   ');
@@ -145,6 +303,17 @@ function drawFusionExportPdf(projectName, boxes) {
             doc.setFontSize(10); doc.setTextColor(...ink);
             doc.text('Esta caixa ainda não tem plano de fusão.', MX, y + 4);
             return;
+        }
+        //Diagrama: cabe na página (reduz até 60%); maior que isso, desenha inteiro na página comprida
+        if (tall) {
+            drawFusionDiagram(doc, b.diagram, MX, y, W - 2 * MX, 1);
+            doc.addPage('a4', 'portrait');
+            y = 20;
+        } else {
+            const scale = Math.min(1, (297 - 18 - y) / natural);
+            drawFusionDiagram(doc, b.diagram, MX, y, W - 2 * MX, scale);
+            y += natural * scale + 6;
+            if (y > 297 - 60) { doc.addPage('a4', 'portrait'); y = 20; }
         }
         if (b.cables.length) {
             heading('Cabos', y);
@@ -195,9 +364,10 @@ function drawFusionExportPdf(projectName, boxes) {
         doc.setPage(p);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
         doc.setDrawColor(219, 229, 235); doc.setLineWidth(0.2);
-        doc.line(MX, 284.5, W - MX, 284.5);
-        doc.text(t(`ROUTE MAP · Plano de fusão · ${projectName}`), MX, 288.5);
-        doc.text(`Página ${p} de ${total}`, W - MX, 288.5, { align: 'right' });
+        const H = doc.internal.pageSize.getHeight();
+        doc.line(MX, H - 12.5, W - MX, H - 12.5);
+        doc.text(t(`ROUTE MAP · Plano de fusão · ${projectName}`), MX, H - 8.5);
+        doc.text(`Página ${p} de ${total}`, W - MX, H - 8.5, { align: 'right' });
     }
     doc.setProperties({ title: `Plano de fusão - ${projectName}`, creator: 'ROUTE MAP' });
     return doc;

@@ -53,6 +53,7 @@ function parseFusionPlanText(planText) {
         return {
             name: card.dataset.cableName || '',
             uid: card.dataset.cableUid || '',
+            role: card.dataset.cableRole || (card.classList.contains('cable-saida') ? 'saida' : 'entrada'),
             fibers: Array.from(card.querySelectorAll('.fiber-row')).map(row => ({
                 id: row.id,
                 number: getFiberNumberFromId(row.id),

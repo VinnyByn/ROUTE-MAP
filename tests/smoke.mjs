@@ -1331,8 +1331,25 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       fusions: c.fusions.map(x => `${x.a.text}>${x.b.text}`).join(' | '), color: c.fusions[0].a.colorName,
       cables: c.cables.map(x => `${x.name}:${x.role}:${x.used}`).join(), pages: doc ? doc.internal.getNumberOfPages() : 3,
       size: doc ? doc.output('arraybuffer').byteLength : 9999,
+      diagram: `${c.diagram.left.map(x => x.title + ':' + x.rows.map(r => r.label).join('/')).join()}|${c.diagram.right.map(x => x.title + ':' + x.rows.map(r => r.label).join('/')).join()}|${c.diagram.middle.length}|${c.diagram.links.length}`,
     };
     window.__fxPdf = doc ? doc.output('datauristring') : '';
+    //Caixa grande (144 fusões): diagrama ganha página comprida, sem erro
+    if (hasPdf) {
+      const big1 = buildFusionCableCard({ name: 'BIG-A', type: 'Cabo AS 80 FO-144', role: 'entrada', fiberCount: 144 });
+      const big2 = buildFusionCableCard({ name: 'BIG-B', type: 'Cabo AS 80 FO-144', role: 'saida', fiberCount: 144 });
+      const hb = document.createElement('div'); hb.append(big1, big2);
+      const ids = (card) => [...card.querySelectorAll('.fiber-row')].map(r => r.id);
+      const ia = ids(big1), ib = ids(big2);
+      const bigBox = mk('CEO', 'CEO-BIG', 'fx-big', -22.1, -44);
+      bigBox.fusionPlan = JSON.stringify({ version: 2, elements: hb.innerHTML, svg: ia.map((x, i) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${ib[i]}"></path>`).join('') });
+      markers.push(bigBox);
+      const bigDoc = drawFusionExportPdf('Grande', [buildBoxFusionExport(bigBox)]);
+      out.bigPages = bigDoc.internal.getNumberOfPages();
+      out.bigTall = bigDoc.internal.pageSize.getHeight && (bigDoc.setPage(2), bigDoc.internal.pageSize.getHeight()) > 297;
+      window.__fxBig = bigDoc.output('datauristring');
+      markers.splice(markers.indexOf(bigBox), 1);
+    }
     savedCables.filter(x => x.folderId === 'projFX').forEach(x => { x.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(x), 1); });
     [ceo, cto].forEach(m => markers.splice(markers.indexOf(m), 1));
     document.querySelector('.folder-title[data-folder-id="projFX"]').closest('.folder').remove();
@@ -1340,11 +1357,13 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     return out;
   }, hasPdf);
   check(fx.order === 'CEO-FX,CTO-FX' && fx.ctoEmpty && fx.fusions === 'CAB-A F1>CAB-B F1 | CAB-A F2>CAB-B F2 | CAB-A F3>Splitter 1:8 · entrada'
-    && fx.color === 'Verde' && fx.cables === 'CAB-A:Entrada:3,CAB-B:Saída:2' && fx.pages === 3 && fx.size > 3000,
+    && fx.color === 'Verde' && fx.cables === 'CAB-A:Entrada:3,CAB-B:Saída:2' && fx.diagram === 'CAB-A:F1/F2/F3/F4–F12 livres|CAB-B:F1/F2/F3–F12 livres|1|3' && fx.pages === 3 && fx.size > 3000 && (fx.bigPages === undefined || (fx.bigPages >= 3 && fx.bigTall)),
     `exportar plano de fusão do projeto em PDF (${JSON.stringify(fx)})`);
   if (process.env.SMOKE_SHOTS && hasPdf) {
     const uri = await sp.evaluate(() => window.__fxPdf);
     fs.writeFileSync(path.join(process.env.SMOKE_SHOTS, 'plano-de-fusao.pdf'), Buffer.from(uri.split(',')[1], 'base64'));
+    const big = await sp.evaluate(() => window.__fxBig);
+    fs.writeFileSync(path.join(process.env.SMOKE_SHOTS, 'plano-de-fusao-grande.pdf'), Buffer.from(big.split(',')[1], 'base64'));
   }
   await spCtx.close();
 }
