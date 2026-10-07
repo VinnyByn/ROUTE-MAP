@@ -318,8 +318,8 @@ function fillMarkerPanelStyle(values) {
 }
 
 // Paleta de cores com amostras clicáveis; o input nativo continua sendo a fonte da verdade.
-const MARKER_COLOR_PALETTE = ['#16a34a', '#22c55e', '#0ea5e9', '#2563eb', '#7c3aed', '#db2777', '#ef4444', '#f59e0b', '#facc15', '#64748b'];
-const LABEL_COLOR_PALETTE = ['#0f172a', '#ffffff', '#facc15', '#ef4444', '#22c55e', '#38bdf8'];
+const MARKER_COLOR_PALETTE = ['#16a34a', '#facc15', '#2563eb', '#ef4444', '#64748b', '#db2777'];
+const LABEL_COLOR_PALETTE = MARKER_COLOR_PALETTE;
 
 function enhanceColorInput(input, palette) {
     if (!input || input.dataset.swatches) return;
