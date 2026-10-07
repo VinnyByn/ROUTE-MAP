@@ -832,13 +832,15 @@ function calculateBomState() {
                         if (splitter.status === 'Novo') {
                             const label = splitter.label;
                             if (label) {
-                                const splitterMaterialName = `Splitter ${label.replace(':', '/')}`;
+                                const connector = label.includes('APC') ? 'APC' : 'UPC';
+                                const ratioMatch = label.match(/1:(\d+)/);
+                                const outputCount = ratioMatch ? parseInt(ratioMatch[1], 10) : 0;
+                                const splitterMaterialName = outputCount
+                                    ? resolveSplitterMaterialName(outputCount, splitter.atendimento, connector)
+                                    : `Splitter ${label.replace(':', '/')}`;
                                 addOrUpdateMaterial(splitterMaterialName, 1, 'unit', fusionGroup, markerInfo.name);
                                 if (splitter.atendimento) {
                                     const isPredial = markerInfo.isPredial || false;
-                                    const connector = label.includes('APC') ? 'APC' : 'UPC';
-                                    const ratioMatch = label.match(/1:(\d+)/);
-                                    const outputCount = ratioMatch ? parseInt(ratioMatch[1], 10) : 0;
 
                                     if (outputCount > 0) {
                                         let adapterMaterialName = isPredial
