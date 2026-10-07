@@ -1996,5 +1996,9 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 .color-swatches .color-swatch { flex: none !important; width: 26px !important; height: 26px !important; min-width: 0 !important; min-height: 0 !important; border-radius: 50% !important; padding: 0 !important; }
 
 /* Seleção múltipla pela barra lateral */
-.ge-pro-item.is-multi-selected > * { background: rgba(37, 99, 235, .16); }
-.ge-pro-item.is-multi-selected { box-shadow: inset 3px 0 0 #2563eb; }
+.sidebar-column .ge-pro-item.is-multi-selected,
+.sidebar-column .ge-pro-item.is-multi-selected:hover {
+  background: var(--sb-row-active, rgba(37, 99, 235, .16)) !important;
+  box-shadow: inset 3px 0 0 var(--sb-accent, #2563eb);
+}
+.sidebar-column .ge-pro-item.is-multi-selected > .item-name { font-weight: 600; color: var(--sb-accent, #2563eb); }
