@@ -1329,14 +1329,14 @@ function renderReportObservations(text) {
 
 //Diz se o cabo está em algum plano de fusão salvo e se tem fusões
 function checkCableUsageInFusionPlans(cableInfo) {
-    const usage = { isInPlan: false, hasFusions: false, locations: [] };
+    const usage = { isInPlan: false, hasFusions: false, locations: [], boxes: [] };
     if (!cableInfo?.name) return usage;
-    const cableName = cableInfo.name.trim();
-    markers.filter(m => (m.type === 'CEO' || m.type === 'CTO') && m.fusionPlan).forEach(markerInfo => {
+    markers.filter(m => (m.type === 'CEO' || m.type === 'CTO' || m.type === 'POP') && m.fusionPlan).forEach(markerInfo => {
         const plan = readFusionPlan(markerInfo);
-        const cable = plan?.cables.find(c => c.name.trim() === cableName);
+        const cable = plan?.cables.find(c => planCableMatches(c, cableInfo, markerInfo));
         if (!cable) return;
         usage.isInPlan = true;
+        usage.boxes.push(markerInfo);
         if (!usage.locations.includes(markerInfo.name)) usage.locations.push(markerInfo.name);
         if (cable.fibers.some(f => f.connected)) usage.hasFusions = true;
     });
@@ -1344,15 +1344,16 @@ function checkCableUsageInFusionPlans(cableInfo) {
 }
 
 //Remove o cabo (sem fusões) dos planos de fusão salvos
-function removeCableFromSavedFusionPlans(cableName, markerNames) {
-    markers.forEach(markerInfo => {
-        if (!markerNames.includes(markerInfo.name) || !markerInfo.fusionPlan) return;
+function removeCableFromSavedFusionPlans(cableInfo, boxes) {
+    boxes.forEach(markerInfo => {
+        if (!markerInfo.fusionPlan) return;
         try {
             const planData = JSON.parse(markerInfo.fusionPlan);
             const html = planData.elements || planData.canvas;
             if (!html) return;
             const tempDiv = parseStoredHtml(html);
-            const cableElement = Array.from(tempDiv.querySelectorAll('.cable-element')).find(el => el.dataset.cableName === cableName);
+            const cableElement = Array.from(tempDiv.querySelectorAll('.cable-element'))
+                .find(el => planCableMatches({ name: el.dataset.cableName || '', uid: el.dataset.cableUid || '' }, cableInfo, markerInfo));
             if (!cableElement) return;
             cableElement.remove();
             if (planData.elements !== undefined) planData.elements = tempDiv.innerHTML;
@@ -1462,7 +1463,7 @@ function getCableRoleAtMarker(cable, markerPosition, markerInfo = null) {
         if (cable.startAnchorUid === markerInfo.uid) return 'saida';
         if (cable.endAnchorUid === markerInfo.uid) return 'entrada';
     }
-    if (markerInfo?.name && !cable.startAnchorUid && !cable.endAnchorUid) {
+    if (markerInfo?.name && !cable.startAnchorUid && !cable.endAnchorUid && !markers.some(m => m !== markerInfo && m.name === markerInfo.name)) {
         if (cable.startAnchorMarkerName === markerInfo.name) return 'saida';
         if (cable.endAnchorMarkerName === markerInfo.name) return 'entrada';
     }
@@ -2459,17 +2460,16 @@ function captureCableAnchorsFromPath(cable) {
 function isCableConnectedToMarker(cable, markerInfo) {
     if (!cable?.path?.length || !markerInfo) return false;
     if (markerInfo.uid && (cable.startAnchorUid === markerInfo.uid || cable.endAnchorUid === markerInfo.uid)) return true;
-    if (cable.startAnchorUid && cable.endAnchorUid) return false;
-    const markerName = markerInfo.name;
-    if (cable.startAnchorMarkerName === markerName || cable.endAnchorMarkerName === markerName) {
-        return true;
-    }
-    const markerPosition = markerInfo.marker.getPosition();
-    const startPoint = cable.path[0];
-    const endPoint = cable.path[cable.path.length - 1];
+    //Ponta com uid já é de outro marcador; só a ponta sem uid (projeto antigo) olha nome e posição
+    const markerPosition = markerInfo.marker?.getPosition?.();
     const thresholdM = 1;
-    return google.maps.geometry.spherical.computeDistanceBetween(markerPosition, startPoint) < thresholdM
-        || google.maps.geometry.spherical.computeDistanceBetween(markerPosition, endPoint) < thresholdM;
+    const endMatches = (uid, name, point) => {
+        if (uid) return false;
+        const near = !!markerPosition && google.maps.geometry.spherical.computeDistanceBetween(markerPosition, point) < thresholdM;
+        return near || (!!name && name === markerInfo.name && !markers.some(m => m !== markerInfo && m.name === name));
+    };
+    return endMatches(cable.startAnchorUid, cable.startAnchorMarkerName, cable.path[0])
+        || endMatches(cable.endAnchorUid, cable.endAnchorMarkerName, cable.path[cable.path.length - 1]);
 }
 
 function getReserveForMarkerType(type) {
@@ -2971,7 +2971,7 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
             wireCableSidebarClick(cabo);
         }
         cabo.polyline.setVisible(true);
-        if (oldName !== name) updateCableNameInAllFusionPlans(oldName, name);
+        if (oldName !== name) updateCableNameInAllFusionPlans(oldName, name, cabo);
         finishCableDrawingUi();
         refreshBomAfterProjectChange();
         refreshClientDrops({ recompute: true });
@@ -3251,7 +3251,7 @@ document.getElementById("deleteCableButton").addEventListener("click", () => {
         confirmMessage += ` Ele também sai do plano de fusão de: ${usage.locations.join(', ')}.`;
     }
     showConfirm('Excluir cabo', confirmMessage, () => {
-        if (usage.isInPlan) removeCableFromSavedFusionPlans(cableToDelete.name, usage.locations);
+        if (usage.isInPlan) removeCableFromSavedFusionPlans(cableToDelete, usage.boxes);
         const cabo = savedCables[editingCableIndex];
         cabo.polyline?.setMap(null);
         cabo.item?.remove();
@@ -4071,13 +4071,22 @@ function renderStickerCounts(counts) {
 
 //Sincronização de renomeação de cabos
 //Renomeia o cabo nos planos de fusão: nome do cartão, ids das fibras (levavam o nome antigo) e as fusões
-function renameCableInPlanDom(root, lineRoot, oldName, newName) {
-    const cards = Array.from(root.querySelectorAll('.cable-element')).filter(el => el.dataset.cableName === oldName);
+//cable (opcional): só os cartões deste cabo (pelo uid; cartões antigos sem uid, pelo nome)
+function renameCableInPlanDom(root, lineRoot, oldName, newName, cable = null, box = null, newUid = null) {
+    const cards = Array.from(root.querySelectorAll('.cable-element')).filter(el => {
+        if (el.dataset.cableName !== oldName) return false;
+        if (!cable) return true;
+        if (el.dataset.cableUid) return el.dataset.cableUid === cable.uid;
+        //Cartão antigo (sem uid): é deste cabo se não há outro com o nome antigo, ou se ele chega na caixa
+        const others = savedCables.filter(c => c !== cable && c.name === oldName);
+        return !others.length || (!!box && isCableConnectedToMarker(cable, box) && !others.some(c => isCableConnectedToMarker(c, box)));
+    });
     if (!cards.length) return false;
     const safeNew = newName.replace(/\s+/g, '-');
     const idMap = new Map();
     cards.forEach(card => {
         card.dataset.cableName = newName;
+        if (newUid) card.dataset.cableUid = newUid;
         const title = card.querySelector('.cable-header-name, .cable-header span');
         if (title) title.textContent = title.textContent.replace(oldName, newName);
         card.querySelectorAll('.fiber-row').forEach(row => {
@@ -4098,28 +4107,29 @@ function renameCableInPlanDom(root, lineRoot, oldName, newName) {
     return true;
 }
 
-function updateCableNameInAllFusionPlans(oldName, newName) {
+function updateCableNameInAllFusionPlans(oldName, newName, cable = null) {
     if (oldName === newName) return;
     markers.forEach(markerInfo => {
         //Cliente ligado direto no cabo (B2B) guarda o nome do cabo
         if (markerInfo.type === 'CLIENTE' && markerInfo.client) {
+            if (cable && markerInfo.client.cableUid && markerInfo.client.cableUid !== cable.uid) return;
             if (markerInfo.client.cableName === oldName) markerInfo.client.cableName = newName;
             if (markerInfo.client.linkedCable === oldName) markerInfo.client.linkedCable = newName;
             return;
         }
-        if ((markerInfo.type !== 'CTO' && markerInfo.type !== 'CEO') || !markerInfo.fusionPlan) return;
+        if ((markerInfo.type !== 'CTO' && markerInfo.type !== 'CEO' && markerInfo.type !== 'POP') || !markerInfo.fusionPlan) return;
         try {
             const planData = JSON.parse(markerInfo.fusionPlan);
             if (!planData.elements) return;
             const tempDiv = parseStoredHtml(planData.elements);
             const tempSvg = planData.svg ? parseStoredSvg(planData.svg) : null;
-            if (!renameCableInPlanDom(tempDiv, tempSvg, oldName, newName)) return;
+            if (!renameCableInPlanDom(tempDiv, tempSvg, oldName, newName, cable, markerInfo)) return;
             planData.elements = tempDiv.innerHTML;
             if (tempSvg) planData.svg = tempSvg.innerHTML;
             markerInfo.fusionPlan = JSON.stringify(planData);
             //Plano aberto na tela: aplica o mesmo
             if (activeMarkerForFusion === markerInfo) {
-                renameCableInPlanDom(getFusionStage(), getFusionSvg(), oldName, newName);
+                renameCableInPlanDom(getFusionStage(), getFusionSvg(), oldName, newName, cable, markerInfo);
             }
         } catch (e) {
             console.error(`Erro ao atualizar o nome do cabo no plano de fusão da ${markerInfo.name}:`, e);

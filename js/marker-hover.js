@@ -113,17 +113,18 @@ const cableFusionCache = new WeakMap(); //markerInfo → { plan (dados de readFu
 function getPlanCableFiberUsage(markerInfo) {
     const plan = readFusionPlan(markerInfo);
     const cached = cableFusionCache.get(markerInfo);
-    if (cached && cached.plan === plan) return cached.cables;
+    if (cached && cached.plan === plan && cached.cableCount === savedCables.length) return cached.cables;
     const cables = new Map();
     if (plan && !plan.empty) {
         plan.cables.forEach(cable => {
             if (!cable.name) return;
-            const used = cables.get(cable.name) || new Set();
+            const key = planCableKey(cable, markerInfo);
+            const used = cables.get(key) || new Set();
             cable.fibers.forEach(f => { if (f.number && f.connected) used.add(f.number); });
-            cables.set(cable.name, used);
+            cables.set(key, used);
         });
     }
-    cableFusionCache.set(markerInfo, { plan, cables });
+    cableFusionCache.set(markerInfo, { plan, cables, cableCount: savedCables.length });
     return cables;
 }
 
@@ -143,7 +144,7 @@ function getCableFiberUsage(cable) {
     const total = getCableFiberCount(cable);
     const used = new Set();
     markers.forEach(m => {
-        if (m.fusionPlan) getPlanCableFiberUsage(m).get(cable.name)?.forEach(n => used.add(n));
+        if (m.fusionPlan) getPlanCableFiberUsage(m).get(cableKeyOf(cable))?.forEach(n => used.add(n));
     });
     getOccupiedCableFibers(cable).forEach((_, n) => used.add(n));
     const usedList = Array.from(used).filter(n => n >= 1 && n <= total).sort((a, b) => a - b);

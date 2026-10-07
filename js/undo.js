@@ -64,6 +64,10 @@ function restoreProjectSnapshot(projectId, json) {
     const next = root.nextSibling;
     const revision = getProjectRevision(root);
     const wasActive = activeFolderId && getAllDescendantFolderIds(projectId).includes(activeFolderId) ? activeFolderId : null;
+    //Pastas abertas/fechadas e rolagem da barra lateral continuam como estavam
+    const openState = new Map(getAllDescendantFolderIds(projectId).map(id => [id, !document.getElementById(id)?.classList.contains('hidden')]));
+    const scroller = document.getElementById('sidebar');
+    const scrollTop = scroller?.scrollTop || 0;
     undoRestoring = true;
     try {
         clearTimeout(undoSnapshotTimer);
@@ -73,9 +77,14 @@ function restoreProjectSnapshot(projectId, json) {
         const rebuilt = document.getElementById(projectId)?.closest('.folder');
         if (rebuilt && parent) parent.insertBefore(rebuilt, next && next.parentElement === parent ? next : null);
         setProjectRevision(rebuilt, revision);
+        openState.forEach((open, id) => {
+            const ul = document.getElementById(id);
+            if (ul && ul.classList.contains('hidden') === open) toggleFolder(id);
+        });
         if (wasActive && document.getElementById(wasActive)) setActiveFolder(wasActive);
         else setActiveFolder(projectId);
         refreshBomAfterProjectChange();
+        if (scroller) scroller.scrollTop = scrollTop;
     } finally {
         undoRestoring = false;
     }
@@ -137,6 +146,20 @@ document.addEventListener('DOMContentLoaded', () => {
             updateUndoButtons();
             return result;
         };
+    }
+    //Pastas (criar, renomear, excluir, arrastar) não passam pela lista de materiais: a barra lateral avisa
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        new MutationObserver((mutations) => {
+            if (undoRestoring) return;
+            const projects = new Set();
+            mutations.forEach(m => {
+                const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                const title = el?.closest('.folder')?.querySelector(':scope > .folder-title[data-is-project="true"]');
+                if (title?.dataset.folderId) projects.add(title.dataset.folderId);
+            });
+            projects.forEach(id => scheduleProjectUndoSnapshot(id));
+        }).observe(sidebar, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-folder-name'] });
     }
     document.getElementById('undoButton')?.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('projectDropdown')?.classList.remove('show'); stepProjectHistory(-1); });
     document.getElementById('redoButton')?.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('projectDropdown')?.classList.remove('show'); stepProjectHistory(1); });

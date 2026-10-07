@@ -139,7 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -176,6 +176,7 @@ function buildSidebarMenuItems(entity) {
             items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
             items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
             items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
+            items.push({ action: 'export-fusion', label: 'Exportar plano de fusão (PDF)', hint: 'Todas as caixas com as fusões' });
             items.push({ action: 'close', label: 'Fechar projeto', hint: 'Continua salvo no banco' });
             if (canEdit) items.push({ action: 'delete', label: 'Excluir projeto', hint: 'Vai para a lixeira por 30 dias', danger: true });
         } else if (canEdit) {
@@ -188,6 +189,12 @@ function buildSidebarMenuItems(entity) {
         items.push({ action: 'open', label: canEdit ? `Editar ${noun}` : `Ver ${noun}` });
         if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO' || entity.info.type === 'POP')) {
             items.push({ action: 'fusion', label: 'Plano de fusão' });
+        }
+        if (canEdit && entity.kind === 'marker' && typeof getCablesPassingThroughMarker === 'function') {
+            getCablesPassingThroughMarker(entity.info).forEach(cable => items.push({
+                action: `split-cable:${ensureItemUid(cable, 'cb', savedCables)}`, icon: 'cable',
+                label: `Dividir cabo ${cable.name} aqui`, hint: 'Vira dois cabos com ponta nesta caixa',
+            }));
         }
         if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Cadastro de equipamentos', hint: 'OLTs, placas, DGOs e switches' });
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
@@ -211,7 +218,7 @@ function renderSidebarMenu(entity) {
         + items.map(item => item.divider
             ? '<div class="sb-menu__divider" role="separator"></div>'
             : `<button type="button" role="menuitem" data-action="${item.action}" class="sb-menu__item${item.danger ? ' is-danger' : ''}">
-                   <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${SB_ICONS[item.action] || 'edit'}"></use></svg>
+                   <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${SB_ICONS[item.icon || item.action] || 'edit'}"></use></svg>
                    <span class="sb-menu__text"><span>${escapeHtml(item.label)}</span>${item.hint ? `<small>${escapeHtml(item.hint)}</small>` : ''}</span>
                    ${item.kbd ? `<kbd>${escapeHtml(item.kbd)}</kbd>` : ''}
                </button>`).join('');
@@ -313,6 +320,11 @@ function handleSidebarMenuAction(action) {
     hideSidebarFolderContextMenu();
     if (!entity) return;
     const { kind, info } = entity;
+    if (action.startsWith('split-cable:')) {
+        const cable = savedCables.find(c => c.uid === action.slice('split-cable:'.length));
+        if (cable) confirmSplitCableAtMarker(cable, info);
+        return;
+    }
     switch (action) {
     case 'edit':
         openFolderEditor(entity.title);
@@ -338,6 +350,10 @@ function handleSidebarMenuAction(action) {
     case 'pop-equipment':
         selectSidebarMarker(info);
         openPopEquipmentModal(info);
+        break;
+    case 'export-fusion':
+        setActiveFolder(entity.folderId);
+        exportProjectFusionPlans();
         break;
     case 'export-xlsx':
         setActiveFolder(entity.folderId);
@@ -442,7 +458,7 @@ function deleteSidebarMapItem(entity) {
         }
         const extra = usage.isInPlan ? ` Ele também sai do plano de fusão de: ${usage.locations.join(', ')}.` : '';
         showConfirm('Excluir cabo', `Excluir o cabo "${info.name}"?${extra}`, () => {
-            if (usage.isInPlan) removeCableFromSavedFusionPlans(info.name, usage.locations);
+            if (usage.isInPlan) removeCableFromSavedFusionPlans(info, usage.boxes);
             info.polyline?.setMap(null);
             info.item?.remove();
             savedCables = savedCables.filter(c => c !== info);

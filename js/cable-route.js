@@ -38,8 +38,9 @@ function buildFiberGraph() {
         plan.cables.forEach(cable => cable.fibers.forEach(f => {
             if (!f.number) return;
             const k = key(f.id);
-            info.set(k, { kind: 'fiber', box, cable: cable.name, number: f.number });
-            const fk = `${cable.name}#${f.number}`;
+            const ck = planCableKey(cable, box);
+            info.set(k, { kind: 'fiber', box, cable: resolvePlanCable(cable, box)?.name || cable.name, cableKey: ck, number: f.number });
+            const fk = `${ck}#${f.number}`;
             if (!fiberNodes.has(fk)) fiberNodes.set(fk, []);
             fiberNodes.get(fk).push(k);
         }));
@@ -59,8 +60,12 @@ function buildFiberGraph() {
 
 //Percorre a partir de uma fibra do cabo. Entrando num splitter por uma saída, segue só para a entrada
 //(não espalha para os outros clientes do mesmo splitter)
-function traceFiberRoute(graph, cableName, fiberNumber) {
-    return traceRouteFromNodes(graph, graph.fiberNodes.get(`${cableName}#${fiberNumber}`) || [], { cable: cableName, number: fiberNumber });
+//cable: objeto do cabo (ou nome, em chamadas antigas)
+function traceFiberRoute(graph, cable, fiberNumber) {
+    const obj = typeof cable === 'object' ? cable : (savedCables.find(c => c.name === cable) || { name: cable });
+    const key = cableKeyOf(obj);
+    const name = obj?.name || cable;
+    return traceRouteFromNodes(graph, graph.fiberNodes.get(`${key}#${fiberNumber}`) || [], { cable: name, cableKey: key, number: fiberNumber });
 }
 
 //A partir de uma porta qualquer (ex.: PON da OLT no plano do POP)
@@ -69,7 +74,7 @@ function traceFromNode(graph, nodeKey) {
 }
 
 function traceRouteFromNodes(graph, start, first) {
-    const segments = new Map(first ? [[`${first.cable}#${first.number}`, first]] : []);
+    const segments = new Map(first ? [[`${first.cableKey}#${first.number}`, first]] : []);
     const steps = [];
     const visited = new Set();
     const queue = start.map(k => [k, null]);
@@ -78,7 +83,7 @@ function traceRouteFromNodes(graph, start, first) {
         const [node, from] = queue.shift();
         const here = graph.info.get(node);
         const prev = from ? graph.info.get(from) : null;
-        if (here?.kind === 'fiber') segments.set(`${here.cable}#${here.number}`, { cable: here.cable, number: here.number });
+        if (here?.kind === 'fiber') segments.set(`${here.cableKey}#${here.number}`, { cable: here.cable, cableKey: here.cableKey, number: here.number });
         //Passos = fusões dentro da caixa (não a ligação interna do splitter)
         const internal = prev?.splitter && here?.splitter && prev.splitter === here.splitter;
         if (prev && here && prev.box === here.box && !internal) steps.push({ box: here.box, from: prev, to: here });
@@ -111,7 +116,11 @@ function traceRouteFromNodes(graph, start, first) {
         ctos.get(s.box).splitters.push(s.splitter.label);
     });
     //Cliente B2B ligado direto numa fibra do caminho
-    const b2b = markers.filter(m => m.type === 'CLIENTE' && m.client?.cableName && segments.has(`${m.client.cableName}#${Number(m.client.cableFiber)}`));
+    const b2b = markers.filter(m => {
+        if (m.type !== 'CLIENTE' || !m.client?.cableName) return false;
+        const cable = findClientCable(m);
+        return segments.has(`${cable ? cableKeyOf(cable) : `nome:${m.client.cableName}`}#${Number(m.client.cableFiber)}`);
+    });
     return { segments: Array.from(segments.values()), steps, olts, ctos: Array.from(ctos.values()), b2b };
 }
 
@@ -142,7 +151,7 @@ function drawCableRouteHighlight(traces) {
     });
     traces.forEach(({ trace, number }) => {
         trace.segments.forEach(seg => {
-            const cable = savedCables.find(c => c.name === seg.cable);
+            const cable = savedCables.find(c => c.uid === seg.cableKey) || savedCables.find(c => c.name === seg.cable);
             if (!cable?.path?.length || !cable.polyline?.getVisible()) return;
             const line = new google.maps.Polyline({
                 path: cable.path,
@@ -191,7 +200,7 @@ function renderCableRouteBox() {
     const body = document.getElementById('cableRouteBody');
 
     if (mode === 'all') {
-        const traces = usage.used.map(number => ({ number, trace: traceFiberRoute(graph, cable.name, number) }));
+        const traces = usage.used.map(number => ({ number, trace: traceFiberRoute(graph, cable, number) }));
         drawCableRouteHighlight(traces);
         body.innerHTML = traces.length
             ? `<ul class="route-legend">${traces.map(({ number, trace }) => `
@@ -215,12 +224,12 @@ function renderCableRouteBox() {
         body.innerHTML = html + '<p class="route-note">Escolha uma fibra.</p>';
         return;
     }
-    const trace = traceFiberRoute(graph, cable.name, fiber);
+    const trace = traceFiberRoute(graph, cable, fiber);
     drawCableRouteHighlight([{ number: fiber, trace }]);
     const items = [];
     trace.olts.forEach(o => items.push(`<li><i style="--fiber:#64748b"></i><span><b>${escapeHtml(formatSplitterOltSummary(o.splitter.olt.olt, o.splitter.olt.placa, o.splitter.olt.pon))}</b> · em ${escapeHtml(o.box.name)}</span></li>`));
     trace.segments.forEach(seg => {
-        const c = savedCables.find(x => x.name === seg.cable);
+        const c = savedCables.find(x => x.uid === seg.cableKey) || savedCables.find(x => x.name === seg.cable);
         items.push(`<li><i style="--fiber:${getFiberColor(seg.number)}"></i><span><b>${escapeHtml(seg.cable)}</b> F${seg.number}${c?.totalLength ? ` · ${c.totalLength} m` : ''}</span></li>`);
     });
     trace.steps.forEach(st => items.push(`<li><i class="is-box"></i><span><b>${escapeHtml(st.box.name)}</b> · ${describeRoutePort(st.from)} → ${describeRoutePort(st.to)}</span></li>`));

@@ -294,6 +294,9 @@ function loadAndDisplayProject(projectId, projectData, { silent = false } = {}) 
         projectData.cables.forEach(cableData => rebuildCable(cableData));
         syncProjectCableMeasurements(savedCables);
     }
+    //Vínculos com cabos pelo identificador (planos de fusão e clientes B2B de projetos antigos)
+    backfillFusionPlanCableUids();
+    markers.forEach(m => { if (m.type === 'CLIENTE' && m.client?.cableName && !m.client.cableUid) findClientCable(m); });
     clientDropsSuspended = false;
     applySidebarOrder(document.getElementById(projectId));
     refreshClientDrops({ recompute: true });

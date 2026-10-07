@@ -52,6 +52,7 @@ function parseFusionPlanText(planText) {
         const kit = card.querySelector('.derivation-kit-checkbox');
         return {
             name: card.dataset.cableName || '',
+            uid: card.dataset.cableUid || '',
             fibers: Array.from(card.querySelectorAll('.fiber-row')).map(row => ({
                 id: row.id,
                 number: getFiberNumberFromId(row.id),
@@ -92,4 +93,62 @@ function parseFusionPlanText(planText) {
         cables,
         splitters,
     };
+}
+
+// ---------------------------------------------------------------
+// Cabo do plano de fusão → cabo do mapa. Vale o identificador (uid) gravado no cartão; planos antigos
+// (só com o nome) usam o nome, e com nomes repetidos ficam com o cabo que chega na caixa.
+// ---------------------------------------------------------------
+function resolvePlanCable(planCable, box = null) {
+    if (!planCable) return null;
+    if (planCable.uid) {
+        const byUid = savedCables.find(c => c.uid === planCable.uid);
+        if (byUid) return byUid;
+    }
+    const same = savedCables.filter(c => c.name === planCable.name);
+    if (same.length <= 1) return same[0] || null;
+    return (box && same.find(c => isCableConnectedToMarker(c, box))) || same[0];
+}
+
+//Chave única do cabo no plano (para juntar a mesma fibra em caixas diferentes)
+function planCableKey(planCable, box = null) {
+    const cable = resolvePlanCable(planCable, box);
+    return cable ? ensureItemUid(cable, 'cb', savedCables) : `nome:${planCable.name}`;
+}
+
+//Mesma chave do lado do cabo do mapa
+function cableKeyOf(cable) {
+    return savedCables.includes(cable) ? ensureItemUid(cable, 'cb', savedCables) : `nome:${cable?.name}`;
+}
+
+function planCableMatches(planCable, cable, box = null) {
+    if (!planCable || !cable) return false;
+    const resolved = resolvePlanCable(planCable, box);
+    if (resolved) return resolved === cable;
+    return !savedCables.includes(cable) && planCable.name === cable.name;
+}
+
+//Planos antigos: grava o uid do cabo nos cartões que só têm o nome
+function backfillFusionPlanCableUids(boxes = markers) {
+    boxes.forEach(box => {
+        if (!box.fusionPlan) return;
+        try {
+            const planData = JSON.parse(box.fusionPlan);
+            if (!planData.elements) return;
+            const root = parseStoredHtml(planData.elements);
+            let changed = false;
+            root.querySelectorAll('.cable-element').forEach(card => {
+                if (card.dataset.cableUid && savedCables.some(c => c.uid === card.dataset.cableUid)) return;
+                const cable = resolvePlanCable({ name: card.dataset.cableName || '' }, box);
+                if (!cable) return;
+                card.dataset.cableUid = ensureItemUid(cable, 'cb', savedCables);
+                changed = true;
+            });
+            if (!changed) return;
+            planData.elements = root.innerHTML;
+            box.fusionPlan = JSON.stringify(planData);
+        } catch (e) {
+            console.error(`Plano de fusão ilegível na caixa "${box.name}":`, e);
+        }
+    });
 }

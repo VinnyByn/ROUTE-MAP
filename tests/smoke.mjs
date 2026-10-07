@@ -740,7 +740,7 @@ if (process.env.SMOKE_SHOTS) {
   await page.locator('#projectCheckBox').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'verificar-projeto.png') });
 }
 await page.evaluate(() => window.__checkCleanup());
-const expectCheck = ['erro:Nome de cabo repetido: V-2', 'erro:Cabo com ponta solta: V-2', 'aviso:CTO sem plano de fusão: V-CTO',
+const expectCheck = ['aviso:Nome de cabo repetido: V-2', 'erro:Cabo com ponta solta: V-2', 'aviso:CTO sem plano de fusão: V-CTO',
   'erro:Cabo inexistente no plano de V-CEO', 'erro:Fusão duplicada em V-CEO', 'erro:Fusão quebrada em V-CEO', 'aviso:Splitter sem entrada em V-CEO',
   'aviso:Cliente sem porta: V-SemPorta', 'erro:Porta usada duas vezes na V-CTO', 'aviso:Drop longo: V-Longe', 'aviso:Cliente sem CTO: V-Solto'];
 const missingCheck = expectCheck.filter(t => !projCheck.titles.includes(t));
@@ -908,22 +908,26 @@ const undoRes = await page.evaluate(async () => {
   setActiveFolder('projU');
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
   const folders = () => [...document.getElementById('projU').querySelectorAll('.folder-name-text')].map(e => e.textContent).join(',');
-  appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); refreshBomAfterProjectChange(); await wait(450);
-  appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); refreshBomAfterProjectChange(); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); await wait(450);
   const before = folders();
+  const isOpen = (id) => !document.getElementById(id).classList.contains('hidden');
+  if (!isOpen('projU')) toggleFolder('projU');
+  if (!isOpen('pU1')) toggleFolder('pU1');
   const key = (k, extra = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, ...extra }));
   key('z'); const undo1 = folders();
+  const keptOpen = isOpen('projU') && isOpen('pU1');
   key('z'); const undo2 = folders();
   key('y'); const redo1 = folders();
   const stillProject = !!document.querySelector('.folder-title[data-folder-id="projU"]');
-  appendFolderToParent(document.getElementById('projU'), 'Pasta X', 'pUX'); refreshBomAfterProjectChange(); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta X', 'pUX'); await wait(450);
   key('y'); const afterNewChange = folders(); //refazer some depois de uma alteração nova
   document.querySelector('.folder-title[data-folder-id="projU"]').closest('.folder').remove();
   activeFolderId = prev;
-  return { before, undo1, undo2, redo1, stillProject, afterNewChange };
+  return { before, undo1, undo2, redo1, stillProject, afterNewChange, keptOpen };
 });
 check(undoRes.before === 'Pasta 1,Pasta 2' && undoRes.undo1 === 'Pasta 1' && undoRes.undo2 === '' && undoRes.redo1 === 'Pasta 1'
-  && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X', `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
+  && undoRes.stillProject && undoRes.afterNewChange === 'Pasta 1,Pasta X' && undoRes.keptOpen, `desfazer e refazer (Ctrl+Z / Ctrl+Y) no projeto (${JSON.stringify(undoRes)})`);
 
 //Seleção múltipla: retângulo seleciona os marcadores do projeto; muda situação, move de pasta e exclui
 const sel = await page.evaluate(() => {
@@ -1205,6 +1209,145 @@ const lightBlocks = await page.evaluate(() => {
   return found;
 });
 check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${lightBlocks.length ? ': ' + lightBlocks.slice(0, 5).join(', ') : ''}`);
+
+{
+  const spCtx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
+  const sp = await spCtx.newPage();
+  await sp.addInitScript(() => { try { localStorage.setItem('routeMapTourDone', '1'); } catch (e) {} });
+  await sp.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+  await sp.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+  //Sem acesso às CDNs: SMOKE_LIBS aponta para cópias locais do jsPDF (mesmos arquivos, passam na integridade)
+  if (process.env.SMOKE_LIBS) {
+    await sp.route('**/jspdf@2.5.1/dist/jspdf.umd.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'jspdf-2.5.1/dist/jspdf.umd.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+    await sp.route('**/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'jspdf-autotable-3.8.2/dist/jspdf.plugin.autotable.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+  }
+  await sp.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
+  await sp.goto(baseUrl + '/index.html');
+  await sp.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
+  await sp.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
+  await sp.evaluate(() => { if (!map) map = new google.maps.Map(document.getElementById('map'), {}); });
+//Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
+const split = await sp.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projSP', name: 'Projeto SP', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+  const mk = (type, name, uid, lat, lng, fusionPlan) => ({ type, name, uid, folderId: 'projSP', fusionPlan,
+    marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+  const card = buildFusionCableCard({ name: 'FO-12-CTO-B', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+  const holder = document.createElement('div'); holder.append(card);
+  const ceoA = mk('CEO', 'CEO-A', 'sp-a', -20, -44, JSON.stringify({ version: 2, elements: holder.innerHTML, svg: '' }));
+  const ctoB = mk('CTO', 'CTO-B', 'sp-b', -20, -43.99, JSON.stringify({ version: 2, elements: holder.innerHTML, svg: '' }));
+  const mid = mk('CEO', 'CEO-M', 'sp-m', -20.00005, -43.995);
+  const off = mk('CTO', 'CTO-LONGE', 'sp-x', -20.01, -43.995);
+  markers.push(ceoA, ctoB, mid, off);
+  rebuildCable({ folderId: 'projSP', name: 'FO-12-CTO-B', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -20, lng: -44 }, { lat: -20, lng: -43.99 }],
+    startAnchorUid: 'sp-a', endAnchorUid: 'sp-b', startAnchorMarkerName: 'CEO-A', endAnchorMarkerName: 'CTO-B' });
+  const cable = savedCables[savedCables.length - 1];
+  const passing = getCablesPassingThroughMarker(mid).map(c => c.name).join();
+  const notPassing = getCablesPassingThroughMarker(off).length + getCablesPassingThroughMarker(ceoA).length;
+  const menu = buildSidebarMenuItems({ kind: 'marker', info: mid, row: document.createElement('li') }).some(i => i.label === 'Dividir cabo FO-12-CTO-B aqui');
+  const res = splitCableAtMarker(cable, mid);
+  const names = savedCables.filter(c => c.folderId === 'projSP').map(c => c.name).join();
+  const first = res.first, second = res.second;
+  const out = {
+    passing, notPassing, menu, names,
+    firstEnds: `${first.startAnchorUid}>${first.endAnchorUid}`, secondEnds: `${second.startAnchorUid}>${second.endAnchorUid}`,
+    meet: Math.abs(first.path[first.path.length - 1].lng() - second.path[0].lng()) < 1e-9,
+    planA: readFusionPlan(ceoA).cables.map(c => c.name).join(), planB: readFusionPlan(ctoB).cables.map(c => c.name).join(),
+    oldGone: !savedCables.includes(cable), rows: document.getElementById('projSP').querySelectorAll('.ge-pro-item').length,
+  };
+  [first, second].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+  [ceoA, ctoB, mid, off].forEach(m => markers.splice(markers.indexOf(m), 1));
+  document.querySelector('.folder-title[data-folder-id="projSP"]').closest('.folder').remove();
+  return out;
+});
+check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu && split.names === 'FO-12-CEO-M,FO-12-CTO-B'
+  && split.firstEnds === 'sp-a>sp-m' && split.secondEnds === 'sp-m>sp-b' && split.meet && split.planA === 'FO-12-CEO-M'
+  && split.planB === 'FO-12-CTO-B' && split.oldGone && split.rows === 2, `dividir cabo no marcador do meio (${JSON.stringify(split)})`);
+
+  //Nomes repetidos: dois cabos "FO-12-CTO" e duas caixas "CTO" — cada ligação vai pelo identificador
+  const dup = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projDU', name: 'Projeto DU', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projDU', marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+    const ceo = mk('CEO', 'CEO-D', 'du-ceo', -21, -44), cto1 = mk('CTO', 'CTO', 'du-c1', -21, -43.99), cto2 = mk('CTO', 'CTO', 'du-c2', -21.01, -44);
+    markers.push(ceo, cto1, cto2);
+    const mkCable = (uid, end) => { rebuildCable({ uid, folderId: 'projDU', name: 'FO-12-CTO', type: 'FO-12', width: 4, color: '#000', status: 'Novo',
+      path: [{ lat: -21, lng: -44 }, { lat: end.marker.getPosition().lat(), lng: end.marker.getPosition().lng() }], startAnchorUid: 'du-ceo', endAnchorUid: end.uid }); return savedCables[savedCables.length - 1]; };
+    const k1 = mkCable('du-k1', cto1), k2 = mkCable('du-k2', cto2);
+    //Plano antigo da CTO 2: cartão só com o nome (sem uid) e uma fusão na fibra 1
+    const legacy = buildFusionCableCard({ name: 'FO-12-CTO', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const sp1 = buildFusionSplitterCard({ id: 'splitter-du', label: '1:8', outputs: 8, type: 'Fusão' });
+    sp1.classList.add('splitter-atendimento');
+    const h = document.createElement('div'); h.append(legacy, sp1);
+    const f1 = legacy.querySelector('.fiber-row').id;
+    cto2.fusionPlan = JSON.stringify({ version: 2, elements: h.innerHTML, svg: `<path class="fusion-line" data-start-id="${f1}" data-end-id="splitter-du-input-port"></path>` });
+    backfillFusionPlanCableUids([cto2]);
+    const uidAfterBackfill = parseStoredHtml(JSON.parse(cto2.fusionPlan).elements).querySelector('.cable-element').dataset.cableUid;
+    const usage1 = getCableFiberUsage(k1).used.join(), usage2 = getCableFiberUsage(k2).used.join();
+    const g = buildFiberGraph();
+    const route1 = traceFiberRoute(g, k1, 1).ctos.length, route2 = traceFiberRoute(g, k2, 1).ctos.map(c => c.box.uid).join();
+    const inPlan1 = checkCableUsageInFusionPlans(k1).isInPlan, inPlan2 = checkCableUsageInFusionPlans(k2).boxes.map(b => b.uid).join();
+    const conn = [isCableConnectedToMarker(k1, cto1), isCableConnectedToMarker(k1, cto2), isCableConnectedToMarker(k2, cto2)].join();
+    //Renomear k1 não mexe no plano do k2
+    const old = k1.name; k1.name = 'FO-12-NOVO'; updateCableNameInAllFusionPlans(old, 'FO-12-NOVO', k1);
+    const planAfterRename = readFusionPlan(cto2).cables.map(c => c.name).join();
+    [k1, k2].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    [ceo, cto1, cto2].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projDU"]').closest('.folder').remove();
+    return { uidAfterBackfill, usage1, usage2, route1, route2, inPlan1, inPlan2, conn, planAfterRename };
+  });
+  check(dup.uidAfterBackfill === 'du-k2' && dup.usage1 === '' && dup.usage2 === '1' && dup.route1 === 0 && dup.route2 === 'du-c2'
+    && dup.inPlan1 === false && dup.inPlan2 === 'du-c2' && dup.conn === 'true,false,true' && dup.planAfterRename === 'FO-12-CTO',
+    `cabos e caixas com o mesmo nome ligados pelo identificador (${JSON.stringify(dup)})`);
+
+  //Exportar plano de fusão do projeto (PDF): todas as caixas, fusões em ordem de cabo/fibra
+  const hasPdf = (process.env.CI || process.env.SMOKE_LIBS)
+    ? await sp.waitForFunction(() => !!window.jspdf?.jsPDF?.API?.autoTable, null, { timeout: 20000 }).then(() => true, () => false)
+    : await sp.evaluate(() => !!window.jspdf?.jsPDF?.API?.autoTable);
+  const fx = await sp.evaluate((hasPdf) => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projFX', name: 'Projeto FX', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const prev = activeFolderId; setActiveFolder('projFX');
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projFX', ceoStatus: 'Novo', marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+    const ceo = mk('CEO', 'CEO-FX', 'fx-ceo', -22, -44), cto = mk('CTO', 'CTO-FX', 'fx-cto', -22, -43.99);
+    markers.push(ceo, cto);
+    rebuildCable({ uid: 'fx-a', folderId: 'projFX', name: 'CAB-A', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -22.01, lng: -44 }, { lat: -22, lng: -44 }], endAnchorUid: 'fx-ceo' });
+    rebuildCable({ uid: 'fx-b', folderId: 'projFX', name: 'CAB-B', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -22, lng: -44 }, { lat: -22, lng: -43.99 }], startAnchorUid: 'fx-ceo', endAnchorUid: 'fx-cto' });
+    const a = buildFusionCableCard({ name: 'CAB-A', uid: 'fx-a', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const b = buildFusionCableCard({ name: 'CAB-B', uid: 'fx-b', type: 'Cabo AS 80 FO-12', role: 'saida', fiberCount: 12 });
+    const sp1 = buildFusionSplitterCard({ id: 'splitter-fx', label: '1:8', outputs: 8, type: 'Fusão' });
+    const h = document.createElement('div'); h.append(a, b, sp1);
+    const f = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+    const links = [[f(b, 2), f(a, 2)], [f(a, 1), f(b, 1)], ['splitter-fx-input-port', f(a, 3)]];
+    ceo.fusionPlan = JSON.stringify({ version: 2, elements: h.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') });
+    const boxes = buildProjectFusionExport(getActiveProjectScope());
+    const c = boxes.find(x => x.name === 'CEO-FX');
+    const doc = hasPdf ? drawFusionExportPdf('Projeto FX', boxes) : null;
+    const out = {
+      order: boxes.map(x => x.name).join(), ctoEmpty: boxes.find(x => x.name === 'CTO-FX').empty,
+      fusions: c.fusions.map(x => `${x.a.text}>${x.b.text}`).join(' | '), color: c.fusions[0].a.colorName,
+      cables: c.cables.map(x => `${x.name}:${x.role}:${x.used}`).join(), pages: doc ? doc.internal.getNumberOfPages() : 3,
+      size: doc ? doc.output('arraybuffer').byteLength : 9999,
+    };
+    window.__fxPdf = doc ? doc.output('datauristring') : '';
+    savedCables.filter(x => x.folderId === 'projFX').forEach(x => { x.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(x), 1); });
+    [ceo, cto].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projFX"]').closest('.folder').remove();
+    activeFolderId = prev;
+    return out;
+  }, hasPdf);
+  check(fx.order === 'CEO-FX,CTO-FX' && fx.ctoEmpty && fx.fusions === 'CAB-A F1>CAB-B F1 | CAB-A F2>CAB-B F2 | CAB-A F3>Splitter 1:8 · entrada'
+    && fx.color === 'Verde' && fx.cables === 'CAB-A:Entrada:3,CAB-B:Saída:2' && fx.pages === 3 && fx.size > 3000,
+    `exportar plano de fusão do projeto em PDF (${JSON.stringify(fx)})`);
+  if (process.env.SMOKE_SHOTS && hasPdf) {
+    const uri = await sp.evaluate(() => window.__fxPdf);
+    fs.writeFileSync(path.join(process.env.SMOKE_SHOTS, 'plano-de-fusao.pdf'), Buffer.from(uri.split(',')[1], 'base64'));
+  }
+  await spCtx.close();
+}
 
 //Edição simultânea ao vivo: duas abas no mesmo projeto (Realtime simulado entre abas) e uma terceira que entra depois
 {

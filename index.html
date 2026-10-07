@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261007h" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261007k" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -95,6 +95,7 @@
             <a href="#" id="importKmlButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"></use></svg><span>Importar KML/KMZ</span></a>
             <a href="#" id="exportKmlButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg><span>Exportar para KML</span></a>
             <a href="#" id="exportSpreadsheetButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg><span>Exportar planilha (Excel)</span></a>
+            <a href="#" id="exportFusionPlansButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg><span>Exportar plano de fusão (PDF)</span></a>
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="undoButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg><span>Desfazer</span><kbd>Ctrl+Z</kbd></a>
             <a href="#" id="redoButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg><span>Refazer</span><kbd>Ctrl+Y</kbd></a>
@@ -2709,8 +2710,8 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261007g" defer></script>
-  <script src="js/persistence.js?v=20261007b" defer></script>
+  <script src="script.js?v=20261007m" defer></script>
+  <script src="js/persistence.js?v=20261007m" defer></script>
   <script src="js/sidebar-actions.js?v=20261007i" defer></script>
   <script src="js/project-safety.js?v=20261007a" defer></script>
   <script src="js/catalog.js?v=20261006g" defer></script>
@@ -2720,27 +2721,29 @@
   <script src="js/report.js?v=20261004e" defer></script>
   <script src="js/sketch.js?v=20261007i" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261007c" defer></script>
+  <script src="js/sidebar.js?v=20261007p" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261007b" defer></script>
   <script src="js/marker-panel.js?v=20261007e" defer></script>
-  <script src="js/fusion-plan.js?v=20261007c" defer></script>
-  <script src="js/fusion.js?v=20261007d" defer></script>
+  <script src="js/fusion-plan.js?v=20261007m" defer></script>
+  <script src="js/fusion.js?v=20261007m" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
-  <script src="js/clients.js?v=20261007e" defer></script>
-  <script src="js/optical-budget.js?v=20261007c" defer></script>
-  <script src="js/project-check.js?v=20261007c" defer></script>
+  <script src="js/clients.js?v=20261007m" defer></script>
+  <script src="js/optical-budget.js?v=20261007m" defer></script>
+  <script src="js/project-check.js?v=20261007m" defer></script>
   <script src="js/project-export.js?v=20261007b" defer></script>
+  <script src="js/fusion-export.js?v=20261007p" defer></script>
   <script src="js/pop-equipment.js?v=20261007c" defer></script>
   <script src="js/global-search.js?v=20261007b" defer></script>
   <script src="js/box-templates.js?v=20261006k" defer></script>
-  <script src="js/undo.js?v=20261006l" defer></script>
-  <script src="js/map-selection.js?v=20261007i" defer></script>
+  <script src="js/undo.js?v=20261007o" defer></script>
+  <script src="js/map-selection.js?v=20261007m" defer></script>
   <script src="js/tour.js?v=20261007i" defer></script>
   <script src="js/live-sync.js?v=20261007a" defer></script>
   <script src="js/pop-plan.js?v=20261007c" defer></script>
-  <script src="js/cable-route.js?v=20261007c" defer></script>
-  <script src="js/marker-hover.js?v=20261007c" defer></script>
+  <script src="js/cable-route.js?v=20261007m" defer></script>
+  <script src="js/cable-split.js?v=20261007m" defer></script>
+  <script src="js/marker-hover.js?v=20261007m" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
