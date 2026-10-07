@@ -97,16 +97,39 @@ function setMapPoiVisible(visible) {
     applyMapTheme();
 }
 
-//Caixa "Pontos do mapa" ao lado de Mapa/Satélite (só no modo Mapa; no Satélite o Google já tem "Rótulos")
+//Seletor Mapa/Satélite próprio: "Pontos do mapa" fica dentro do menu do Mapa e "Rótulos" no do Satélite
 function setupMapPoiControl() {
-    const box = document.createElement('label');
-    box.className = 'map-poi-control';
-    box.title = 'Mostrar ou esconder comércios, igrejas, pontos de ônibus e outros locais do Google';
-    box.innerHTML = '<input type="checkbox"> <span>Pontos do mapa</span>';
-    const input = box.querySelector('input');
-    input.checked = mapPoiVisible;
-    input.addEventListener('change', () => setMapPoiVisible(input.checked));
-    const sync = () => { box.hidden = !['roadmap', 'terrain'].includes(map.getMapTypeId()); };
+    const box = document.createElement('div');
+    box.className = 'map-type-control';
+    box.innerHTML = `
+      <div class="mtc-item" data-kind="map">
+        <button type="button" class="mtc-btn" data-type="roadmap">Mapa</button>
+        <div class="mtc-menu">
+          <label title="Mostrar ou esconder comércios, igrejas, pontos de ônibus e outros locais do Google"><input type="checkbox" data-opt="poi"> Pontos do mapa</label>
+          <label><input type="checkbox" data-opt="terrain"> Terreno</label>
+        </div>
+      </div>
+      <div class="mtc-item" data-kind="sat">
+        <button type="button" class="mtc-btn" data-type="hybrid">Satélite</button>
+        <div class="mtc-menu"><label><input type="checkbox" data-opt="labels" checked> Rótulos</label></div>
+      </div>`;
+    const poi = box.querySelector('[data-opt="poi"]');
+    const terrain = box.querySelector('[data-opt="terrain"]');
+    const labels = box.querySelector('[data-opt="labels"]');
+    poi.checked = mapPoiVisible;
+    poi.addEventListener('change', () => setMapPoiVisible(poi.checked));
+    terrain.addEventListener('change', () => map.setMapTypeId(terrain.checked ? 'terrain' : 'roadmap'));
+    labels.addEventListener('change', () => map.setMapTypeId(labels.checked ? 'hybrid' : 'satellite'));
+    box.querySelector('[data-type="roadmap"]').addEventListener('click', () => map.setMapTypeId(terrain.checked ? 'terrain' : 'roadmap'));
+    box.querySelector('[data-type="hybrid"]').addEventListener('click', () => map.setMapTypeId(labels.checked ? 'hybrid' : 'satellite'));
+    const sync = () => {
+        const type = map.getMapTypeId();
+        const isMap = ['roadmap', 'terrain'].includes(type);
+        box.querySelector('[data-kind="map"]').classList.toggle('is-active', isMap);
+        box.querySelector('[data-kind="sat"]').classList.toggle('is-active', !isMap);
+        terrain.checked = type === 'terrain';
+        if (!isMap) labels.checked = type === 'hybrid';
+    };
     map.addListener('maptypeid_changed', sync);
     sync();
     map.controls[google.maps.ControlPosition.TOP_LEFT].push(box);
@@ -676,6 +699,7 @@ function initMap() {
         map = new google.maps.Map(mapElement, {
             center: { lat: -20.1394, lng: -44.8872 },
             zoom: 10,
+            mapTypeControl: false,
         });
         map.addListener("click", handleMapClick);
         map.addListener("rightclick", handleMapRightClick);

@@ -15,6 +15,11 @@ const TOUR_DONE_KEY = 'routeMapTourDone';
 let tourIndex = -1;
 
 function startTour() {
+    //Visto uma vez já conta: não reaparece mesmo se a página for fechada no meio
+    try { localStorage.setItem(TOUR_DONE_KEY, '1'); } catch (e) { /* sem armazenamento */ }
+    if (typeof supabaseClient !== 'undefined' && supabaseClient?.auth?.updateUser) {
+        supabaseClient.auth.updateUser({ data: { tour_done: true } }).catch(() => {});
+    }
     document.querySelectorAll('.dropdown-content.show, .user-menu.show').forEach(el => el.classList.remove('show'));
     const accountModal = document.getElementById('accountModal');
     if (accountModal) accountModal.style.display = 'none';
@@ -103,7 +108,15 @@ document.addEventListener('DOMContentLoaded', () => {
         appReady.then(() => {
             let done = false;
             try { done = localStorage.getItem(TOUR_DONE_KEY) === '1'; } catch (e) { done = true; }
-            if (!done && !navigator.webdriver) setTimeout(startTour, 1200);
+            if (done || navigator.webdriver) return;
+            //Conta que já viu o tour em outro navegador
+            Promise.resolve(supabaseClient?.auth?.getUser?.()).then((res) => {
+                if (res?.data?.user?.user_metadata?.tour_done) {
+                    try { localStorage.setItem(TOUR_DONE_KEY, '1'); } catch (e) { /* sem armazenamento */ }
+                    return;
+                }
+                setTimeout(startTour, 1200);
+            }).catch(() => setTimeout(startTour, 1200));
         });
     }
 });
