@@ -1176,6 +1176,7 @@ function openClientModal(clientInfo, presetKind) {
     document.getElementById('clientShowLabel').checked = mapLabel.show;
     document.getElementById('clientLabelColor').value = mapLabel.color;
     document.getElementById('clientLabelColor').disabled = !mapLabel.show;
+    if (typeof syncColorSwatches === 'function') syncColorSwatches();
     document.getElementById('clientEquipmentList').innerHTML = '';
     //Cliente novo: residencial/predial começa com uma ONU; B2B escolhe na lista Data Center
     const equipments = data.equipments.length ? data.equipments : (clientInfo || data.kind === 'b2b' ? [] : [{ type: 'ONU/ONT' }]);
@@ -1433,6 +1434,7 @@ function setupClientModal() {
     });
     document.getElementById('clientShowLabel').addEventListener('change', (e) => {
         document.getElementById('clientLabelColor').disabled = !e.target.checked;
+        if (typeof syncColorSwatches === 'function') syncColorSwatches();
     });
     document.getElementById('clientB2BService').innerHTML = B2B_SERVICES.map(s => `<option>${s}</option>`).join('');
     document.getElementById('addClientEquipmentButton').addEventListener('click', () => {

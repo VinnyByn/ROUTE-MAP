@@ -314,6 +314,64 @@ function fillMarkerPanelStyle(values) {
     document.getElementById('markerColor').value = values.color;
     document.getElementById('markerLabelColor').value = values.labelColor;
     setMarkerSizeControlValue('markerSize', values.size);
+    syncColorSwatches();
+}
+
+// Paleta de cores com amostras clicáveis; o input nativo continua sendo a fonte da verdade.
+const MARKER_COLOR_PALETTE = ['#16a34a', '#22c55e', '#0ea5e9', '#2563eb', '#7c3aed', '#db2777', '#ef4444', '#f59e0b', '#facc15', '#64748b'];
+const LABEL_COLOR_PALETTE = ['#0f172a', '#ffffff', '#facc15', '#ef4444', '#22c55e', '#38bdf8'];
+
+function enhanceColorInput(input, palette) {
+    if (!input || input.dataset.swatches) return;
+    input.dataset.swatches = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'color-swatches';
+    input.parentNode.insertBefore(wrap, input.nextSibling);
+    const pick = (value) => {
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    palette.forEach(color => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'color-swatch';
+        b.dataset.color = color;
+        b.style.setProperty('--swatch', color);
+        b.title = color;
+        b.setAttribute('aria-label', `Cor ${color}`);
+        b.addEventListener('click', () => pick(color));
+        wrap.appendChild(b);
+    });
+    const custom = document.createElement('label');
+    custom.className = 'color-swatch color-swatch--custom';
+    custom.title = 'Cor personalizada';
+    custom.textContent = '+';
+    custom.appendChild(input);
+    wrap.appendChild(custom);
+    input.addEventListener('input', () => syncColorSwatches(wrap));
+    syncColorSwatches(wrap);
+}
+
+function syncColorSwatches(root) {
+    const wraps = root ? [root] : document.querySelectorAll('.color-swatches');
+    wraps.forEach(wrap => {
+        const input = wrap.querySelector('input[type="color"]');
+        if (!input) return;
+        const value = input.value.toLowerCase();
+        let matched = false;
+        wrap.querySelectorAll('.color-swatch[data-color]').forEach(b => {
+            const on = b.dataset.color === value;
+            matched = matched || on;
+            b.classList.toggle('is-selected', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        const custom = wrap.querySelector('.color-swatch--custom');
+        custom.classList.toggle('is-selected', !matched);
+        custom.style.setProperty('--swatch', matched ? 'transparent' : value);
+        wrap.disabled = input.disabled;
+        wrap.classList.toggle('is-disabled', input.disabled);
+    });
 }
 
 // ---------------------------------------------------------------
@@ -708,6 +766,9 @@ function setupMarkerPanel() {
         const text = document.getElementById('infraMarkerCoordinatesText').textContent;
         navigator.clipboard?.writeText(text).then(() => showToast('Copiado', 'Coordenadas copiadas.'));
     });
+    enhanceColorInput(document.getElementById('markerColor'), MARKER_COLOR_PALETTE);
+    enhanceColorInput(document.getElementById('markerLabelColor'), LABEL_COLOR_PALETTE);
+    enhanceColorInput(document.getElementById('clientLabelColor'), LABEL_COLOR_PALETTE);
     ['markerColor', 'markerLabelColor', 'markerName', 'markerNumber'].forEach(id => {
         document.getElementById(id).addEventListener('input', handleMarkerStyleInput);
     });
