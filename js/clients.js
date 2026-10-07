@@ -85,7 +85,13 @@ function getProjectCables(folderId) {
 
 function findClientCable(clientInfo) {
     const name = clientInfo?.client?.cableName;
-    return name ? getProjectCables(clientInfo.folderId ?? getClientFolderId()).find(c => c.name === name) || null : null;
+    if (!name) return null;
+    const uid = clientInfo.client.cableUid;
+    const byUid = uid && savedCables.find(c => c.uid === uid);
+    if (byUid) return byUid;
+    const cable = getProjectCables(clientInfo.folderId ?? getClientFolderId()).find(c => c.name === name) || null;
+    if (cable) clientInfo.client.cableUid = ensureItemUid(cable, 'cb', savedCables); //Grava o vínculo pelo identificador
+    return cable;
 }
 
 function getCableFiberCount(cable) {
@@ -98,7 +104,7 @@ function getOccupiedCableFibers(cable, ignoreClient) {
     const occupied = new Map();
     markers.forEach(m => {
         if (m === ignoreClient || m.type !== 'CLIENTE' || m.client?.status === 'cancelado') return;
-        if (m.client?.cableName === cable.name && m.client.cableFiber) occupied.set(Number(m.client.cableFiber), m);
+        if (m.client?.cableName && m.client.cableFiber && findClientCable(m) === cable) occupied.set(Number(m.client.cableFiber), m);
     });
     return occupied;
 }
@@ -1219,6 +1225,7 @@ function collectClientForm() {
             ctoPort: ctoUid && ctoUid !== 'auto' && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? Number(value('clientPort')) || null : null,
             cableName: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid.slice(CLIENT_CABLE_PREFIX.length) : null,
             cableFiber: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? Number(value('clientPort')) || null : null,
+            cableUid: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? (editingClient?.client?.cableUid || null) : null,
             dropOverride: Number(value('clientDropOverride')) > 0 ? Number(value('clientDropOverride')) : null,
             equipments: collectClientEquipments(),
             predial: kind === 'predial' ? {

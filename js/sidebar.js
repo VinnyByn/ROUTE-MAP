@@ -453,7 +453,7 @@ function deleteSidebarMapItem(entity) {
         }
         const extra = usage.isInPlan ? ` Ele também sai do plano de fusão de: ${usage.locations.join(', ')}.` : '';
         showConfirm('Excluir cabo', `Excluir o cabo "${info.name}"?${extra}`, () => {
-            if (usage.isInPlan) removeCableFromSavedFusionPlans(info.name, usage.locations);
+            if (usage.isInPlan) removeCableFromSavedFusionPlans(info, usage.boxes);
             info.polyline?.setMap(null);
             info.item?.remove();
             savedCables = savedCables.filter(c => c !== info);

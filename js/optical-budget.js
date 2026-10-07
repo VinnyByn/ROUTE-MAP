@@ -40,8 +40,9 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
         });
         plan.cables.forEach(c => c.fibers.forEach(f => {
             if (!f.number) return;
+            const ck = planCableKey(c, box);
             info.set(key(f.id), { kind: 'fiber', box, cable: c.name, number: f.number });
-            const fk = `${c.name}#${f.number}`;
+            const fk = `${ck}#${f.number}`;
             if (!fiberNodes.has(fk)) fiberNodes.set(fk, []);
             fiberNodes.get(fk).push(key(f.id));
         }));
@@ -61,7 +62,8 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
         });
     });
     fiberNodes.forEach((nodes, fk) => {
-        const cable = savedCables.find(c => c.name === fk.split('#')[0]);
+        const ck = fk.slice(0, fk.lastIndexOf('#'));
+        const cable = savedCables.find(c => c.uid === ck) || savedCables.find(c => `nome:${c.name}` === ck);
         const loss = ((Number(cable?.totalLength) || 0) / 1000) * cfg.lossPerKm;
         nodes.forEach(a => nodes.forEach(b => { if (a !== b) addEdge(a, b, loss, 'cable'); }));
     });

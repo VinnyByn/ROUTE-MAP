@@ -17,13 +17,12 @@ function runProjectCheck(scope) {
     const issues = [];
     const add = (level, title, detail, target) => issues.push({ level, title, detail, target });
     const boxes = scope.markers.filter(m => m.type === 'CEO' || m.type === 'CTO' || m.type === 'POP');
-    const cableNames = new Set(savedCables.map(c => c.name));
 
-    //Nomes repetidos: o plano de fusão liga cartão e cabo pelo nome
+    //Nomes repetidos: o sistema liga pelo identificador, mas na rua e nos relatórios confunde
     const byName = new Map();
     scope.cables.forEach(c => byName.set(c.name, [...(byName.get(c.name) || []), c]));
     byName.forEach((list, name) => {
-        if (list.length > 1) add('erro', `Nome de cabo repetido: ${name}`, `${list.length} cabos com o mesmo nome. Os planos de fusão não sabem qual é qual.`, { kind: 'cable', info: list[0] });
+        if (list.length > 1) add('aviso', `Nome de cabo repetido: ${name}`, `${list.length} cabos com o mesmo nome. As ligações continuam certas, mas vale renomear para não confundir em campo.`, { kind: 'cable', info: list[0] });
     });
     const boxNames = new Map();
     boxes.forEach(b => boxNames.set(b.name, [...(boxNames.get(b.name) || []), b]));
@@ -50,12 +49,12 @@ function runProjectCheck(scope) {
             if (connected.length) add('aviso', `${box.type} sem plano de fusão: ${box.name}`, `${connected.length} cabo(s) chegam nesta caixa e não há fusões.`, { kind: 'marker', info: box });
             return;
         }
-        const cardNames = new Set(plan.cables.map(c => c.name));
+        const inPlan = new Set(plan.cables.map(c => resolvePlanCable(c, box)).filter(Boolean));
         connected.forEach(cable => {
-            if (!cardNames.has(cable.name)) add('aviso', `Cabo fora do plano: ${cable.name}`, `Chega em ${box.name}, mas não foi adicionado ao plano de fusão da caixa.`, { kind: 'marker', info: box });
+            if (!inPlan.has(cable)) add('aviso', `Cabo fora do plano: ${cable.name}`, `Chega em ${box.name}, mas não foi adicionado ao plano de fusão da caixa.`, { kind: 'marker', info: box });
         });
         plan.cables.forEach(card => {
-            if (!cableNames.has(card.name)) add('erro', `Cabo inexistente no plano de ${box.name}`, `O plano tem o cabo "${card.name}", que não existe mais (renomeado ou excluído). Remova o cartão e adicione o cabo certo.`, { kind: 'marker', info: box });
+            if (!resolvePlanCable(card, box)) add('erro', `Cabo inexistente no plano de ${box.name}`, `O plano tem o cabo "${card.name}", que não existe mais (renomeado ou excluído). Remova o cartão e adicione o cabo certo.`, { kind: 'marker', info: box });
         });
         const ports = new Set();
         plan.cables.forEach(c => c.fibers.forEach(f => ports.add(f.id)));

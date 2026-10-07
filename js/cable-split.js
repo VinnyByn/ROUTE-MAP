@@ -65,19 +65,19 @@ function getCableSplitNames(cable, markerInfo) {
 }
 
 //Renomeia o cabo só no plano de fusão desta caixa (as outras continuam com o nome antigo)
-function renameCableInBoxPlan(box, oldName, newName) {
+function renameCableInBoxPlan(box, oldName, newName, cable = null, newUid = null) {
     if (!box.fusionPlan) return false;
     try {
         const planData = JSON.parse(box.fusionPlan);
         if (!planData.elements) return false;
         const tempDiv = parseStoredHtml(planData.elements);
         const tempSvg = planData.svg ? parseStoredSvg(planData.svg) : null;
-        if (!renameCableInPlanDom(tempDiv, tempSvg, oldName, newName)) return false;
+        if (!renameCableInPlanDom(tempDiv, tempSvg, oldName, newName, cable, box, newUid)) return false;
         planData.elements = tempDiv.innerHTML;
         if (tempSvg) planData.svg = tempSvg.innerHTML;
         box.fusionPlan = JSON.stringify(planData);
         if (typeof activeMarkerForFusion !== 'undefined' && activeMarkerForFusion === box) {
-            renameCableInPlanDom(getFusionStage(), getFusionSvg(), oldName, newName);
+            renameCableInPlanDom(getFusionStage(), getFusionSvg(), oldName, newName, cable, box, newUid);
         }
         return true;
     } catch (e) {
@@ -91,7 +91,7 @@ function getBoxesOnFirstPart(cable, splitAlong, splitMarker) {
     return markers.filter(box => {
         if (box === splitMarker || !box.fusionPlan) return false;
         const plan = readFusionPlan(box);
-        if (!plan?.cables?.some(c => c.name === cable.name)) return false;
+        if (!plan?.cables?.some(c => planCableMatches(c, cable, box))) return false;
         if (box.uid && box.uid === cable.startAnchorUid) return true;
         if (box.uid && box.uid === cable.endAnchorUid) return false;
         if (!box.marker?.getPosition) return false;
@@ -146,15 +146,18 @@ function splitCableAtMarker(cable, markerInfo) {
         anchorRow.remove();
     }
     ensureItemUid(first, 'cb', savedCables);
+    ensureItemUid(second, 'cb', savedCables);
 
     //Planos de fusão das caixas do trecho A passam a usar o nome novo
-    firstBoxes.forEach(box => renameCableInBoxPlan(box, names.second, names.first));
+    firstBoxes.forEach(box => renameCableInBoxPlan(box, names.second, names.first, second, first.uid));
     //Clientes B2B ligados no cabo: ficam no trecho mais perto deles
     markers.forEach(m => {
         if (m.type !== 'CLIENTE' || m.client?.cableName !== names.second || !m.marker?.getPosition) return;
+        if (m.client.cableUid && m.client.cableUid !== second.uid) return; //Outro cabo com o mesmo nome
         const q = projectOnCablePath(cable.path, m.marker.getPosition());
         if (q && q.index + q.t < splitAlong) {
             m.client.cableName = names.first;
+            m.client.cableUid = first.uid;
             if (m.client.linkedCable === names.second) m.client.linkedCable = names.first;
         }
     });

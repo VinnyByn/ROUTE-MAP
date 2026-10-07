@@ -740,7 +740,7 @@ if (process.env.SMOKE_SHOTS) {
   await page.locator('#projectCheckBox').screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'verificar-projeto.png') });
 }
 await page.evaluate(() => window.__checkCleanup());
-const expectCheck = ['erro:Nome de cabo repetido: V-2', 'erro:Cabo com ponta solta: V-2', 'aviso:CTO sem plano de fusão: V-CTO',
+const expectCheck = ['aviso:Nome de cabo repetido: V-2', 'erro:Cabo com ponta solta: V-2', 'aviso:CTO sem plano de fusão: V-CTO',
   'erro:Cabo inexistente no plano de V-CEO', 'erro:Fusão duplicada em V-CEO', 'erro:Fusão quebrada em V-CEO', 'aviso:Splitter sem entrada em V-CEO',
   'aviso:Cliente sem porta: V-SemPorta', 'erro:Porta usada duas vezes na V-CTO', 'aviso:Drop longo: V-Longe', 'aviso:Cliente sem CTO: V-Solto'];
 const missingCheck = expectCheck.filter(t => !projCheck.titles.includes(t));
@@ -1255,6 +1255,43 @@ const split = await sp.evaluate(() => {
 check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu && split.names === 'FO-12-CEO-M,FO-12-CTO-B'
   && split.firstEnds === 'sp-a>sp-m' && split.secondEnds === 'sp-m>sp-b' && split.meet && split.planA === 'FO-12-CEO-M'
   && split.planB === 'FO-12-CTO-B' && split.oldGone && split.rows === 2, `dividir cabo no marcador do meio (${JSON.stringify(split)})`);
+
+  //Nomes repetidos: dois cabos "FO-12-CTO" e duas caixas "CTO" — cada ligação vai pelo identificador
+  const dup = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projDU', name: 'Projeto DU', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projDU', marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+    const ceo = mk('CEO', 'CEO-D', 'du-ceo', -21, -44), cto1 = mk('CTO', 'CTO', 'du-c1', -21, -43.99), cto2 = mk('CTO', 'CTO', 'du-c2', -21.01, -44);
+    markers.push(ceo, cto1, cto2);
+    const mkCable = (uid, end) => { rebuildCable({ uid, folderId: 'projDU', name: 'FO-12-CTO', type: 'FO-12', width: 4, color: '#000', status: 'Novo',
+      path: [{ lat: -21, lng: -44 }, { lat: end.marker.getPosition().lat(), lng: end.marker.getPosition().lng() }], startAnchorUid: 'du-ceo', endAnchorUid: end.uid }); return savedCables[savedCables.length - 1]; };
+    const k1 = mkCable('du-k1', cto1), k2 = mkCable('du-k2', cto2);
+    //Plano antigo da CTO 2: cartão só com o nome (sem uid) e uma fusão na fibra 1
+    const legacy = buildFusionCableCard({ name: 'FO-12-CTO', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const sp1 = buildFusionSplitterCard({ id: 'splitter-du', label: '1:8', outputs: 8, type: 'Fusão' });
+    sp1.classList.add('splitter-atendimento');
+    const h = document.createElement('div'); h.append(legacy, sp1);
+    const f1 = legacy.querySelector('.fiber-row').id;
+    cto2.fusionPlan = JSON.stringify({ version: 2, elements: h.innerHTML, svg: `<path class="fusion-line" data-start-id="${f1}" data-end-id="splitter-du-input-port"></path>` });
+    backfillFusionPlanCableUids([cto2]);
+    const uidAfterBackfill = parseStoredHtml(JSON.parse(cto2.fusionPlan).elements).querySelector('.cable-element').dataset.cableUid;
+    const usage1 = getCableFiberUsage(k1).used.join(), usage2 = getCableFiberUsage(k2).used.join();
+    const g = buildFiberGraph();
+    const route1 = traceFiberRoute(g, k1, 1).ctos.length, route2 = traceFiberRoute(g, k2, 1).ctos.map(c => c.box.uid).join();
+    const inPlan1 = checkCableUsageInFusionPlans(k1).isInPlan, inPlan2 = checkCableUsageInFusionPlans(k2).boxes.map(b => b.uid).join();
+    const conn = [isCableConnectedToMarker(k1, cto1), isCableConnectedToMarker(k1, cto2), isCableConnectedToMarker(k2, cto2)].join();
+    //Renomear k1 não mexe no plano do k2
+    const old = k1.name; k1.name = 'FO-12-NOVO'; updateCableNameInAllFusionPlans(old, 'FO-12-NOVO', k1);
+    const planAfterRename = readFusionPlan(cto2).cables.map(c => c.name).join();
+    [k1, k2].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    [ceo, cto1, cto2].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projDU"]').closest('.folder').remove();
+    return { uidAfterBackfill, usage1, usage2, route1, route2, inPlan1, inPlan2, conn, planAfterRename };
+  });
+  check(dup.uidAfterBackfill === 'du-k2' && dup.usage1 === '' && dup.usage2 === '1' && dup.route1 === 0 && dup.route2 === 'du-c2'
+    && dup.inPlan1 === false && dup.inPlan2 === 'du-c2' && dup.conn === 'true,false,true' && dup.planAfterRename === 'FO-12-CTO',
+    `cabos e caixas com o mesmo nome ligados pelo identificador (${JSON.stringify(dup)})`);
   await spCtx.close();
 }
 

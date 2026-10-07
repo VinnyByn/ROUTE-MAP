@@ -182,16 +182,17 @@ function getFreeFiberRowId(safeName, n) {
 }
 
 //Cartão de cabo. fiberIds preserva os ids antigos (as linhas salvas apontam para eles)
-function buildFusionCableCard({ name, type, status, role, fiberCount, fiberIds = new Map(), kitChecked = false, otherEnd = '' }) {
+function buildFusionCableCard({ name, uid = '', type, status, role, fiberCount, fiberIds = new Map(), kitChecked = false, otherEnd = '' }) {
     const card = document.createElement('div');
     card.className = `cable-element fx-card fx-cable ${role === 'saida' ? 'cable-saida' : 'cable-entrada'}`;
     card.dataset.cableName = name;
+    if (uid) card.dataset.cableUid = uid;
     card.dataset.cableRole = role === 'saida' ? 'saida' : 'entrada';
     card.dataset.cableStatus = status || 'Novo';
     card.dataset.cableType = type || '';
     card.dataset.fiberCount = String(fiberCount);
     card.dataset.lane = role === 'saida' ? 'right' : 'left';
-    const cable = savedCables.find(c => c.name === name);
+    const cable = (uid && savedCables.find(c => c.uid === uid)) || savedCables.find(c => c.name === name);
     card.style.setProperty('--cable-color', cable?.color || getCableColor(getFiberType(type)) || '#475569');
 
     const header = document.createElement('div');
@@ -321,7 +322,7 @@ function upgradeFusionCard(card) {
             const n = getFiberNumberFromId(row.id);
             if (n) fiberIds.set(n, row.id);
         });
-        const saved = savedCables.find(c => c.name === name);
+        const saved = resolvePlanCable({ name, uid: card.dataset.cableUid || '' }, activeMarkerForFusion);
         //Tipo do cabo trocado (só é permitido sem fusões): o cartão segue a quantidade de fibras atual
         const savedCount = getFiberType(saved?.type) ? parseInt(getFiberType(saved.type).split('-')[1], 10) : 0;
         const fiberCount = savedCount || fiberIds.size || parseInt(card.dataset.fiberCount, 10) || 12;
@@ -329,6 +330,7 @@ function upgradeFusionCard(card) {
         const kitBox = card.querySelector('.derivation-kit-checkbox');
         const upgraded = buildFusionCableCard({
             name,
+            uid: saved ? ensureItemUid(saved, 'cb', savedCables) : (card.dataset.cableUid || ''),
             type: saved?.type || card.dataset.cableType || '',
             status: saved?.status || card.dataset.cableStatus || 'Novo',
             role,
@@ -886,16 +888,23 @@ function getCablesConnectedToFusionMarker() {
     return savedCables.filter(cable => cable.name && cable.path?.length && isCableConnectedToMarker(cable, activeMarkerForFusion));
 }
 
-function isCableInFusionPlan(cableName) {
-    return getFusionCards().some(card => card.classList.contains('cable-element') && card.dataset.cableName === cableName);
+//Cartão do cabo no plano aberto (pelo uid; cartões antigos, pelo nome)
+function findFusionCardForCable(cable) {
+    return getFusionCards().find(card => card.classList.contains('cable-element')
+        && planCableMatches({ name: card.dataset.cableName || '', uid: card.dataset.cableUid || '' }, cable, activeMarkerForFusion));
+}
+
+function isCableInFusionPlan(cable) {
+    return !!findFusionCardForCable(cable);
 }
 
 function addCableToFusionPlan(cable, { render = true } = {}) {
-    if (!cable || isCableInFusionPlan(cable.name)) return null;
+    if (!cable || isCableInFusionPlan(cable)) return null;
     const role = getCableRoleAtMarker(cable, activeMarkerForFusion.marker.getPosition(), activeMarkerForFusion);
     const fiberType = getFiberType(cable.type);
     const card = buildFusionCableCard({
         name: cable.name,
+        uid: ensureItemUid(cable, 'cb', savedCables),
         type: cable.type,
         status: cable.status,
         role,
@@ -913,7 +922,7 @@ function addCableToFusionPlan(cable, { render = true } = {}) {
 }
 
 function addAllCablesToFusionPlan() {
-    const available = getCablesConnectedToFusionMarker().filter(c => !isCableInFusionPlan(c.name));
+    const available = getCablesConnectedToFusionMarker().filter(c => !isCableInFusionPlan(c));
     if (!available.length) {
         showToast('Nada a adicionar', 'Todos os cabos desta caixa já estão no plano.', 'progress');
         return 0;
@@ -933,7 +942,7 @@ function renderFusionCableList() {
         list.innerHTML = '<li class="fx-empty-note">Nenhum cabo chega nesta caixa. Desenhe um cabo ancorado nela para adicioná-lo aqui.</li>';
     }
     cables.forEach(cable => {
-        const inPlan = isCableInFusionPlan(cable.name);
+        const inPlan = isCableInFusionPlan(cable);
         const role = getCableRoleAtMarker(cable, activeMarkerForFusion.marker.getPosition(), activeMarkerForFusion);
         const other = getCableOtherEndName(cable, role);
         const li = document.createElement('li');
@@ -950,8 +959,8 @@ function renderFusionCableList() {
         button.className = inPlan ? 'fx-cable-item__action is-done' : 'fx-cable-item__action';
         button.textContent = inPlan ? 'Ver' : 'Adicionar';
         button.addEventListener('click', () => {
-            if (isCableInFusionPlan(cable.name)) {
-                const card = getFusionCards().find(c => c.dataset.cableName === cable.name);
+            if (isCableInFusionPlan(cable)) {
+                const card = findFusionCardForCable(cable);
                 card?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                 card?.classList.add('fx-flash');
                 setTimeout(() => card?.classList.remove('fx-flash'), 1200);
@@ -963,7 +972,7 @@ function renderFusionCableList() {
         list.appendChild(li);
     });
     const addAll = document.getElementById('addAllCablesButton');
-    if (addAll) addAll.disabled = !cables.some(c => !isCableInFusionPlan(c.name));
+    if (addAll) addAll.disabled = !cables.some(c => !isCableInFusionPlan(c));
 }
 
 function renderSplitterDraft() {

@@ -218,7 +218,7 @@ function deleteSelection() {
                 it.marker?.setMap(null);
             } else if (kind === 'cable') {
                 const usage = checkCableUsageInFusionPlans(it);
-                if (usage.isInPlan) removeCableFromSavedFusionPlans(it.name, usage.locations);
+                if (usage.isInPlan) removeCableFromSavedFusionPlans(it, usage.boxes);
                 it.polyline?.setMap(null);
             } else if (kind === 'polygon') {
                 it.polygonObject?.setMap(null);
