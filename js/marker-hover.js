@@ -140,13 +140,32 @@ function formatFiberRanges(numbers) {
     return parts.join(', ');
 }
 
-function getCableFiberUsage(cable) {
-    const total = getCableFiberCount(cable);
-    const used = new Set();
+function getDirectCableFiberUse(cable, used) {
     markers.forEach(m => {
         if (m.fusionPlan) getPlanCableFiberUsage(m).get(cableKeyOf(cable))?.forEach(n => used.add(n));
     });
     getOccupiedCableFibers(cable).forEach((_, n) => used.add(n));
+}
+
+function getCableFiberUsage(cable) {
+    const total = getCableFiberCount(cable);
+    const used = new Set();
+    getDirectCableFiberUse(cable, used);
+    //Reserva técnica no caminho: a fibra em uso de um lado também está em uso no cabo do outro lado
+    if (typeof getReservePassThroughs === 'function' && savedCables.includes(cable)) {
+        const passes = getReservePassThroughs();
+        const seen = new Set([cable]);
+        const queue = [cable];
+        while (queue.length) {
+            const current = queue.shift();
+            passes.filter(p => p.cables.includes(current)).forEach(p => p.cables.forEach(other => {
+                if (seen.has(other)) return;
+                seen.add(other);
+                queue.push(other);
+                getDirectCableFiberUse(other, used);
+            }));
+        }
+    }
     const usedList = Array.from(used).filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
     const freeList = [];
     for (let n = 1; n <= total; n++) if (!used.has(n)) freeList.push(n);

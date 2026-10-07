@@ -153,3 +153,20 @@ function backfillFusionPlanCableUids(boxes = markers) {
         }
     });
 }
+
+//Reserva técnica no meio da rota: não tem fusões, a fibra N de um cabo continua na fibra N do outro.
+//Devolve as reservas com 2+ cabos com ponta nelas: [{ box, cables }]
+function getReservePassThroughs() {
+    const list = [];
+    markers.forEach(box => {
+        if (box.type !== 'RESERVA' || !box.uid) return;
+        const cables = savedCables.filter(c => c.startAnchorUid === box.uid || c.endAnchorUid === box.uid);
+        if (cables.length >= 2) list.push({ box, cables });
+    });
+    return list;
+}
+
+function getCableFiberTotalForPassThrough(cable) {
+    const type = typeof getFiberType === 'function' ? getFiberType(cable?.type) : null;
+    return type ? parseInt(type.split('-')[1], 10) || 12 : 12;
+}

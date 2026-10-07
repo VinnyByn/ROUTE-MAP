@@ -61,6 +61,22 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
             addEdge(key(l.endId), key(l.startId), cfg.lossFusion, 'fusion');
         });
     });
+    //Reserva técnica: a fibra passa direto de um cabo para o outro, sem perda de fusão
+    getReservePassThroughs().forEach(({ box, cables }) => {
+        const total = Math.min(...cables.map(getCableFiberTotalForPassThrough));
+        for (let n = 1; n <= total; n++) {
+            const keys = cables.map(c => {
+                const ck = cableKeyOf(c);
+                const k = `${box.uid}|pass|${ck}#${n}`;
+                info.set(k, { kind: 'fiber', box, cable: c.name, number: n });
+                const fk = `${ck}#${n}`;
+                if (!fiberNodes.has(fk)) fiberNodes.set(fk, []);
+                fiberNodes.get(fk).push(k);
+                return k;
+            });
+            keys.forEach(a => keys.forEach(b => { if (a !== b) addEdge(a, b, 0, 'reserva'); }));
+        }
+    });
     fiberNodes.forEach((nodes, fk) => {
         const ck = fk.slice(0, fk.lastIndexOf('#'));
         const cable = savedCables.find(c => c.uid === ck) || savedCables.find(c => `nome:${c.name}` === ck);

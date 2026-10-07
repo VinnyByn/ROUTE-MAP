@@ -1445,6 +1445,36 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(midEdit.handles1 === 1 && midEdit.hit && !midEdit.farOk && midEdit.nearOk && midEdit.points === 3 && midEdit.handles2 === 2 && midEdit.cleared,
     `edição do cabo: pontos-fantasma e clique no meio do cabo (${JSON.stringify(midEdit)})`);
+
+  //Ver rota: a reserva técnica não para a rota (fibra N de um cabo segue na fibra N do outro)
+  const passRes = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projPR', name: 'Projeto PR', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projPR', marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
+    const ceo = mk('CEO', 'CEO-PR', 'pr-ceo', -26, -44), rt = mk('RESERVA', 'RT-PR', 'pr-rt', -26, -43.99), cto = mk('CTO', 'CTO-PR', 'pr-cto', -26, -43.98);
+    markers.push(ceo, rt, cto);
+    rebuildCable({ uid: 'pr-a', folderId: 'projPR', name: 'PR-A', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -26, lng: -44 }, { lat: -26, lng: -43.99 }], startAnchorUid: 'pr-ceo', endAnchorUid: 'pr-rt' });
+    rebuildCable({ uid: 'pr-b', folderId: 'projPR', name: 'PR-B', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -26, lng: -43.99 }, { lat: -26, lng: -43.98 }], startAnchorUid: 'pr-rt', endAnchorUid: 'pr-cto' });
+    const a = savedCables.find(c => c.uid === 'pr-a'), b = savedCables.find(c => c.uid === 'pr-b');
+    const f = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+    const cardB = buildFusionCableCard({ name: 'PR-B', uid: 'pr-b', type: 'Cabo AS 80 FO-12', role: 'entrada', fiberCount: 12 });
+    const spl = buildFusionSplitterCard({ id: 'splitter-pr', label: '1:8', outputs: 8, type: 'Atendimento' });
+    spl.classList.add('splitter-atendimento');
+    const h = document.createElement('div'); h.append(cardB, spl);
+    cto.fusionPlan = JSON.stringify({ version: 2, elements: h.innerHTML, svg: `<path class="fusion-line" data-start-id="${f(cardB, 3)}" data-end-id="splitter-pr-input-port"></path>` });
+    const trace = traceFiberRoute(buildFiberGraph(), a, 3);
+    const out = {
+      ctos: trace.ctos.map(c => c.box.name).join(), segs: trace.segments.map(x => x.cable).sort().join(),
+      rtSteps: trace.steps.filter(st => st.box === rt).length, usedA: getCableFiberUsage(a).used.join(),
+    };
+    [a, b].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    [ceo, rt, cto].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projPR"]').closest('.folder').remove();
+    return out;
+  });
+  check(passRes.ctos === 'CTO-PR' && passRes.segs === 'PR-A,PR-B' && passRes.rtSteps === 0 && passRes.usedA === '3',
+    `rota passa direto pela reserva técnica (${JSON.stringify(passRes)})`);
   await spCtx.close();
 }
 
