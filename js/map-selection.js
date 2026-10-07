@@ -1,5 +1,6 @@
 // Seleção múltipla no mapa: Shift + arrastar desenha um retângulo e seleciona os marcadores do projeto
-// ativo; Shift + clique adiciona ou tira um marcador. Barra de ações: situação, mover para pasta,
+// ativo; Shift + clique adiciona ou tira um marcador.
+// Na barra lateral: Ctrl + clique e Shift + clique (intervalo). Barra de ações: situação, mover para pasta,
 // ocultar/mostrar, excluir. Depende de script.js e js/sidebar.js.
 
 const mapSelection = { items: new Set(), rings: new Map(), drag: null };
@@ -23,7 +24,41 @@ function setMapSelection(list) {
     if (typeof google !== 'undefined' && google.maps?.Marker) {
         mapSelection.items.forEach(m => { if (m.marker?.getPosition) mapSelection.rings.set(m, selectionRingFor(m)); });
     }
+    syncSidebarSelection();
     renderMapSelectionBar();
+}
+
+//Destaca na barra lateral as linhas dos marcadores selecionados
+function syncSidebarSelection() {
+    document.querySelectorAll('.ge-pro-item.is-multi-selected').forEach(li => li.classList.remove('is-multi-selected'));
+    mapSelection.items.forEach(m => m.listItem?.classList.add('is-multi-selected'));
+}
+
+//Barra lateral: Ctrl+clique adiciona/tira, Shift+clique seleciona o intervalo desde o último clicado
+function setupSidebarMultiSelect() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    sidebar.addEventListener('click', (e) => {
+        if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return;
+        if (e.target.closest('input, button, .sb-menu-button')) return;
+        const li = e.target.closest('.ge-pro-item');
+        const info = li && markers.find(m => m.listItem === li);
+        if (!info) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const anchor = mapSelection.sidebarAnchor;
+        if (e.shiftKey && anchor?.listItem?.isConnected) {
+            const rows = [...sidebar.querySelectorAll('.ge-pro-item')].filter(r => r.offsetParent !== null || r === li || r === anchor.listItem);
+            const a = rows.indexOf(anchor.listItem), b = rows.indexOf(li);
+            const range = rows.slice(Math.min(a, b), Math.max(a, b) + 1)
+                .map(r => markers.find(m => m.listItem === r)).filter(Boolean);
+            const base = (e.ctrlKey || e.metaKey) ? [...mapSelection.items] : [];
+            setMapSelection([...new Set([...base, ...range])]);
+        } else {
+            toggleMapSelection(info);
+            mapSelection.sidebarAnchor = info;
+        }
+    }, true);
 }
 
 function toggleMapSelection(markerInfo) {
@@ -171,6 +206,7 @@ function setupMapSelectionDrag() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    setupSidebarMultiSelect();
     const bar = document.getElementById('mapSelectionBar');
     if (!bar) return;
     document.getElementById('mapSelectionStatus').addEventListener('change', (e) => { applySelectionStatus(e.target.value); e.target.value = ''; });
