@@ -53,6 +53,22 @@ function buildFiberGraph() {
         });
         plan.lines.forEach(l => link(key(l.startId), key(l.endId)));
     });
+    //Reserva técnica: passa direto (fibra N de um cabo = fibra N do outro), sem virar passo da rota
+    getReservePassThroughs().forEach(({ box, cables }) => {
+        const total = Math.min(...cables.map(getCableFiberTotalForPassThrough));
+        for (let n = 1; n <= total; n++) {
+            const keys = cables.map(c => {
+                const ck = cableKeyOf(c);
+                const k = `${box.uid}|pass|${ck}#${n}`;
+                info.set(k, { kind: 'fiber', box, cable: c.name, cableKey: ck, number: n, passThrough: true });
+                const fk = `${ck}#${n}`;
+                if (!fiberNodes.has(fk)) fiberNodes.set(fk, []);
+                fiberNodes.get(fk).push(k);
+                return k;
+            });
+            keys.slice(1).forEach(k => link(keys[0], k));
+        }
+    });
     //A mesma fibra do cabo nas duas pontas (caixas diferentes) é um caminho só
     fiberNodes.forEach(nodes => nodes.slice(1).forEach(k => link(nodes[0], k)));
     return { adj, info, fiberNodes };
@@ -86,7 +102,7 @@ function traceRouteFromNodes(graph, start, first) {
         if (here?.kind === 'fiber') segments.set(`${here.cableKey}#${here.number}`, { cable: here.cable, cableKey: here.cableKey, number: here.number });
         //Passos = fusões dentro da caixa (não a ligação interna do splitter)
         const internal = prev?.splitter && here?.splitter && prev.splitter === here.splitter;
-        if (prev && here && prev.box === here.box && !internal) steps.push({ box: here.box, from: prev, to: here });
+        if (prev && here && prev.box === here.box && !internal && !here.passThrough) steps.push({ box: here.box, from: prev, to: here });
         (graph.adj.get(node) || []).forEach(next => {
             if (visited.has(next)) return;
             const n = graph.info.get(next);

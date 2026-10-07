@@ -2165,8 +2165,10 @@ function handleMapRightClick(event) {
 //Encontra o segmento mais próximo do clique e a posição interpolada para inserir um vértice
 function findCablePolylineInsertInfo(clickLatLng) {
     if (!clickLatLng || cableMarkers.length < 2) return null;
-    const maxDistM = 55;
-    const minVertexDistM = 14;
+    //Distâncias em pixels da tela (convertidas para metros no zoom atual)
+    const mpp = getMetersPerPixelAt(clickLatLng);
+    const maxDistM = 22 * mpp;
+    const minVertexDistM = 9 * mpp;
     for (let m = 0; m < cableMarkers.length; m++) {
         const d = google.maps.geometry.spherical.computeDistanceBetween(clickLatLng, cableMarkers[m].getPosition());
         if (d < minVertexDistM) return null;
@@ -2198,15 +2200,109 @@ function insertCableVertexAtIndex(insertAtIndex, position) {
     wireCableVertexMarker(marker);
 }
 
+function getMetersPerPixelAt(latLng) {
+    const zoom = typeof map?.getZoom === 'function' ? (map.getZoom() ?? 16) : 16;
+    const lat = typeof latLng?.lat === 'function' ? latLng.lat() : 0;
+    return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+}
+
+// ---------------------------------------------------------------
+// Edição do traçado: faixa larga e invisível para o clique pegar fácil, e um ponto-fantasma no meio
+// de cada trecho (arrastar ou clicar nele cria um ponto novo ali)
+// ---------------------------------------------------------------
+let cableHitPolyline = null;
+let cableMidHandles = [];
+let cableMidDragging = false;
+
+function getCableMidHandleIcon(active = false) {
+    return {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: active ? 6 : 4.5,
+        fillColor: '#ffffff',
+        fillOpacity: active ? 1 : 0.85,
+        strokeColor: '#2563eb',
+        strokeOpacity: 0.9,
+        strokeWeight: 1.5,
+    };
+}
+
+function clearCableEditHelpers() {
+    if (cableHitPolyline) cableHitPolyline.setMap(null);
+    cableHitPolyline = null;
+    cableMidHandles.forEach(h => h.setMap(null));
+    cableMidHandles = [];
+    cableMidDragging = false;
+}
+
+function insertCableVertexFromClick(latLng) {
+    const info = findCablePolylineInsertInfo(latLng);
+    if (!info) return false;
+    if (typeof scheduleSuppressNextCableMapClick === 'function') scheduleSuppressNextCableMapClick();
+    insertCableVertexAtIndex(info.insertAt, info.point);
+    updatePolylineFromMarkers();
+    return true;
+}
+
+function refreshCableMidHandles() {
+    if (cableMidDragging) return;
+    cableMidHandles.forEach(h => h.setMap(null));
+    cableMidHandles = [];
+    if (!isDrawingCable || cableMarkers.length < 2) return;
+    for (let i = 0; i < cableMarkers.length - 1; i++) {
+        const a = cableMarkers[i].getPosition();
+        const b = cableMarkers[i + 1].getPosition();
+        const mid = google.maps.geometry.spherical.interpolate(a, b, 0.5);
+        const handle = new google.maps.Marker({
+            position: mid, map, draggable: true, zIndex: 900, cursor: 'copy',
+            title: 'Arraste (ou clique) para criar um ponto aqui', icon: getCableMidHandleIcon(false),
+        });
+        let vertex = null;
+        handle.addListener('mouseover', () => handle.setIcon(getCableMidHandleIcon(true)));
+        handle.addListener('mouseout', () => { if (!vertex) handle.setIcon(getCableMidHandleIcon(false)); });
+        handle.addListener('click', () => {
+            if (typeof scheduleSuppressNextCableMapClick === 'function') scheduleSuppressNextCableMapClick();
+            insertCableVertexAtIndex(i + 1, handle.getPosition());
+            updatePolylineFromMarkers();
+        });
+        handle.addListener('dragstart', () => {
+            cableMidDragging = true;
+            insertCableVertexAtIndex(i + 1, handle.getPosition());
+            vertex = cableMarkers[i + 1];
+            vertex.setVisible(false);
+        });
+        handle.addListener('drag', () => {
+            if (!vertex) return;
+            vertex.setPosition(handle.getPosition());
+            updatePolylineFromMarkers();
+        });
+        handle.addListener('dragend', () => {
+            if (!vertex) return;
+            vertex.setPosition(handle.getPosition());
+            vertex.setVisible(true);
+            cableMidDragging = false;
+            handle.setMap(null);
+            handleCableVertexDragEnd(cableMarkers.indexOf(vertex));
+            updatePolylineFromMarkers();
+        });
+        cableMidHandles.push(handle);
+    }
+}
+
 function setupCablePolylineClickInsert() {
-    if (!cablePolyline || !isDrawingCable || cableMarkers.length < 2) return;
+    if (!cablePolyline || !isDrawingCable || cableMarkers.length < 2) {
+        clearCableEditHelpers();
+        return;
+    }
     google.maps.event.clearListeners(cablePolyline, "click");
-    cablePolyline.addListener("click", (e) => {
-        const info = findCablePolylineInsertInfo(e.latLng);
-        if (!info) return;
-        insertCableVertexAtIndex(info.insertAt, info.point);
-        updatePolylineFromMarkers();
+    cablePolyline.addListener("click", (e) => insertCableVertexFromClick(e.latLng));
+    //Faixa invisível bem mais larga que o cabo: o clique no "meio do cabo" não escapa
+    if (cableHitPolyline) cableHitPolyline.setMap(null);
+    cableHitPolyline = new google.maps.Polyline({
+        path: cablePolyline.getPath(), map, clickable: true, zIndex: 49,
+        strokeColor: '#000000', strokeOpacity: 0.01, strokeWeight: 22,
     });
+    cableHitPolyline.addListener('click', (e) => insertCableVertexFromClick(e.latLng));
+    refreshCableMidHandles();
 }
 
 //Reserva técnica no ponto de ancoragem do cabo
@@ -2844,6 +2940,7 @@ function startDrawingCable() {
     cableDistance = { lancamento: 0, reserva: 0, total: 0 };
     if (cablePolyline) cablePolyline.setMap(null);
     cablePolyline = null;
+    clearCableEditHelpers();
     document.getElementById("cableStatusSelect").value = currentCableStatus;
     document.getElementById("cableName").value = "";
     cableNameAutoFill = { endMarkerName: null, lastValue: null };
@@ -2893,6 +2990,7 @@ function finishCableDrawingUi() {
     isDrawingCable = false;
     if (cablePolyline) cablePolyline.setMap(null);
     cablePolyline = null;
+    clearCableEditHelpers();
     setAllPolygonsClickable(true);
     setAllCablesClickable(true);
     document.getElementById("invertCableButton").classList.add("hidden");

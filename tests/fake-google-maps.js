@@ -4,7 +4,7 @@
   class LatLng { constructor(lat, lng) { if (typeof lat === 'object') { lng = lat.lng; lat = lat.lat; } this._a = +lat; this._o = +lng; }
     lat() { return this._a; } lng() { return this._o; } equals(o) { return o && o.lat() === this._a && o.lng() === this._o; } toJSON() { return { lat: this._a, lng: this._o }; } }
   const toLL = (p) => (p instanceof LatLng ? p : new LatLng(p));
-  class MVCArray { constructor(a = []) { this.a = a.map(toLL); } getArray() { return this.a; } getLength() { return this.a.length; } getAt(i) { return this.a[i]; }
+  class MVCArray { constructor(a = []) { this.a = (a instanceof MVCArray ? a.getArray() : a).map(toLL); } getArray() { return this.a; } getLength() { return this.a.length; } getAt(i) { return this.a[i]; }
     forEach(f) { this.a.forEach(f); } push(p) { this.a.push(toLL(p)); } setAt(i, p) { this.a[i] = toLL(p); } insertAt(i, p) { this.a.splice(i, 0, toLL(p)); } removeAt(i) { this.a.splice(i, 1); } clear() { this.a = []; } }
   const generic = (extra = {}) => function (opts = {}) {
     const self = { o: { ...opts }, ...extra };
