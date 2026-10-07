@@ -424,6 +424,11 @@ function wirePolygonInteractions(polygonInfo) {
     polygonInfo.polygonObject.addListener('rightclick', (e) => openMapItemMenu('polygon', polygonInfo, e?.domEvent));
     const nameEl = polygonInfo.listItem.querySelector('.item-name');
     if (nameEl) nameEl.addEventListener('click', () => openPolygonEditor(polygonInfo));
+    //Clique na linha da barra lateral: fica selecionado para Ctrl+C
+    polygonInfo.listItem.addEventListener('click', (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.target.closest('input, button')) return;
+        if (typeof selectSidebarItem === 'function') selectSidebarItem(polygonInfo.listItem, { type: 'polygon', polygonInfo });
+    });
     const visCb = polygonInfo.listItem.querySelector('.ge-vis-checkbox');
     if (visCb) wireItemVisibilityCheckbox(visCb, polygonInfo.polygonObject);
 }
