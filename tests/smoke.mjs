@@ -754,7 +754,8 @@ const optical = await page.evaluate(() => {
   const bOut = buildFusionCableCard({ name: 'O-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
   const ceo = { type: 'CEO', name: 'O-CEO', uid: 'o-ceo', fusionPlan: mk([s8, bOut], [['splitter-1-output-1', fiber(bOut, 1)]]) };
   const bIn = buildFusionCableCard({ name: 'O-B', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
-  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  //OLT/PON preenchida também na CTO (vínculo automático): não pode virar origem de novo
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento', olt: { olt: 'OLT-1', placa: '1', pon: '1' } });
   const cto = { type: 'CTO', name: 'O-CTO', uid: 'o-cto', fusionPlan: mk([bIn, at], [[fiber(bIn, 1), 'splitter-1-input-port']]) };
   const orphanCard = buildFusionCableCard({ name: 'O-SOLTO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
   const at2 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:16', outputs: 16, type: 'Atendimento' });

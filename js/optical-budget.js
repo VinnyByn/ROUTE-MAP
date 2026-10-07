@@ -86,25 +86,52 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
     //Maior potência que chega em cada nó (Dijkstra com a perda como custo)
     const power = new Map();
     const queue = [];
-    sources.forEach(s => {
+    const seed = (node) => {
         const p = cfg.oltPower - cfg.lossConnector; //Conector da OLT / DIO
-        if (!power.has(s.node) || power.get(s.node) < p) { power.set(s.node, p); queue.push([p, s.node]); }
+        if (!power.has(node) || power.get(node) < p) { power.set(node, p); queue.push([p, node]); }
+    };
+    const run = () => {
+        while (queue.length) {
+            queue.sort((a, b) => b[0] - a[0]);
+            const [p, node] = queue.shift();
+            if (p < power.get(node)) continue;
+            const here = info.get(node);
+            (edges.get(node) || []).forEach(e => {
+                //Não sobe da saída para a entrada do splitter (o sinal não volta)
+                if (here?.kind === 'split-out' && info.get(e.to)?.kind === 'split-in' && info.get(e.to).splitter === here.splitter) return;
+                const np = p - e.loss;
+                if (!power.has(e.to) || np > power.get(e.to) + 1e-9) {
+                    power.set(e.to, np);
+                    queue.push([np, e.to]);
+                }
+            });
+        }
+    };
+    //1º: PONs ligadas no plano do POP. O sinal desce pelas fusões, cabos e splitters, perdendo em cada um.
+    sources.filter(s => !s.splitter).forEach(s => seed(s.node));
+    run();
+    //2º: splitter com OLT/PON preenchida que não recebe sinal de nenhuma PON (rede sem POP desenhado).
+    //Um splitter que já recebe sinal pelo caminho não vira origem (senão começaria de novo com a potência da OLT).
+    //Splitter em cascata abaixo de outro que também vira origem não conta como origem.
+    const fallback = sources.filter(s => s.splitter && !power.has(s.node));
+    const downstream = new Set();
+    fallback.forEach(src => {
+        const seen = new Set([src.node]);
+        const stack = [src.node];
+        while (stack.length) {
+            const node = stack.pop();
+            const here = info.get(node);
+            (edges.get(node) || []).forEach(e => {
+                if (seen.has(e.to)) return;
+                if (here?.kind === 'split-out' && info.get(e.to)?.kind === 'split-in' && info.get(e.to).splitter === here.splitter) return;
+                seen.add(e.to);
+                stack.push(e.to);
+            });
+        }
+        fallback.forEach(o => { if (o !== src && seen.has(o.node)) downstream.add(o.node); });
     });
-    while (queue.length) {
-        queue.sort((a, b) => b[0] - a[0]);
-        const [p, node] = queue.shift();
-        if (p < power.get(node)) continue;
-        const here = info.get(node);
-        (edges.get(node) || []).forEach(e => {
-            //Não sobe da saída para a entrada do splitter (o sinal não volta)
-            if (here?.kind === 'split-out' && info.get(e.to)?.kind === 'split-in' && info.get(e.to).splitter === here.splitter) return;
-            const np = p - e.loss;
-            if (!power.has(e.to) || np > power.get(e.to) + 1e-9) {
-                power.set(e.to, np);
-                queue.push([np, e.to]);
-            }
-        });
-    }
+    fallback.filter(s => !downstream.has(s.node)).forEach(s => seed(s.node));
+    run();
     return { power, info, sources };
 }
 
