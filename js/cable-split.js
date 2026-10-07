@@ -121,14 +121,19 @@ function splitCableAtMarker(cable, markerInfo) {
 
     const markerUid = ensureMarkerUid(markerInfo);
     const base = serializeCable(cable);
+    //Cada pedaço leva só a parte tubulada que cai nele
+    const conduitParts = cable.conduit?.length && typeof splitCableConduit === 'function'
+        ? splitCableConduit(cable, getMetersAlongPath(cable.path, pos).meters) : null;
     const toPlain = (path) => path.map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
     const firstData = {
         ...base, uid: undefined, name: names.first, path: toPlain(firstPath),
         endAnchorUid: markerUid, endAnchorMarkerName: markerInfo.name, endAnchorMarkerFolderId: markerInfo.folderId,
+        ...(conduitParts ? { conduit: conduitParts.first } : {}),
     };
     const secondData = {
         ...base, name: names.second, path: toPlain(secondPath),
         startAnchorUid: markerUid, startAnchorMarkerName: markerInfo.name, startAnchorMarkerFolderId: markerInfo.folderId,
+        ...(conduitParts ? { conduit: conduitParts.second } : {}),
     };
 
     //Sai o cabo antigo, entram os dois trechos no mesmo lugar da barra lateral

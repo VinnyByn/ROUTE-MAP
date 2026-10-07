@@ -199,6 +199,7 @@ function buildSidebarMenuItems(entity) {
         }
         if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Cadastro de equipamentos', hint: 'OLTs, placas, DGOs e switches' });
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
+        if (canEdit && entity.kind === 'cable') items.push({ action: 'conduit', icon: 'cable', label: 'Trecho tubulado', hint: 'Marca o que vai em duto, sem ferragens de poste' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);
         if (canEdit) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
@@ -367,6 +368,10 @@ function handleSidebarMenuAction(action) {
     case 'route':
         selectSidebarCable(info);
         showCableRoute(info);
+        break;
+    case 'conduit':
+        selectSidebarCable(info);
+        openConduitTool(info);
         break;
     case 'drop-edit':
         editClientDropFromSidebar(info);

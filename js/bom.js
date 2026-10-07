@@ -651,7 +651,9 @@ function getAggregatedCableLengthsForFerragens(projectId) {
     Object.entries(groupCablesByType(projectCables)).forEach(([cableType, cables]) => {
         const bomKey = makeBomKey(cableType);
         if (bomState[bomKey]?.removed) return;
-        const length = getCableDisplayQuantity(cableType, cables);
+        //Trechos tubulados não vão em poste: ficam fora das ferragens
+        const tubedShare = typeof getCablesConduitShare === 'function' ? getCablesConduitShare(cables) : 0;
+        const length = getCableDisplayQuantity(cableType, cables) * (1 - tubedShare);
         if (length > 0) {
             aggregated[cableType] = (aggregated[cableType] || 0) + length;
         }
