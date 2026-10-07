@@ -761,18 +761,28 @@ function normalizeClientData(data = {}) {
 }
 
 //Drop e kit de instalação de clientes em viabilidade ou a instalar
+const CLIENT_PTO_MATERIAL = 'PTO - PONTO DE TERMINAÇÃO ÓPTICA';
+
+function isPtoMaterialName(name) {
+    const n = normalizeMaterialName(name);
+    return /\bPTO\b/.test(n) || /TERMINACAO OPTICA/.test(n);
+}
+
 function addClientMaterialsToBom(projectMarkers, addMaterial) {
-    const kit = getKitComponents(CLIENT_KIT_NAME);
+    //A PTO sai do kit: entra só no cliente que tem a PTO marcada
+    const kit = getKitComponents(CLIENT_KIT_NAME).filter(c => !isPtoMaterialName(c.name));
     projectMarkers.forEach(clientInfo => {
         if (clientInfo.type !== 'CLIENTE') return;
         if (!getClientStatus(clientInfo.client?.status).billable) return;
         const drop = getClientDropInfo(clientInfo);
         if (drop) addMaterial(CLIENT_DROP_MATERIAL, drop.length, 'length', 'Clientes', clientInfo.name);
         kit.forEach(c => addMaterial(c.name, c.quantity, 'unit', 'Clientes', clientInfo.name));
+        if (clientInfo.client?.pto) addMaterial(CLIENT_PTO_MATERIAL, 1, 'unit', 'Clientes', clientInfo.name);
         //Equipamentos do cliente: o escolhido no catálogo entra com o preço dele; o digitado procura
         //um material de mesmo nome no catálogo e, se não achar, entra pelo tipo e modelo (sem preço)
         //Ficam na parte de Data Center da lista de materiais
-        (clientInfo.client?.equipments || []).forEach(e => {
+        //Só equipamento escolhido (do catálogo ou com modelo); linha vazia não entra
+        (clientInfo.client?.equipments || []).filter(e => e.material || String(e.model || '').trim()).forEach(e => {
             const name = getClientEquipmentMaterialName(e);
             //Sem preço no catálogo: usa o valor informado no equipamento do cliente
             const catalogPrice = Number(MATERIAL_PRICES[resolveMaterialName(name)]?.price) || 0;
@@ -887,6 +897,9 @@ function setClientKind(kind) {
     document.getElementById('clientModal').classList.toggle('is-predial', predial);
     document.getElementById('clientNameLabel').textContent = b2b ? 'Razão social *' : predial ? 'Nome do prédio / condomínio *' : 'Nome *';
     document.getElementById('clientDocumentLabel').textContent = b2b || predial ? 'CNPJ' : 'CPF / CNPJ';
+    //Cliente novo: PTO marcado por padrão só no B2B (se o usuário não mexeu)
+    const pto = document.getElementById('clientPtoCheckbox');
+    if (pto && !editingClient && !pto.dataset.userChanged) pto.checked = b2b;
     if (document.getElementById('clientModal').style.display === 'flex') {
         //Troca de tipo: a lista de ligação muda (cabos FO só para B2B)
         const current = document.getElementById('clientCto').value;
@@ -1184,8 +1197,11 @@ function openClientModal(clientInfo, presetKind) {
     document.getElementById('clientLabelColor').disabled = !mapLabel.show;
     if (typeof syncColorSwatches === 'function') syncColorSwatches();
     document.getElementById('clientEquipmentList').innerHTML = '';
-    //Cliente novo: residencial/predial começa com uma ONU; B2B escolhe na lista Data Center
-    const equipments = data.equipments.length ? data.equipments : (clientInfo || data.kind === 'b2b' ? [] : [{ type: 'ONU/ONT' }]);
+    //Equipamentos e PTO só quando o usuário escolhe (nada entra sozinho na lista de materiais)
+    const equipments = data.equipments;
+    const pto = document.getElementById('clientPtoCheckbox');
+    pto.checked = clientInfo ? !!data.pto : data.kind === 'b2b';
+    delete pto.dataset.userChanged;
     equipments.forEach(addClientEquipmentRow);
     updateClientEquipmentEmptyState();
     populateClientCtoSelect(clientInfo ? (data.cableName ? CLIENT_CABLE_PREFIX + data.cableName : (data.ctoUid || '')) : 'auto');
@@ -1228,6 +1244,7 @@ function collectClientForm() {
             cableUid: kind === 'b2b' && ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? (editingClient?.client?.cableUid || null) : null,
             dropOverride: Number(value('clientDropOverride')) > 0 ? Number(value('clientDropOverride')) : null,
             equipments: collectClientEquipments(),
+            pto: !!document.getElementById('clientPtoCheckbox')?.checked,
             predial: kind === 'predial' ? {
                 units: Number(value('clientPredialUnits')) > 0 ? Number(value('clientPredialUnits')) : null,
                 floors: Number(value('clientPredialFloors')) > 0 ? Number(value('clientPredialFloors')) : null,
@@ -1444,6 +1461,7 @@ function setupClientModal() {
         if (typeof syncColorSwatches === 'function') syncColorSwatches();
     });
     document.getElementById('clientB2BService').innerHTML = B2B_SERVICES.map(s => `<option>${s}</option>`).join('');
+    document.getElementById('clientPtoCheckbox')?.addEventListener('change', (e) => { e.target.dataset.userChanged = '1'; });
     document.getElementById('addClientEquipmentButton').addEventListener('click', () => {
         //B2B: escolhe o equipamento na lista de materiais Data Center do catálogo
         if (getSelectedClientKind() === 'b2b') {

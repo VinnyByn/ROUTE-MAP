@@ -163,3 +163,63 @@ function decoratePonReach() {
         activeMarkerForFusion.fusionPlan = saved;
     }
 }
+
+// ---------------------------------------------------------------
+// Splitter ligado (pelas fusões) numa PON do plano do POP: OLT, placa e PON preenchidas sozinhas.
+// Só sobe a rede: da entrada do splitter nunca desce pelas saídas dele.
+// ---------------------------------------------------------------
+function findPonForSplitterInput(graph, startKey) {
+    if (!graph.info.has(startKey)) return null;
+    const seen = new Set([startKey]);
+    const queue = [startKey];
+    while (queue.length) {
+        const node = queue.shift();
+        const here = graph.info.get(node);
+        if (here?.kind === 'olt-port') return here.olt;
+        (graph.adj.get(node) || []).forEach(next => {
+            if (seen.has(next)) return;
+            const n = graph.info.get(next);
+            if (here?.kind === 'split-in' && n?.kind === 'split-out' && n.splitter === here.splitter) return;
+            seen.add(next);
+            queue.push(next);
+        });
+    }
+    return null;
+}
+
+//Atualiza os splitters dos planos salvos (os vinculados à mão ficam como estão). Devolve quantos mudaram.
+function autoLinkSplitterOlts(boxes = markers) {
+    if (typeof buildFiberGraph !== 'function') return 0;
+    const graph = buildFiberGraph();
+    let changed = 0;
+    boxes.forEach(box => {
+        if (!box.fusionPlan || !['CEO', 'CTO', 'POP'].includes(box.type)) return;
+        let planData;
+        try { planData = JSON.parse(box.fusionPlan); } catch (e) { return; }
+        if (!planData.elements) return;
+        const root = parseStoredHtml(planData.elements);
+        let touched = false;
+        const uid = ensureMarkerUid(box);
+        root.querySelectorAll('.splitter-element').forEach(card => {
+            const manual = card.dataset.oltName && card.dataset.oltAuto !== '1';
+            if (manual) return;
+            const input = card.querySelector('.splitter-input .splitter-port-row');
+            const pon = input ? findPonForSplitterInput(graph, `${uid}|${input.id}`) : null;
+            const next = pon ? { oltName: pon.olt || '', placaNumber: pon.placa || '', ponNumber: pon.pon || '' } : null;
+            const same = next ? (card.dataset.oltName === next.oltName && card.dataset.placaNumber === next.placaNumber && card.dataset.ponNumber === next.ponNumber && card.dataset.oltAuto === '1')
+                : !card.dataset.oltAuto;
+            if (same) return;
+            ['oltName', 'placaNumber', 'ponNumber', 'oltAuto'].forEach(k => delete card.dataset[k]);
+            if (next) {
+                Object.entries(next).forEach(([k, v]) => { if (v) card.dataset[k] = v; });
+                card.dataset.oltAuto = '1';
+            }
+            touched = true;
+        });
+        if (!touched) return;
+        planData.elements = root.innerHTML;
+        box.fusionPlan = JSON.stringify(planData);
+        changed++;
+    });
+    return changed;
+}

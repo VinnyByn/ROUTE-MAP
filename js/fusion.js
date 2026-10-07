@@ -356,6 +356,7 @@ function upgradeFusionCard(card) {
         olt: { olt: card.dataset.oltName, placa: card.dataset.placaNumber, pon: card.dataset.ponNumber },
         lane: card.dataset.lane === 'left' ? 'left' : 'right',
     });
+    if (card.dataset.oltAuto === '1') upgraded.dataset.oltAuto = '1';
     return upgraded;
 }
 
@@ -708,8 +709,65 @@ function completeFusionConnection(target) {
     setTimeout(() => line.classList.remove('fusion-line-new'), 700);
 }
 
+// ---------------------------------------------------------------
+// Seleção de várias fusões: Ctrl/Shift + clique na linha (ou na porta ligada), Delete exclui todas
+// ---------------------------------------------------------------
+function getSelectedFusionLines() {
+    return getFusionLines().filter(l => l.classList.contains('fx-line-selected'));
+}
+
+function updateFusionSelectionBar() {
+    const bar = document.getElementById('fusionSelectionBar');
+    if (!bar) return;
+    const count = getSelectedFusionLines().length;
+    bar.classList.toggle('hidden', !count);
+    document.getElementById('fusionSelectionCount').textContent = `${count} fus${count === 1 ? 'ão selecionada' : 'ões selecionadas'}`;
+    const stage = getFusionStage();
+    stage?.querySelectorAll('.port-selected').forEach(p => p.classList.remove('port-selected'));
+    getSelectedFusionLines().forEach(l => {
+        document.getElementById(l.dataset.startId)?.classList.add('port-selected');
+        document.getElementById(l.dataset.endId)?.classList.add('port-selected');
+    });
+}
+
+function toggleFusionLineSelection(line) {
+    if (!line) return;
+    line.classList.toggle('fx-line-selected');
+    updateFusionSelectionBar();
+}
+
+function clearFusionLineSelection() {
+    getFusionLines().forEach(l => l.classList.remove('fx-line-selected'));
+    updateFusionSelectionBar();
+}
+
+function deleteSelectedFusionLines() {
+    const lines = getSelectedFusionLines();
+    if (!lines.length || !AppSession.canEdit) return;
+    showConfirm('Excluir fusões', `Excluir ${lines.length} fus${lines.length === 1 ? 'ão' : 'ões'} selecionada${lines.length === 1 ? '' : 's'}?`, () => {
+        lines.forEach(l => l.remove());
+        markFusionDirty();
+        renderFusionConnections();
+        updateFusionSelectionBar();
+        showToast('Fusões excluídas', `${lines.length} fusão(ões) removida(s).`);
+    });
+}
+
 function handleConnectionClick(event) {
     if (fusionDrag?.moved) return;
+    //Ctrl/Shift + clique: entra ou sai da seleção (linha ou porta já ligada)
+    if (AppSession.canEdit && !fusionArmed && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+        const hitSel = event.target.closest?.('.fx-line-hit, .fusion-line');
+        const portSel = event.target.closest?.('.connectable');
+        const lineSel = hitSel
+            ? (hitSel.classList.contains('fusion-line') ? hitSel : document.getElementById(hitSel.dataset.lineId))
+            : (portSel ? findLineForPort(portSel.id) : null);
+        if (lineSel) {
+            event.preventDefault();
+            toggleFusionLineSelection(lineSel);
+            return;
+        }
+    }
     if (!AppSession.canEdit) {
         //Visualização: só mostra para onde a porta está ligada
         const port = event.target.closest('.connectable');
@@ -1150,7 +1208,8 @@ function updateSplitterOltDisplay(splitterElement) {
     const values = getSplitterOltValues(splitterElement);
     const hasConfig = !!(values.olt || values.placa || values.pon);
     if (info) {
-        info.textContent = hasConfig ? formatOltPath(values) : 'Sem OLT vinculada';
+        const auto = splitterElement.dataset.oltAuto === '1';
+        info.textContent = hasConfig ? `${formatOltPath(values)}${auto ? ' · automático' : ''}` : 'Sem OLT vinculada';
         info.title = hasConfig ? formatSplitterOltSummary(values.olt, values.placa, values.pon) : '';
         info.classList.remove('hidden');
     }
@@ -1258,6 +1317,7 @@ function applySplitterOltConfig() {
     const card = activeSplitterForOltConfig;
     const values = readOltPopoverValues();
     const map = { oltName: values.olt, placaNumber: values.placa, ponNumber: values.pon };
+    delete card.dataset.oltAuto; //Vinculado à mão: o automático não mexe mais
     Object.entries(map).forEach(([key, value]) => {
         if (value) card.dataset[key] = value; else delete card.dataset[key];
     });
@@ -1399,15 +1459,15 @@ function serializeFusionPlan() {
         clone.style.transform = '';
         clone.classList.remove('is-dragging', 'fx-flash');
         clone.querySelectorAll('.fusion-dynamic').forEach(n => { n.textContent = ''; n.removeAttribute('title'); });
-        clone.querySelectorAll('.connection-source, .fx-target, .fx-busy, .port-highlighted, .is-connected, .has-client').forEach(n => {
-            n.classList.remove('connection-source', 'fx-target', 'fx-busy', 'port-highlighted', 'is-connected', 'has-client');
+        clone.querySelectorAll('.connection-source, .fx-target, .fx-busy, .port-highlighted, .is-connected, .has-client, .port-selected').forEach(n => {
+            n.classList.remove('connection-source', 'fx-target', 'fx-busy', 'port-highlighted', 'is-connected', 'has-client', 'port-selected');
         });
         container.appendChild(clone);
     });
     const svgClone = getFusionSvg().cloneNode(true);
     svgClone.querySelectorAll('.fx-line-hit, .connecting-line, defs').forEach(n => n.remove());
     svgClone.querySelectorAll('.fusion-line').forEach(line => {
-        line.classList.remove('fx-line-hover', 'fusion-line-new', 'fusion-line-editing');
+        line.classList.remove('fx-line-hover', 'fusion-line-new', 'fusion-line-editing', 'fx-line-selected');
     });
     const planData = { version: 2, elements: container.innerHTML, svg: svgClone.innerHTML };
     if (activeMarkerForFusion?.type === 'CEO') planData.trayQuantity = document.getElementById('trayKitQuantity').value || 0;
@@ -1419,6 +1479,7 @@ function saveFusionPlan() {
     if (!markerInfo || !requireEdit('salvar planos de fusão')) return;
     if (markerInfo.type === 'POP' && typeof popEquipmentFromCards === 'function') markerInfo.popEquipment = popEquipmentFromCards();
     markerInfo.fusionPlan = serializeFusionPlan();
+    if (typeof autoLinkSplitterOlts === 'function') autoLinkSplitterOlts();
     fusionDirty = false;
     closeFusionModal({ force: true });
     refreshBomAfterProjectChange();
@@ -1430,6 +1491,7 @@ function saveFusionPlan() {
 function closeFusionModal({ force = false } = {}) {
     const close = () => {
         cancelFusionArm();
+        clearFusionLineSelection();
         closeOltPopover();
         document.getElementById('fusionModal').style.display = 'none';
         activeMarkerForFusion = null;
@@ -1452,6 +1514,23 @@ function cancelFusionArmFromEscape() {
 function setupFusionModal() {
     const canvas = document.getElementById('fusionCanvas');
     canvas.addEventListener('click', handleConnectionClick);
+    document.getElementById('fusionSelectAllButton')?.addEventListener('click', () => {
+        getFusionLines().forEach(l => { if (l.style.display !== 'none') l.classList.add('fx-line-selected'); });
+        updateFusionSelectionBar();
+    });
+    document.getElementById('fusionDeleteSelectedButton')?.addEventListener('click', deleteSelectedFusionLines);
+    document.getElementById('fusionClearSelectionButton')?.addEventListener('click', clearFusionLineSelection);
+    document.addEventListener('keydown', (e) => {
+        if (document.getElementById('fusionModal')?.style.display !== 'flex' && document.getElementById('fusionModal')?.style.display !== 'block') return;
+        const t = e.target;
+        if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+        if ((e.key === 'Delete' || e.key === 'Backspace') && getSelectedFusionLines().length) {
+            e.preventDefault();
+            deleteSelectedFusionLines();
+        } else if (e.key === 'Escape' && getSelectedFusionLines().length && !fusionArmed) {
+            clearFusionLineSelection();
+        }
+    });
     canvas.addEventListener('contextmenu', handleFusionCanvasRightClick);
     canvas.addEventListener('mousemove', handleFusionCanvasMouseMove);
     canvas.addEventListener('dragstart', (e) => e.preventDefault());

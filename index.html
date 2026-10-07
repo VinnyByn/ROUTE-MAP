@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261007k" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261008e" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -1402,6 +1402,12 @@
               <div id="fusionStage" class="fx-stage">
                 <svg id="fusion-svg-layer" class="fusion-svg-layer" xmlns="http://www.w3.org/2000/svg"></svg>
               </div>
+              <div class="fx-selection-bar hidden" id="fusionSelectionBar" role="toolbar" aria-label="Fusões selecionadas">
+                <strong id="fusionSelectionCount">0 fusões</strong>
+                <button type="button" class="btn btn-secondary btn-sm" id="fusionSelectAllButton">Selecionar todas</button>
+                <button type="button" class="btn btn-danger btn-sm" id="fusionDeleteSelectedButton">Excluir</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="fusionClearSelectionButton">Limpar</button>
+              </div>
               <div class="fx-empty-state hidden" id="fusionEmptyState">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg>
                 <strong>Plano vazio</strong>
@@ -1905,6 +1911,9 @@
                 <button type="button" class="btn btn-secondary btn-sm" id="clientDcManual">Digitar manualmente</button>
               </div>
               <ul class="client-dc-picker__list" id="clientDcList" role="listbox" aria-label="Materiais Data Center"></ul>
+            </div>
+            <div class="marker-panel__chips client-pto-option">
+              <label class="map-tool-chip"><input type="checkbox" id="clientPtoCheckbox" /><span class="chip-text"><strong>PTO</strong><small>Ponto de terminação óptica (normalmente cliente B2B). Só entra na lista de materiais se marcado.</small></span><span class="chip-switch" aria-hidden="true"></span></label>
             </div>
             <button type="button" class="btn btn-secondary btn-sm" id="addClientEquipmentButton">
               <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg>Equipamento
@@ -2711,7 +2720,7 @@
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
   <script src="script.js?v=20261008c" defer></script>
-  <script src="js/persistence.js?v=20261007m" defer></script>
+  <script src="js/persistence.js?v=20261008e" defer></script>
   <script src="js/sidebar-actions.js?v=20261007i" defer></script>
   <script src="js/project-safety.js?v=20261007a" defer></script>
   <script src="js/catalog.js?v=20261006g" defer></script>
@@ -2726,9 +2735,9 @@
   <script src="js/marker-icons.js?v=20261007b" defer></script>
   <script src="js/marker-panel.js?v=20261007e" defer></script>
   <script src="js/fusion-plan.js?v=20261008d" defer></script>
-  <script src="js/fusion.js?v=20261007m" defer></script>
+  <script src="js/fusion.js?v=20261008e" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
-  <script src="js/clients.js?v=20261007m" defer></script>
+  <script src="js/clients.js?v=20261008e" defer></script>
   <script src="js/optical-budget.js?v=20261008d" defer></script>
   <script src="js/project-check.js?v=20261007m" defer></script>
   <script src="js/project-export.js?v=20261007b" defer></script>
@@ -2740,7 +2749,7 @@
   <script src="js/map-selection.js?v=20261007m" defer></script>
   <script src="js/tour.js?v=20261007i" defer></script>
   <script src="js/live-sync.js?v=20261007a" defer></script>
-  <script src="js/pop-plan.js?v=20261007c" defer></script>
+  <script src="js/pop-plan.js?v=20261008e" defer></script>
   <script src="js/cable-route.js?v=20261008d" defer></script>
   <script src="js/cable-split.js?v=20261008a" defer></script>
   <script src="js/marker-hover.js?v=20261008d" defer></script>
