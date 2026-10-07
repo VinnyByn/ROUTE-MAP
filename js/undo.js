@@ -147,6 +147,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return result;
         };
     }
+    //Pastas (criar, renomear, excluir, arrastar) não passam pela lista de materiais: a barra lateral avisa
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        new MutationObserver((mutations) => {
+            if (undoRestoring) return;
+            const projects = new Set();
+            mutations.forEach(m => {
+                const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                const title = el?.closest('.folder')?.querySelector(':scope > .folder-title[data-is-project="true"]');
+                if (title?.dataset.folderId) projects.add(title.dataset.folderId);
+            });
+            projects.forEach(id => scheduleProjectUndoSnapshot(id));
+        }).observe(sidebar, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-folder-name'] });
+    }
     document.getElementById('undoButton')?.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('projectDropdown')?.classList.remove('show'); stepProjectHistory(-1); });
     document.getElementById('redoButton')?.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('projectDropdown')?.classList.remove('show'); stepProjectHistory(1); });
 });

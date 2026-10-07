@@ -908,8 +908,8 @@ const undoRes = await page.evaluate(async () => {
   setActiveFolder('projU');
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
   const folders = () => [...document.getElementById('projU').querySelectorAll('.folder-name-text')].map(e => e.textContent).join(',');
-  appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); refreshBomAfterProjectChange(); await wait(450);
-  appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); refreshBomAfterProjectChange(); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 1', 'pU1'); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta 2', 'pU2'); await wait(450);
   const before = folders();
   const isOpen = (id) => !document.getElementById(id).classList.contains('hidden');
   if (!isOpen('projU')) toggleFolder('projU');
@@ -920,7 +920,7 @@ const undoRes = await page.evaluate(async () => {
   key('z'); const undo2 = folders();
   key('y'); const redo1 = folders();
   const stillProject = !!document.querySelector('.folder-title[data-folder-id="projU"]');
-  appendFolderToParent(document.getElementById('projU'), 'Pasta X', 'pUX'); refreshBomAfterProjectChange(); await wait(450);
+  appendFolderToParent(document.getElementById('projU'), 'Pasta X', 'pUX'); await wait(450);
   key('y'); const afterNewChange = folders(); //refazer some depois de uma alteração nova
   document.querySelector('.folder-title[data-folder-id="projU"]').closest('.folder').remove();
   activeFolderId = prev;
