@@ -532,7 +532,7 @@ function handleMarkerPanelConfirm() {
         applyMarkerFormToData(markerInfo, type, form);
         if (getMarkerTypeMeta(type).statuses) applyMarkerInfrastructureStatus(markerInfo, form.status);
         if (type === 'CTO') markerInfo.needsStickers = form.needsStickers;
-        if (oldName !== markerInfo.name) syncCableAnchorNamesForMarker(markerInfo);
+        if (oldName !== markerInfo.name) syncCableAnchorNamesForMarker(markerInfo, oldName);
         updateMarkerAppearance(markerInfo);
         refreshBomAfterProjectChange();
         resetMarkerModal({ discardPositionChanges: false });
