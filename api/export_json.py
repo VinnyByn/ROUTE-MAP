@@ -16,7 +16,10 @@ import main
 
 async def build() -> dict:
     text = await main.fetch_sheet_csv(main.DEFAULT_SHEET_ID, main.DEFAULT_GID)
-    items = main.parse_rows(list(csv.reader(io.StringIO(text))))
+    skipped: list[str] = []
+    items = main.parse_rows(list(csv.reader(io.StringIO(text))), skipped)
+    for name in skipped:
+        print(f"::warning::Material sem preço na planilha (não entra no catálogo): {name}")
     return {
         "fonte": f"https://docs.google.com/spreadsheets/d/{main.DEFAULT_SHEET_ID}",
         "atualizado_em": datetime.now(timezone.utc).isoformat(),

@@ -62,3 +62,14 @@ def test_secoes(monkeypatch):
     main._cache.clear()
     itens = TestClient(main.app).get("/materiais").json()["itens"]
     assert [i["secao"] for i in itens] == ["FERRAGENS", "DATA CENTER"]
+
+
+def test_material_sem_preco_nao_vira_secao(monkeypatch):
+    csv_text = ("Código,Descrição,Unidade,Valor unitário\nCAIXAS,,,\n"
+                "10,ETIQUETA ADESIVA PARA C.T.O (CAIXA CONECTORIZADA),un,\n"
+                "11,SPLITTER 1X8,un,\"30,00\"\n")
+    import csv, io
+    skipped = []
+    itens = main.parse_rows(list(csv.reader(io.StringIO(csv_text))), skipped)
+    assert [(i.descricao, i.secao) for i in itens] == [("SPLITTER 1X8", "CAIXAS")]
+    assert skipped == ["ETIQUETA ADESIVA PARA C.T.O (CAIXA CONECTORIZADA)"]
