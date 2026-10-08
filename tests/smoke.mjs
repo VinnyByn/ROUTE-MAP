@@ -851,6 +851,13 @@ const conduit = await page.evaluate(() => {
   calculateBomState();
   const rq = n => qty(resolveMaterialName(n));
   const duct = { raquete: rq('RAQUETE PARA CEO'), suporte: rq('SUPORTE PARA CEO'), caixa: rq('CAIXA DE EMENDA ÓPTICA (CEO)'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED), reserva: calculateCableMeasurement(cable).reserva };
+  //Item retirado da lista continua retirado quando a lista é recalculada por mudança no mapa
+  const caixaKey = Object.keys(bomState).find(k => bomState[k].materialName === resolveMaterialName('CAIXA DE EMENDA ÓPTICA (CEO)'));
+  projectBoms.projT = JSON.parse(JSON.stringify(bomState));
+  projectBoms.projT[caixaKey].removed = true;
+  calculateBomState();
+  duct.removedKept = bomState[caixaKey]?.removed === true && summarizeBomCosts(bomState).fusaoTotal >= 0;
+  delete projectBoms.projT;
   ceo.ceoAccessory = 'Raquete';
   calculateBomState();
   duct.raqueteAerea = rq('RAQUETE PARA CEO');
@@ -875,7 +882,7 @@ check(conduit.surcharge.cabo === conduit.before.cabo - 500 && conduit.surcharge.
   && conduit.surcharge.bap === conduit.expectSurchargeBap && conduit.surcharge.rows === `Aéreo:0:${conduit.before.cabo - 500},Tubulado:10:550`,
   `aéreo e tubulado com acréscimos separados (${JSON.stringify(conduit.surcharge)})`);
 check(conduit.duct.raquete === 0 && conduit.duct.suporte === 0 && conduit.duct.caixa === 1 && conduit.duct.reserva === 50
-  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0,
+  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0 && conduit.duct.removedKept,
   `CEO em duto não leva kit de poste e a reserva dela vai para o tubulado (${JSON.stringify(conduit.duct)})`);
 check(conduit.highlight.idle === 0 && conduit.highlight.shown === 2 && conduit.highlight.sliceMeters === '200,200' && conduit.highlight.cleared,
   `trecho tubulado fica roxo só enquanto é editado (${JSON.stringify(conduit.highlight)})`);

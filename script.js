@@ -851,7 +851,8 @@ function initMap() {
         }
         const projectRootElement = document.getElementById(activeFolderId).closest('.folder');
         const projectId = projectRootElement.querySelector('.folder-title').dataset.folderId;
-        showConfirm('Recalcular Lista', 'Isso descartará todas as alterações manuais nesta lista e a recalculará a partir do mapa. Deseja continuar?', () => {
+        showConfirm('Recalcular Lista', 'Isso descartará todas as alterações manuais nesta lista (inclusive itens retirados) e a recalculará a partir do mapa. Deseja continuar?', () => {
+            Object.values(projectBoms[projectId] || {}).forEach(item => { delete item.removed; });
             calculateBomState();
             projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
             renderBomTable();

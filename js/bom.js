@@ -969,6 +969,10 @@ function calculateBomState() {
         }
     }
     bomState = normalizeBomState(bomState);
+    //Item retirado da lista continua retirado quando o mapa muda (só o "Recalcular" traz de volta)
+    for (const key in currentProjectBom) {
+        if (currentProjectBom[key].removed && bomState[key]) bomState[key].removed = true;
+    }
 }
 
 //Remoção lógica de item
@@ -977,6 +981,7 @@ function handleRemoveItem(button) {
     const materialName = getMaterialDisplayName(bomKey, bomState[bomKey]);
     showConfirm('Remover Item', `Tem certeza que deseja remover "${materialName}" da lista?`, () => {
         bomState[bomKey].removed = true;
+        syncBomStateToActiveProject(); //Fica gravado no projeto sem precisar clicar em Salvar
         renderBomTable();
     });
 }
