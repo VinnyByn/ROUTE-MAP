@@ -2925,8 +2925,14 @@ const AUTO_CABLE_NAME_RE = /^(.*?FO-\d+)-(.+?)(?: \(\d+\))?$/;
 //A ponta do cabo está nesta caixa? Pela âncora gravada; cabos antigos sem âncora, pelo nome antigo e a posição
 function isCableEndAtMarker(cable, markerInfo, isStart, oldName) {
     const uid = isStart ? cable.startAnchorUid : cable.endAnchorUid;
-    if (uid) return uid === markerInfo.uid;
+    if (uid && uid === markerInfo.uid) return true;
     if (typeof isSameProject === 'function' && !isSameProject(cable, markerInfo)) return false;
+    //Âncora apontando para outra caixa: só vale se essa caixa existir no mesmo projeto do cabo
+    //(pasta copiada e colada pode trazer a âncora da caixa original, do outro projeto)
+    if (uid) {
+        const anchored = markers.find(m => m.uid === uid && m !== markerInfo);
+        if (anchored && (typeof isSameProject !== 'function' || isSameProject(cable, anchored))) return false;
+    }
     const stored = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
     if (stored && stored !== oldName && stored !== markerInfo.name) return false;
     const position = markerInfo.marker?.getPosition?.();
@@ -2945,7 +2951,7 @@ function syncCableAnchorNamesForMarker(markerInfo, oldName = null) {
         if (isCableEndAtMarker(cable, markerInfo, true, oldName)) cable.startAnchorMarkerName = markerInfo.name;
         if (!isCableEndAtMarker(cable, markerInfo, false, oldName)) return;
         cable.endAnchorMarkerName = markerInfo.name;
-        if (!cable.endAnchorUid) { //Cabo antigo: passa a ficar ligado à caixa pela âncora
+        if (cable.endAnchorUid !== markerInfo.uid) { //Cabo antigo ou colado: passa a ficar ligado a esta caixa
             cable.endAnchorUid = ensureMarkerUid(markerInfo);
             cable.endAnchorMarkerFolderId = markerInfo.folderId || null;
         }
