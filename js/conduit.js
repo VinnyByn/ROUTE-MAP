@@ -188,8 +188,17 @@ function drawCableLaunchHighlight(cables) {
     if (!bounds.isEmpty()) map.fitBounds(bounds, { top: 56, right: 340, bottom: 56, left: getMapFocusPadding() });
 }
 
+//Todos os cabos do projeto do cabo (os com duto primeiro)
+function getProjectLaunchCables(cable) {
+    const projectId = typeof getItemProjectId === 'function' ? getItemProjectId(cable) : null;
+    const list = projectId ? getProjectItems(projectId).cables : [cable];
+    return list.filter(c => c.path?.length >= 2)
+        .sort((a, b) => (b.conduit?.length ? 1 : 0) - (a.conduit?.length ? 1 : 0) || (a.name || '').localeCompare(b.name || '', 'pt-BR', { numeric: true }));
+}
+
 function renderCableLaunchView(cable) {
-    const cables = getRouteCables(cable);
+    const scope = conduitTool.launch.scope === 'project' ? 'project' : 'route';
+    const cables = scope === 'project' ? getProjectLaunchCables(cable) : getRouteCables(cable);
     conduitTool.launch.cables = cables;
     drawCableLaunchHighlight(cables);
     const rows = cables.map(c => ({ cable: c, ...getCableLaunchRanges(c) }));
@@ -198,7 +207,12 @@ function renderCableLaunchView(cable) {
     const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
     const meters = value => `${Math.round(value).toLocaleString('pt-BR')} m`;
     const bar = (a, t) => `<span class="route-launch-bar" aria-hidden="true"><b style="width:${pct(a, a + t)}%"></b><em style="width:${pct(t, a + t)}%"></em></span>`;
+    const scopeButton = (value, label) => `<button type="button" data-conduit-scope="${value}"${scope === value ? ' class="is-active"' : ''}>${label}</button>`;
+    const withDuct = rows.filter(r => r.tubedMeters > 0).length;
     return `
+        <div class="route-modes route-launch-scope" role="group" aria-label="Quais cabos">
+            ${scopeButton('route', 'Rota deste cabo')}${scopeButton('project', 'Projeto todo')}
+        </div>
         <div class="route-launch-total">
             <span><i style="--fiber:${AERIAL_COLOR}"></i>Aéreo <b>${meters(aerial)}</b></span>
             <span><i style="--fiber:${CONDUIT_COLOR}"></i>Em duto <b>${meters(tubed)}</b></span>
@@ -210,7 +224,9 @@ function renderCableLaunchView(cable) {
                 <span class="route-launch__meters">${meters(r.aerialMeters)} aéreo${r.tubedMeters ? ` · ${meters(r.tubedMeters)} duto` : ''}</span>
                 ${bar(r.aerialMeters, r.tubedMeters)}
             </button></li>`).join('')}</ul>
-        <p class="route-note">${cables.length > 1 ? 'Cabos por onde passam as fibras em uso deste cabo. ' : ''}Medidas do traçado, sem reserva técnica. Clique num cabo para vê-lo no mapa; para marcar o duto dele, abra "Trecho tubulado" naquele cabo.</p>`;
+        <p class="route-note">${scope === 'project'
+            ? `${cables.length} cabo${cables.length === 1 ? '' : 's'} no projeto, ${withDuct} com trecho em duto. `
+            : (cables.length > 1 ? 'Cabos por onde passam as fibras em uso deste cabo. ' : '')}Medidas do traçado, sem reserva técnica. Clique num cabo para vê-lo no mapa; para marcar o duto dele, abra "Trecho tubulado" naquele cabo.</p>`;
 }
 
 // ---------------------------------------------------------------
@@ -231,7 +247,7 @@ function openConduitTool(cable) {
     }
     if (conduitTool) closeConduitTool();
     if (typeof isCableRouteOpen === 'function' && isCableRouteOpen()) closeCableRoute();
-    conduitTool = { cable, tab: 'mark', pendingMeters: null, listener: null, pendingMarker: null, highlights: [], launch: { overlays: [], dimmed: new Map(), cables: [] } };
+    conduitTool = { cable, tab: 'mark', pendingMeters: null, listener: null, pendingMarker: null, highlights: [], launch: { overlays: [], dimmed: new Map(), cables: [], scope: 'route' } };
     setAllCablesClickable(false);
     setMapCursor('crosshair');
     conduitTool.listener = map.addListener('click', (event) => handleConduitMapClick(event?.latLng));
@@ -369,6 +385,12 @@ function setupConduitTool() {
         const tab = e.target.closest('[data-conduit-tab]');
         if (tab && conduitTool) {
             setConduitTab(tab.dataset.conduitTab);
+            return;
+        }
+        const scopeButton = e.target.closest('[data-conduit-scope]');
+        if (scopeButton && conduitTool) {
+            conduitTool.launch.scope = scopeButton.dataset.conduitScope;
+            renderConduitTool();
             return;
         }
         const launchRow = e.target.closest('[data-conduit-launch]');

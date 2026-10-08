@@ -2077,3 +2077,5 @@ html[data-theme="dark"] .mh-signal.is-erro, html[data-theme="dark"] .fx-port__si
 .cable-route-box .route-launch .route-launch__name small { color: var(--color-text-dim); font-weight: 400; }
 .cable-route-box .route-launch .route-launch__meters { white-space: nowrap; font-size: 11.5px; }
 .cable-route-box .route-launch .route-launch-bar { grid-column: 1 / -1; margin: 0; height: 4px; }
+.cable-route-box .route-launch-scope { margin-bottom: 8px; }
+.cable-route-box .route-launch-scope button { font-size: 12px; padding: 4px 8px; }
