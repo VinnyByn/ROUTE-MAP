@@ -1750,6 +1750,35 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && autoName.renamed === 'FO-12-CTO-NOVA|BACKBONE|CTO-NOVA' && autoName.legacyRenamed === 'Cabo AS 80 FO-12-CTO-B2|an-cto2',
     `nome do cabo acompanha o tipo, a ponta B e o nome da caixa (${JSON.stringify(autoName)})`);
 
+  //Fluxo real: renomear a CTO pelo painel do marcador renomeia o cabo que chega nela
+  const ctoRename = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projRN', name: 'Projeto RN', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projRN');
+    rebuildMarker({ uid: 'mk_rnceo', folderId: 'projRN', type: 'CEO', name: 'CEO-RN', color: '#f00', position: { lat: -28, lng: -44 } });
+    rebuildMarker({ uid: 'mk_rncto', folderId: 'projRN', type: 'CTO', name: 'CTO-RN', color: '#f00', position: { lat: -28, lng: -43.99 } });
+    const cto = markers.find(m => m.uid === 'mk_rncto');
+    rebuildCable({ uid: 'rn-c', folderId: 'projRN', name: 'FO-06-CTO-RN', type: 'Cabo AS 80 FO-06', width: 4, color: '#000', status: 'Novo', path: [{ lat: -28, lng: -44 }, { lat: -28, lng: -43.99 }], startAnchorUid: 'mk_rnceo', endAnchorUid: 'mk_rncto', startAnchorMarkerName: 'CEO-RN', endAnchorMarkerName: 'CTO-RN' });
+    const cable = savedCables.find(c => c.uid === 'rn-c');
+    //Cabo de pasta colada antiga: âncora aponta para a CTO do projeto original, que não está aqui
+    rebuildCable({ uid: 'rn-d', folderId: 'projRN', name: 'FO-12-CTO-RN', type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -28.001, lng: -44 }, { lat: -28, lng: -43.99 }], startAnchorUid: 'mk_rnceo', endAnchorUid: 'mk_outro_projeto', startAnchorMarkerName: 'CEO-RN', endAnchorMarkerName: 'CTO-RN' });
+    const pasted = savedCables.find(c => c.uid === 'rn-d');
+    let error = null;
+    try {
+      openMarkerEditor(cto);
+      document.getElementById('markerName').value = 'CTO-RN2';
+      document.getElementById('confirmMarker').click();
+    } catch (e) { error = String(e); }
+    const out = { error, cto: cto.name, cable: cable.name, label: cable.item?.textContent?.includes('FO-06-CTO-RN2'), pasted: `${pasted.name}|${pasted.endAnchorUid}` };
+    [cable, pasted].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    markers.filter(m => m.folderId === 'projRN').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    document.querySelector('.folder-title[data-folder-id="projRN"]').closest('.folder').remove();
+    return out;
+  });
+  check(!ctoRename.error && ctoRename.cto === 'CTO-RN2' && ctoRename.cable === 'FO-06-CTO-RN2' && ctoRename.label
+    && ctoRename.pasted === 'FO-12-CTO-RN2|mk_rncto',
+    `renomear a CTO pelo painel renomeia o cabo (${JSON.stringify(ctoRename)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');
