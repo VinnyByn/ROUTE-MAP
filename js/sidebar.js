@@ -205,7 +205,7 @@ function buildSidebarMenuItems(entity) {
         if (canEdit) items.push({ action: 'copy', label: 'Copiar', kbd: 'Ctrl+C' });
         if (canEdit) {
             items.push({ divider: true });
-            items.push({ action: 'delete', label: `Excluir ${noun}`, danger: true });
+            items.push({ action: 'delete', label: `Excluir ${noun}`, danger: true, kbd: 'Del' });
         }
     }
     //Sem divisórias sobrando no começo, no fim ou em sequência
