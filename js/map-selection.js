@@ -274,6 +274,27 @@ function deleteSelection() {
     });
 }
 
+//Tecla Delete: exclui a seleção múltipla ou, sem ela, o item selecionado na barra lateral.
+//Não age enquanto se digita, com janela aberta ou com desenho em andamento.
+function handleSelectionDeleteKey(e) {
+    if (e.key !== 'Delete' || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+    const target = e.target;
+    if (target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    if ([...document.querySelectorAll('.modal')].some(m => m.style.display === 'flex' || m.style.display === 'block')) return;
+    if (isMapSelectionBusy() || (typeof isConduitToolOpen === 'function' && isConduitToolOpen())) return;
+    if (mapSelection.items.size) {
+        e.preventDefault();
+        deleteSelection();
+        return;
+    }
+    const row = document.querySelector('#sidebar .ge-pro-item.active');
+    const entity = row && typeof getSidebarEntity === 'function' ? getSidebarEntity(row) : null;
+    if (entity && ['marker', 'cable', 'polygon'].includes(entity.kind)) {
+        e.preventDefault();
+        deleteSidebarMapItem(entity);
+    }
+}
+
 // ---------------------------------------------------------------
 // Retângulo (Shift + arrastar)
 // ---------------------------------------------------------------
@@ -362,5 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && mapSelection.items.size) clearMapSelection();
     });
+    document.addEventListener('keydown', handleSelectionDeleteKey);
     if (typeof mapReady !== 'undefined' && mapReady?.then) mapReady.then(setupMapSelectionDrag);
 });

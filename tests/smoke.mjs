@@ -1136,6 +1136,36 @@ check(selStyle.picked === 'Y-CABO,Y-CTO1,Y-CTO2' && selStyle.styleEnabled && sel
   && selStyle.ctoColors === '#ff0000,#ff0000' && selStyle.cableColor === '#008000' && selStyle.cableStroke === '#008000',
   `seleção pega cabo que atravessa o retângulo e o estilo muda só as CTOs (${JSON.stringify(selStyle)})`);
 
+//Tecla Delete: com seleção, pede confirmação e exclui; digitando num campo, não faz nada
+const delKey = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  const ul = document.createElement('ul'); sidebar.appendChild(ul);
+  const mk = (name) => { const li = document.createElement('li'); li.className = 'ge-pro-item'; ul.appendChild(li);
+    const m = { type: 'CTO', name, listItem: li, marker: { getPosition: () => ({ lat: () => 0, lng: () => 0 }), setMap() {} } }; markers.push(m); return m; };
+  const a = mk('D1'), b = mk('D2');
+  const press = (target) => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+  setMapSelection([a, b]);
+  const input = document.createElement('input'); document.body.appendChild(input);
+  press(input);
+  const typing = document.getElementById('confirmModal').style.display;
+  input.remove();
+  press(document.body);
+  const asked = document.getElementById('confirmModal').style.display;
+  document.getElementById('confirmModalConfirmButton').click();
+  const gone = !markers.includes(a) && !markers.includes(b);
+  //Sem seleção múltipla: exclui o item ativo na barra lateral
+  const c = mk('D3');
+  c.listItem.classList.add('active');
+  press(document.body);
+  const askedSingle = document.getElementById('confirmModal').style.display;
+  document.getElementById('confirmModalConfirmButton').click();
+  const goneSingle = !markers.includes(c);
+  ul.remove();
+  return { typing, asked, gone, askedSingle, goneSingle };
+});
+check(delKey.typing !== 'flex' && delKey.asked === 'flex' && delKey.gone && delKey.askedSingle === 'flex' && delKey.goneSingle,
+  `tecla Delete exclui a seleção e o item ativo, e não age ao digitar (${JSON.stringify(delKey)})`);
+
 //Seleção múltipla pela barra lateral: Ctrl+clique e Shift+clique (intervalo)
 const sbSel = await page.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
