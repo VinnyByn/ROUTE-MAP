@@ -1824,6 +1824,13 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       editLines: conduitTool.highlights.length,
       routeTab: !!document.querySelector('[data-route-mode="launch"]'),
     };
+    //Projeto todo: entra também o cabo que não está na rota
+    rebuildCable({ uid: 'ld-b', folderId: 'projLD', name: 'LD-B', type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -29.1, lng: -44 }, { lat: -29.101, lng: -44 }] });
+    const other = savedCables.find(c => c.uid === 'ld-b');
+    const routeCount = body.querySelectorAll('[data-conduit-launch]').length;
+    document.querySelector('[data-conduit-scope="project"]').click();
+    out.scope = `${routeCount}>${body.querySelectorAll('[data-conduit-launch]').length}|${[...body.querySelectorAll('.route-launch__name b')].map(b => b.textContent).join(',')}`;
+    other.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(other), 1);
     document.querySelector('[data-conduit-tab="mark"]').click();
     out.backToMark = conduitTool.launch.overlays.length === 0 && conduitTool.highlights.length === 1;
     closeConduitTool();
@@ -1833,7 +1840,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     return out;
   });
   check(launch.markFirst && launch.active && /^70\d m aéreo · 300 m duto$/.test(launch.text) && launch.colors === '#0284c7,#0284c7,#7c3aed'
-    && launch.editLines === 0 && !launch.routeTab && launch.backToMark && launch.cleared,
+    && launch.editLines === 0 && !launch.routeTab && launch.backToMark && launch.cleared && launch.scope === '1>2|LD-A,LD-B',
     `trecho tubulado: aba Aéreo × duto mostra trechos aéreos e em duto (${JSON.stringify(launch)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
