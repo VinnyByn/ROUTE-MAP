@@ -1729,13 +1729,18 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     updatePolylineFromMarkers();
     const customAfter = name();
     cancelCableDrawingSession();
+    //Renomear a caixa da ponta B renomeia o cabo automático (o de nome à mão só guarda o nome novo da ponta)
+    ctoA.name = 'CTO-NOVA';
+    syncCableAnchorNamesForMarker(ctoA, 'CTO-AN1');
+    const renamed = `${auto.name}|${custom.name}|${custom.endAnchorMarkerName}`;
     [auto, custom].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
     [ceo, ctoA, ctoB].forEach(m => markers.splice(markers.indexOf(m), 1));
     document.querySelector('.folder-title[data-folder-id="projAN"]').closest('.folder').remove();
-    return { opened, afterType, afterEnd, customAfter };
+    return { opened, afterType, afterEnd, customAfter, renamed };
   });
-  check(autoName.opened === 'FO-12-CTO-AN1' && autoName.afterType === 'FO-24-CTO-AN1' && autoName.afterEnd === 'FO-24-CTO-AN2' && autoName.customAfter === 'BACKBONE',
-    `nome do cabo acompanha o tipo e a ponta B (${JSON.stringify(autoName)})`);
+  check(autoName.opened === 'FO-12-CTO-AN1' && autoName.afterType === 'FO-24-CTO-AN1' && autoName.afterEnd === 'FO-24-CTO-AN2' && autoName.customAfter === 'BACKBONE'
+    && autoName.renamed === 'FO-12-CTO-NOVA|BACKBONE|CTO-NOVA',
+    `nome do cabo acompanha o tipo, a ponta B e o nome da caixa (${JSON.stringify(autoName)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {

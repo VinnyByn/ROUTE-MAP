@@ -2919,13 +2919,31 @@ function resolveCableEndAnchor(cable, isStart) {
     return distance <= KML_CABLE_ANCHOR_SNAP_DISTANCE_M ? byName : null;
 }
 
-//Mantém o nome gravado nos cabos quando o marcador é renomeado
-function syncCableAnchorNamesForMarker(markerInfo) {
+//Mantém o nome gravado nos cabos quando o marcador é renomeado. Cabo que chega nele (ponta B)
+//com nome automático "FO-12-<nome antigo>" passa a "FO-12-<nome novo>"; nome digitado à mão fica.
+function syncCableAnchorNamesForMarker(markerInfo, oldName = null) {
     if (!markerInfo?.uid) return;
+    const renamed = [];
     savedCables.forEach(cable => {
         if (cable.startAnchorUid === markerInfo.uid) cable.startAnchorMarkerName = markerInfo.name;
-        if (cable.endAnchorUid === markerInfo.uid) cable.endAnchorMarkerName = markerInfo.name;
+        if (cable.endAnchorUid !== markerInfo.uid) return;
+        cable.endAnchorMarkerName = markerInfo.name;
+        const match = oldName && /^(FO-\d+)-(.+?)(?: \(\d+\))?$/.exec(cable.name || '');
+        if (!match || match[2] !== oldName || !markerInfo.name) return;
+        const base = `${match[1]}-${markerInfo.name}`;
+        let newName = base;
+        for (let i = 2; savedCables.some(c => c !== cable && c.name === newName); i++) newName = `${base} (${i})`;
+        renamed.push({ cable, from: cable.name, to: newName });
     });
+    renamed.forEach(({ cable, from, to }) => {
+        cable.name = to;
+        if (cable.item) updateCableSidebarLabel(cable);
+        updateCableNameInAllFusionPlans(from, to, cable);
+    });
+    if (renamed.length) {
+        showToast(renamed.length === 1 ? 'Cabo renomeado' : 'Cabos renomeados',
+            renamed.map(r => `"${r.from}" → "${r.to}"`).join(', '));
+    }
 }
 
 function undoCableVertex() {
