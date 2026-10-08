@@ -116,7 +116,8 @@ def _find_header(rows: list[list[str]]) -> tuple[int, dict[str, int]] | None:
     return None
 
 
-def parse_rows(rows: list[list[str]]) -> list[Material]:
+def parse_rows(rows: list[list[str]], skipped: list[str] | None = None) -> list[Material]:
+    """Lê os materiais. Linhas com descrição mas sem preço vão para "skipped" (quando informado)."""
     header = _find_header(rows)
     if not header:
         raise HTTPException(
@@ -131,6 +132,11 @@ def parse_rows(rows: list[list[str]]) -> list[Material]:
         descricao = get(row, "descricao")
         valor = parse_price(get(row, "valor_unitario"))
         if valor is None:
+            # Material sem preço (tem descrição e unidade): fica de fora e não muda a seção
+            if descricao and get(row, "unidade"):
+                if skipped is not None and _normalize(descricao) not in ("total", "subtotal"):
+                    skipped.append(descricao)
+                continue
             # Título de seção: primeira célula com texto numa linha sem preço (ex.: "DATA CENTER")
             title = next((c.strip() for c in row if c.strip() and not re.search(r"\d{3,}", c)), "")
             header_words = {alias for aliases in HEADER_ALIASES.values() for alias in aliases}
