@@ -2346,8 +2346,8 @@ function getCableDrawStartAnchorMarker() {
 
 //Nome no padrão automático ("FO-12-" + nome de uma caixa do mapa): pode ser refeito ao trocar tipo ou ponta B
 function isAutoCableName(name) {
-    const match = /^FO-\d+-(.+)$/.exec(name || '');
-    return !!match && markers.some(m => m.name === match[1] && (isCableAnchorMarkerType(m.type) || isB2BCableAnchor(m)));
+    const match = AUTO_CABLE_NAME_RE.exec(name || '');
+    return !!match && markers.some(m => m.name === match[2] && (isCableAnchorMarkerType(m.type) || isB2BCableAnchor(m)));
 }
 
 //Ponta B mudou (clique, arraste, inverter): o nome automático acompanha a nova caixa
@@ -2919,16 +2919,37 @@ function resolveCableEndAnchor(cable, isStart) {
     return distance <= KML_CABLE_ANCHOR_SNAP_DISTANCE_M ? byName : null;
 }
 
+//Nome automático do cabo: "FO-12-<caixa>" (desenho) ou "Cabo AS 80 FO-12-<caixa>" (cabo dividido), com "(2)" opcional
+const AUTO_CABLE_NAME_RE = /^(.*?FO-\d+)-(.+?)(?: \(\d+\))?$/;
+
+//A ponta do cabo está nesta caixa? Pela âncora gravada; cabos antigos sem âncora, pelo nome antigo e a posição
+function isCableEndAtMarker(cable, markerInfo, isStart, oldName) {
+    const uid = isStart ? cable.startAnchorUid : cable.endAnchorUid;
+    if (uid) return uid === markerInfo.uid;
+    if (typeof isSameProject === 'function' && !isSameProject(cable, markerInfo)) return false;
+    const stored = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
+    if (stored && stored !== oldName && stored !== markerInfo.name) return false;
+    const position = markerInfo.marker?.getPosition?.();
+    const point = cable.path?.length ? cable.path[isStart ? 0 : cable.path.length - 1] : null;
+    if (!position || !point) return false;
+    const reach = stored ? KML_CABLE_ANCHOR_SNAP_DISTANCE_M : 1.5;
+    return google.maps.geometry.spherical.computeDistanceBetween(point, position) <= reach;
+}
+
 //Mantém o nome gravado nos cabos quando o marcador é renomeado. Cabo que chega nele (ponta B)
 //com nome automático "FO-12-<nome antigo>" passa a "FO-12-<nome novo>"; nome digitado à mão fica.
 function syncCableAnchorNamesForMarker(markerInfo, oldName = null) {
-    if (!markerInfo?.uid) return;
+    if (!markerInfo) return;
     const renamed = [];
     savedCables.forEach(cable => {
-        if (cable.startAnchorUid === markerInfo.uid) cable.startAnchorMarkerName = markerInfo.name;
-        if (cable.endAnchorUid !== markerInfo.uid) return;
+        if (isCableEndAtMarker(cable, markerInfo, true, oldName)) cable.startAnchorMarkerName = markerInfo.name;
+        if (!isCableEndAtMarker(cable, markerInfo, false, oldName)) return;
         cable.endAnchorMarkerName = markerInfo.name;
-        const match = oldName && /^(FO-\d+)-(.+?)(?: \(\d+\))?$/.exec(cable.name || '');
+        if (!cable.endAnchorUid) { //Cabo antigo: passa a ficar ligado à caixa pela âncora
+            cable.endAnchorUid = ensureMarkerUid(markerInfo);
+            cable.endAnchorMarkerFolderId = markerInfo.folderId || null;
+        }
+        const match = oldName && AUTO_CABLE_NAME_RE.exec(cable.name || '');
         if (!match || match[2] !== oldName || !markerInfo.name) return;
         const base = `${match[1]}-${markerInfo.name}`;
         let newName = base;
