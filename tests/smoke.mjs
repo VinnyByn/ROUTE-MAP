@@ -1847,6 +1847,40 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && launch.editLines === 0 && !launch.routeTab && launch.backToMark && launch.cleared && launch.scope === '1>2|LD-A,LD-B',
     `trecho tubulado: aba Aéreo × duto mostra trechos aéreos e em duto (${JSON.stringify(launch)})`);
 
+  //Mão de obra: continua no projeto quando o mapa muda; regional com dias automáticos acompanha o mapa
+  const labor = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projMO', name: 'Projeto MO', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projMO');
+    const savedConfig = { ...laborConfig };
+    Object.assign(laborConfig, { cablePerDay: 1000, ctoPerDay: 1, ceoPerDay: 1, hoursPerDay: 8, hourlyRate: 10 });
+    rebuildMarker({ uid: 'mk_mo1', folderId: 'projMO', type: 'CTO', name: 'CTO-MO1', color: '#f00', position: { lat: -30, lng: -44 } });
+    const reg = (extra) => ({ quantity: 1, type: 'Regional', category: 'Mão de Obra', removed: false, unitPrice: 0,
+      details: { techs: 2, fuelQty: 0, fuelPrice: 0, foodQty: 1, foodPrice: 50, lodgingQty: 0, lodgingPrice: 0, tollQty: 0, tollPrice: 0, ...extra } });
+    projectBoms.projMO = { 'Mão de Obra Regional': reg({ autoDays: true, days: 0, manualDays: 0 }),
+      'Mão de Obra - ACME': { quantity: 1, type: 'Outsourced', category: 'Mão de Obra', removed: false, unitPrice: 500, details: { companyName: 'ACME', services: [{ name: 'X', qty: 1, price: 500, unit: 'un' }], totalCost: 500 } } };
+    refreshBomAfterProjectChange();
+    const r1 = projectBoms.projMO['Mão de Obra Regional'];
+    const first = `${r1?.details.manualDays}|${r1?.details.totalCost}|${!!projectBoms.projMO['Mão de Obra - ACME']}`;
+    rebuildMarker({ uid: 'mk_mo2', folderId: 'projMO', type: 'CTO', name: 'CTO-MO2', color: '#f00', position: { lat: -30.001, lng: -44 } });
+    refreshBomAfterProjectChange();
+    const second = `${projectBoms.projMO['Mão de Obra Regional'].details.manualDays}|${projectBoms.projMO['Mão de Obra Regional'].details.totalCost}`;
+    //Dias informados à mão ficam como estão
+    projectBoms.projMO['Mão de Obra Regional'] = reg({ autoDays: false, days: 2, manualDays: 30 });
+    refreshBomAfterProjectChange();
+    const manual = `${projectBoms.projMO['Mão de Obra Regional'].details.manualDays}|${projectBoms.projMO['Mão de Obra Regional'].details.totalCost}`;
+    openLaborModal();
+    const ui = { summary: document.getElementById('laborQuantitiesSummary').textContent.replace(/\s+/g, ' ').trim(), buttons: document.querySelectorAll('#labor-items-body .labor-btn').length };
+    document.getElementById('laborModal').style.display = 'none';
+    Object.assign(laborConfig, savedConfig);
+    markers.filter(m => m.folderId === 'projMO').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    delete projectBoms.projMO;
+    document.querySelector('.folder-title[data-folder-id="projMO"]').closest('.folder').remove();
+    return { first, second, manual, ui };
+  });
+  check(labor.first === '1|210|true' && labor.second === '2|370' && labor.manual === '30|4850' && /2 CTOs/.test(labor.ui.summary) && /Estimativa de obra: 2 dias/.test(labor.ui.summary) && labor.ui.buttons === 5,
+    `mão de obra continua no projeto e os dias automáticos acompanham o mapa (${JSON.stringify(labor)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');

@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261013k" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261013m" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -733,6 +733,7 @@
             <span class="close" id="closeLaborModal">&times;</span>
             <h2>Planilha de Mão de Obra</h2>
             <div class="modal-body-content">
+                <div class="labor-quantities" id="laborQuantitiesSummary"></div>
                 <div class="material-section" style="margin: 0;">
                     <table id="labor-summary-table">
                         <thead>
@@ -778,10 +779,11 @@
                     <input type="number" id="regionalTechs" value="1" min="1">
                 </div>
                 <div class="form-group">
-                    <label for="regionalDaysInput">Dias Informados (para Custo)</label>
+                    <label for="regionalDaysInput">Dias de obra (para o custo)</label>
                     <input type="number" id="regionalDaysInput" value="0" min="0">
                 </div>
             </div>
+            <label class="labor-auto-days"><input type="checkbox" id="regionalAutoDays" checked> Calcular os dias automaticamente pelo mapa (acompanha as mudanças no projeto)</label>
 
             <fieldset>
                 <legend>Despesas Adicionais</legend>
@@ -2784,8 +2786,8 @@
   <script src="js/project-safety.js?v=20261007a" defer></script>
   <script src="js/catalog.js?v=20261013h" defer></script>
   <script src="js/kml.js?v=20261007i" defer></script>
-  <script src="js/bom.js?v=20261013g" defer></script>
-  <script src="js/labor.js?v=20261013b" defer></script>
+  <script src="js/bom.js?v=20261013m" defer></script>
+  <script src="js/labor.js?v=20261013m" defer></script>
   <script src="js/report.js?v=20261010b" defer></script>
   <script src="js/sketch.js?v=20261009c" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
