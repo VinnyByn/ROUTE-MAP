@@ -140,7 +140,8 @@ function syncCableConduitOverlays(cable) {
         points.push(getPointAtMeters(cable.path, r.to, cumulative));
         cable.conduitLines.push(new google.maps.Polyline({
             path: points, map: visible ? map : null, clickable: false, strokeOpacity: 0, zIndex: 60,
-            icons: [{ icon: { path: 'M 0,-1 0,1', strokeColor: CONDUIT_COLOR, strokeOpacity: 1, strokeWeight: 3, scale: (cable.width || 4) / 2 + 2 }, offset: '0', repeat: '10px' }],
+            //Tracejado branco fino no meio: a cor do cabo continua visível
+            icons: [{ icon: { path: 'M 0,-1 0,1', strokeColor: '#ffffff', strokeOpacity: 0.95, strokeWeight: 2, scale: 3 }, offset: '0', repeat: '12px' }],
         }));
     });
 }
