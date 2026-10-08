@@ -1302,7 +1302,10 @@ function saveClient(event) {
     }
     if (editingClient) {
         const previous = editingClient.client || {};
+        const oldName = editingClient.name;
         editingClient.name = name;
+        //Cliente B2B é ponta de cabo: o cabo de nome automático acompanha o nome novo
+        if (oldName !== name && typeof syncCableAnchorNamesForMarker === 'function') syncCableAnchorNamesForMarker(editingClient, oldName);
         editingClient.description = client.notes;
         //Mantém o traçado do drop se a CTO não mudou
         const keepRoute = previous.ctoUid === client.ctoUid && previous.cableName === client.cableName;
