@@ -2050,3 +2050,4 @@ html[data-theme="dark"] .mh-signal.is-erro, html[data-theme="dark"] .fx-port__si
 .conduit-box .conduit-list small { color: var(--color-text-dim); }
 .conduit-box .conduit-list button { border: 0; background: transparent; color: var(--color-text-dim); font-size: 18px; line-height: 1; cursor: pointer; }
 .conduit-box .conduit-list button:hover { color: #ef4444; }
+.map-tool-stats [hidden] { display: none; }
