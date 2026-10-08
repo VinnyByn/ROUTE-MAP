@@ -973,6 +973,8 @@ function calculateBomState() {
     for (const key in currentProjectBom) {
         if (currentProjectBom[key].removed && bomState[key]) bomState[key].removed = true;
     }
+    //Mão de obra (regional e terceirizada) continua no projeto; a regional refaz os dias pelo mapa
+    if (typeof preserveLaborItems === 'function') preserveLaborItems(bomState, currentProjectBom, projectId);
 }
 
 //Remoção lógica de item

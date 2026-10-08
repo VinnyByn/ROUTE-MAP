@@ -14,8 +14,12 @@ function getProjectQuantities() {
         console.error("Não foi possível encontrar o projeto raiz para o cálculo da mão de obra.");
         return { cableLength: 0, cordoalhaLength: 0, cordoalhaCount: 0, ctoCount: 0, ceoCount: 0, reservaCount: 0 };
     }
-    const projectId = projectRootElement.querySelector('.folder-title').dataset.folderId;
-    //Pega APENAS os marcadores e cabos que pertencem ao projeto ativo.
+    return getProjectQuantitiesFor(projectRootElement.querySelector('.folder-title').dataset.folderId);
+}
+
+//Quantitativos de um projeto (cabo cobrado, cordoalha, CTOs, CEOs e reservas novos)
+function getProjectQuantitiesFor(projectId) {
+    //Pega APENAS os marcadores e cabos que pertencem ao projeto.
     const { markers: projectMarkers, cables: projectCables } = getProjectItems(projectId);
     let totalLength = 0;
     let cordoalhaLength = 0;
@@ -57,6 +61,52 @@ function getProjectQuantities() {
     };
 }
 
+// ---------------------------------------------------------------
+// Mão de obra regional: dias automáticos pelo mapa
+// ---------------------------------------------------------------
+const REGIONAL_LABOR_KEY = 'Mão de Obra Regional';
+
+//Dias automáticos (padrão). Itens antigos sem a opção: automáticos se os dias informados eram a estimativa.
+function isRegionalAutoDays(details) {
+    if (!details) return true;
+    if (details.autoDays !== undefined) return !!details.autoDays;
+    return details.manualDays == null || Number(details.manualDays) === 0 || Number(details.manualDays) === Number(details.days);
+}
+
+function getRegionalLaborExpenses(d) {
+    const v = (x) => Number(x) || 0;
+    return v(d.fuelQty) * v(d.fuelPrice) + v(d.foodQty) * v(d.foodPrice) + v(d.lodgingQty) * v(d.lodgingPrice) + v(d.tollQty) * v(d.tollPrice);
+}
+
+//Refaz dias (se automáticos) e custos do item regional com os quantitativos atuais do projeto
+function refreshRegionalLaborItem(item, projectId) {
+    const d = item?.details;
+    if (!d || !projectId) return item;
+    const estimate = estimateLaborDays(getProjectQuantitiesFor(projectId));
+    d.days = estimate;
+    if (isRegionalAutoDays(d)) {
+        d.autoDays = true;
+        d.manualDays = estimate;
+    }
+    const days = Number(d.manualDays) || 0;
+    d.baseCost = (Number(d.techs) || 0) * days * laborConfig.hoursPerDay * laborConfig.hourlyRate;
+    d.totalCost = d.baseCost + getRegionalLaborExpenses(d);
+    item.unitPrice = d.totalCost;
+    return item;
+}
+
+//Mão de obra fica guardada na lista do projeto quando a lista é recalculada pelo mapa
+function preserveLaborItems(targetBom, savedBom, projectId) {
+    for (const key in savedBom || {}) {
+        const item = savedBom[key];
+        if (item?.category !== 'Mão de Obra') continue;
+        targetBom[key] = JSON.parse(JSON.stringify(item));
+        if (key === REGIONAL_LABOR_KEY) refreshRegionalLaborItem(targetBom[key], projectId);
+    }
+}
+
+const formatLaborMoney = (value) => `R$ ${(Number(value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 //Gerenciamento de mão de obra
 function openLaborModal() {
     //Identificar o projeto ativo ANTES de ler o bomState
@@ -74,10 +124,22 @@ function openLaborModal() {
     const projectName = projectRootElement.querySelector('.folder-title').dataset.folderName;
     if (projectBoms[projectId]) {
         bomState = normalizeBomState(JSON.parse(JSON.stringify(projectBoms[projectId])));
+        if (bomState[REGIONAL_LABOR_KEY]) {
+            refreshRegionalLaborItem(bomState[REGIONAL_LABOR_KEY], projectId);
+            projectBoms[projectId][REGIONAL_LABOR_KEY] = JSON.parse(JSON.stringify(bomState[REGIONAL_LABOR_KEY]));
+        }
     } else {
         calculateBomState();
         projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
     }
+    const quantities = getProjectQuantitiesFor(projectId);
+    const estimate = estimateLaborDays(quantities);
+    document.getElementById('laborQuantitiesSummary').innerHTML = `
+        <span><b>${quantities.cableLength.toLocaleString('pt-BR')} m</b> de cabo</span>
+        <span><b>${quantities.ctoCount}</b> CTO${quantities.ctoCount === 1 ? '' : 's'}</span>
+        <span><b>${quantities.ceoCount}</b> CEO${quantities.ceoCount === 1 ? '' : 's'}</span>
+        <span><b>${quantities.reservaCount}</b> reserva${quantities.reservaCount === 1 ? '' : 's'}</span>
+        <span class="labor-estimate">Estimativa de obra: <b>${estimate} dia${estimate === 1 ? '' : 's'}</b></span>`;
     //Renderização da tabela
     const tableBody = document.getElementById('labor-items-body');
     tableBody.innerHTML = '';
@@ -93,27 +155,22 @@ function openLaborModal() {
             const row = tableBody.insertRow();
             let type = '';
             let detailsHtml = '';
-            let actionsHtml = `
-                <button data-name="${escapeHtml(name)}" class="edit-labor-btn" style="background-color: #ffc107; color: #333; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px; margin-right: 5px;">Editar</button>
-                <button data-name="${escapeHtml(name)}" class="remove-labor-btn" style="background-color: #f44336; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px;">Remover</button>
-            `;
+            const actionButton = (cls, label, icon) => `<button type="button" data-name="${escapeHtml(name)}" class="labor-btn ${cls}" title="${label}" aria-label="${label}">${uiIcon(icon)}</button>`;
+            let actionsHtml = actionButton('edit-labor-btn', 'Editar', 'edit') + actionButton('remove-labor-btn labor-btn--danger', 'Remover', 'trash');
             //Lógica mão de obra regional com detalhe nas despesas
-            if (name === 'Mão de Obra Regional') {
+            if (name === REGIONAL_LABOR_KEY) {
                 type = 'Regional';
                 hasRegional = true;
                 const details = item.details || {};
-                const totalFuel = (details.fuelQty || 0) * (details.fuelPrice || 0);
-                const totalFood = (details.foodQty || 0) * (details.foodPrice || 0);
-                const totalLodging = (details.lodgingQty || 0) * (details.lodgingPrice || 0);
-                const totalToll = (details.tollQty || 0) * (details.tollPrice || 0);
-                const expenses = totalFuel + totalFood + totalLodging + totalToll;
-                const informedDays = getRegionalLaborInformedDays(details);
-                const daysDisplay = informedDays !== null ? informedDays : (details.days ?? 'N/A');
+                const auto = isRegionalAutoDays(details);
+                const days = Number(details.manualDays) || 0;
+                const expenses = getRegionalLaborExpenses(details);
                 detailsHtml = `
-                    <ul class="details-list">
-                        <li><strong>Técnicos:</strong> ${escapeHtml(details.techs || 'N/A')}</li>
-                        <li><strong>Dias Informados:</strong> ${escapeHtml(daysDisplay)}</li>
-                        <li><strong>Despesas Adic.:</strong> R$ ${expenses.toFixed(2).replace('.', ',')}</li>
+                    <ul class="details-list labor-details">
+                        <li><span>Técnicos</span><b>${escapeHtml(details.techs || 0)}</b></li>
+                        <li><span>Dias</span><b>${days}</b><em class="labor-tag${auto ? ' is-auto' : ''}">${auto ? 'automático pelo mapa' : `informado · estimativa ${details.days ?? 0}`}</em></li>
+                        <li><span>Custo dos técnicos</span><b>${formatLaborMoney(details.baseCost)}</b></li>
+                        <li><span>Despesas adicionais</span><b>${formatLaborMoney(expenses)}</b></li>
                     </ul>`;
             }
             //Lógica mão de obra terceirizada
@@ -122,20 +179,24 @@ function openLaborModal() {
                 hasOutsourced = true;
                 const details = item.details || {};
                 const companyName = details.companyName || name.replace('Mão de Obra - ', '');
-                detailsHtml = escapeHtml(companyName);
-                actionsHtml = `<button data-name="${escapeHtml(name)}" class="view-labor-details-btn" style="background-color: #17a2b8; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 4px 10px; margin-right: 5px;">Ver Detalhes</button>` + actionsHtml;
+                const services = (details.services || []).filter(sv => sv.qty > 0).length;
+                detailsHtml = `<ul class="details-list labor-details"><li><span>Empresa</span><b>${escapeHtml(companyName)}</b></li><li><span>Serviços</span><b>${services}</b></li></ul>`;
+                actionsHtml = actionButton('view-labor-details-btn', 'Ver detalhes', 'eye') + actionsHtml;
             }
             //Preenchimento da linha da tabela
             row.innerHTML = `
-                <td>${type}</td>
+                <td><span class="labor-type">${type}</span></td>
                 <td>${detailsHtml}</td>
-                <td>R$ ${itemTotal.toFixed(2).replace('.', ',')}</td>
-                <td style="text-align: center;">${actionsHtml}</td>
+                <td class="labor-cost">${formatLaborMoney(itemTotal)}</td>
+                <td><div class="labor-actions">${actionsHtml}</div></td>
             `;
         }
     }
     //Atualização de interface e listeneres
-    document.getElementById('labor-grand-total-price').textContent = `R$ ${totalLaborCost.toFixed(2).replace('.', ',')}`;
+    if (!tableBody.children.length) {
+        tableBody.innerHTML = '<tr class="material-empty-row"><td colspan="4">Nenhuma mão de obra adicionada. Use os botões abaixo.</td></tr>';
+    }
+    document.getElementById('labor-grand-total-price').textContent = formatLaborMoney(totalLaborCost);
     //Altera visibilidade dos botões de adição
     const regionalBtnElement = document.getElementById('addNewRegionalLaborButton');
     const outsourcedBtnElement = document.getElementById('addNewOutsourcedLaborButton');
@@ -151,7 +212,7 @@ function openLaborModal() {
     //Listener de Remoção
     document.querySelectorAll('.remove-labor-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const itemName = e.target.dataset.name;
+            const itemName = e.currentTarget.dataset.name;
             showConfirm('Remover Mão de Obra', `Tem certeza que deseja remover "${itemName}"?`, () => {
                 delete bomState[itemName]; 
                 if (activeFolderId) {
@@ -170,13 +231,13 @@ function openLaborModal() {
     //Listeners de Detalhes e Edição
     document.querySelectorAll('.view-labor-details-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const itemName = e.target.dataset.name;
+            const itemName = e.currentTarget.dataset.name;
             showOutsourcedDetails(itemName); 
         });
     });
     document.querySelectorAll('.edit-labor-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const itemName = e.target.dataset.name;
+            const itemName = e.currentTarget.dataset.name;
             if (itemName === 'Mão de Obra Regional') {
                 openRegionalLaborModal(itemName); 
             } else if (itemName.startsWith('Mão de Obra - ')) {
@@ -237,6 +298,14 @@ function openRegionalLaborModal(itemNameForEdit = null) {
         document.getElementById('regionalDaysDisplay').textContent = calculatedDays;
         //Pega o campo de input de dias manuais
         const manualDaysInput = document.getElementById('regionalDaysInput');
+        const autoDaysInput = document.getElementById('regionalAutoDays');
+        const editingDetails = itemNameForEdit ? (bomState[itemNameForEdit]?.details || {}) : null;
+        autoDaysInput.checked = editingDetails ? isRegionalAutoDays(editingDetails) : true;
+        autoDaysInput.onchange = () => {
+            if (autoDaysInput.checked) manualDaysInput.value = calculatedDays;
+            manualDaysInput.disabled = autoDaysInput.checked;
+            updateRegionalCost();
+        };
         //Lista de todos os IDs de input para facilitar
         const inputIds = [
             'regionalTechs', 'regionalDaysInput',
@@ -283,6 +352,8 @@ function openRegionalLaborModal(itemNameForEdit = null) {
             inputElement.oninput = null;
             inputElement.oninput = updateRegionalCost;
         });
+        if (autoDaysInput.checked) manualDaysInput.value = calculatedDays;
+        manualDaysInput.disabled = autoDaysInput.checked;
         updateRegionalCost();
         modal.style.display = 'flex';
         
@@ -363,6 +434,7 @@ function handleRegionalLaborConfirm() {
             techs, 
             days: calculatedDays,
             manualDays: manualDays,
+            autoDays: document.getElementById('regionalAutoDays').checked,
             fuelQty, fuelPrice,
             foodQty, foodPrice,
             lodgingQty, lodgingPrice,
