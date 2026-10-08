@@ -950,6 +950,24 @@ const splitterNames = await page.evaluate(() => {
 check(splitterNames === 'Splitter 1/4 APC | SPLITTER CONECTORIZADO 1/4 SC/APC | SPLITTER FUSÃO 1/4 | SPLITTER CONECTORIZADO 1/8 SC/UPC | Splitter 1/16',
   `splitter de atendimento usa o conectorizado da planilha (${splitterNames})`);
 
+//Kit CTO: escolher o material de cada splitter do plano de fusão
+const splitterKit = await page.evaluate(() => {
+  const saved = materialCatalog.splitterMaterials;
+  materialCatalog.splitterMaterials = { 'APC|4': 'SPLITTER FUSÃO 1/4' };
+  const custom = resolveSplitterMaterialName(4, true, 'APC');
+  const other = resolveSplitterMaterialName(8, true, 'UPC');
+  renderCatalogKits();
+  const section = document.querySelector('#catalogKitsList .splitter-kit');
+  const selects = section ? section.querySelectorAll('select[data-splitter-kit]').length : 0;
+  const autos = section ? section.querySelectorAll('small').length : 0;
+  const picked = section?.querySelector('select[data-splitter-kit="APC|4"]')?.value;
+  materialCatalog.splitterMaterials = saved;
+  renderCatalogKits();
+  return { custom, other, selects, autos, picked };
+});
+check(splitterKit.custom === 'SPLITTER FUSÃO 1/4' && splitterKit.other === 'SPLITTER CONECTORIZADO 1/8 SC/UPC' && splitterKit.selects === 12 && splitterKit.autos === 11 && splitterKit.picked === 'SPLITTER FUSÃO 1/4',
+  `kit CTO escolhe o material de cada splitter (${JSON.stringify(splitterKit)})`);
+
 //Exportar planilha: abas e linhas do projeto ativo
 const sheets = await page.evaluate(() => {
   document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projX" data-folder-name="Projeto X"></div><ul id="projX" class="subfolders"></ul></li>');

@@ -319,10 +319,27 @@ Object.keys(MATERIAL_RENAMES).forEach(oldName => {
     if (!(newName in MATERIAL_PRICES_BASE)) MATERIAL_PRICES_BASE[newName] = MATERIAL_PRICES_BASE[oldName];
     delete MATERIAL_PRICES_BASE[oldName];
 });
+//Splitter do plano de fusão → material da lista. Escolha feita no kit CTO (catálogo, aba Kits);
+//sem escolha, usa o item da planilha que bate com o tipo.
+const SPLITTER_KIT_RATIOS = [2, 4, 8, 16];
+const SPLITTER_KIT_KINDS = [
+    { key: 'fusao', label: 'Fusão', atendimento: false, connector: '' },
+    { key: 'APC', label: 'Atendimento APC', atendimento: true, connector: 'APC' },
+    { key: 'UPC', label: 'Atendimento UPC', atendimento: true, connector: 'UPC' },
+];
+function getSplitterKitKey(ratio, atendimento, connector = 'APC') {
+    return `${atendimento ? (connector === 'UPC' ? 'UPC' : 'APC') : 'fusao'}|${ratio}`;
+}
+
+function resolveSplitterMaterialName(ratio, atendimento, connector = 'APC') {
+    const custom = typeof materialCatalog !== 'undefined' ? materialCatalog.splitterMaterials?.[getSplitterKitKey(ratio, atendimento, connector)] : null;
+    return custom ? resolveMaterialName(custom) : resolveDefaultSplitterMaterialName(ratio, atendimento, connector);
+}
+
 //Splitter da lista de materiais: usa o item da planilha que bate com o tipo do plano de fusão
 //(atendimento → conectorizado com o conector certo; fusão → splitter de fusão). Se a planilha não
 //tiver o item exato, cai no nome antigo (que é trocado pelo substituto).
-function resolveSplitterMaterialName(ratio, atendimento, connector = 'APC') {
+function resolveDefaultSplitterMaterialName(ratio, atendimento, connector = 'APC') {
     const fallback = atendimento ? `Splitter 1/${ratio} ${connector}` : `Splitter 1/${ratio}`;
     const names = Object.keys(MATERIAL_PRICES_BASE);
     const norm = n => normalizeMaterialName(n);
@@ -782,7 +799,7 @@ function buildSeedCatalog() {
 function loadMaterialCatalog(stored) {
     const seed = buildSeedCatalog();
     if (!stored || !Array.isArray(stored.materials)) {
-        materialCatalog = { ...seed, cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION };
+        materialCatalog = { ...seed, cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION, splitterMaterials: {} };
         return;
     }
     //Normaliza itens salvos
@@ -821,6 +838,7 @@ function loadMaterialCatalog(stored) {
         kits: kits.filter(k => !k.name.toUpperCase().startsWith('KIT LANÇAMENTO ')),
         cableAlcas: stored.cableAlcasVersion === CABLE_ALCA_VERSION && stored.cableAlcas && typeof stored.cableAlcas === 'object' ? { ...stored.cableAlcas } : {},
         cableAlcasVersion: CABLE_ALCA_VERSION,
+        splitterMaterials: stored.splitterMaterials && typeof stored.splitterMaterials === 'object' ? { ...stored.splitterMaterials } : {},
     };
 }
 
@@ -1234,6 +1252,7 @@ function renderCatalogKits() {
                 <strong class="cat3-kit__total">R$ ${formatCatalogPrice(total)}</strong>
             </header>
             <ul>${k.components.map(c => `<li><span class="kit-li-qty">${c.quantity}×</span><span class="cat3-kit__name">${escapeHtml(c.name)}</span><span class="cat3-kit__price">R$ ${formatCatalogPrice(unitOf(c) * (Number(c.quantity) || 0))}</span></li>`).join('') || '<li class="cat3-kit__empty">Sem itens</li>'}</ul>
+            ${k.name.toUpperCase() === 'CTO' ? renderSplitterKitSection(priceOf) : ''}
             <div class="catalog-row-actions">
                 <button type="button" class="catalog-icon-btn" data-edit-kit="${k.id}">${uiIcon('edit')} Editar</button>
                 <button type="button" class="catalog-icon-btn danger" data-delete-kit="${k.id}" title="Excluir kit" aria-label="Excluir kit">${uiIcon('trash')}</button>
@@ -1274,6 +1293,32 @@ function renderCableAlcaKit(priceOf) {
                 <p class="cable-alca-note">As quantidades por poste (alças por SUPA, SUPA, BAP e plaquetas) ficam em Configurações.</p>
             </details>
         </article>`;
+}
+
+//Splitters do plano de fusão dentro do kit CTO: cada tipo aponta para um material da lista (trocável)
+function renderSplitterKitSection(priceOf) {
+    const splitterNames = [...new Set(materialCatalog.materials
+        .filter(m => /^SPLITTER\b/i.test(normalizeMaterialName(m.name)))
+        .map(m => m.name))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    const rows = SPLITTER_KIT_RATIOS.flatMap(ratio => SPLITTER_KIT_KINDS.map(kind => {
+        const key = getSplitterKitKey(ratio, kind.atendimento, kind.connector);
+        const current = resolveSplitterMaterialName(ratio, kind.atendimento, kind.connector);
+        const options = (splitterNames.includes(current) ? splitterNames : [current, ...splitterNames])
+            .map(name => `<option value="${escapeHtml(name)}"${name === current ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
+        const custom = !!materialCatalog.splitterMaterials?.[key];
+        return `<li class="cable-alca-row">
+            <span class="cable-alca-row__cable">1:${ratio} · ${kind.label}${custom ? '' : ' <small>(automático)</small>'}</span>
+            <span class="cable-alca-row__arrow" aria-hidden="true">→</span>
+            <select class="cable-alca-row__select" data-splitter-kit="${key}" aria-label="Material do splitter 1:${ratio} ${kind.label}"${AppSession.isAdmin ? '' : ' disabled'}>${options}</select>
+            <span class="cat3-kit__price">R$ ${formatCatalogPrice(priceOf(current))}</span>
+        </li>`;
+    })).join('');
+    return `
+            <details class="splitter-kit">
+                <summary>Splitters do plano de fusão (CTO e CEO) · clique para ver qual material entra na lista</summary>
+                <ul class="cable-alca-list">${rows}</ul>
+                <p class="cable-alca-note">Cada splitter "Novo" do plano de fusão entra na lista de materiais com o material escolhido aqui.</p>
+            </details>`;
 }
 
 //Atualiza os contadores do cabeçalho
@@ -2002,6 +2047,22 @@ function setupMaterialCatalogUI() {
     });
     //Delegação de ações nos cards de kit
     document.getElementById('catalogKitsList')?.addEventListener('change', (e) => {
+        const splitterSelect = e.target.closest('[data-splitter-kit]');
+        if (splitterSelect) {
+            const [kind, ratio] = splitterSelect.dataset.splitterKit.split('|');
+            const auto = resolveDefaultSplitterMaterialName(Number(ratio), kind !== 'fusao', kind === 'fusao' ? 'APC' : kind);
+            const next = { ...(materialCatalog.splitterMaterials || {}) };
+            if (splitterSelect.value === auto) delete next[splitterSelect.dataset.splitterKit];
+            else next[splitterSelect.dataset.splitterKit] = splitterSelect.value;
+            materialCatalog.splitterMaterials = next;
+            persistMaterialCatalog();
+            refreshBomAfterProjectChange();
+            renderCatalogKits();
+            const reopened = document.querySelector('.splitter-kit');
+            if (reopened) reopened.open = true;
+            showToast('Splitter atualizado', `1:${ratio} ${kind === 'fusao' ? 'Fusão' : `Atendimento ${kind}`} → ${splitterSelect.value}`);
+            return;
+        }
         const select = e.target.closest('[data-cable-alca]');
         if (!select) return;
         materialCatalog.cableAlcas = { ...(materialCatalog.cableAlcas || {}), [select.dataset.cableAlca]: select.value };
