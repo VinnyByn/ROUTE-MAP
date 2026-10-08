@@ -810,7 +810,7 @@ const conduit = await page.evaluate(() => {
   const before = { bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR') };
   //Metade do cabo em duto
   setCableConduitRanges(cable, [{ from: 0, to: 500 }]);
-  const half = { meters: Math.round(getCableConduitMeters(cable)), bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), stored: cable.conduit.length, report: getProjectConduitMeters('projT') > 0 };
+  const half = { meters: Math.round(getCableConduitMeters(cable)), bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), stored: cable.conduit.length, report: getProjectConduitMeters('projT') > 0, hover: /Tubulado<\/span><b>500 m/.test(buildCableHoverHtml(cable)) };
   //Dois trechos que se tocam viram um só; fora do cabo é cortado
   setCableConduitRanges(cable, [{ from: 0, to: 300 }, { from: 250, to: 600 }, { from: -20, to: 5 }]);
   const merged = getCableConduitRanges(cable).map(r => `${Math.round(r.from)}-${Math.round(r.to)}`).join();
@@ -828,7 +828,7 @@ const conduit = await page.evaluate(() => {
     expectHalf: Math.ceil(before.cabo * (1 - 500 / exact) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
 });
 check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.half.meters === 500 && conduit.half.bap === conduit.expectHalf && conduit.half.bap < conduit.before.bap
-  && conduit.half.cabo === conduit.before.cabo && conduit.half.report,
+  && conduit.half.cabo === conduit.before.cabo && conduit.half.report && conduit.half.hover,
   `trecho tubulado tira as ferragens de poste e mantém o cabo (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
 check(conduit.merged === '0-600' && conduit.parts === '1|1' && conduit.all.flag && conduit.all.bap === 0 && conduit.all.cabo === conduit.before.cabo && conduit.back === conduit.before.bap,
   `trechos se juntam, cabo todo tubulado zera as ferragens e limpar volta ao normal (${conduit.merged} | ${conduit.parts} | ${JSON.stringify(conduit.all)} | ${conduit.back})`);

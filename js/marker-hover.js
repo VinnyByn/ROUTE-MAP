@@ -194,12 +194,14 @@ function getCableFiberUsage(cable) {
 
 function buildCableHoverHtml(cable) {
     const u = getCableFiberUsage(cable);
+    const tubed = cable.conduit?.length && typeof getCableConduitMeters === 'function' ? getCableConduitMeters(cable) : 0;
     const row = (label, value, cls = '') => `<div class="mh-row ${cls}"><span>${label}</span><b>${value}</b></div>`;
     const color = /^#[0-9a-f]{3,8}$/i.test(cable.color || '') ? cable.color : '#3b82f6';
     const head = `<header class="mh-card__head"><span class="mh-card__cable" style="--cable-color:${color}" aria-hidden="true"></span>`
         + `<div><strong>${escapeHtml(cable.name || '')}</strong><span>${escapeHtml(cable.type || 'Cabo')}</span></div></header>`;
     let body = `<section><h5>Metragem</h5>${row('Lançamento', `${cable.lancamento ?? cable.totalLength} m`)}`
-        + `${cable.reserva ? row('Reserva', `${cable.reserva} m`) : ''}${row('Total', `${cable.totalLength} m`, 'is-total')}</section>`;
+        + `${cable.reserva ? row('Reserva', `${cable.reserva} m`) : ''}${row('Total', `${cable.totalLength} m`, 'is-total')}`
+        + `${tubed ? row('Tubulado', `${Math.round(tubed)} m`) + row('Aéreo (em postes)', `${Math.max(0, Math.round((cable.lancamento ?? cable.totalLength) - tubed))} m`) : ''}</section>`;
     body += `<section><h5>Fibras</h5>${row('Em uso', `${u.used.length} / ${u.total}`, 'is-busy')}`
         + `${u.used.length ? `<p class="mh-card__note">${formatFiberRanges(u.used)}</p>` : ''}`
         + `${row('Livres', u.free.length, 'is-free')}${u.free.length ? `<p class="mh-card__note">${formatFiberRanges(u.free)}</p>` : ''}</section>`;

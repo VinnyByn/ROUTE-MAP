@@ -1,6 +1,7 @@
 // Trecho tubulado: parte de um cabo que passa dentro de duto/subduto em vez de ir pelos postes.
 // Esse trecho não entra na conta de postes, então não gera plaqueta, abraçadeira BAP, SUPA nem alça preformada.
 // O cabo continua inteiro na lista de materiais (a fibra é a mesma); só as ferragens de poste diminuem.
+// No mapa o cabo não muda de aparência: o trecho aparece só no cartão ao passar o mouse e no editor do cabo.
 // Guardado no cabo como cable.conduit = [{ all: true }] (cabo todo) ou [{ a: {lat,lng}, b: {lat,lng} }] (trecho).
 // Os extremos são pontos no mapa, não metros: se o traçado do cabo mudar, o trecho acompanha.
 // Depende de script.js, js/cable-split.js (projectOnCablePath) e js/sidebar-actions.js.
@@ -119,53 +120,7 @@ function getProjectConduitMeters(projectId) {
     return getBillableProjectCables(projectId).reduce((sum, cable) => sum + getCableConduitMeters(cable), 0);
 }
 
-// ---------------------------------------------------------------
-// No mapa: trecho tubulado tracejado por cima do cabo
-// ---------------------------------------------------------------
-function syncCableConduitOverlays(cable) {
-    if (!cable) return;
-    const ranges = cable.conduit?.length ? getCableConduitRanges(cable) : [];
-    const visible = cable.polyline?.getVisible ? cable.polyline.getVisible() !== false : true;
-    const signature = `${JSON.stringify(ranges.map(r => [Math.round(r.from), Math.round(r.to)]))}|${cable.path?.length}|${cable.width}|${visible}`;
-    if (cable.conduitSignature === signature) return;
-    cable.conduitSignature = signature;
-    (cable.conduitLines || []).forEach(line => line.setMap(null));
-    cable.conduitLines = [];
-    if (!ranges.length || typeof map === 'undefined' || !map) return;
-    hookCableVisibility(cable);
-    const cumulative = getPathCumulativeMeters(cable.path);
-    ranges.forEach(r => {
-        const points = [getPointAtMeters(cable.path, r.from, cumulative)];
-        cable.path.forEach((vertex, i) => { if (cumulative[i] > r.from && cumulative[i] < r.to) points.push(vertex); });
-        points.push(getPointAtMeters(cable.path, r.to, cumulative));
-        cable.conduitLines.push(new google.maps.Polyline({
-            path: points, map: visible ? map : null, clickable: false, strokeOpacity: 0, zIndex: 60,
-            //Tracejado branco fino no meio: a cor do cabo continua visível
-            icons: [{ icon: { path: 'M 0,-1 0,1', strokeColor: '#ffffff', strokeOpacity: 0.95, strokeWeight: 2, scale: 3 }, offset: '0', repeat: '12px' }],
-        }));
-    });
-}
-
-//O trecho tracejado some e volta junto com o cabo (ocultar na barra lateral, edição e exclusão)
-function hookCableVisibility(cable) {
-    const line = cable.polyline;
-    if (!line || line.conduitHooked) return;
-    line.conduitHooked = true;
-    const setVisible = line.setVisible?.bind(line);
-    const setMap = line.setMap?.bind(line);
-    if (setVisible) line.setVisible = (visible) => {
-        setVisible(visible);
-        (cable.conduitLines || []).forEach(l => l.setMap(visible ? map : null));
-    };
-    if (setMap) line.setMap = (target) => {
-        setMap(target);
-        if (!target) (cable.conduitLines || []).forEach(l => l.setMap(null));
-        else cable.conduitSignature = null;
-    };
-}
-
 function onCableConduitChanged(cable) {
-    syncCableConduitOverlays(cable);
     if (typeof updateCableSidebarLabel === 'function') updateCableSidebarLabel(cable);
     if (typeof refreshBomAfterProjectChange === 'function') refreshBomAfterProjectChange();
     if (conduitTool?.cable === cable) renderConduitTool();
