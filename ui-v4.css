@@ -1836,7 +1836,7 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 
 /* Rota do cabo pelas fusões */
 .cable-route-box { width: 330px; }
-.cable-route-box .route-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 10px; background: var(--color-surface-muted); margin-bottom: 10px; }
+.cable-route-box .route-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 3px; border-radius: 10px; background: var(--color-surface-muted); margin-bottom: 10px; }
 .cable-route-box .route-modes button { border: 0; border-radius: 8px; padding: 6px 8px; background: transparent; color: var(--color-text-dim); font: 600 12.5px var(--font-sans); cursor: pointer; }
 .cable-route-box .route-modes button.is-active { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18); }
 .cable-route-box .route-legend, .cable-route-box .route-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 300px; overflow: auto; }
@@ -2063,3 +2063,17 @@ html[data-theme="dark"] .mh-signal.is-erro, html[data-theme="dark"] .fx-port__si
 .conduit-box .conduit-list button { border: 0; background: transparent; color: var(--color-text-dim); font-size: 18px; line-height: 1; cursor: pointer; }
 .conduit-box .conduit-list button:hover { color: #ef4444; }
 .map-tool-stats [hidden] { display: none; }
+
+/* Rota da fibra: aba Aéreo × duto */
+.cable-route-box .route-launch-total { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--color-text-dim); margin-bottom: 6px; }
+.cable-route-box .route-launch-total span { display: inline-flex; align-items: center; gap: 6px; }
+.cable-route-box .route-launch-total b { color: var(--color-text); }
+.cable-route-box .route-launch-total i { width: 10px; height: 10px; border-radius: 50%; background: var(--fiber); }
+.cable-route-box .route-launch-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--color-surface-muted); margin-bottom: 10px; }
+.cable-route-box .route-launch-bar b { background: #0284c7; }
+.cable-route-box .route-launch-bar em { background: #7c3aed; }
+.cable-route-box .route-launch button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
+.cable-route-box .route-launch .route-launch__name { color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cable-route-box .route-launch .route-launch__name small { color: var(--color-text-dim); font-weight: 400; }
+.cable-route-box .route-launch .route-launch__meters { white-space: nowrap; font-size: 11.5px; }
+.cable-route-box .route-launch .route-launch-bar { grid-column: 1 / -1; margin: 0; height: 4px; }
