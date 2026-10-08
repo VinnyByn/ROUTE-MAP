@@ -1557,6 +1557,10 @@
               <h4>Cabos</h4>
               <span class="fs-section__note" id="folderStyleCableCount"></span>
             </header>
+            <div class="fs-field fs-field--wide is-off" id="fsCableColorField">
+              <label class="fs-toggle"><input type="checkbox" id="fsApplyCableColor" /><span>Cor da linha</span></label>
+              <input type="color" id="folderCableColor" value="#008000" aria-label="Cor dos cabos" />
+            </div>
             <div class="fs-field fs-field--wide is-off" id="fsWidthField">
               <label class="fs-toggle"><input type="checkbox" id="fsApplyWidth" /><span>Espessura da linha</span><output id="folderCableWidthValue">4 px</output></label>
               <input type="range" id="folderCableWidth" min="1" max="12" step="1" value="4" aria-label="Espessura dos cabos" />
@@ -2501,6 +2505,7 @@
         <option value="">Situação…</option><option>Nova</option><option>Existente</option><option>Troca</option>
       </select>
       <select id="mapSelectionFolder" data-sel-edit title="Mover para pasta"></select>
+      <button type="button" id="mapSelectionStyle" data-sel-edit title="Cor e tamanho por tipo">Estilo</button>
       <button type="button" id="mapSelectionHide">Ocultar</button>
       <button type="button" id="mapSelectionDelete" class="is-danger" data-sel-edit>Excluir</button>
       <button type="button" id="mapSelectionClear" title="Limpar seleção (Esc)" aria-label="Limpar seleção">&times;</button>
@@ -2767,7 +2772,7 @@
   <script src="js/layering.js?v=20261005a" defer></script>
   <script src="script.js?v=20261010e" defer></script>
   <script src="js/persistence.js?v=20261010b" defer></script>
-  <script src="js/sidebar-actions.js?v=20261009e" defer></script>
+  <script src="js/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/project-safety.js?v=20261007a" defer></script>
   <script src="js/catalog.js?v=20261009a" defer></script>
   <script src="js/kml.js?v=20261007i" defer></script>
@@ -2776,7 +2781,7 @@
   <script src="js/report.js?v=20261010b" defer></script>
   <script src="js/sketch.js?v=20261009c" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261010b" defer></script>
+  <script src="js/sidebar.js?v=20261011a" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261007b" defer></script>
   <script src="js/marker-panel.js?v=20261007e" defer></script>
@@ -2794,7 +2799,7 @@
   <script src="js/global-search.js?v=20261007b" defer></script>
   <script src="js/box-templates.js?v=20261006k" defer></script>
   <script src="js/undo.js?v=20261007o" defer></script>
-  <script src="js/map-selection.js?v=20261009e" defer></script>
+  <script src="js/map-selection.js?v=20261011b" defer></script>
   <script src="js/tour.js?v=20261007i" defer></script>
   <script src="js/live-sync.js?v=20261007a" defer></script>
   <script src="js/pop-plan.js?v=20261008e" defer></script>

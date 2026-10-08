@@ -1,5 +1,5 @@
-// Seleção múltipla no mapa: Shift + arrastar desenha um retângulo e seleciona marcadores, cabos e
-// polígonos do projeto ativo; Shift + clique adiciona ou tira um marcador.
+// Seleção múltipla no mapa: Shift + arrastar desenha um retângulo e seleciona marcadores e cabos que encostam nele
+// e polígonos inteiros dentro dele, do projeto ativo; Shift + clique adiciona ou tira um marcador.
 // Na barra lateral: Ctrl + clique e Shift + clique (intervalo). Barra de ações: situação, mover para pasta,
 // ocultar/mostrar, excluir. Depende de script.js e js/sidebar.js.
 
@@ -118,17 +118,46 @@ function getSelectionScopeMarkers(list = markers) {
     return list.filter(m => ids.has(m.folderId));
 }
 
-//Cabos e polígonos entram quando estão inteiros dentro do retângulo
+//Polígonos entram quando estão inteiros dentro do retângulo
 function shapeInsideBounds(shape, bounds) {
     if (!shape || shape.getVisible?.() === false || !shape.getPath) return false;
     const points = shape.getPath().getArray?.() || [];
     return points.length > 0 && points.every(p => bounds.contains(p));
 }
 
+//Trecho a-b cruza o retângulo? (recorte de Liang-Barsky em lat/lng)
+function segmentCrossesBox(a, b, box) {
+    const x0 = a.lng(), y0 = a.lat(), dx = b.lng() - x0, dy = b.lat() - y0;
+    let t0 = 0, t1 = 1;
+    const edges = [[-dx, x0 - box.west], [dx, box.east - x0], [-dy, y0 - box.south], [dy, box.north - y0]];
+    for (const [p, q] of edges) {
+        if (p === 0) { if (q < 0) return false; continue; }
+        const r = q / p;
+        if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+        else { if (r < t0) return false; if (r < t1) t1 = r; }
+    }
+    return true;
+}
+
+//Cabos entram quando qualquer parte do traçado encosta no retângulo
+function cableTouchesBounds(cable, bounds) {
+    const line = cable.polyline;
+    if (line?.getVisible?.() === false) return false;
+    const points = line?.getPath?.().getArray?.() || cable.path || [];
+    if (!points.length) return false;
+    if (points.some(p => bounds.contains(p))) return true;
+    const ne = bounds.getNorthEast?.();
+    const sw = bounds.getSouthWest?.();
+    if (!ne || !sw) return false;
+    const box = { north: ne.lat(), east: ne.lng(), south: sw.lat(), west: sw.lng() };
+    for (let i = 1; i < points.length; i++) if (segmentCrossesBox(points[i - 1], points[i], box)) return true;
+    return false;
+}
+
 function selectMarkersInBounds(bounds, { add = false } = {}) {
     const inside = [
         ...getSelectionScopeMarkers().filter(m => m.marker?.getVisible?.() !== false && m.marker?.getPosition && bounds.contains(m.marker.getPosition())),
-        ...getSelectionScopeMarkers(savedCables).filter(c => shapeInsideBounds(c.polyline, bounds)),
+        ...getSelectionScopeMarkers(savedCables).filter(c => cableTouchesBounds(c, bounds)),
         ...getSelectionScopeMarkers(savedPolygons).filter(p => shapeInsideBounds(p.polygonObject, bounds)),
     ];
     setMapSelection(add ? [...new Set([...mapSelection.items, ...inside])] : inside);
@@ -164,6 +193,7 @@ function renderMapSelectionBar() {
     const canEdit = AppSession.canEdit;
     bar.querySelectorAll('[data-sel-edit]').forEach(el => { el.disabled = !canEdit; });
     document.getElementById('mapSelectionStatus').disabled = !canEdit || !items.some(m => selectionKind(m) === 'marker' && SELECTION_STATUS_TYPES.includes(m.type));
+    document.getElementById('mapSelectionStyle').disabled = !canEdit || !items.some(m => selectionKind(m) === 'cable' || (selectionKind(m) === 'marker' && FOLDER_STYLE_TYPES.some(t => t.type === m.type)));
 }
 
 function applySelectionStatus(status) {
@@ -274,18 +304,26 @@ function toggleNearestMapItem(latLng) {
     if (item) toggleMapSelectionFromMap(item);
 }
 
+let mapSelectionRect = null;
+
+//Shift + mousedown no mapa ou em cima de um cabo começa o retângulo. Sem arrastar, vira Shift+clique
+//no item ("hit", quando o mousedown foi no próprio cabo) ou no mais perto.
+function startMapSelectionDrag(latLng, domEvent, hit = null) {
+    if (!domEvent?.shiftKey || !latLng || mapSelection.drag || isMapSelectionBusy()) return;
+    mapSelection.drag = { start: latLng, add: domEvent.ctrlKey || domEvent.metaKey, hit };
+    mapSelection.dragStart = latLng;
+    map.setOptions({ draggable: false, gestureHandling: 'none' });
+    //Cabos sem clique durante o arraste: o mapa continua recebendo o movimento em cima deles
+    if (typeof setAllCablesClickable === 'function') setAllCablesClickable(false);
+    mapSelectionRect = new google.maps.Rectangle({ map, clickable: false, strokeColor: '#2563eb', strokeWeight: 1.5, fillColor: '#2563eb', fillOpacity: 0.08,
+        bounds: new google.maps.LatLngBounds(latLng, latLng) });
+}
+
 function setupMapSelectionDrag() {
     if (typeof map === 'undefined' || !map) return;
-    let rect = null;
-    map.addListener('mousedown', (e) => {
-        if (!e.domEvent?.shiftKey || isMapSelectionBusy()) return;
-        mapSelection.drag = { start: e.latLng, add: e.domEvent.ctrlKey || e.domEvent.metaKey };
-        mapSelection.dragStart = e.latLng;
-        map.setOptions({ draggable: false, gestureHandling: 'none' });
-        rect = new google.maps.Rectangle({ map, clickable: false, strokeColor: '#2563eb', strokeWeight: 1.5, fillColor: '#2563eb', fillOpacity: 0.08,
-            bounds: new google.maps.LatLngBounds(e.latLng, e.latLng) });
-    });
+    map.addListener('mousedown', (e) => startMapSelectionDrag(e.latLng, e.domEvent));
     map.addListener('mousemove', (e) => {
+        const rect = mapSelectionRect;
         if (!mapSelection.drag || !rect) return;
         const b = new google.maps.LatLngBounds();
         b.extend(mapSelection.drag.start);
@@ -294,15 +332,17 @@ function setupMapSelectionDrag() {
     });
     const finish = () => {
         if (!mapSelection.drag) return;
-        const bounds = rect?.getBounds();
-        rect?.setMap(null);
-        rect = null;
+        const bounds = mapSelectionRect?.getBounds();
+        mapSelectionRect?.setMap(null);
+        mapSelectionRect = null;
         map.setOptions({ draggable: true, gestureHandling: 'auto' });
-        const add = mapSelection.drag.add;
+        if (typeof setAllCablesClickable === 'function') setAllCablesClickable(true);
+        const { add, hit } = mapSelection.drag;
         mapSelection.drag = null;
         const start = mapSelection.dragStart;
         mapSelection.dragStart = null;
         if (bounds && !bounds.getNorthEast().equals(bounds.getSouthWest())) selectMarkersInBounds(bounds, { add });
+        else if (hit) toggleMapSelectionFromMap(hit);
         else if (start) toggleNearestMapItem(start); //Shift+clique sem arrastar: o mapa travado pode engolir o clique no cabo
     };
     map.addListener('mouseup', finish);
@@ -316,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('mapSelectionStatus').addEventListener('change', (e) => { applySelectionStatus(e.target.value); e.target.value = ''; });
     document.getElementById('mapSelectionFolder').addEventListener('change', (e) => { moveSelectionToFolder(e.target.value); e.target.value = ''; });
     document.getElementById('mapSelectionHide').addEventListener('click', () => setSelectionVisible(false));
+    document.getElementById('mapSelectionStyle').addEventListener('click', () => openSelectionStyleModal([...mapSelection.items]));
     document.getElementById('mapSelectionDelete').addEventListener('click', deleteSelection);
     document.getElementById('mapSelectionClear').addEventListener('click', clearMapSelection);
     document.addEventListener('keydown', (e) => {
