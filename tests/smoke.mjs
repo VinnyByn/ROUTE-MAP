@@ -817,6 +817,17 @@ const conduit = await page.evaluate(() => {
   //Dividir: cada pedaço leva só a parte dele
   setCableConduitRanges(cable, [{ from: 100, to: 700 }]);
   const parts = splitCableConduit(cable, 400);
+  //Destaque roxo só com a ferramenta aberta: um traço por trecho, some ao fechar
+  const linesBefore = lines.length;
+  setCableConduitRanges(cable, [{ from: 100, to: 300 }, { from: 500, to: 700 }]);
+  const idle = lines.length - linesBefore;
+  conduitTool = { cable, pendingMeters: null, listener: null, pendingMarker: null, highlights: [] };
+  renderConduitTool();
+  const shown = conduitTool.highlights.filter(l => l.o.map !== null && l.o.strokeColor === CONDUIT_COLOR);
+  const sliceMeters = shown.map(l => Math.round(google.maps.geometry.spherical.computeLength(l.o.path))).join();
+  clearConduitHighlights();
+  const highlight = { idle, shown: shown.length, sliceMeters, cleared: shown.every(l => l.o.map === null) };
+  conduitTool = null;
   const all = (setCableConduitRanges(cable, [{ from: 0, to: 5000 }]), { flag: cable.conduit[0]?.all === true, bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR') });
   setCableConduitRanges(cable, []);
   const back = qty('ABRAÇADEIRA BAP 3');
@@ -824,7 +835,7 @@ const conduit = await page.evaluate(() => {
   activeFolderId = previousFolder; bomState = {};
   document.querySelector('[data-folder-id="projT"]').closest('li').remove();
   window.google = realGoogle;
-  return { per, span, exact, drawn: measure.lancamento, before, half, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back,
+  return { per, span, exact, drawn: measure.lancamento, before, half, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back, highlight,
     expectHalf: Math.ceil(before.cabo * (1 - 500 / exact) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
 });
 check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.half.meters === 500 && conduit.half.bap === conduit.expectHalf && conduit.half.bap < conduit.before.bap
@@ -832,6 +843,8 @@ check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.
   `trecho tubulado tira as ferragens de poste e mantém o cabo (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
 check(conduit.merged === '0-600' && conduit.parts === '1|1' && conduit.all.flag && conduit.all.bap === 0 && conduit.all.cabo === conduit.before.cabo && conduit.back === conduit.before.bap,
   `trechos se juntam, cabo todo tubulado zera as ferragens e limpar volta ao normal (${conduit.merged} | ${conduit.parts} | ${JSON.stringify(conduit.all)} | ${conduit.back})`);
+check(conduit.highlight.idle === 0 && conduit.highlight.shown === 2 && conduit.highlight.sliceMeters === '200,200' && conduit.highlight.cleared,
+  `trecho tubulado fica roxo só enquanto é editado (${JSON.stringify(conduit.highlight)})`);
 
 //Redundância e impacto: CEO com OLT alimenta duas CTOs por cabos diferentes. Cortar um cabo derruba só a CTO dele;
 //cortar a CEO derruba as duas. Na topologia, o anel não tem ponte e o cabo isolado é ponte (sem rota alternativa).

@@ -1,7 +1,8 @@
 // Trecho tubulado: parte de um cabo que passa dentro de duto/subduto em vez de ir pelos postes.
 // Esse trecho não entra na conta de postes, então não gera plaqueta, abraçadeira BAP, SUPA nem alça preformada.
 // O cabo continua inteiro na lista de materiais (a fibra é a mesma); só as ferragens de poste diminuem.
-// No mapa o cabo não muda de aparência: o trecho aparece só no cartão ao passar o mouse e no editor do cabo.
+// No mapa o cabo não muda de aparência: o trecho aparece no cartão ao passar o mouse e no editor do cabo,
+// e fica destacado em roxo só enquanto a ferramenta de marcar o trecho está aberta.
 // Guardado no cabo como cable.conduit = [{ all: true }] (cabo todo) ou [{ a: {lat,lng}, b: {lat,lng} }] (trecho).
 // Os extremos são pontos no mapa, não metros: se o traçado do cabo mudar, o trecho acompanha.
 // Depende de script.js, js/cable-split.js (projectOnCablePath) e js/sidebar-actions.js.
@@ -20,6 +21,16 @@ function getPathCumulativeMeters(path) {
 }
 
 //Distância (m) desde o começo do cabo até o ponto do traçado mais perto de "latLng"
+//Pedaço do traçado entre duas distâncias (em metros desde o início)
+function getPathSlice(path, from, to, cumulative = getPathCumulativeMeters(path)) {
+    const slice = [getPointAtMeters(path, from, cumulative)];
+    for (let i = 1; i < path.length - 1; i++) {
+        if (cumulative[i] > from && cumulative[i] < to) slice.push(path[i]);
+    }
+    slice.push(getPointAtMeters(path, to, cumulative));
+    return slice;
+}
+
 function getMetersAlongPath(path, latLng, cumulative = getPathCumulativeMeters(path)) {
     const p = projectOnCablePath(path, latLng);
     if (!p) return { meters: 0, offset: Infinity };
@@ -129,7 +140,7 @@ function onCableConduitChanged(cable) {
 // ---------------------------------------------------------------
 // Ferramenta: clicar o início e o fim do trecho no cabo
 // ---------------------------------------------------------------
-let conduitTool = null; //{ cable, pendingMeters, listener, pendingMarker }
+let conduitTool = null; //{ cable, pendingMeters, listener, pendingMarker, highlights }
 
 function isConduitToolOpen() {
     return !!conduitTool;
@@ -144,7 +155,7 @@ function openConduitTool(cable) {
     }
     if (conduitTool) closeConduitTool();
     if (typeof isCableRouteOpen === 'function' && isCableRouteOpen()) closeCableRoute();
-    conduitTool = { cable, pendingMeters: null, listener: null, pendingMarker: null };
+    conduitTool = { cable, pendingMeters: null, listener: null, pendingMarker: null, highlights: [] };
     setAllCablesClickable(false);
     setMapCursor('crosshair');
     conduitTool.listener = map.addListener('click', (event) => handleConduitMapClick(event?.latLng));
@@ -157,6 +168,7 @@ function closeConduitTool() {
     if (!conduitTool) return;
     conduitTool.listener?.remove?.();
     conduitTool.pendingMarker?.setMap(null);
+    clearConduitHighlights();
     conduitTool = null;
     setAllCablesClickable(true);
     setMapCursor('');
@@ -195,10 +207,28 @@ function handleConduitMapClick(latLng) {
     setCableConduitRanges(cable, [...getCableConduitRanges(cable), { from, to }]);
 }
 
+//Destaque roxo dos trechos tubulados, só enquanto a ferramenta está aberta
+function clearConduitHighlights() {
+    conduitTool?.highlights.forEach(line => line.setMap(null));
+    if (conduitTool) conduitTool.highlights = [];
+}
+
+function drawConduitHighlights(ranges) {
+    clearConduitHighlights();
+    const { cable } = conduitTool;
+    const cumulative = getPathCumulativeMeters(cable.path);
+    const weight = (Number(cable.polyline?.get?.('strokeWeight')) || 4) + 4;
+    conduitTool.highlights = ranges.map(r => new google.maps.Polyline({
+        path: getPathSlice(cable.path, r.from, r.to, cumulative),
+        map, clickable: false, strokeColor: CONDUIT_COLOR, strokeOpacity: 0.9, strokeWeight: weight, zIndex: 1000,
+    }));
+}
+
 function renderConduitTool() {
     if (!conduitTool) return;
     const { cable } = conduitTool;
     const ranges = getCableConduitRanges(cable);
+    drawConduitHighlights(ranges);
     const drawn = google.maps.geometry.spherical.computeLength(cable.path);
     const conduit = ranges.reduce((sum, r) => sum + (r.to - r.from), 0);
     const aerial = Math.max(0, drawn - conduit);
