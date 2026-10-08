@@ -1733,13 +1733,21 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     ctoA.name = 'CTO-NOVA';
     syncCableAnchorNamesForMarker(ctoA, 'CTO-AN1');
     const renamed = `${auto.name}|${custom.name}|${custom.endAnchorMarkerName}`;
+    //Cabo antigo sem âncora gravada (só nome e posição) e nome de cabo dividido ("Cabo AS 80 FO-12-...")
+    rebuildCable({ uid: 'an-c', folderId: 'projAN', name: 'Cabo AS 80 FO-12-CTO-AN2', type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -27, lng: -43.99 }, { lat: -27, lng: -43.98 }], endAnchorMarkerName: 'CTO-AN2' });
+    const legacy = savedCables[savedCables.length - 1];
+    legacy.startAnchorUid = null; legacy.endAnchorUid = null;
+    ctoB.name = 'CTO-B2';
+    syncCableAnchorNamesForMarker(ctoB, 'CTO-AN2');
+    const legacyRenamed = `${legacy.name}|${legacy.endAnchorUid}`;
+    legacy.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(legacy), 1);
     [auto, custom].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
     [ceo, ctoA, ctoB].forEach(m => markers.splice(markers.indexOf(m), 1));
     document.querySelector('.folder-title[data-folder-id="projAN"]').closest('.folder').remove();
-    return { opened, afterType, afterEnd, customAfter, renamed };
+    return { opened, afterType, afterEnd, customAfter, renamed, legacyRenamed };
   });
   check(autoName.opened === 'FO-12-CTO-AN1' && autoName.afterType === 'FO-24-CTO-AN1' && autoName.afterEnd === 'FO-24-CTO-AN2' && autoName.customAfter === 'BACKBONE'
-    && autoName.renamed === 'FO-12-CTO-NOVA|BACKBONE|CTO-NOVA',
+    && autoName.renamed === 'FO-12-CTO-NOVA|BACKBONE|CTO-NOVA' && autoName.legacyRenamed === 'Cabo AS 80 FO-12-CTO-B2|an-cto2',
     `nome do cabo acompanha o tipo, a ponta B e o nome da caixa (${JSON.stringify(autoName)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
