@@ -57,6 +57,14 @@ function hideMarkerPanel() {
 // Botões segmentados (situação e instalação)
 // ---------------------------------------------------------------
 
+//Instalação da CEO/reserva. "Em duto": caixa subterrânea, sem kit de raquete/suporte no poste,
+//e a reserva técnica dela entra na linha tubulada do cabo na lista de materiais.
+const MARKER_ACCESSORY_OPTIONS = [
+    { value: 'Raquete', label: 'Raquete' },
+    { value: 'Suporte', label: 'Suporte' },
+    { value: 'Duto', label: 'Em duto' },
+];
+
 function renderSegmentedOptions(containerId, options, value) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -391,10 +399,7 @@ function openMarkerCreatePanel(type) {
         size: stored.size || DEFAULT_MARKER_SIZE,
     });
     setSegmentedValue('markerStatusSegmented', kmlSource?.pendingImportStatus === 'Existente' ? 'Existente' : 'Nova');
-    renderSegmentedOptions('markerAccessorySegmented', [
-        { value: 'Raquete', label: 'Raquete' },
-        { value: 'Suporte', label: 'Suporte' },
-    ], 'Raquete');
+    renderSegmentedOptions('markerAccessorySegmented', MARKER_ACCESSORY_OPTIONS, 'Raquete');
     document.getElementById('markerName').value = kmlSource ? kmlSource.name : suggestMarkerName(type);
     document.getElementById('markerDescription').value = kmlSource?.description || '';
     document.getElementById('markerNumber').value = kmlSource && type === 'CASA' ? (parseInt(kmlSource.name, 10) || '') : '';
@@ -423,10 +428,8 @@ function openMarkerEditor(markerInfo) {
     document.getElementById('markerDescription').value = markerInfo.description || '';
     setSegmentedValue('markerStatusSegmented', getMarkerInfrastructureStatus(markerInfo) || 'Nova');
     const accessory = markerInfo.type === 'RESERVA' ? markerInfo.reservaAccessory : markerInfo.ceoAccessory;
-    renderSegmentedOptions('markerAccessorySegmented', [
-        { value: 'Raquete', label: 'Raquete' },
-        { value: 'Suporte', label: 'Suporte' },
-    ], accessory === 'Suporte' ? 'Suporte' : 'Raquete');
+    renderSegmentedOptions('markerAccessorySegmented', MARKER_ACCESSORY_OPTIONS,
+        MARKER_ACCESSORY_OPTIONS.some(o => o.value === accessory) ? accessory : 'Raquete');
     document.getElementById('ctoPredialCheckbox').checked = !!markerInfo.isPredial;
     document.getElementById('ctoStickerCheckbox').checked = markerInfo.needsStickers ?? shouldDefaultCtoStickers(markerInfo.ctoStatus);
     document.getElementById('ceo144Checkbox').checked = !!markerInfo.is144F;

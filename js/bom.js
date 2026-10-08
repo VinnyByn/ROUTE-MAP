@@ -345,28 +345,36 @@ function renderCabosTable(tbody, projectId) {
     const cableGroups = groupCablesByType(projectCables);
 
     Object.keys(cableGroups).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((cableType) => {
-        const bomKey = makeBomKey(cableType);
-        if (bomState[bomKey]?.removed) return;
-
         const cables = cableGroups[cableType];
-        const baseSum = getCableTypeBaseLength(cables);
-        const surcharge = getCableTypeSurcharge(cableType);
-        const billableLength = getCableDisplayQuantity(cableType, cables);
-        const unitPrice = getCableUnitPrice(cableType);
-        const safeBomKey = escapeHtml(bomKey);
-        const safeType = escapeHtml(cableType);
-        const row = document.createElement('tr');
-        row.className = 'cable-material-row';
-        row.dataset.cableType = cableType;
-        row.dataset.bomKey = bomKey;
-        row.innerHTML = `
-      <td class="material-item-name material-item-clickable cable-type-usage-trigger" data-cable-type="${safeType}" title="Ver trechos deste cabo">${escapeHtml(resolveMaterialName(cableType))}</td>
-      <td><span class="material-category-badge">Lançamento</span></td>
-      <td class="material-qty">${formatMaterialLengthValue(baseSum)}</td>
+        const parts = getCableDisplayParts(cableType, cables);
+        const split = parts.tubedBase > 0;
+        const lines = [];
+        if (parts.aerialBase > 0 || !split) {
+            lines.push({ bomKey: makeBomKey(cableType), name: resolveMaterialName(cableType), badge: split ? 'Aéreo' : 'Lançamento',
+                base: parts.aerialBase, surcharge: getCableTypeSurcharge(cableType), billable: parts.aerial });
+        }
+        if (split) {
+            lines.push({ bomKey: getCableTubedBomKey(cableType), name: getCableTubedBomKey(cableType), badge: 'Tubulado',
+                base: parts.tubedBase, surcharge: getCableTubedSurcharge(cableType), billable: parts.tubed });
+        }
+        lines.forEach((line) => {
+            const item = bomState[line.bomKey];
+            if (item?.removed) return;
+            const unitPrice = item?.unitPrice ?? getCableUnitPrice(cableType);
+            const safeBomKey = escapeHtml(line.bomKey);
+            const safeType = escapeHtml(cableType);
+            const row = document.createElement('tr');
+            row.className = 'cable-material-row';
+            row.dataset.cableType = cableType;
+            row.dataset.bomKey = line.bomKey;
+            row.innerHTML = `
+      <td class="material-item-name material-item-clickable cable-type-usage-trigger" data-cable-type="${safeType}" title="Ver trechos deste cabo">${escapeHtml(line.name)}</td>
+      <td><span class="material-category-badge">${line.badge}</span></td>
+      <td class="material-qty">${formatMaterialLengthValue(line.base)}</td>
       <td class="material-surcharge-cell">
-        <input type="number" class="cable-surcharge-input" min="0" step="0.1" value="${surcharge}" data-cable-type="${safeType}" aria-label="Acréscimo percentual" />
+        <input type="number" class="cable-surcharge-input" min="0" step="0.1" value="${line.surcharge}" data-bom-key="${safeBomKey}" aria-label="Acréscimo percentual (${line.badge.toLowerCase()})" />
       </td>
-      <td class="material-qty cable-final-qty">${formatMaterialLengthValue(billableLength)}</td>
+      <td class="material-qty cable-final-qty">${formatMaterialLengthValue(line.billable)}</td>
       <td class="material-unit">m</td>
       <td>
         <div class="material-actions">
@@ -375,18 +383,18 @@ function renderCabosTable(tbody, projectId) {
         </div>
       </td>
       <td class="material-price">R$ ${unitPrice.toFixed(2).replace('.', ',')}</td>
-      <td class="material-price material-price-total">R$ ${(billableLength * unitPrice).toFixed(2).replace('.', ',')}</td>
+      <td class="material-price material-price-total">R$ ${(line.billable * unitPrice).toFixed(2).replace('.', ',')}</td>
     `;
-        tbody.appendChild(row);
+            tbody.appendChild(row);
+        });
     });
 }
 
 function handleCableSurchargeChange(input) {
-    const cableType = input.dataset.cableType;
-    if (!cableType) return;
+    const bomKey = input.dataset.bomKey;
+    if (!bomKey) return;
     const surcharge = Math.max(0, parseFloat(input.value) || 0);
     const projectId = getActiveProjectId();
-    const bomKey = makeBomKey(cableType);
     if (bomState[bomKey]) {
         bomState[bomKey].surchargePercent = surcharge;
         delete bomState[bomKey].manualQuantity;
@@ -394,7 +402,7 @@ function handleCableSurchargeChange(input) {
     if (projectId) {
         if (!projectBoms[projectId]) projectBoms[projectId] = {};
         if (!projectBoms[projectId][bomKey]) {
-            projectBoms[projectId][bomKey] = { category: 'Lançamento', materialName: resolveMaterialName(cableType) };
+            projectBoms[projectId][bomKey] = { category: 'Lançamento', materialName: bomState[bomKey]?.materialName || bomKey };
         }
         projectBoms[projectId][bomKey].surchargePercent = surcharge;
         delete projectBoms[projectId][bomKey].manualQuantity;
@@ -412,9 +420,8 @@ function openCableTypeUsageModal(cableType) {
     if (!projectId) return;
     const cables = getBillableProjectCables(projectId).filter((c) => c.type === cableType);
     syncProjectCableMeasurements(cables);
-    const baseSum = getCableTypeBaseLength(cables);
-    const surcharge = getCableTypeSurcharge(cableType);
-    const billableLength = getCableDisplayQuantity(cableType, cables);
+    const parts = getCableDisplayParts(cableType, cables);
+    const split = parts.tubedBase > 0;
     const modal = document.getElementById('materialUsageModal');
     const titleEl = document.getElementById('materialUsageModalTitle');
     const bodyEl = document.getElementById('materialUsageModalBody');
@@ -425,35 +432,48 @@ function openCableTypeUsageModal(cableType) {
 
     const table = document.createElement('table');
     table.className = 'material-usage-table';
-    table.innerHTML = `
-        <thead>
-            <tr><th>Trecho</th><th>Medição</th></tr>
-        </thead>
-        <tbody></tbody>
-    `;
+    table.innerHTML = split
+        ? '<thead><tr><th>Trecho</th><th>Aéreo</th><th>Tubulado</th></tr></thead><tbody></tbody>'
+        : '<thead><tr><th>Trecho</th><th>Medição</th></tr></thead><tbody></tbody>';
     const tbody = table.querySelector('tbody');
     cables.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR')).forEach((cable) => {
         const measurement = calculateCableMeasurement(cable);
         const row = document.createElement('tr');
-        const labelCell = document.createElement('td');
-        const qtyCell = document.createElement('td');
-        labelCell.textContent = `${cable.name} (${measurement.lancamento} m + ${measurement.reserva} m)`;
-        qtyCell.className = 'material-usage-qty';
-        qtyCell.textContent = `${measurement.total} m`;
-        row.appendChild(labelCell);
-        row.appendChild(qtyCell);
+        const cell = (text, qty) => {
+            const td = document.createElement('td');
+            if (qty) td.className = 'material-usage-qty';
+            td.textContent = text;
+            row.appendChild(td);
+        };
+        cell(`${cable.name} (${measurement.lancamento} m + ${measurement.reserva} m)`);
+        if (split) {
+            const tubed = Math.round(getCableTubedLength(cable, measurement.total));
+            cell(`${measurement.total - tubed} m`, true);
+            cell(`${tubed} m`, true);
+        } else {
+            cell(`${measurement.total} m`, true);
+        }
         tbody.appendChild(row);
     });
     bodyEl.appendChild(table);
 
-    if (surcharge > 0) {
+    const notes = [];
+    const aerialSurcharge = getCableTypeSurcharge(cableType);
+    const tubedSurcharge = getCableTubedSurcharge(cableType);
+    if (split) {
+        notes.push(`Aéreo: ${formatMaterialLengthValue(parts.aerialBase)} m${aerialSurcharge > 0 ? ` + ${aerialSurcharge}%` : ''} = ${formatMaterialLengthValue(parts.aerial)} m.`);
+        notes.push(`Tubulado (trechos em duto e reserva em caixa no duto): ${formatMaterialLengthValue(parts.tubedBase)} m${tubedSurcharge > 0 ? ` + ${tubedSurcharge}%` : ''} = ${formatMaterialLengthValue(parts.tubed)} m.`);
+    } else if (aerialSurcharge > 0) {
+        notes.push(`Acréscimo de ${aerialSurcharge}% aplicado sobre o total de ${formatMaterialLengthValue(parts.aerialBase)} m.`);
+    }
+    notes.forEach((text) => {
         const extra = document.createElement('p');
         extra.className = 'material-usage-hint';
-        extra.textContent = `Acréscimo de ${surcharge}% aplicado sobre o total de ${formatMaterialLengthValue(baseSum)} m.`;
+        extra.textContent = text;
         bodyEl.appendChild(extra);
-    }
+    });
 
-    totalEl.textContent = `Total faturado: ${formatMaterialLengthValue(billableLength)} m`;
+    totalEl.textContent = `Total faturado: ${formatMaterialLengthValue(parts.aerial + parts.tubed)} m`;
     modal.style.display = 'flex';
 }
 
@@ -651,9 +671,8 @@ function getAggregatedCableLengthsForFerragens(projectId) {
     Object.entries(groupCablesByType(projectCables)).forEach(([cableType, cables]) => {
         const bomKey = makeBomKey(cableType);
         if (bomState[bomKey]?.removed) return;
-        //Trechos tubulados não vão em poste: ficam fora das ferragens
-        const tubedShare = typeof getCablesConduitShare === 'function' ? getCablesConduitShare(cables) : 0;
-        const length = getCableDisplayQuantity(cableType, cables) * (1 - tubedShare);
+        //Só a parte aérea vai em poste: a linha tubulada fica fora das ferragens
+        const length = getCableDisplayParts(cableType, cables).aerial;
         if (length > 0) {
             aggregated[cableType] = (aggregated[cableType] || 0) + length;
         }
@@ -878,30 +897,41 @@ function calculateBomState() {
     const cableGroups = groupCablesByType(activeBillableCables);
     Object.keys(cableGroups).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((cableType) => {
         const cables = cableGroups[cableType];
-        const baseSum = getCableTypeBaseLength(cables);
-        const surcharge = Math.max(0, parseFloat(preservedCableSurcharges[resolveMaterialName(cableType)] ?? preservedCableSurcharges[cableType]) || 0);
-        const billableLength = getCableTypeBillableLength(cables, surcharge);
-        const priceInfo = MATERIAL_PRICES[cableType] || { price: 0, category: 'Lançamento' };
         const bomKey = makeBomKey(cableType);
+        const tubedKey = getCableTubedBomKey(cableType);
+        const surcharge = Math.max(0, parseFloat(preservedCableSurcharges[resolveMaterialName(cableType)] ?? preservedCableSurcharges[cableType]) || 0);
+        const tubedSurcharge = Math.max(0, parseFloat(preservedCableSurcharges[tubedKey] ?? surcharge) || 0);
+        const parts = getCableTypeLengthParts(cables, surcharge, tubedSurcharge);
+        const priceInfo = MATERIAL_PRICES[cableType] || { price: 0, category: 'Lançamento' };
         const savedCableItem = currentProjectBom[cableType] || currentProjectBom[bomKey];
-        const manualQuantity = !!savedCableItem?.manualQuantity;
-        bomState[bomKey] = {
-            materialName: resolveMaterialName(cableType),
-            bomGroup: 'Lançamento',
-            quantity: manualQuantity
-                ? roundLengthUpToTen(savedCableItem.quantity)
-                : billableLength,
-            baseMeasurement: baseSum,
-            surchargePercent: surcharge,
-            manualQuantity,
-            type: 'm',
-            unitPrice: savedCableItem?.unitPrice ?? priceInfo.price,
-            category: 'Lançamento',
-            removed: !!savedCableItem?.removed,
-            usage: {}
+        const unitPrice = savedCableItem?.unitPrice ?? priceInfo.price;
+        //Linha do cabo (aéreo) e, se houver parte em duto, a linha tubulada com acréscimo próprio
+        const addCableLine = (key, materialName, base, billable, percent, saved, part) => {
+            const manualQuantity = !!saved?.manualQuantity;
+            bomState[key] = {
+                materialName,
+                bomGroup: 'Lançamento',
+                cableType,
+                cablePart: part,
+                quantity: manualQuantity ? roundLengthUpToTen(saved.quantity) : billable,
+                baseMeasurement: base,
+                surchargePercent: percent,
+                manualQuantity,
+                type: 'm',
+                unitPrice: part === 'tubulado' ? (saved?.unitPrice ?? unitPrice) : unitPrice,
+                category: 'Lançamento',
+                removed: !!saved?.removed,
+                usage: {}
+            };
         };
+        const hasAerial = parts.aerialBase > 0 || parts.tubedBase <= 0;
+        if (hasAerial) addCableLine(bomKey, resolveMaterialName(cableType), parts.aerialBase, parts.aerial, surcharge, savedCableItem, 'aereo');
+        if (parts.tubedBase > 0) addCableLine(tubedKey, tubedKey, parts.tubedBase, parts.tubed, tubedSurcharge, currentProjectBom[tubedKey], 'tubulado');
         cables.forEach((cable) => {
-            addUsageEntry(bomState[bomKey], 'Lançamento', getCableBaseLength(cable), cable.name || cable.type);
+            const base = getCableBaseLength(cable);
+            const tubed = parts.tubedBase > 0 ? Math.round(getCableTubedLength(cable, base)) : 0;
+            if (hasAerial && base - tubed > 0) addUsageEntry(bomState[bomKey], 'Lançamento', base - tubed, cable.name || cable.type);
+            if (tubed > 0) addUsageEntry(bomState[tubedKey], 'Lançamento', tubed, cable.name || cable.type);
         });
     });
     const tapeName = "FITA ISOLANTE";
@@ -1008,11 +1038,12 @@ function openMaterialEditor(bomKey) {
     document.getElementById('editMaterialName').value = getMaterialDisplayName(resolvedKey, materialData);
     if (materialData.category === 'Lançamento') {
         const projectId = getActiveProjectId();
-        const cableType = getMaterialDisplayName(resolvedKey, materialData);
+        const cableType = materialData.cableType || getMaterialDisplayName(resolvedKey, materialData);
         const cables = projectId
             ? (groupCablesByType(getBillableProjectCables(projectId))[cableType] || [])
             : [];
-        document.getElementById('editMaterialQty').value = getCableDisplayQuantity(cableType, cables);
+        const parts = getCableDisplayParts(cableType, cables);
+        document.getElementById('editMaterialQty').value = materialData.cablePart === 'tubulado' ? parts.tubed : parts.aerial;
     } else {
         document.getElementById('editMaterialQty').value = materialData.quantity;
     }

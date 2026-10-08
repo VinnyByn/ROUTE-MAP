@@ -30,7 +30,7 @@ function getProjectQuantities() {
     );
     Object.entries(cableGroups).forEach(([cableType, cables]) => {
         const surcharge = Math.max(0, parseFloat(projectBoms[projectId]?.[cableType]?.surchargePercent) || 0);
-        totalLength += getCableTypeBillableLength(cables, surcharge);
+        totalLength += getCableTypeBillableLength(cables, surcharge, getCableTubedSurcharge(cableType, projectBoms[projectId]));
     });
     projectCables.forEach((cable) => {
         if (cable.status !== 'Existente' && cable.type === 'Cabo Importado') {

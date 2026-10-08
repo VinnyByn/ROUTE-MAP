@@ -1,6 +1,7 @@
 // Trecho tubulado: parte de um cabo que passa dentro de duto/subduto em vez de ir pelos postes.
 // Esse trecho não entra na conta de postes, então não gera plaqueta, abraçadeira BAP, SUPA nem alça preformada.
-// O cabo continua inteiro na lista de materiais (a fibra é a mesma); só as ferragens de poste diminuem.
+// Na lista de materiais o tipo de cabo ganha uma linha "— TUBULADO" com acréscimo próprio (ver script.js);
+// as ferragens de poste saem só da linha aérea.
 // No mapa o cabo não muda de aparência: o trecho aparece no cartão ao passar o mouse e no editor do cabo,
 // e fica destacado em roxo só enquanto a ferramenta de marcar o trecho está aberta.
 // Guardado no cabo como cable.conduit = [{ all: true }] (cabo todo) ou [{ a: {lat,lng}, b: {lat,lng} }] (trecho).
@@ -110,20 +111,6 @@ function splitCableConduit(cable, splitMeters) {
         first: toPoints(mergeConduitRanges(ranges.filter(r => r.from < splitMeters).map(r => ({ from: r.from, to: Math.min(r.to, splitMeters) })))),
         second: toPoints(mergeConduitRanges(ranges.filter(r => r.to > splitMeters).map(r => ({ from: Math.max(r.from, splitMeters), to: r.to })))),
     };
-}
-
-//Parte (0 a 1) do traçado dos cabos que vai em duto. Aplicada à metragem cobrada, para o cabo
-//todo tubulado zerar as ferragens mesmo com a metragem arredondada para cima.
-function getCablesConduitShare(cables) {
-    let drawn = 0;
-    let tubed = 0;
-    cables.forEach(cable => {
-        if (!cable.path || cable.path.length < 2) return;
-        drawn += google.maps.geometry.spherical.computeLength(cable.path);
-        tubed += cable.conduit?.length ? getCableConduitMeters(cable) : 0;
-    });
-    if (drawn <= 0 || tubed <= 0) return 0;
-    return tubed >= drawn - 0.5 ? 1 : tubed / drawn;
 }
 
 //Metros tubulados de todos os cabos cobrados do projeto (para as ferragens)

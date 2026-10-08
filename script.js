@@ -2602,11 +2602,17 @@ function getReserveForMarker(markerInfo) {
     return 0;
 }
 
+//Caixa na ponta do cabo (pela âncora gravada ou pela posição)
+function getCableEndpointMarker(cable, isStart) {
+    if (!cable?.path?.length) return null;
+    const point = isStart ? cable.path[0] : cable.path[cable.path.length - 1];
+    return resolveCableEndAnchor(cable, isStart)
+        || getAnchorMarkerAtPoint(point, 1, getAnchorMarkerCandidatesForFolder(cable.folderId));
+}
+
 function getReserveForCableEndpoint(cable, isStart) {
     if (!cable?.path?.length) return 0;
-    const point = isStart ? cable.path[0] : cable.path[cable.path.length - 1];
-    const markerInfo = resolveCableEndAnchor(cable, isStart)
-        || getAnchorMarkerAtPoint(point, 1, getAnchorMarkerCandidatesForFolder(cable.folderId));
+    const markerInfo = getCableEndpointMarker(cable, isStart);
     //Cabo dividido numa reserva técnica: a sobra é uma só, contada no trecho que chega nela (ponta B)
     if (isStart && markerInfo?.type === 'RESERVA' && markerInfo.uid
         && savedCables.some(c => c !== cable && c.endAnchorUid === markerInfo.uid)) return 0;
@@ -2707,6 +2713,80 @@ function getCableTypeSurcharge(cableType) {
     return Math.max(0, parseFloat(bomState[bomKey]?.surchargePercent) || 0);
 }
 
+// ---------------------------------------------------------------
+// Cabo aéreo x tubulado na lista de materiais
+// ---------------------------------------------------------------
+//Cada tipo de cabo com parte em duto ganha uma segunda linha ("— TUBULADO"), com acréscimo próprio.
+//Vai para o tubulado: os trechos tubulados do traçado e a reserva técnica deixada em caixa instalada em duto.
+//O resto (traçado aéreo e reservas nos postes) fica na linha normal do cabo, que é a base das ferragens de poste.
+const CABLE_TUBED_SUFFIX = ' — TUBULADO';
+const MARKER_DUCT_ACCESSORY = 'Duto';
+
+function getCableTubedBomKey(cableType) {
+    return makeBomKey(cableType) + CABLE_TUBED_SUFFIX;
+}
+
+//CEO ou reserva instalada em duto/caixa subterrânea (sem raquete nem suporte no poste)
+function isMarkerInDuct(markerInfo) {
+    if (!markerInfo) return false;
+    const accessory = markerInfo.type === 'CEO' ? markerInfo.ceoAccessory
+        : markerInfo.type === 'RESERVA' ? markerInfo.reservaAccessory : null;
+    return accessory === MARKER_DUCT_ACCESSORY;
+}
+
+//Metros do cabo que vão em duto (trechos tubulados + reserva em caixa no duto)
+function getCableTubedLength(cable, base = getCableBaseLength(cable)) {
+    if (!cable?.path || cable.path.length < 2) return 0;
+    //Cabo todo em duto leva o lançamento inteiro (com o arredondamento), para não sobrar 10 m aéreos
+    const allTubed = cable.conduit?.length === 1 && cable.conduit[0].all;
+    let tubed = allTubed ? (Number(cable.lancamento) || calculateCableMeasurement(cable).lancamento)
+        : cable.conduit?.length && typeof getCableConduitMeters === 'function' ? getCableConduitMeters(cable) : 0;
+    if (isMarkerInDuct(getCableEndpointMarker(cable, true))) tubed += getReserveForCableEndpoint(cable, true);
+    if (!cable.path[0].equals(cable.path[cable.path.length - 1]) && isMarkerInDuct(getCableEndpointMarker(cable, false))) {
+        tubed += getReserveForCableEndpoint(cable, false);
+    }
+    return Math.min(base, tubed);
+}
+
+//Medição do tipo de cabo separada em aérea e tubulada, cada parte com o seu acréscimo
+function getCableTypeLengthParts(cables, aerialSurcharge = 0, tubedSurcharge = aerialSurcharge) {
+    let total = 0;
+    let tubed = 0;
+    (cables || []).forEach((cable) => {
+        const base = getCableBaseLength(cable);
+        total += base;
+        tubed += getCableTubedLength(cable, base);
+    });
+    tubed = Math.round(tubed); //Metro inteiro: evita que 500,0000001 m vire 510 m no arredondamento
+    const aerialBase = roundLengthUpToTen(total - tubed);
+    const tubedBase = roundLengthUpToTen(tubed);
+    return {
+        aerialBase,
+        tubedBase,
+        aerial: roundLengthUpToTen(aerialBase * (1 + aerialSurcharge / 100)),
+        tubed: roundLengthUpToTen(tubedBase * (1 + tubedSurcharge / 100)),
+    };
+}
+
+//Acréscimo da linha tubulada; sem valor próprio, segue o do cabo aéreo
+function getCableTubedSurcharge(cableType, bom = bomState) {
+    const saved = bom?.[getCableTubedBomKey(cableType)]?.surchargePercent;
+    const fallback = bom?.[makeBomKey(cableType)]?.surchargePercent;
+    return Math.max(0, parseFloat(saved ?? fallback) || 0);
+}
+
+//Quantidades exibidas (respeitam a quantidade digitada à mão em cada linha)
+function getCableDisplayParts(cableType, cables) {
+    const parts = getCableTypeLengthParts(cables, getCableTypeSurcharge(cableType), getCableTubedSurcharge(cableType));
+    const manual = (key) => {
+        const item = bomState[key];
+        return item?.manualQuantity && item.quantity != null ? roundLengthUpToTen(item.quantity) : null;
+    };
+    parts.aerial = manual(makeBomKey(cableType)) ?? parts.aerial;
+    if (parts.tubedBase > 0) parts.tubed = manual(getCableTubedBomKey(cableType)) ?? parts.tubed;
+    return parts;
+}
+
 function getCableUnitPrice(cableType) {
     const bomKey = makeBomKey(cableType);
     const priceInfo = MATERIAL_PRICES[cableType] || { price: 0 };
@@ -2714,19 +2794,17 @@ function getCableUnitPrice(cableType) {
 }
 
 function getCableDisplayQuantity(cableType, cables) {
-    const bomKey = makeBomKey(cableType);
-    const item = bomState[bomKey];
-    if (item?.manualQuantity && item.quantity != null) {
-        return roundLengthUpToTen(item.quantity);
-    }
-    const surcharge = getCableTypeSurcharge(cableType);
-    return getCableTypeBillableLength(cables, surcharge);
+    const parts = getCableDisplayParts(cableType, cables);
+    return parts.aerial + parts.tubed;
 }
 
-function getCableTypeBillableLength(cables, surchargePercent) {
-    const baseSum = getCableTypeBaseLength(cables);
-    const surcharge = surchargePercent ?? getCableTypeSurcharge(cables[0]?.type);
-    return roundLengthUpToTen(baseSum * (1 + surcharge / 100));
+//Metragem cobrada do tipo (aéreo + tubulado)
+function getCableTypeBillableLength(cables, surchargePercent, tubedSurchargePercent) {
+    const type = cables[0]?.type;
+    const surcharge = surchargePercent ?? getCableTypeSurcharge(type);
+    const tubedSurcharge = tubedSurchargePercent ?? (surchargePercent == null ? getCableTubedSurcharge(type) : surcharge);
+    const parts = getCableTypeLengthParts(cables, surcharge, tubedSurcharge);
+    return parts.aerial + parts.tubed;
 }
 
 function getCableBillableLength(cable) {
@@ -3558,9 +3636,9 @@ function updateMarkerAppearance(markerInfo) {
     const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP', POSTE: 'Poste' };
     let details = [];
     if (markerInfo.type === "CTO") details = [markerInfo.ctoStatus, markerInfo.isPredial ? 'Predial' : null, markerInfo.needsStickers ? 'Adesivos' : null];
-    if (markerInfo.type === "CEO") details = [markerInfo.ceoStatus, markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null];
+    if (markerInfo.type === "CEO") details = [markerInfo.ceoStatus, isMarkerInDuct(markerInfo) ? 'Em duto' : markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null];
     if (markerInfo.type === "CORDOALHA") details = [markerInfo.cordoalhaStatus, markerInfo.derivationTCount ? `${markerInfo.derivationTCount} deriv.` : null];
-    if (markerInfo.type === "RESERVA") details = [markerInfo.reservaStatus, markerInfo.reservaAccessory];
+    if (markerInfo.type === "RESERVA") details = [markerInfo.reservaStatus, isMarkerInDuct(markerInfo) ? 'Em duto' : markerInfo.reservaAccessory];
     if (markerInfo.type === "POSTE") details = [markerInfo.pole?.situation, markerInfo.pole?.height ? `${markerInfo.pole.height} m` : null, markerInfo.pole?.effort ? `${markerInfo.pole.effort} daN` : null];
     details = details.filter(Boolean);
     let name = markerInfo.name;
@@ -3948,7 +4026,7 @@ function getProjectQuantitiesFromItems(projectItems, projectId) {
     );
     Object.entries(groupCablesByType(billableCables)).forEach(([cableType, cables]) => {
         const surcharge = Math.max(0, parseFloat(savedSurcharges[cableType]) || 0);
-        totalLength += getCableTypeBillableLength(cables, surcharge);
+        totalLength += getCableTypeBillableLength(cables, surcharge, getCableTubedSurcharge(cableType, projectBoms[projectId]));
     });
     projectItems.cables.forEach((cable) => {
         if (cable.status !== 'Existente' && cable.type === 'Cabo Importado') {
