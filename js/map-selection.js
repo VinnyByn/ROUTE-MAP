@@ -192,14 +192,26 @@ function renderMapSelectionBar() {
     }).join('');
     const canEdit = AppSession.canEdit;
     bar.querySelectorAll('[data-sel-edit]').forEach(el => { el.disabled = !canEdit; });
-    document.getElementById('mapSelectionStatus').disabled = !canEdit || !items.some(m => selectionKind(m) === 'marker' && SELECTION_STATUS_TYPES.includes(m.type));
+    document.getElementById('mapSelectionStatus').disabled = !canEdit || !items.some(m => selectionKind(m) === 'cable' || (selectionKind(m) === 'marker' && SELECTION_STATUS_TYPES.includes(m.type)));
     document.getElementById('mapSelectionStyle').disabled = !canEdit || !items.some(m => selectionKind(m) === 'cable' || (selectionKind(m) === 'marker' && FOLDER_STYLE_TYPES.some(t => t.type === m.type)));
 }
 
 function applySelectionStatus(status) {
     if (!status || !requireEdit('alterar a situação')) return;
     let changed = 0;
+    let cables = 0;
+    //Cabo usa "Novo"/"Existente" (sem "Troca") e a espessura acompanha: Novo 4, Existente 2
+    const cableStatus = status === 'Nova' ? 'Novo' : status === 'Existente' ? 'Existente' : null;
     mapSelection.items.forEach(m => {
+        if (selectionKind(m) === 'cable') {
+            if (!cableStatus || m.status === cableStatus) return;
+            m.status = cableStatus;
+            m.width = getDefaultCableWidthForStatus(cableStatus);
+            m.polyline?.setOptions({ strokeWeight: m.width });
+            updateCableSidebarLabel(m);
+            cables++;
+            return;
+        }
         if (selectionKind(m) !== 'marker' || !SELECTION_STATUS_TYPES.includes(m.type)) return;
         if (status === 'Troca' && !['CTO', 'CEO'].includes(m.type)) return; //Troca só existe para caixas
         applyMarkerInfrastructureStatus(m, status);
@@ -207,7 +219,10 @@ function applySelectionStatus(status) {
         changed++;
     });
     refreshBomAfterProjectChange();
-    showToast('Situação alterada', `${changed} marcador(es) agora "${status}".`);
+    const parts = [];
+    if (changed) parts.push(`${changed} marcador(es)`);
+    if (cables) parts.push(`${cables} cabo(s)`);
+    showToast('Situação alterada', parts.length ? `${parts.join(' e ')} agora "${cableStatus && !changed ? cableStatus : status}".` : 'Nada para alterar na seleção.');
 }
 
 function moveSelectionToFolder(folderId) {
