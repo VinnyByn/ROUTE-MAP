@@ -1766,6 +1766,65 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(copyRes.single.name && copyRes.single.port === null && copyRes.single.cto === null && copyRes.multi.both && copyRes.multi.plan && copyRes.multi.anchor,
     `copiar/colar cliente sozinho e seleção múltipla (${JSON.stringify(copyRes)})`);
 
+  //Pasta copiada para outro projeto (os dois abertos, um em cima do outro): cada caixa usa o cabo do próprio projeto,
+  //mesmo se o plano ficou apontando para o cabo do original (só F1/F2 no original, F1–F4 na cópia)
+  const cpSig = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projO', name: 'Projeto O', isProject: true, type: 'TCR', children: [{ id: 'oF', name: 'Rede', isProject: false, type: 'folder', children: [] }] },
+      { id: 'projN', name: 'Projeto N', isProject: true, type: 'TCR', children: [] }], sidebar);
+    const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+    const mk = (cards, links) => { const b = document.createElement('div'); b.append(...cards); return JSON.stringify({ version: 2, elements: b.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }); };
+    const card = (name, uid, role) => buildFusionCableCard({ name, uid, type: 'Cabo AS 80 FO-12', role, fiberCount: 12 });
+    const sp8 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Fusão', olt: { olt: 'OLT-X', placa: '1', pon: '1' } });
+    const sOut = card('RX016', 'cb_rx016', 'saida');
+    rebuildMarker({ uid: 'mk_s', folderId: 'oF', type: 'CEO', name: 'LAV_RX_008', color: '#f00', position: { lat: -27, lng: -44 },
+      fusionPlan: mk([sp8, sOut], [1, 2, 3, 4].map(n => [`splitter-1-output-${n}`, fiber(sOut, n)])) });
+    const lIn = card('RX016', 'cb_rx016', 'entrada'), lOut = card('AC100', 'cb_ac100', 'saida');
+    rebuildMarker({ uid: 'mk_l', folderId: 'oF', type: 'CEO', name: 'LAV_RX_016', color: '#f00', position: { lat: -27, lng: -43.99 },
+      fusionPlan: mk([lIn, lOut], [1, 2].map(n => [fiber(lIn, n), fiber(lOut, n)])) }); //Original: só F1 e F2
+    const cIn = card('AC100', 'cb_ac100', 'entrada'), cOut = card('RT01', 'cb_rt01', 'saida');
+    rebuildMarker({ uid: 'mk_c', folderId: 'oF', type: 'CEO', name: 'CEO-01', color: '#f00', position: { lat: -27, lng: -43.98 },
+      fusionPlan: mk([cIn, cOut], [1, 2].map(n => [fiber(cIn, n), fiber(cOut, n)])) });
+    rebuildMarker({ uid: 'mk_rt', folderId: 'oF', type: 'RESERVA', name: 'RT-01', color: '#f00', position: { lat: -27, lng: -43.97 } });
+    const cab = (uid, name, a, b, lngA, lngB) => rebuildCable({ uid, folderId: 'oF', name, type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -27, lng: lngA }, { lat: -27, lng: lngB }], startAnchorUid: a, endAnchorUid: b });
+    cab('cb_rx016', 'RX016', 'mk_s', 'mk_l', -44, -43.99);
+    cab('cb_ac100', 'AC100', 'mk_l', 'mk_c', -43.99, -43.98);
+    cab('cb_rt01', 'RT01', 'mk_c', 'mk_rt', -43.98, -43.97);
+    setActiveFolder('oF'); copySidebarSelection(); setActiveFolder('projN'); pasteSidebarClipboard();
+    const copyC = markers.find(m => m.name === 'CEO-01' && m.uid !== 'mk_c');
+    const copyL = markers.find(m => m.name === 'LAV_RX_016' && m.uid !== 'mk_l');
+    //Na cópia, F3 e F4 passam na LAV_RX_016 e na CEO-01
+    const addF34 = (box) => {
+      const pl = JSON.parse(box.fusionPlan);
+      const hh = document.createElement('div'); hh.innerHTML = pl.elements;
+      const [a, b] = hh.querySelectorAll('.cable-element');
+      pl.svg += [3, 4].map(n => `<path class="fusion-line" data-start-id="${[...a.querySelectorAll('.fiber-row')][n - 1].id}" data-end-id="${[...b.querySelectorAll('.fiber-row')][n - 1].id}"></path>`).join('');
+      box.fusionPlan = JSON.stringify(pl);
+    };
+    addF34(copyL);
+    //Estado do problema: o cartão da CEO-01 colada ficou apontando para o cabo do projeto original
+    copyC.fusionPlan = copyC.fusionPlan.split(savedCables.find(c => c.name === 'AC100' && c.uid !== 'cb_ac100').uid).join('cb_ac100');
+    const plan = JSON.parse(copyC.fusionPlan);
+    const h = document.createElement('div'); h.innerHTML = plan.elements;
+    const [ci, co] = h.querySelectorAll('.cable-element');
+    plan.svg += [3, 4].map(n => `<path class="fusion-line" data-start-id="${[...ci.querySelectorAll('.fiber-row')][n - 1].id}" data-end-id="${[...co.querySelectorAll('.fiber-row')][n - 1].id}"></path>`).join('');
+    copyC.fusionPlan = JSON.stringify(plan);
+    const sig = (box) => { const s = getBoxOpticalPower(box); const p = readFusionPlan(box); return p.cables[0].fibers.slice(0, 4).map(f => s.has(f.id) ? s.get(f.id).toFixed(1) : '-').join('/'); };
+    const keys = (box) => readFusionPlan(box).cables.map(c => `${c.name}:${planCableKey(c, box)}`).join(',');
+    const out = { origC: sig(markers.find(m => m.uid === 'mk_c')), copyC: sig(copyC), copyL: sig(copyL), keysOrigC: keys(markers.find(m => m.uid === 'mk_c')), keysCopyC: keys(copyC), keysCopyL: keys(copyL) };
+    //Ao abrir o projeto, o cartão é corrigido para o cabo do próprio projeto
+    backfillFusionPlanCableUids([copyC]);
+    out.fixedUid = !copyC.fusionPlan.includes('cb_ac100');
+    const ids = new Set([...getAllDescendantFolderIds('projO'), ...getAllDescendantFolderIds('projN')]);
+    markers.filter(m => ids.has(m.folderId)).forEach(m => { m.marker.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    savedCables.filter(c => ids.has(c.folderId)).forEach(c => { c.polyline.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    ['projO', 'projN'].forEach(id => document.querySelector(`.folder-title[data-folder-id="${id}"]`).closest('.folder').remove());
+    sidebarClipboard = null;
+    return out;
+  });
+  check(cpSig.origC.endsWith('/-/-') && cpSig.copyC.split('/').every(v => v !== '-') && cpSig.keysCopyC !== cpSig.keysOrigC && !cpSig.keysCopyC.includes('cb_ac100') && cpSig.fixedUid,
+    `pasta colada em outro projeto segue com sinal e cabos próprios (${JSON.stringify(cpSig)})`);
+
   //Shift+clique no mapa perto de um cabo: marca o cabo (uma vez só, mesmo se o clique do cabo também chegar)
   const shiftRes = await sp.evaluate(() => {
     rebuildSidebarFromJSON([{ id: 'projSH', name: 'Projeto SH', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
