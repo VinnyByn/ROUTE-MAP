@@ -1702,6 +1702,41 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(swap.first === 'SW-A' && swap.switched === 'SW-B' && swap.asked && swap.stillB && swap.afterConfirm === 'SW-A',
     `editor do cabo acompanha o cabo clicado (${JSON.stringify(swap)})`);
 
+  //Nome automático do cabo acompanha o tipo e a ponta B (também na edição); nome digitado à mão não muda
+  const autoName = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projAN', name: 'Projeto AN', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projAN');
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    const mk = (type, name, uid, lat, lng) => ({ type, name, uid, folderId: 'projAN', marker: { getPosition: () => LL(lat, lng), setMap() {}, getMap: () => map, getVisible: () => true } });
+    const ceo = mk('CEO', 'CEO-AN', 'an-ceo', -27, -44), ctoA = mk('CTO', 'CTO-AN1', 'an-cto1', -27, -43.99), ctoB = mk('CTO', 'CTO-AN2', 'an-cto2', -27, -43.98);
+    markers.push(ceo, ctoA, ctoB);
+    const mkc = (uid, name) => { rebuildCable({ uid, folderId: 'projAN', name, type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -27, lng: -44 }, { lat: -27, lng: -43.99 }], startAnchorUid: 'an-ceo', endAnchorUid: 'an-cto1' }); return savedCables[savedCables.length - 1]; };
+    const auto = mkc('an-a', 'FO-12-CTO-AN1'), custom = mkc('an-b', 'BACKBONE');
+    const setType = (v) => { const sel = document.getElementById('cableType'); sel.value = v; sel.dispatchEvent(new Event('change')); };
+    const name = () => document.getElementById('cableName').value;
+    openCableEditor(auto);
+    const opened = name();
+    setType('FO-24');
+    const afterType = name();
+    cableDrawAnchors.end = ctoB;
+    updatePolylineFromMarkers();
+    const afterEnd = name();
+    cancelCableDrawingSession();
+    openCableEditor(custom);
+    setType('FO-24');
+    cableDrawAnchors.end = ctoB;
+    updatePolylineFromMarkers();
+    const customAfter = name();
+    cancelCableDrawingSession();
+    [auto, custom].forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    [ceo, ctoA, ctoB].forEach(m => markers.splice(markers.indexOf(m), 1));
+    document.querySelector('.folder-title[data-folder-id="projAN"]').closest('.folder').remove();
+    return { opened, afterType, afterEnd, customAfter };
+  });
+  check(autoName.opened === 'FO-12-CTO-AN1' && autoName.afterType === 'FO-24-CTO-AN1' && autoName.afterEnd === 'FO-24-CTO-AN2' && autoName.customAfter === 'BACKBONE',
+    `nome do cabo acompanha o tipo e a ponta B (${JSON.stringify(autoName)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');

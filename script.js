@@ -2344,7 +2344,21 @@ function getCableDrawStartAnchorMarker() {
     return resolveCableDrawEndpointForIndex(0, { snap: false });
 }
 
+//Nome no padrão automático ("FO-12-" + nome de uma caixa do mapa): pode ser refeito ao trocar tipo ou ponta B
+function isAutoCableName(name) {
+    const match = /^FO-\d+-(.+)$/.exec(name || '');
+    return !!match && markers.some(m => m.name === match[1] && (isCableAnchorMarkerType(m.type) || isB2BCableAnchor(m)));
+}
+
+//Ponta B mudou (clique, arraste, inverter): o nome automático acompanha a nova caixa
+function syncCableNameAutoFill() {
+    const endName = cableDrawAnchors.end?.name;
+    if (!isDrawingCable || !endName || endName === cableNameAutoFill.endMarkerName) return;
+    applyCableNameAutoFill(endName);
+}
+
 //Preenche o nome do cabo com "tipo de fibra-nome do marcador da ponta B" (ex.: FO-12-Marcador)
+//e o refaz ao trocar o tipo ou a ponta B, enquanto o nome não for digitado à mão
 function applyCableNameAutoFill(endMarkerName) {
     if (typeof endMarkerName === 'string') {
         cableNameAutoFill.endMarkerName = endMarkerName;
@@ -2850,6 +2864,7 @@ function updatePolylineFromMarkers() {
     if (isDrawingCable && cableMarkers.length > 0) {
         updateCableVertexLabels();
     }
+    syncCableNameAutoFill();
     updateCableDrawReadout();
 }
 
@@ -3268,7 +3283,8 @@ function openCableEditor(cabo) {
     document.getElementById("invertCableButton").classList.remove("hidden");
     applyCableAnchorsToPath(cabo);
     cableDrawAnchors = { start: resolveCableEndAnchor(cabo, true), end: resolveCableEndAnchor(cabo, false) };
-    cableNameAutoFill = { endMarkerName: null, lastValue: null };
+    //Nome automático ("FO-12-CTO-01") volta a acompanhar tipo e ponta B; nome digitado à mão fica como está
+    cableNameAutoFill = { endMarkerName: cableDrawAnchors.end?.name || null, lastValue: isAutoCableName(cabo.name) ? cabo.name : null };
     cableMarkers.forEach((marker) => marker.setMap(null));
     cableMarkers = [];
     cabo.path.forEach((position) => {
