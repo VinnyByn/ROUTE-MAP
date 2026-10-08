@@ -780,24 +780,53 @@ function openFolderMarkerStyleModal(titleElement) {
     if (!titleElement?.dataset.folderId) return;
     const folderId = titleElement.dataset.folderId;
     const scope = getFolderScope(folderId);
+    openStyleSession({
+        title: `Padronizar estilo · ${titleElement.dataset.folderName || 'Pasta'}`,
+        applyLabel: 'Aplicar na pasta',
+        scope,
+        projectRoot: () => document.getElementById(folderId)?.closest('.folder'),
+    });
+}
+
+//Seleção do mapa: só os tipos marcados mudam (ex.: cor das CTOs sem mexer nos cabos)
+function openSelectionStyleModal(items) {
+    if (!requireEdit('alterar o estilo')) return;
+    const scope = {
+        markers: items.filter(m => markers.includes(m) && FOLDER_STYLE_TYPES.some(t => t.type === m.type)),
+        cables: items.filter(c => savedCables.includes(c)),
+    };
+    if (!scope.markers.length && !scope.cables.length) return;
+    openStyleSession({
+        title: `Estilo dos selecionados · ${scope.markers.length + scope.cables.length} itens`,
+        applyLabel: 'Aplicar nos selecionados',
+        scope,
+        projectRoot: () => getActiveProjectRoot?.(),
+        onApplied: () => { if (typeof setMapSelection === 'function') setMapSelection([...mapSelection.items]); },
+    });
+}
+
+const STYLE_CABLE_TYPE = '__cabos';
+
+function openStyleSession({ title, applyLabel, scope, projectRoot, onApplied }) {
     const presentTypes = FOLDER_STYLE_TYPES.filter(t => scope.markers.some(m => m.type === t.type));
     const sample = scope.markers[0];
     folderStyleSession = {
-        folderId,
         scope,
-        types: new Set(presentTypes.map(t => t.type)),
+        projectRoot,
+        onApplied,
+        types: new Set([...presentTypes.map(t => t.type), ...(scope.cables.length ? [STYLE_CABLE_TYPE] : [])]),
         original: {
             markers: scope.markers.map(m => ({ m, color: m.color, labelColor: m.labelColor, size: m.size })),
-            cables: scope.cables.map(c => ({ c, width: c.width })),
+            cables: scope.cables.map(c => ({ c, width: c.width, color: c.color })),
         },
     };
-    document.getElementById('folderMarkerStyleModalTitle').textContent = `Padronizar estilo · ${titleElement.dataset.folderName || 'Pasta'}`;
+    document.getElementById('folderMarkerStyleModalTitle').textContent = title;
+    document.getElementById('confirmFolderMarkerStyle').textContent = applyLabel;
     const chips = document.getElementById('folderStyleTypes');
-    chips.innerHTML = presentTypes.length
-        ? presentTypes.map(t => {
-            const count = scope.markers.filter(m => m.type === t.type).length;
-            return `<label class="map-tool-chip fs-type"><input type="checkbox" value="${t.type}" checked /><span>${t.label} <small>${count}</small></span></label>`;
-        }).join('')
+    const chip = (value, label, count) => `<label class="map-tool-chip fs-type"><input type="checkbox" value="${value}" checked /><span>${label} <small>${count}</small></span></label>`;
+    chips.innerHTML = (presentTypes.length || scope.cables.length)
+        ? presentTypes.map(t => chip(t.type, t.label, scope.markers.filter(m => m.type === t.type).length)).join('')
+            + (scope.cables.length ? chip(STYLE_CABLE_TYPE, 'Cabos', scope.cables.length) : '')
         : '<span class="fs-empty">Nenhum CEO, CTO, reserva, cordoalha ou POP nesta pasta.</span>';
     chips.querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
         if (input.checked) folderStyleSession.types.add(input.value); else folderStyleSession.types.delete(input.value);
@@ -805,13 +834,15 @@ function openFolderMarkerStyleModal(titleElement) {
     }));
     document.getElementById('folderMarkerColor').value = sample?.color || '#16a34a';
     document.getElementById('folderMarkerLabelColor').value = sample?.labelColor || '#0f172a';
-    ['fsApplyColor', 'fsApplyLabel'].forEach(id => { document.getElementById(id).checked = true; });
+    ['fsApplyColor', 'fsApplyLabel'].forEach(id => { document.getElementById(id).checked = !!presentTypes.length; });
     document.getElementById('fsApplySize').checked = false; //Tamanho agora é uma preferência do usuário
     document.getElementById('fsApplyWidth').checked = false;
+    document.getElementById('fsApplyCableColor').checked = false;
     setMarkerSizeControlValue('folderStyleSize', sample?.size || DEFAULT_MARKER_SIZE);
     const cableWidth = scope.cables[0]?.width || 4;
     document.getElementById('folderCableWidth').value = cableWidth;
     document.getElementById('folderCableWidthValue').textContent = `${cableWidth} px`;
+    document.getElementById('folderCableColor').value = /^#[0-9a-f]{6}$/i.test(scope.cables[0]?.color || '') ? scope.cables[0].color : '#008000';
     document.getElementById('folderStyleCableSection').classList.toggle('hidden', !scope.cables.length);
     document.getElementById('folderStyleCableCount').textContent = `${scope.cables.length} ${scope.cables.length === 1 ? 'cabo' : 'cabos'}`;
     document.getElementById('folderStyleMarkerSection').classList.toggle('is-disabled', !presentTypes.length);
@@ -821,7 +852,7 @@ function openFolderMarkerStyleModal(titleElement) {
 }
 
 function syncFolderStyleFieldStates() {
-    [['fsApplyColor', 'fsColorField'], ['fsApplyLabel', 'fsLabelField'], ['fsApplySize', 'fsSizeField'], ['fsApplyWidth', 'fsWidthField']].forEach(([check, field]) => {
+    [['fsApplyColor', 'fsColorField'], ['fsApplyLabel', 'fsLabelField'], ['fsApplySize', 'fsSizeField'], ['fsApplyWidth', 'fsWidthField'], ['fsApplyCableColor', 'fsCableColorField']].forEach(([check, field]) => {
         document.getElementById(field)?.classList.toggle('is-off', !document.getElementById(check).checked);
     });
 }
@@ -832,6 +863,7 @@ function readFolderStyleForm() {
         labelColor: document.getElementById('fsApplyLabel').checked ? document.getElementById('folderMarkerLabelColor').value : null,
         size: document.getElementById('fsApplySize').checked ? getMarkerSizeControlValue('folderStyleSize') : null,
         width: document.getElementById('fsApplyWidth').checked ? parseInt(document.getElementById('folderCableWidth').value, 10) : null,
+        cableColor: document.getElementById('fsApplyCableColor').checked ? document.getElementById('folderCableColor').value : null,
     };
 }
 
@@ -840,6 +872,7 @@ function previewFolderStyle() {
     const session = folderStyleSession;
     if (!session) return;
     const form = readFolderStyleForm();
+    const cablesOn = session.types.has(STYLE_CABLE_TYPE);
     session.original.markers.forEach(({ m, color, labelColor, size }) => {
         const inScope = session.types.has(m.type);
         const next = {
@@ -850,13 +883,17 @@ function previewFolderStyle() {
         m.marker.setIcon(buildMarkerMapIcon(m.type, { color: next.color, size: next.size, labelColor: next.labelColor }));
         m.marker.setLabel(buildMarkerMapLabel(m.name, next.labelColor));
     });
-    session.original.cables.forEach(({ c, width }) => {
-        c.polyline?.setOptions({ strokeWeight: form.width || width });
+    session.original.cables.forEach(({ c, width, color }) => {
+        c.polyline?.setOptions({
+            strokeWeight: cablesOn && form.width ? form.width : width,
+            strokeColor: cablesOn && form.cableColor ? form.cableColor : color,
+        });
     });
     const affected = session.original.markers.filter(({ m }) => session.types.has(m.type)).length;
+    const cableCount = cablesOn && (form.width || form.cableColor) ? session.original.cables.length : 0;
     const parts = [];
-    if (form.color || form.labelColor || form.size) parts.push(`${affected} ${affected === 1 ? 'marcador' : 'marcadores'}`);
-    if (form.width) parts.push(`${session.original.cables.length} ${session.original.cables.length === 1 ? 'cabo' : 'cabos'}`);
+    if (affected && (form.color || form.labelColor || form.size)) parts.push(`${affected} ${affected === 1 ? 'marcador' : 'marcadores'}`);
+    if (cableCount) parts.push(`${cableCount} ${cableCount === 1 ? 'cabo' : 'cabos'}`);
     document.getElementById('folderMarkerStyleHint').textContent = parts.length
         ? `Prévia no mapa: ${parts.join(' e ')} com o novo estilo. Cancelar desfaz.`
         : 'Marque o que deseja padronizar.';
@@ -868,7 +905,7 @@ function revertFolderStylePreview() {
     const session = folderStyleSession;
     if (!session) return;
     session.original.markers.forEach(({ m }) => updateMarkerAppearance(m));
-    session.original.cables.forEach(({ c, width }) => c.polyline?.setOptions({ strokeWeight: width }));
+    session.original.cables.forEach(({ c, width, color }) => c.polyline?.setOptions({ strokeWeight: width, strokeColor: color }));
 }
 
 function closeFolderStyleModal({ revert = true } = {}) {
@@ -882,27 +919,32 @@ function applyFolderMarkerStyle() {
     if (!session) return;
     const form = readFolderStyleForm();
     let markerCount = 0;
-    session.original.markers.forEach(({ m }) => {
-        if (!session.types.has(m.type)) return;
-        if (form.color) m.color = form.color;
-        if (form.labelColor) m.labelColor = form.labelColor;
-        if (form.size) m.size = form.size;
-        updateMarkerAppearance(m);
-        markerCount++;
-    });
+    if (form.color || form.labelColor || form.size) {
+        session.original.markers.forEach(({ m }) => {
+            if (!session.types.has(m.type)) return;
+            if (form.color) m.color = form.color;
+            if (form.labelColor) m.labelColor = form.labelColor;
+            if (form.size) m.size = form.size;
+            updateMarkerAppearance(m);
+            markerCount++;
+        });
+    }
     let cableCount = 0;
-    if (form.width) {
+    if (session.types.has(STYLE_CABLE_TYPE) && (form.width || form.cableColor)) {
         session.original.cables.forEach(({ c }) => {
-            c.width = form.width;
-            c.polyline?.setOptions({ strokeWeight: form.width });
+            if (form.width) c.width = form.width;
+            if (form.cableColor) c.color = form.cableColor;
+            c.polyline?.setOptions({ strokeWeight: c.width, strokeColor: c.color });
+            if (typeof applyCableSidebarColorStyles === 'function') applyCableSidebarColorStyles(c);
             cableCount++;
         });
     }
     closeFolderStyleModal({ revert: false });
-    const projectRoot = document.getElementById(session.folderId)?.closest('.folder');
+    const projectRoot = session.projectRoot?.();
     if (projectRoot) saveProjectElement(projectRoot);
+    session.onApplied?.();
     const parts = [];
-    if (form.color || form.labelColor || form.size) parts.push(`${markerCount} ${markerCount === 1 ? 'marcador' : 'marcadores'}`);
+    if (markerCount) parts.push(`${markerCount} ${markerCount === 1 ? 'marcador' : 'marcadores'}`);
     if (cableCount) parts.push(`${cableCount} ${cableCount === 1 ? 'cabo' : 'cabos'}`);
     showToast('Estilo aplicado', `${parts.join(' e ')} padronizado(s).`);
 }
@@ -912,7 +954,7 @@ function setupFolderStyleModal() {
     if (!modal) return;
     buildMarkerSizeControl(document.getElementById('folderStyleSizeMount'), { id: 'folderStyleSize', type: 'CTO', onInput: previewFolderStyle });
     ['folderMarkerColor', 'folderMarkerLabelColor'].forEach(id => document.getElementById(id).addEventListener('input', previewFolderStyle));
-    ['fsApplyColor', 'fsApplyLabel', 'fsApplySize', 'fsApplyWidth'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+    ['fsApplyColor', 'fsApplyLabel', 'fsApplySize', 'fsApplyWidth', 'fsApplyCableColor'].forEach(id => document.getElementById(id).addEventListener('change', () => {
         syncFolderStyleFieldStates();
         previewFolderStyle();
     }));
@@ -921,6 +963,13 @@ function setupFolderStyleModal() {
         document.getElementById('folderCableWidthValue').textContent = `${width.value} px`;
         if (!document.getElementById('fsApplyWidth').checked) {
             document.getElementById('fsApplyWidth').checked = true;
+            syncFolderStyleFieldStates();
+        }
+        previewFolderStyle();
+    });
+    document.getElementById('folderCableColor').addEventListener('input', () => {
+        if (!document.getElementById('fsApplyCableColor').checked) {
+            document.getElementById('fsApplyCableColor').checked = true;
             syncFolderStyleFieldStates();
         }
         previewFolderStyle();

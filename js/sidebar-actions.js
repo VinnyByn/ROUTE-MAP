@@ -259,9 +259,11 @@ function wireCableSidebarClick(cableInfo) {
     }
     if (cableInfo.polyline && !cableInfo._mapClickEditorBound) {
         cableInfo._mapClickEditorBound = true;
-        //Shift: marca já no mousedown (o clique pode não chegar enquanto o mapa trava para o retângulo)
+        //Shift + mousedown em cima do cabo: começa o retângulo; sem arrastar, marca o próprio cabo
         cableInfo.polyline.addListener('mousedown', (e) => {
-            if (e?.domEvent?.shiftKey && !isDrawingCable && typeof toggleMapSelectionFromMap === 'function') toggleMapSelectionFromMap(cableInfo);
+            if (!e?.domEvent?.shiftKey || isDrawingCable) return;
+            if (typeof startMapSelectionDrag === 'function' && typeof map !== 'undefined' && map) startMapSelectionDrag(e.latLng, e.domEvent, cableInfo);
+            else if (typeof toggleMapSelectionFromMap === 'function') toggleMapSelectionFromMap(cableInfo);
         });
         cableInfo.polyline.addListener('click', (e) => (e?.domEvent?.shiftKey && typeof toggleMapSelectionFromMap === 'function') ? toggleMapSelectionFromMap(cableInfo) : (typeof isCableRouteOpen === 'function' && isCableRouteOpen() ? showCableRoute(cableInfo) : openCableEditor(cableInfo)));
     }

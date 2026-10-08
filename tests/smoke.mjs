@@ -1084,6 +1084,58 @@ const sel = await page.evaluate(() => {
 check(sel.picked === 'S-CTO,S-RT' && sel.barShown && sel.count === '2 selecionados' && sel.status === 'Troca/Nova'
   && sel.moved === 'pS1,pS1|2' && sel.left === 'S-LONGE' && sel.cleared, `seleção múltipla: retângulo, situação, mover e excluir (${JSON.stringify(sel)})`);
 
+//Retângulo pega o cabo que só atravessa a área (pontas fora); "Estilo" muda a cor das CTOs sem mexer no cabo
+const selStyle = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projY', name: 'Projeto Y', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const prev = activeFolderId; setActiveFolder('projY');
+  const pos = (lat, lng) => ({ lat: () => lat, lng: () => lng });
+  const mk = (name, lat, lng) => {
+    const li = document.createElement('li'); document.getElementById('projY').appendChild(li);
+    return { type: 'CTO', name, folderId: 'projY', listItem: li, color: '#111111', marker: { getPosition: () => pos(lat, lng), getVisible: () => true, setMap() {}, setVisible() {}, setIcon() {}, setLabel() {} } };
+  };
+  const c1 = mk('Y-CTO1', 1, 1), c2 = mk('Y-CTO2', 2, 2);
+  const opts = {};
+  const cable = { name: 'Y-CABO', folderId: 'projY', color: '#008000', width: 4, path: [pos(5, -10), pos(5, 10)], item: document.createElement('li'),
+    polyline: { getVisible: () => true, getPath: () => ({ getArray: () => cable.path }), setOptions(o) { Object.assign(opts, o); }, setMap() {} } };
+  const away = { name: 'Y-LONGE', folderId: 'projY', path: [pos(50, 50), pos(51, 51)], item: document.createElement('li'),
+    polyline: { getVisible: () => true, getPath: () => ({ getArray: () => away.path }), setOptions() {}, setMap() {} } };
+  markers.push(c1, c2); savedCables.push(cable, away);
+  const realAppearance = window.updateMarkerAppearance; window.updateMarkerAppearance = () => {};
+  const realSave = window.saveProjectElement; window.saveProjectElement = () => {};
+  //O ícone real usa o Google Maps (bloqueado no teste)
+  const realIcon = window.buildMarkerMapIcon, realLabel = window.buildMarkerMapLabel;
+  window.buildMarkerMapIcon = () => ({}); window.buildMarkerMapLabel = () => ({});
+  //No teste a janela de estilo não passa pela inicialização da página (que depende do mapa)
+  if (!document.getElementById('folderStyleSizeMount').children.length) setupFolderStyleModal();
+  const bounds = { contains: (p) => p.lat() >= 0 && p.lat() <= 6 && p.lng() >= 0 && p.lng() <= 6,
+    getNorthEast: () => pos(6, 6), getSouthWest: () => pos(0, 0) };
+  selectMarkersInBounds(bounds);
+  const picked = [...mapSelection.items].map(m => m.name).sort().join();
+  const styleEnabled = !document.getElementById('mapSelectionStyle').disabled;
+  document.getElementById('mapSelectionStyle').click();
+  const open = document.getElementById('folderMarkerStyleModal').style.display === 'flex';
+  const chips = [...document.querySelectorAll('#folderStyleTypes input')].map(i => i.value).join();
+  const cableChip = document.querySelector('#folderStyleTypes input[value="__cabos"]');
+  cableChip.checked = false; cableChip.dispatchEvent(new Event('change'));
+  document.getElementById('folderMarkerColor').value = '#ff0000';
+  document.getElementById('folderMarkerColor').dispatchEvent(new Event('input'));
+  document.getElementById('folderCableColor').value = '#0000ff';
+  document.getElementById('folderCableColor').dispatchEvent(new Event('input'));
+  document.getElementById('confirmFolderMarkerStyle').click();
+  const result = { picked, styleEnabled, open, chips, ctoColors: `${c1.color},${c2.color}`, cableColor: cable.color, cableStroke: opts.strokeColor || '' };
+  clearMapSelection();
+  markers.splice(markers.indexOf(c1), 2); savedCables.splice(savedCables.indexOf(cable), 2);
+  window.updateMarkerAppearance = realAppearance; window.saveProjectElement = realSave;
+  window.buildMarkerMapIcon = realIcon; window.buildMarkerMapLabel = realLabel;
+  document.querySelector('.folder-title[data-folder-id="projY"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return result;
+});
+check(selStyle.picked === 'Y-CABO,Y-CTO1,Y-CTO2' && selStyle.styleEnabled && selStyle.open && selStyle.chips === 'CTO,__cabos'
+  && selStyle.ctoColors === '#ff0000,#ff0000' && selStyle.cableColor === '#008000' && selStyle.cableStroke === '#008000',
+  `seleção pega cabo que atravessa o retângulo e o estilo muda só as CTOs (${JSON.stringify(selStyle)})`);
+
 //Seleção múltipla pela barra lateral: Ctrl+clique e Shift+clique (intervalo)
 const sbSel = await page.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
