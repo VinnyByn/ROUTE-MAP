@@ -1200,6 +1200,11 @@ const selStyle = await page.evaluate(() => {
   document.getElementById('folderCableColor').dispatchEvent(new Event('input'));
   document.getElementById('confirmFolderMarkerStyle').click();
   const result = { picked, styleEnabled, open, chips, ctoColors: `${c1.color},${c2.color}`, cableColor: cable.color, cableStroke: opts.strokeColor || '' };
+  //Situação pela seleção: o cabo também vira "Existente" (e fica com espessura 2)
+  const realRefresh = window.refreshBomAfterProjectChange; window.refreshBomAfterProjectChange = () => {};
+  applySelectionStatus('Existente');
+  window.refreshBomAfterProjectChange = realRefresh;
+  result.cableStatus = `${cable.status}|${cable.width}|${opts.strokeWeight}`;
   clearMapSelection();
   markers.splice(markers.indexOf(c1), 2); savedCables.splice(savedCables.indexOf(cable), 2);
   window.updateMarkerAppearance = realAppearance; window.saveProjectElement = realSave;
@@ -1209,7 +1214,7 @@ const selStyle = await page.evaluate(() => {
   return result;
 });
 check(selStyle.picked === 'Y-CABO,Y-CTO1,Y-CTO2' && selStyle.styleEnabled && selStyle.open && selStyle.chips === 'CTO,__cabos'
-  && selStyle.ctoColors === '#ff0000,#ff0000' && selStyle.cableColor === '#008000' && selStyle.cableStroke === '#008000',
+  && selStyle.ctoColors === '#ff0000,#ff0000' && selStyle.cableColor === '#008000' && selStyle.cableStroke === '#008000' && selStyle.cableStatus === 'Existente|2|2',
   `seleção pega cabo que atravessa o retângulo e o estilo muda só as CTOs (${JSON.stringify(selStyle)})`);
 
 //Tecla Delete: com seleção, pede confirmação e exclui; digitando num campo, não faz nada
@@ -1880,6 +1885,58 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(labor.first === '1|210|true' && labor.second === '2|370' && labor.manual === '30|4850' && /2 CTOs/.test(labor.ui.summary) && /Estimativa de obra: 2 dias/.test(labor.ui.summary) && labor.ui.buttons === 5,
     `mão de obra continua no projeto e os dias automáticos acompanham o mapa (${JSON.stringify(labor)})`);
+
+  //Clique fora da janela fecha; botão direito "Mover"; cabo entre caixas no mesmo poste salva
+  const misc = await sp.evaluate(() => {
+    const out = {};
+    const usage = document.getElementById('materialUsageModal');
+    usage.style.display = 'flex';
+    const press = (el) => { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })); el.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 })); };
+    press(usage);
+    out.closedOutside = usage.style.display === 'none';
+    usage.style.display = 'flex';
+    press(usage.querySelector('.modal-content') || usage.firstElementChild);
+    out.insideKeeps = usage.style.display === 'flex';
+    usage.style.display = 'none';
+    const fusion = document.getElementById('fusionModal');
+    const prevFusion = fusion.style.display;
+    fusion.style.display = 'flex';
+    press(fusion);
+    out.fusionKeeps = fusion.style.display === 'flex';
+    fusion.style.display = prevFusion;
+
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projSP', name: 'Projeto SP', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projSP');
+    rebuildMarker({ uid: 'mk_spceo', folderId: 'projSP', type: 'CEO', name: 'CEO-SP', color: '#f00', position: { lat: -31, lng: -44 } });
+    rebuildMarker({ uid: 'mk_spcto', folderId: 'projSP', type: 'CTO', name: 'CTO-SP', color: '#f00', position: { lat: -31.000003, lng: -44 } });
+    const ceo = markers.find(m => m.uid === 'mk_spceo'), cto = markers.find(m => m.uid === 'mk_spcto');
+    out.moveItem = buildSidebarMenuItems({ kind: 'marker', info: cto, name: cto.name, row: cto.listItem || document.createElement('div') }).some(i => i.action === 'move');
+    const before = savedCables.length;
+    document.getElementById('drawCableButton').click();
+    handleAnchorMarkerClickDuringCableDraw(ceo);
+    handleAnchorMarkerClickDuringCableDraw(cto);
+    document.getElementById('saveCableButton').click();
+    const made = savedCables.length === before + 1 ? savedCables[savedCables.length - 1] : null;
+    out.samePole = made ? `${made.startAnchorUid}>${made.endAnchorUid}|${made.reserva}` : 'não salvou';
+    if (isDrawingCable) cancelCableDrawingSession();
+    //Cabo já salvo: trocar a situação ajusta a espessura (Existente 2, Novo 4)
+    if (made) {
+      openCableEditor(made);
+      const setStatus = (v) => { const sel = document.getElementById('cableStatusSelect'); sel.value = v; sel.dispatchEvent(new Event('change')); };
+      setStatus('Existente');
+      const existing = document.getElementById('cableWidth').value;
+      setStatus('Novo');
+      out.width = `${existing}|${document.getElementById('cableWidth').value}`;
+      cancelCableDrawingSession();
+    }
+    if (made) { made.polyline?.setMap(null); made.item?.remove(); savedCables.splice(savedCables.indexOf(made), 1); }
+    [ceo, cto].forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    document.querySelector('.folder-title[data-folder-id="projSP"]').closest('.folder').remove();
+    return out;
+  });
+  check(misc.closedOutside && misc.insideKeeps && misc.fusionKeeps && misc.moveItem && misc.samePole === 'mk_spceo>mk_spcto|30' && misc.width === '2|4',
+    `janela fecha clicando fora, "Mover" no botão direito e cabo entre caixas no mesmo poste (${JSON.stringify(misc)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {

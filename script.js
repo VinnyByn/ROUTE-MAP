@@ -3198,7 +3198,8 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
         showAlert("Pontas iguais", "O cabo não pode começar e terminar na mesma caixa.");
         return;
     }
-    if (google.maps.geometry.spherical.computeLength(cablePath) < 1) {
+    //Caixas no mesmo poste (pontas a menos de 1 m) podem ser ligadas: o cabo fica só com a reserva técnica
+    if (!(startAnchor && endAnchor) && google.maps.geometry.spherical.computeLength(cablePath) < 1) {
         showToast('Rota incompleta', 'Desenhe a rota do cabo antes de salvar.', 'progress');
         return;
     }
@@ -3507,10 +3508,12 @@ document.getElementById("cableWidth").addEventListener("change", () => {
     }
 });
 
+//Trocar a situação (no cabo novo ou na edição) ajusta a espessura: Novo 4, Existente 2
 document.getElementById("cableStatusSelect").addEventListener("change", () => {
-    if (isDrawingCable && editingCableIndex === null) {
-        currentCableStatus = document.getElementById("cableStatusSelect").value;
-        const defaultWidth = getDefaultCableWidthForStatus(currentCableStatus);
+    if (isDrawingCable) {
+        const status = document.getElementById("cableStatusSelect").value;
+        if (editingCableIndex === null) currentCableStatus = status;
+        const defaultWidth = getDefaultCableWidthForStatus(status);
         document.getElementById("cableWidth").value = defaultWidth;
         if (cablePolyline) {
             cablePolyline.setOptions({ strokeWeight: defaultWidth });
@@ -4276,6 +4279,22 @@ function invertCableDirection() {
         showToast('Cabo invertido', 'Salve o cabo para confirmar.');
     });
 }
+
+//Clicar fora da janela (no fundo escuro) fecha, como o X. O plano de fusão e a prévia do relatório,
+//onde se perde trabalho fácil, só fecham pelo botão.
+const MODALS_WITHOUT_BACKDROP_CLOSE = new Set(['fusionModal', 'reportPreviewModal']);
+let modalBackdropPress = null;
+document.addEventListener('mousedown', (e) => {
+    modalBackdropPress = e.button === 0 && e.target.classList?.contains('modal') ? e.target : null;
+}, true);
+document.addEventListener('click', (e) => {
+    const modal = e.target;
+    if (!modalBackdropPress || modal !== modalBackdropPress) return;
+    modalBackdropPress = null;
+    if (!modal.classList.contains('modal') || MODALS_WITHOUT_BACKDROP_CLOSE.has(modal.id)) return;
+    modal.querySelector('.close')?.click();
+    if (getComputedStyle(modal).display !== 'none') modal.style.display = 'none';
+}, true);
 
 //Listener de inicialização
 document.addEventListener('DOMContentLoaded', () => {

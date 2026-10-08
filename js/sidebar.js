@@ -188,6 +188,9 @@ function buildSidebarMenuItems(entity) {
         const isClient = entity.kind === 'marker' && entity.info.type === 'CLIENTE';
         const noun = isClient ? 'cliente' : labels[entity.kind];
         items.push({ action: 'open', label: canEdit ? `Editar ${noun}` : `Ver ${noun}` });
+        if (canEdit && entity.kind === 'marker' && !isClient && entity.info.marker) {
+            items.push({ action: 'move', icon: 'marker', label: 'Mover', hint: 'Arraste até a nova posição' });
+        }
         if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO' || entity.info.type === 'POP')) {
             items.push({ action: 'fusion', label: 'Plano de fusão' });
         }
@@ -372,6 +375,12 @@ function handleSidebarMenuAction(action) {
     case 'conduit':
         selectSidebarCable(info);
         openConduitTool(info);
+        break;
+    case 'move':
+        //Abre o marcador e já entra no modo de arrastar; ao soltar, o painel volta para salvar
+        selectSidebarMarker(info);
+        openMarkerFromUserAction(info);
+        if (editingMarkerInfo === info && typeof startMarkerPositionEditSession === 'function') startMarkerPositionEditSession();
         break;
     case 'drop-edit':
         editClientDropFromSidebar(info);
