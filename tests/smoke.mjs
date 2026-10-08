@@ -801,6 +801,7 @@ const conduit = await page.evaluate(() => {
   const cable = { folderId: 'projT', name: 'CABO-T', type: 'Cabo AS 80 FO-12', status: 'Novo', path: [new LatLng(-20, -44), new LatLng(-20.009, -44)] };
   savedCables.push(cable);
   const qty = name => Object.values(bomState).find(i => i.materialName === name)?.quantity || 0;
+  const TUBED = 'CFOA SM ASU 80 S 12 FIBRAS NR' + CABLE_TUBED_SUFFIX;
   const measure = calculateCableMeasurement(cable);
   const exact = google.maps.geometry.spherical.computeLength(cable.path);
   cable.lancamento = measure.lancamento; cable.reserva = measure.reserva; cable.totalLength = measure.total;
@@ -810,7 +811,7 @@ const conduit = await page.evaluate(() => {
   const before = { bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR') };
   //Metade do cabo em duto
   setCableConduitRanges(cable, [{ from: 0, to: 500 }]);
-  const half = { meters: Math.round(getCableConduitMeters(cable)), bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), stored: cable.conduit.length, report: getProjectConduitMeters('projT') > 0, hover: /Tubulado<\/span><b>500 m/.test(buildCableHoverHtml(cable)) };
+  const half = { meters: Math.round(getCableConduitMeters(cable)), bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED), stored: cable.conduit.length, report: getProjectConduitMeters('projT') > 0, hover: /Tubulado<\/span><b>500 m/.test(buildCableHoverHtml(cable)) };
   //Dois trechos que se tocam viram um só; fora do cabo é cortado
   setCableConduitRanges(cable, [{ from: 0, to: 300 }, { from: 250, to: 600 }, { from: -20, to: 5 }]);
   const merged = getCableConduitRanges(cable).map(r => `${Math.round(r.from)}-${Math.round(r.to)}`).join();
@@ -828,21 +829,54 @@ const conduit = await page.evaluate(() => {
   clearConduitHighlights();
   const highlight = { idle, shown: shown.length, sliceMeters, cleared: shown.every(l => l.o.map === null) };
   conduitTool = null;
-  const all = (setCableConduitRanges(cable, [{ from: 0, to: 5000 }]), { flag: cable.conduit[0]?.all === true, bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR') });
+  const all = (setCableConduitRanges(cable, [{ from: 0, to: 5000 }]), { flag: cable.conduit[0]?.all === true, bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED) });
+  //Acréscimo próprio da linha tubulada: 10% só nela
+  setCableConduitRanges(cable, [{ from: 0, to: 500 }]);
+  const tubedKey = Object.keys(bomState).find(k => bomState[k].materialName === TUBED);
+  projectBoms.projT = JSON.parse(JSON.stringify(bomState));
+  projectBoms.projT[tubedKey].surchargePercent = 10;
+  calculateBomState();
+  const surcharge = { cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED), bap: qty('ABRAÇADEIRA BAP 3'),
+    total: getCableTypeBillableLength([cable], 0, 10), rows: (projectBoms.projT = bomState, renderCabosTable(document.createElement('tbody'), 'projT'), 0) };
+  const body = document.createElement('tbody');
+  renderCabosTable(body, 'projT');
+  surcharge.rows = [...body.querySelectorAll('tr')].map(r => `${r.querySelector('.material-category-badge').textContent}:${r.querySelector('.cable-surcharge-input').value}:${r.querySelector('.cable-final-qty').textContent}`).join();
+  delete projectBoms.projT;
+  //CEO em duto: sem kit de raquete/suporte, e a reserva dela vai para a linha tubulada
   setCableConduitRanges(cable, []);
+  const ceo = { type: 'CEO', name: 'CEO-DUTO', folderId: 'projT', ceoStatus: 'Nova', ceoAccessory: 'Duto', uid: 'ceo-duto' };
+  markers.push(ceo);
+  const realEndpoint = getCableEndpointMarker;
+  getCableEndpointMarker = () => ceo;
+  calculateBomState();
+  const rq = n => qty(resolveMaterialName(n));
+  const duct = { raquete: rq('RAQUETE PARA CEO'), suporte: rq('SUPORTE PARA CEO'), caixa: rq('CAIXA DE EMENDA ÓPTICA (CEO)'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED), reserva: calculateCableMeasurement(cable).reserva };
+  ceo.ceoAccessory = 'Raquete';
+  calculateBomState();
+  duct.raqueteAerea = rq('RAQUETE PARA CEO');
+  duct.tuboAereo = qty(TUBED);
+  getCableEndpointMarker = realEndpoint;
+  markers.splice(markers.indexOf(ceo), 1);
+  calculateBomState();
   const back = qty('ABRAÇADEIRA BAP 3');
   savedCables.splice(savedCables.indexOf(cable), 1);
   activeFolderId = previousFolder; bomState = {};
   document.querySelector('[data-folder-id="projT"]').closest('li').remove();
   window.google = realGoogle;
-  return { per, span, exact, drawn: measure.lancamento, before, half, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back, highlight,
-    expectHalf: Math.ceil(before.cabo * (1 - 500 / exact) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
+  return { per, span, exact, drawn: measure.lancamento, before, half, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back, highlight, surcharge, duct,
+    expectHalf: Math.ceil((before.cabo - 500) / span) * per, expectSurchargeBap: Math.ceil((before.cabo - 500) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
 });
 check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.half.meters === 500 && conduit.half.bap === conduit.expectHalf && conduit.half.bap < conduit.before.bap
-  && conduit.half.cabo === conduit.before.cabo && conduit.half.report && conduit.half.hover,
-  `trecho tubulado tira as ferragens de poste e mantém o cabo (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
-check(conduit.merged === '0-600' && conduit.parts === '1|1' && conduit.all.flag && conduit.all.bap === 0 && conduit.all.cabo === conduit.before.cabo && conduit.back === conduit.before.bap,
+  && conduit.half.cabo === conduit.before.cabo - 500 && conduit.half.tubo === 500 && conduit.half.report && conduit.half.hover,
+  `trecho tubulado vira linha própria na lista e sai das ferragens de poste (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
+check(conduit.merged === '0-600' && conduit.parts === '1|1' && conduit.all.flag && conduit.all.bap === 0 && conduit.all.cabo === 0 && conduit.all.tubo === conduit.before.cabo && conduit.back === conduit.before.bap,
   `trechos se juntam, cabo todo tubulado zera as ferragens e limpar volta ao normal (${conduit.merged} | ${conduit.parts} | ${JSON.stringify(conduit.all)} | ${conduit.back})`);
+check(conduit.surcharge.cabo === conduit.before.cabo - 500 && conduit.surcharge.tubo === 550 && conduit.surcharge.total === conduit.surcharge.cabo + 550
+  && conduit.surcharge.bap === conduit.expectSurchargeBap && conduit.surcharge.rows === `Aéreo:0:${conduit.before.cabo - 500},Tubulado:10:550`,
+  `aéreo e tubulado com acréscimos separados (${JSON.stringify(conduit.surcharge)})`);
+check(conduit.duct.raquete === 0 && conduit.duct.suporte === 0 && conduit.duct.caixa === 1 && conduit.duct.reserva === 50
+  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0,
+  `CEO em duto não leva kit de poste e a reserva dela vai para o tubulado (${JSON.stringify(conduit.duct)})`);
 check(conduit.highlight.idle === 0 && conduit.highlight.shown === 2 && conduit.highlight.sliceMeters === '200,200' && conduit.highlight.cleared,
   `trecho tubulado fica roxo só enquanto é editado (${JSON.stringify(conduit.highlight)})`);
 
