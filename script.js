@@ -2749,18 +2749,25 @@ function isMarkerInDuct(markerInfo) {
     return accessory === MARKER_DUCT_ACCESSORY;
 }
 
-//Metros do cabo que vão em duto (trechos tubulados + reserva em caixa no duto)
+//Metros do cabo que vão em duto. Do traçado: os trechos tubulados. Da reserva técnica: a das pontas
+//que chegam pelo duto (trecho tubulado encostado na ponta) ou em caixa instalada em duto.
+//O arredondamento (lançamento de 10 em 10 m e total de 10 em 10 m) é dividido na mesma proporção.
 function getCableTubedLength(cable, base = getCableBaseLength(cable)) {
-    if (!cable?.path || cable.path.length < 2) return 0;
-    //Cabo todo em duto leva o lançamento inteiro (com o arredondamento), para não sobrar 10 m aéreos
-    const allTubed = cable.conduit?.length === 1 && cable.conduit[0].all;
-    let tubed = allTubed ? (Number(cable.lancamento) || calculateCableMeasurement(cable).lancamento)
-        : cable.conduit?.length && typeof getCableConduitMeters === 'function' ? getCableConduitMeters(cable) : 0;
-    if (isMarkerInDuct(getCableEndpointMarker(cable, true))) tubed += getReserveForCableEndpoint(cable, true);
-    if (!cable.path[0].equals(cable.path[cable.path.length - 1]) && isMarkerInDuct(getCableEndpointMarker(cable, false))) {
-        tubed += getReserveForCableEndpoint(cable, false);
-    }
-    return Math.min(base, tubed);
+    if (!cable?.path || cable.path.length < 2 || base <= 0) return 0;
+    const ranges = cable.conduit?.length && typeof getCableConduitRanges === 'function' ? getCableConduitRanges(cable) : [];
+    const hasDuctBox = isMarkerInDuct(getCableEndpointMarker(cable, true)) || isMarkerInDuct(getCableEndpointMarker(cable, false));
+    if (!ranges.length && !hasDuctBox) return 0;
+    const drawn = google.maps.geometry.spherical.computeLength(cable.path);
+    const tubedDrawn = ranges.reduce((sum, r) => sum + (r.to - r.from), 0);
+    const closed = cable.path[0].equals(cable.path[cable.path.length - 1]);
+    const startReserve = getReserveForCableEndpoint(cable, true);
+    const endReserve = closed ? 0 : getReserveForCableEndpoint(cable, false);
+    const endInDuct = (isStart) => (isStart ? ranges.some(r => r.from <= 1) : ranges.some(r => r.to >= drawn - 1))
+        || isMarkerInDuct(getCableEndpointMarker(cable, isStart));
+    const tubedReserve = (endInDuct(true) ? startReserve : 0) + (endInDuct(false) ? endReserve : 0);
+    const raw = drawn + startReserve + endReserve;
+    if (raw <= 0) return 0;
+    return Math.min(base, base * ((tubedDrawn + tubedReserve) / raw));
 }
 
 //Medição do tipo de cabo separada em aérea e tubulada, cada parte com o seu acréscimo

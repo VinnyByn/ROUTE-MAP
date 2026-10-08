@@ -862,6 +862,10 @@ const conduit = await page.evaluate(() => {
   calculateBomState();
   duct.raqueteAerea = rq('RAQUETE PARA CEO');
   duct.tuboAereo = qty(TUBED);
+  //Cabo todo em duto chegando em caixa aérea: a reserva das pontas acompanha o duto (nada sobra no aéreo)
+  setCableConduitRanges(cable, [{ from: 0, to: 5000 }]);
+  duct.allTubed = `${qty('CFOA SM ASU 80 S 12 FIBRAS NR')}|${qty(TUBED)}`;
+  setCableConduitRanges(cable, []);
   getCableEndpointMarker = realEndpoint;
   markers.splice(markers.indexOf(ceo), 1);
   calculateBomState();
@@ -874,15 +878,15 @@ const conduit = await page.evaluate(() => {
     expectHalf: Math.ceil((before.cabo - 500) / span) * per, expectSurchargeBap: Math.ceil((before.cabo - 500) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
 });
 check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.half.meters === 500 && conduit.half.bap === conduit.expectHalf && conduit.half.bap < conduit.before.bap
-  && conduit.half.cabo === conduit.before.cabo - 500 && conduit.half.tubo === 500 && conduit.half.report && conduit.half.hover,
+  && conduit.half.cabo === conduit.before.cabo - 500 && conduit.half.tubo === 510 && conduit.half.report && conduit.half.hover,
   `trecho tubulado vira linha própria na lista e sai das ferragens de poste (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
 check(conduit.merged === '0-600' && conduit.parts === '1|1' && conduit.all.flag && conduit.all.bap === 0 && conduit.all.cabo === 0 && conduit.all.tubo === conduit.before.cabo && conduit.back === conduit.before.bap,
   `trechos se juntam, cabo todo tubulado zera as ferragens e limpar volta ao normal (${conduit.merged} | ${conduit.parts} | ${JSON.stringify(conduit.all)} | ${conduit.back})`);
-check(conduit.surcharge.cabo === conduit.before.cabo - 500 && conduit.surcharge.tubo === 550 && conduit.surcharge.total === conduit.surcharge.cabo + 550
-  && conduit.surcharge.bap === conduit.expectSurchargeBap && conduit.surcharge.rows === `Aéreo:0:${conduit.before.cabo - 500},Tubulado:10:550`,
+check(conduit.surcharge.cabo === conduit.before.cabo - 500 && conduit.surcharge.tubo === 570 && conduit.surcharge.total === conduit.surcharge.cabo + 570
+  && conduit.surcharge.bap === conduit.expectSurchargeBap && conduit.surcharge.rows === `Aéreo:0:${conduit.before.cabo - 500},Tubulado:10:570`,
   `aéreo e tubulado com acréscimos separados (${JSON.stringify(conduit.surcharge)})`);
 check(conduit.duct.raquete === 0 && conduit.duct.suporte === 0 && conduit.duct.caixa === 1 && conduit.duct.reserva === 50
-  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0 && conduit.duct.removedKept,
+  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0 && conduit.duct.removedKept && conduit.duct.allTubed === '0|1060',
   `CEO em duto não leva kit de poste e a reserva dela vai para o tubulado (${JSON.stringify(conduit.duct)})`);
 check(conduit.highlight.idle === 0 && conduit.highlight.shown === 2 && conduit.highlight.sliceMeters === '200,200' && conduit.highlight.cleared,
   `trecho tubulado fica roxo só enquanto é editado (${JSON.stringify(conduit.highlight)})`);
