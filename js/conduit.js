@@ -4,11 +4,14 @@
 // as ferragens de poste saem só da linha aérea.
 // No mapa o cabo não muda de aparência: o trecho aparece no cartão ao passar o mouse e no editor do cabo,
 // e fica destacado em roxo só enquanto a ferramenta de marcar o trecho está aberta.
+// A ferramenta tem duas abas: "Marcar trecho" (clicar início e fim no cabo) e "Aéreo × duto"
+// (os cabos da rota do cabo, com os trechos aéreos em azul e os em duto em roxo).
 // Guardado no cabo como cable.conduit = [{ all: true }] (cabo todo) ou [{ a: {lat,lng}, b: {lat,lng} }] (trecho).
 // Os extremos são pontos no mapa, não metros: se o traçado do cabo mudar, o trecho acompanha.
 // Depende de script.js, js/cable-split.js (projectOnCablePath) e js/sidebar-actions.js.
 
 const CONDUIT_COLOR = '#7c3aed';
+const AERIAL_COLOR = '#0284c7';
 
 // ---------------------------------------------------------------
 // Medidas ao longo do traçado
@@ -125,9 +128,95 @@ function onCableConduitChanged(cable) {
 }
 
 // ---------------------------------------------------------------
+// Aéreo × duto: cabos da rota com os trechos aéreos e tubulados
+// ---------------------------------------------------------------
+
+//Cabos por onde passam as fibras em uso deste cabo (ele primeiro, depois na ordem da rota)
+function getRouteCables(cable, graph = buildFiberGraph()) {
+    const found = new Set([cable]);
+    getCableFiberUsage(cable).used.forEach(number => {
+        traceFiberRoute(graph, cable, number).segments.forEach(seg => {
+            const c = savedCables.find(x => x.uid === seg.cableKey) || savedCables.find(x => x.name === seg.cable);
+            if (c) found.add(c);
+        });
+    });
+    return [...found].filter(c => c.path?.length >= 2);
+}
+
+//Trechos (em metros do traçado) aéreos e tubulados de um cabo
+function getCableLaunchRanges(cable) {
+    const cumulative = getPathCumulativeMeters(cable.path);
+    const total = cumulative[cumulative.length - 1];
+    const tubed = cable.conduit?.length ? getCableConduitRanges(cable) : [];
+    const aerial = [];
+    let cursor = 0;
+    tubed.forEach(r => { if (r.from - cursor > 0.5) aerial.push({ from: cursor, to: r.from }); cursor = Math.max(cursor, r.to); });
+    if (total - cursor > 0.5) aerial.push({ from: cursor, to: total });
+    const sum = list => list.reduce((acc, r) => acc + (r.to - r.from), 0);
+    return { cumulative, total, aerial, tubed, aerialMeters: sum(aerial), tubedMeters: sum(tubed) };
+}
+
+function clearLaunchHighlight() {
+    const store = conduitTool?.launch;
+    if (!store) return;
+    store.overlays.forEach(o => o.setMap(null));
+    store.overlays = [];
+    store.dimmed.forEach((opacity, cable) => cable.polyline?.setOptions({ strokeOpacity: opacity }));
+    store.dimmed.clear();
+}
+
+function drawCableLaunchHighlight(cables) {
+    clearLaunchHighlight();
+    const store = conduitTool.launch;
+    const bounds = new google.maps.LatLngBounds();
+    savedCables.forEach(cable => {
+        if (!cable.polyline) return;
+        store.dimmed.set(cable, cable.polyline.get('strokeOpacity') ?? 1);
+        cable.polyline.setOptions({ strokeOpacity: 0.25 });
+    });
+    cables.forEach(cable => {
+        if (!cable.polyline?.getVisible()) return;
+        const parts = getCableLaunchRanges(cable);
+        const draw = (ranges, color) => ranges.forEach(r => store.overlays.push(new google.maps.Polyline({
+            path: getPathSlice(cable.path, r.from, r.to, parts.cumulative),
+            map, clickable: false, strokeColor: color, strokeOpacity: 1, strokeWeight: (cable.width || 4) + 4, zIndex: 300,
+        })));
+        draw(parts.aerial, AERIAL_COLOR);
+        draw(parts.tubed, CONDUIT_COLOR);
+        cable.path.forEach(p => bounds.extend(p));
+    });
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { top: 56, right: 340, bottom: 56, left: getMapFocusPadding() });
+}
+
+function renderCableLaunchView(cable) {
+    const cables = getRouteCables(cable);
+    conduitTool.launch.cables = cables;
+    drawCableLaunchHighlight(cables);
+    const rows = cables.map(c => ({ cable: c, ...getCableLaunchRanges(c) }));
+    const aerial = rows.reduce((sum, r) => sum + r.aerialMeters, 0);
+    const tubed = rows.reduce((sum, r) => sum + r.tubedMeters, 0);
+    const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+    const meters = value => `${Math.round(value).toLocaleString('pt-BR')} m`;
+    const bar = (a, t) => `<span class="route-launch-bar" aria-hidden="true"><b style="width:${pct(a, a + t)}%"></b><em style="width:${pct(t, a + t)}%"></em></span>`;
+    return `
+        <div class="route-launch-total">
+            <span><i style="--fiber:${AERIAL_COLOR}"></i>Aéreo <b>${meters(aerial)}</b></span>
+            <span><i style="--fiber:${CONDUIT_COLOR}"></i>Em duto <b>${meters(tubed)}</b></span>
+        </div>
+        ${bar(aerial, tubed)}
+        <ul class="route-legend route-launch">${rows.map((r, i) => `
+            <li><button type="button" data-conduit-launch="${i}">
+                <span class="route-launch__name" title="${escapeHtml(r.cable.name)}"><b>${escapeHtml(r.cable.name)}</b>${r.cable === cable ? ' <small>(este cabo)</small>' : ''}</span>
+                <span class="route-launch__meters">${meters(r.aerialMeters)} aéreo${r.tubedMeters ? ` · ${meters(r.tubedMeters)} duto` : ''}</span>
+                ${bar(r.aerialMeters, r.tubedMeters)}
+            </button></li>`).join('')}</ul>
+        <p class="route-note">${cables.length > 1 ? 'Cabos por onde passam as fibras em uso deste cabo. ' : ''}Medidas do traçado, sem reserva técnica. Clique num cabo para vê-lo no mapa; para marcar o duto dele, abra "Trecho tubulado" naquele cabo.</p>`;
+}
+
+// ---------------------------------------------------------------
 // Ferramenta: clicar o início e o fim do trecho no cabo
 // ---------------------------------------------------------------
-let conduitTool = null; //{ cable, pendingMeters, listener, pendingMarker, highlights }
+let conduitTool = null; //{ cable, tab: 'mark' | 'launch', pendingMeters, listener, pendingMarker, highlights, launch }
 
 function isConduitToolOpen() {
     return !!conduitTool;
@@ -142,7 +231,7 @@ function openConduitTool(cable) {
     }
     if (conduitTool) closeConduitTool();
     if (typeof isCableRouteOpen === 'function' && isCableRouteOpen()) closeCableRoute();
-    conduitTool = { cable, pendingMeters: null, listener: null, pendingMarker: null, highlights: [] };
+    conduitTool = { cable, tab: 'mark', pendingMeters: null, listener: null, pendingMarker: null, highlights: [], launch: { overlays: [], dimmed: new Map(), cables: [] } };
     setAllCablesClickable(false);
     setMapCursor('crosshair');
     conduitTool.listener = map.addListener('click', (event) => handleConduitMapClick(event?.latLng));
@@ -156,6 +245,7 @@ function closeConduitTool() {
     conduitTool.listener?.remove?.();
     conduitTool.pendingMarker?.setMap(null);
     clearConduitHighlights();
+    clearLaunchHighlight();
     conduitTool = null;
     setAllCablesClickable(true);
     setMapCursor('');
@@ -163,7 +253,7 @@ function closeConduitTool() {
 }
 
 function handleConduitMapClick(latLng) {
-    if (!conduitTool || !latLng) return;
+    if (!conduitTool || !latLng || conduitTool.tab !== 'mark') return;
     const { cable } = conduitTool;
     const found = getMetersAlongPath(cable.path, latLng);
     const reach = Math.max(12, getMetersPerPixelAt(latLng) * 24); //Perto do cabo, em qualquer zoom
@@ -211,8 +301,33 @@ function drawConduitHighlights(ranges) {
     }));
 }
 
+function setConduitTab(tab) {
+    if (!conduitTool) return;
+    conduitTool.tab = tab === 'launch' ? 'launch' : 'mark';
+    conduitTool.pendingMeters = null;
+    conduitTool.pendingMarker?.setMap(null);
+    conduitTool.pendingMarker = null;
+    if (conduitTool.tab === 'mark') clearLaunchHighlight();
+    else clearConduitHighlights();
+    renderConduitTool();
+}
+
 function renderConduitTool() {
     if (!conduitTool) return;
+    const box = document.getElementById('cableConduitBox');
+    box.querySelectorAll('[data-conduit-tab]').forEach(b => b.classList.toggle('is-active', b.dataset.conduitTab === conduitTool.tab));
+    ['conduitMarkPane', 'conduitAllButton', 'conduitClearButton'].forEach(id => document.getElementById(id).classList.toggle('hidden', conduitTool.tab !== 'mark'));
+    document.getElementById('conduitLaunchPane').classList.toggle('hidden', conduitTool.tab !== 'launch');
+    setMapCursor(conduitTool.tab === 'mark' ? 'crosshair' : '');
+    document.getElementById('cableConduitSubtitle').textContent = conduitTool.cable.name;
+    if (conduitTool.tab === 'launch') {
+        document.getElementById('conduitLaunchPane').innerHTML = renderCableLaunchView(conduitTool.cable);
+        return;
+    }
+    renderConduitMarkPane();
+}
+
+function renderConduitMarkPane() {
     const { cable } = conduitTool;
     const ranges = getCableConduitRanges(cable);
     drawConduitHighlights(ranges);
@@ -220,7 +335,6 @@ function renderConduitTool() {
     const conduit = ranges.reduce((sum, r) => sum + (r.to - r.from), 0);
     const aerial = Math.max(0, drawn - conduit);
     const span = getPoleSpanDistance();
-    document.getElementById('cableConduitSubtitle').textContent = cable.name;
     document.getElementById('conduitTotal').textContent = `${Math.round(drawn)} m`;
     document.getElementById('conduitTubed').textContent = `${Math.round(conduit)} m`;
     document.getElementById('conduitAerial').textContent = `${Math.round(aerial)} m`;
@@ -252,6 +366,17 @@ function setupConduitTool() {
         setCableConduitRanges(conduitTool.cable, []);
     });
     box.addEventListener('click', (e) => {
+        const tab = e.target.closest('[data-conduit-tab]');
+        if (tab && conduitTool) {
+            setConduitTab(tab.dataset.conduitTab);
+            return;
+        }
+        const launchRow = e.target.closest('[data-conduit-launch]');
+        if (launchRow && conduitTool) {
+            const target = conduitTool.launch.cables[Number(launchRow.dataset.conduitLaunch)];
+            if (target) focusMapToCable(target);
+            return;
+        }
         const remove = e.target.closest('[data-conduit-remove]');
         if (!remove || !conduitTool) return;
         const ranges = getCableConduitRanges(conduitTool.cable);

@@ -1804,7 +1804,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && ctoRename.pasted === 'FO-12-CTO-RN2|mk_rncto',
     `renomear a CTO pelo painel renomeia o cabo (${JSON.stringify(ctoRename)})`);
 
-  //Rota da fibra, aba Aéreo × duto: trechos aéreos e tubulados do cabo, no mapa e no painel
+  //Trecho tubulado, aba Aéreo × duto: trechos aéreos e tubulados do cabo, no mapa e no painel
   const launch = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');
     rebuildSidebarFromJSON([{ id: 'projLD', name: 'Projeto LD', isProject: true, type: 'TCR', children: [] }], sidebar);
@@ -1812,22 +1812,29 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     rebuildCable({ uid: 'ld-a', folderId: 'projLD', name: 'LD-A', type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -29, lng: -44 }, { lat: -29.009, lng: -44 }] });
     const cable = savedCables.find(c => c.uid === 'ld-a');
     setCableConduitRanges(cable, [{ from: 200, to: 500 }]);
-    showCableRoute(cable, { mode: 'launch' });
-    const body = document.getElementById('cableRouteBody');
-    const colors = cableRouteState.overlays.map(o => o.get('strokeColor')).join();
+    openConduitTool(cable);
+    const markFirst = !document.getElementById('conduitMarkPane').classList.contains('hidden') && document.getElementById('conduitLaunchPane').classList.contains('hidden');
+    document.querySelector('[data-conduit-tab="launch"]').click();
+    const body = document.getElementById('conduitLaunchPane');
     const out = {
-      active: document.querySelector('[data-route-mode="launch"]').classList.contains('is-active'),
+      markFirst,
+      active: document.querySelector('[data-conduit-tab="launch"]').classList.contains('is-active') && document.getElementById('conduitMarkPane').classList.contains('hidden'),
       text: body.querySelector('.route-launch__meters')?.textContent.trim(),
-      colors,
+      colors: conduitTool.launch.overlays.map(o => o.get('strokeColor')).join(),
+      editLines: conduitTool.highlights.length,
+      routeTab: !!document.querySelector('[data-route-mode="launch"]'),
     };
-    closeCableRoute();
-    out.cleared = !cableRouteState;
+    document.querySelector('[data-conduit-tab="mark"]').click();
+    out.backToMark = conduitTool.launch.overlays.length === 0 && conduitTool.highlights.length === 1;
+    closeConduitTool();
+    out.cleared = !conduitTool;
     cable.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(cable), 1);
     document.querySelector('.folder-title[data-folder-id="projLD"]').closest('.folder').remove();
     return out;
   });
-  check(launch.active && /^70\d m aéreo · 300 m duto$/.test(launch.text) && launch.colors === '#0284c7,#0284c7,#7c3aed' && launch.cleared,
-    `rota da fibra mostra trechos aéreos e em duto (${JSON.stringify(launch)})`);
+  check(launch.markFirst && launch.active && /^70\d m aéreo · 300 m duto$/.test(launch.text) && launch.colors === '#0284c7,#0284c7,#7c3aed'
+    && launch.editLines === 0 && !launch.routeTab && launch.backToMark && launch.cleared,
+    `trecho tubulado: aba Aéreo × duto mostra trechos aéreos e em duto (${JSON.stringify(launch)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {

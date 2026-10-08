@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261013i" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261013j" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
   </head>
@@ -1987,6 +1987,11 @@
         </button>
       </div>
       <div class="map-tool-box__body">
+        <div class="route-modes" role="group" aria-label="Visualização">
+          <button type="button" data-conduit-tab="mark" class="is-active">Marcar trecho</button>
+          <button type="button" data-conduit-tab="launch">Aéreo × duto</button>
+        </div>
+        <div id="conduitMarkPane">
         <dl class="map-tool-stats">
           <div><dt>Traçado</dt><dd id="conduitTotal">0 m</dd></div>
           <div><dt>Tubulado</dt><dd id="conduitTubed">0 m</dd></div>
@@ -1995,7 +2000,9 @@
         </dl>
         <p class="map-tool-help" id="conduitHelp"></p>
         <ul class="conduit-list" id="conduitList"></ul>
-        <p class="route-note">O trecho tubulado não gera plaqueta, abraçadeira, SUPA nem alça. O cabo continua inteiro na lista de materiais.</p>
+        <p class="route-note">O trecho tubulado não gera plaqueta, abraçadeira, SUPA nem alça. Na lista de materiais ele vira a linha "— TUBULADO" do cabo.</p>
+        </div>
+        <div id="conduitLaunchPane" class="hidden"></div>
       </div>
       <div class="map-tool-box__actions">
         <button type="button" class="map-tool-btn" id="conduitAllButton">Cabo todo</button>
@@ -2018,7 +2025,6 @@
         <div class="route-modes" role="group" aria-label="Visualização">
           <button type="button" data-route-mode="all">Todas as fibras</button>
           <button type="button" data-route-mode="one">Uma fibra</button>
-          <button type="button" data-route-mode="launch">Aéreo × duto</button>
         </div>
         <div id="cableRouteBody"></div>
         <p class="route-note">Com este painel aberto, clique em outro cabo no mapa para ver a rota dele.</p>
@@ -2793,7 +2799,7 @@
   <script src="js/clients.js?v=20261013e" defer></script>
   <script src="js/optical-budget.js?v=20261010a" defer></script>
   <script src="js/project-check.js?v=20261007m" defer></script>
-  <script src="js/conduit.js?v=20261013b" defer></script>
+  <script src="js/conduit.js?v=20261013j" defer></script>
   <script src="js/network-impact.js?v=20261010a" defer></script>
   <script src="js/project-export.js?v=20261007b" defer></script>
   <script src="js/fusion-export.js?v=20261008c" defer></script>
@@ -2805,7 +2811,7 @@
   <script src="js/tour.js?v=20261007i" defer></script>
   <script src="js/live-sync.js?v=20261007a" defer></script>
   <script src="js/pop-plan.js?v=20261008e" defer></script>
-  <script src="js/cable-route.js?v=20261013i" defer></script>
+  <script src="js/cable-route.js?v=20261013j" defer></script>
   <script src="js/cable-split.js?v=20261010b" defer></script>
   <script src="js/marker-hover.js?v=20261010e" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
