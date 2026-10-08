@@ -1804,6 +1804,31 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && ctoRename.pasted === 'FO-12-CTO-RN2|mk_rncto',
     `renomear a CTO pelo painel renomeia o cabo (${JSON.stringify(ctoRename)})`);
 
+  //Rota da fibra, aba Aéreo × duto: trechos aéreos e tubulados do cabo, no mapa e no painel
+  const launch = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projLD', name: 'Projeto LD', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projLD');
+    rebuildCable({ uid: 'ld-a', folderId: 'projLD', name: 'LD-A', type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -29, lng: -44 }, { lat: -29.009, lng: -44 }] });
+    const cable = savedCables.find(c => c.uid === 'ld-a');
+    setCableConduitRanges(cable, [{ from: 200, to: 500 }]);
+    showCableRoute(cable, { mode: 'launch' });
+    const body = document.getElementById('cableRouteBody');
+    const colors = cableRouteState.overlays.map(o => o.get('strokeColor')).join();
+    const out = {
+      active: document.querySelector('[data-route-mode="launch"]').classList.contains('is-active'),
+      text: body.querySelector('.route-launch__meters')?.textContent.trim(),
+      colors,
+    };
+    closeCableRoute();
+    out.cleared = !cableRouteState;
+    cable.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(cable), 1);
+    document.querySelector('.folder-title[data-folder-id="projLD"]').closest('.folder').remove();
+    return out;
+  });
+  check(launch.active && /^70\d m aéreo · 300 m duto$/.test(launch.text) && launch.colors === '#0284c7,#0284c7,#7c3aed' && launch.cleared,
+    `rota da fibra mostra trechos aéreos e em duto (${JSON.stringify(launch)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');

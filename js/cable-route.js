@@ -1,9 +1,11 @@
 // Rota do cabo: segue as fusões dos planos de fusão de caixa em caixa e destaca no mapa por onde
-// cada fibra passa. Duas visões, à escolha do usuário: todas as fibras em uso do cabo de uma vez, ou
-// uma fibra com o caminho passo a passo. Depende de script.js, js/fusion-plan.js, js/fusion.js
-// (getFiberColor) e js/clients.js (getCtoClients).
+// cada fibra passa. Três visões, à escolha do usuário: todas as fibras em uso do cabo de uma vez,
+// uma fibra com o caminho passo a passo, ou os cabos da rota separados em trecho aéreo e em duto.
+// Depende de script.js, js/fusion-plan.js, js/fusion.js (getFiberColor), js/clients.js (getCtoClients)
+// e js/conduit.js (trechos tubulados).
 
-let cableRouteState = null; //{ cable, mode: 'all' | 'one', fiber, overlays: [], dimmed: Map }
+let cableRouteState = null; //{ cable, mode: 'all' | 'one' | 'launch', fiber, overlays: [], dimmed: Map }
+const ROUTE_AERIAL_COLOR = '#0284c7';
 
 // ---------------------------------------------------------------
 // Grafo das fibras: nós são portas (fibras e portas de splitter) de cada caixa
@@ -200,6 +202,81 @@ function drawCableRouteHighlight(traces) {
 }
 
 // ---------------------------------------------------------------
+// Aéreo × duto: cabos da rota com os trechos aéreos e tubulados
+// ---------------------------------------------------------------
+
+//Cabos por onde passam as fibras em uso deste cabo (ele primeiro, depois na ordem da rota)
+function getRouteCables(cable, graph = buildFiberGraph()) {
+    const found = new Set([cable]);
+    getCableFiberUsage(cable).used.forEach(number => {
+        traceFiberRoute(graph, cable, number).segments.forEach(seg => {
+            const c = savedCables.find(x => x.uid === seg.cableKey) || savedCables.find(x => x.name === seg.cable);
+            if (c) found.add(c);
+        });
+    });
+    return [...found].filter(c => c.path?.length >= 2);
+}
+
+//Trechos (em metros do traçado) aéreos e tubulados de um cabo
+function getCableLaunchRanges(cable) {
+    const cumulative = getPathCumulativeMeters(cable.path);
+    const total = cumulative[cumulative.length - 1];
+    const tubed = cable.conduit?.length ? getCableConduitRanges(cable) : [];
+    const aerial = [];
+    let cursor = 0;
+    tubed.forEach(r => { if (r.from - cursor > 0.5) aerial.push({ from: cursor, to: r.from }); cursor = Math.max(cursor, r.to); });
+    if (total - cursor > 0.5) aerial.push({ from: cursor, to: total });
+    const sum = list => list.reduce((acc, r) => acc + (r.to - r.from), 0);
+    return { cumulative, total, aerial, tubed, aerialMeters: sum(aerial), tubedMeters: sum(tubed) };
+}
+
+function drawCableLaunchHighlight(cables) {
+    clearCableRouteHighlight();
+    const bounds = new google.maps.LatLngBounds();
+    savedCables.forEach(cable => {
+        if (!cable.polyline) return;
+        cableRouteState.dimmed.set(cable, cable.polyline.get('strokeOpacity') ?? 1);
+        cable.polyline.setOptions({ strokeOpacity: 0.25 });
+    });
+    cables.forEach(cable => {
+        if (!cable.polyline?.getVisible()) return;
+        const parts = getCableLaunchRanges(cable);
+        const draw = (ranges, color) => ranges.forEach(r => cableRouteState.overlays.push(new google.maps.Polyline({
+            path: getPathSlice(cable.path, r.from, r.to, parts.cumulative),
+            map, clickable: false, strokeColor: color, strokeOpacity: 1, strokeWeight: (cable.width || 4) + 4, zIndex: 300,
+        })));
+        draw(parts.aerial, ROUTE_AERIAL_COLOR);
+        draw(parts.tubed, CONDUIT_COLOR);
+        cable.path.forEach(p => bounds.extend(p));
+    });
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { top: 56, right: 340, bottom: 56, left: getMapFocusPadding() });
+}
+
+function renderCableLaunchView(cable, graph) {
+    const cables = getRouteCables(cable, graph);
+    drawCableLaunchHighlight(cables);
+    const rows = cables.map(c => ({ cable: c, ...getCableLaunchRanges(c) }));
+    const aerial = rows.reduce((sum, r) => sum + r.aerialMeters, 0);
+    const tubed = rows.reduce((sum, r) => sum + r.tubedMeters, 0);
+    const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+    const meters = value => `${Math.round(value).toLocaleString('pt-BR')} m`;
+    const bar = (a, t) => `<span class="route-launch-bar" aria-hidden="true"><b style="width:${pct(a, a + t)}%"></b><em style="width:${pct(t, a + t)}%"></em></span>`;
+    return `
+        <div class="route-launch-total">
+            <span><i style="--fiber:${ROUTE_AERIAL_COLOR}"></i>Aéreo <b>${meters(aerial)}</b></span>
+            <span><i style="--fiber:${CONDUIT_COLOR}"></i>Em duto <b>${meters(tubed)}</b></span>
+        </div>
+        ${bar(aerial, tubed)}
+        <ul class="route-legend route-launch">${rows.map((r, i) => `
+            <li><button type="button" data-route-launch="${i}">
+                <span class="route-launch__name" title="${escapeHtml(r.cable.name)}"><b>${escapeHtml(r.cable.name)}</b>${r.cable === cable ? ' <small>(este cabo)</small>' : ''}</span>
+                <span class="route-launch__meters">${meters(r.aerialMeters)} aéreo${r.tubedMeters ? ` · ${meters(r.tubedMeters)} duto` : ''}</span>
+                ${bar(r.aerialMeters, r.tubedMeters)}
+            </button></li>`).join('')}</ul>
+        <p class="route-note">${cables.length > 1 ? 'Cabos por onde passam as fibras em uso deste cabo. ' : ''}Medidas do traçado, sem reserva técnica. Clique num cabo para vê-lo no mapa; o trecho em duto se marca em "Trecho tubulado" no menu do cabo.</p>`;
+}
+
+// ---------------------------------------------------------------
 // Painel
 // ---------------------------------------------------------------
 
@@ -234,6 +311,12 @@ function renderCableRouteBox() {
     document.getElementById('cableRouteSubtitle').textContent = `${usage.used.length} de ${total} fibras em uso`;
     box.querySelectorAll('[data-route-mode]').forEach(b => b.classList.toggle('is-active', b.dataset.routeMode === mode));
     const body = document.getElementById('cableRouteBody');
+
+    if (mode === 'launch') {
+        cableRouteState.launchCables = getRouteCables(cable, graph);
+        body.innerHTML = renderCableLaunchView(cable, graph);
+        return;
+    }
 
     if (mode === 'all') {
         const traces = usage.used.map(number => ({ number, trace: traceFiberRoute(graph, cable, number) }));
@@ -308,6 +391,12 @@ function setupCableRouteBox() {
         const modeButton = e.target.closest('[data-route-mode]');
         if (modeButton && cableRouteState) {
             showCableRoute(cableRouteState.cable, { mode: modeButton.dataset.routeMode });
+            return;
+        }
+        const launchButton = e.target.closest('[data-route-launch]');
+        if (launchButton && cableRouteState) {
+            const target = cableRouteState.launchCables?.[Number(launchButton.dataset.routeLaunch)];
+            if (target) focusMapToCable(target);
             return;
         }
         const fiberButton = e.target.closest('[data-route-fiber]');
