@@ -2556,7 +2556,9 @@ function captureCableAnchorsFromPath(cable) {
 function isCableConnectedToMarker(cable, markerInfo) {
     if (!cable?.path?.length || !markerInfo) return false;
     if (markerInfo.uid && (cable.startAnchorUid === markerInfo.uid || cable.endAnchorUid === markerInfo.uid)) return true;
-    //Ponta com uid já é de outro marcador; só a ponta sem uid (projeto antigo) olha nome e posição
+    //Ponta com uid já é de outro marcador; só a ponta sem uid (projeto antigo) olha nome e posição,
+    //e só dentro do mesmo projeto (um projeto colado em cima do original fica na mesma posição)
+    if (typeof isSameProject === 'function' && !isSameProject(cable, markerInfo)) return false;
     const markerPosition = markerInfo.marker?.getPosition?.();
     const thresholdM = 1;
     const endMatches = (uid, name, point) => {

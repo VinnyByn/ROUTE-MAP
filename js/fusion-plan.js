@@ -102,13 +102,38 @@ function parseFusionPlanText(planText) {
 // ---------------------------------------------------------------
 function resolvePlanCable(planCable, box = null) {
     if (!planCable) return null;
+    const same = savedCables.filter(c => c.name === planCable.name);
     if (planCable.uid) {
         const byUid = savedCables.find(c => c.uid === planCable.uid);
+        //Projeto colado em cima do original: o cartão pode ter ficado com o cabo do outro projeto.
+        //Se a caixa tem um cabo com o mesmo nome no próprio projeto, chegando nela, vale esse.
+        if (byUid && box && same.length > 1 && !isSameProject(byUid, box)) {
+            const local = same.find(c => c !== byUid && isSameProject(c, box) && isCableConnectedToMarker(c, box));
+            if (local) return local;
+        }
         if (byUid) return byUid;
     }
-    const same = savedCables.filter(c => c.name === planCable.name);
     if (same.length <= 1) return same[0] || null;
-    return (box && same.find(c => isCableConnectedToMarker(c, box))) || same[0];
+    if (!box) return same[0];
+    return same.find(c => box.uid && (c.startAnchorUid === box.uid || c.endAnchorUid === box.uid))
+        || same.find(c => isSameProject(c, box) && isCableConnectedToMarker(c, box))
+        || same.find(c => isSameProject(c, box))
+        || same.find(c => isCableConnectedToMarker(c, box))
+        || same[0];
+}
+
+//Projeto (pasta raiz) de um item do mapa pelo folderId; null se não estiver na barra lateral
+function getItemProjectId(item) {
+    const folderId = item?.folderId;
+    if (!folderId || typeof document === 'undefined') return null;
+    return document.getElementById(folderId)?.closest('.folder')?.querySelector('.folder-title')?.dataset.folderId || null;
+}
+
+//Itens do mesmo projeto (ou sem projeto conhecido: não dá para separar)
+function isSameProject(a, b) {
+    const pa = getItemProjectId(a);
+    const pb = getItemProjectId(b);
+    return !pa || !pb || pa === pb;
 }
 
 //Chave única do cabo no plano (para juntar a mesma fibra em caixas diferentes)
@@ -129,7 +154,8 @@ function planCableMatches(planCable, cable, box = null) {
     return !savedCables.includes(cable) && planCable.name === cable.name;
 }
 
-//Planos antigos: grava o uid do cabo nos cartões que só têm o nome
+//Planos antigos: grava o uid do cabo nos cartões que só têm o nome. Também corrige cartões que apontam
+//para o cabo de outro projeto quando a caixa tem o cabo com o mesmo nome no próprio projeto.
 function backfillFusionPlanCableUids(boxes = markers) {
     boxes.forEach(box => {
         if (!box.fusionPlan) return;
@@ -139,10 +165,11 @@ function backfillFusionPlanCableUids(boxes = markers) {
             const root = parseStoredHtml(planData.elements);
             let changed = false;
             root.querySelectorAll('.cable-element').forEach(card => {
-                if (card.dataset.cableUid && savedCables.some(c => c.uid === card.dataset.cableUid)) return;
-                const cable = resolvePlanCable({ name: card.dataset.cableName || '' }, box);
+                const cable = resolvePlanCable({ name: card.dataset.cableName || '', uid: card.dataset.cableUid || '' }, box);
                 if (!cable) return;
-                card.dataset.cableUid = ensureItemUid(cable, 'cb', savedCables);
+                const uid = ensureItemUid(cable, 'cb', savedCables);
+                if (card.dataset.cableUid === uid) return;
+                card.dataset.cableUid = uid;
                 changed = true;
             });
             if (!changed) return;
