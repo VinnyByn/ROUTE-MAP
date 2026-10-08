@@ -1708,6 +1708,18 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 #materialCatalogModal .cable-alca-kit li.cable-alca-row { display: grid; grid-template-columns: minmax(180px, 1fr) 16px minmax(220px, 1.4fr) 80px; align-items: center; gap: 10px; padding: 6px 4px; }
 #materialCatalogModal .cable-alca-kit li.cable-alca-row .cable-alca-row__cable { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) { #materialCatalogModal .cable-alca-kit li.cable-alca-row { grid-template-columns: 1fr; } }
+/* Kit CTO: splitters do plano de fusão → material da lista */
+.cat3-kit:has(.splitter-kit[open]) { grid-column: 1 / -1; }
+.splitter-kit { margin-top: 10px; border-top: 1px solid var(--color-border); padding-top: 8px; }
+.splitter-kit > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 600; }
+.splitter-kit > summary::-webkit-details-marker { display: none; }
+.splitter-kit > summary::after { content: '▾'; color: var(--color-text-muted, #64748b); transition: transform 0.15s ease; }
+.splitter-kit[open] > summary::after { transform: rotate(180deg); }
+#materialCatalogModal .splitter-kit ul.cable-alca-list { max-height: none; overflow: visible; background: none; padding: 0; }
+#materialCatalogModal .splitter-kit li.cable-alca-row { display: grid; grid-template-columns: minmax(180px, 1fr) 16px minmax(220px, 1.4fr) 80px; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--color-border); }
+#materialCatalogModal .splitter-kit li.cable-alca-row .cat3-kit__price { text-align: right; white-space: nowrap; }
+.splitter-kit .cable-alca-row__cable small { font-weight: 400; color: var(--color-text-muted, #64748b); }
+@media (max-width: 640px) { #materialCatalogModal .splitter-kit li.cable-alca-row { grid-template-columns: 1fr; } }
 
 /* Seletor de materiais Data Center (equipamentos B2B) */
 .client-dc-picker { border: 1px solid var(--color-border); border-radius: 10px; padding: 8px; margin: 6px 0 10px; background: var(--color-surface); }

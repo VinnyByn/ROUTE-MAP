@@ -851,6 +851,13 @@ const conduit = await page.evaluate(() => {
   calculateBomState();
   const rq = n => qty(resolveMaterialName(n));
   const duct = { raquete: rq('RAQUETE PARA CEO'), suporte: rq('SUPORTE PARA CEO'), caixa: rq('CAIXA DE EMENDA ÓPTICA (CEO)'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED), reserva: calculateCableMeasurement(cable).reserva };
+  //Item retirado da lista continua retirado quando a lista é recalculada por mudança no mapa
+  const caixaKey = Object.keys(bomState).find(k => bomState[k].materialName === resolveMaterialName('CAIXA DE EMENDA ÓPTICA (CEO)'));
+  projectBoms.projT = JSON.parse(JSON.stringify(bomState));
+  projectBoms.projT[caixaKey].removed = true;
+  calculateBomState();
+  duct.removedKept = bomState[caixaKey]?.removed === true && summarizeBomCosts(bomState).fusaoTotal >= 0;
+  delete projectBoms.projT;
   ceo.ceoAccessory = 'Raquete';
   calculateBomState();
   duct.raqueteAerea = rq('RAQUETE PARA CEO');
@@ -875,7 +882,7 @@ check(conduit.surcharge.cabo === conduit.before.cabo - 500 && conduit.surcharge.
   && conduit.surcharge.bap === conduit.expectSurchargeBap && conduit.surcharge.rows === `Aéreo:0:${conduit.before.cabo - 500},Tubulado:10:550`,
   `aéreo e tubulado com acréscimos separados (${JSON.stringify(conduit.surcharge)})`);
 check(conduit.duct.raquete === 0 && conduit.duct.suporte === 0 && conduit.duct.caixa === 1 && conduit.duct.reserva === 50
-  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0,
+  && conduit.duct.tubo === 50 && conduit.duct.cabo === conduit.before.cabo && conduit.duct.raqueteAerea > 0 && conduit.duct.tuboAereo === 0 && conduit.duct.removedKept,
   `CEO em duto não leva kit de poste e a reserva dela vai para o tubulado (${JSON.stringify(conduit.duct)})`);
 check(conduit.highlight.idle === 0 && conduit.highlight.shown === 2 && conduit.highlight.sliceMeters === '200,200' && conduit.highlight.cleared,
   `trecho tubulado fica roxo só enquanto é editado (${JSON.stringify(conduit.highlight)})`);
@@ -942,6 +949,24 @@ const splitterNames = await page.evaluate(() => {
 });
 check(splitterNames === 'Splitter 1/4 APC | SPLITTER CONECTORIZADO 1/4 SC/APC | SPLITTER FUSÃO 1/4 | SPLITTER CONECTORIZADO 1/8 SC/UPC | Splitter 1/16',
   `splitter de atendimento usa o conectorizado da planilha (${splitterNames})`);
+
+//Kit CTO: escolher o material de cada splitter do plano de fusão
+const splitterKit = await page.evaluate(() => {
+  const saved = materialCatalog.splitterMaterials;
+  materialCatalog.splitterMaterials = { 'APC|4': 'SPLITTER FUSÃO 1/4' };
+  const custom = resolveSplitterMaterialName(4, true, 'APC');
+  const other = resolveSplitterMaterialName(8, true, 'UPC');
+  renderCatalogKits();
+  const section = document.querySelector('#catalogKitsList .splitter-kit');
+  const selects = section ? section.querySelectorAll('select[data-splitter-kit]').length : 0;
+  const autos = section ? section.querySelectorAll('small').length : 0;
+  const picked = section?.querySelector('select[data-splitter-kit="APC|4"]')?.value;
+  materialCatalog.splitterMaterials = saved;
+  renderCatalogKits();
+  return { custom, other, selects, autos, picked };
+});
+check(splitterKit.custom === 'SPLITTER FUSÃO 1/4' && splitterKit.other === 'SPLITTER CONECTORIZADO 1/8 SC/UPC' && splitterKit.selects === 12 && splitterKit.autos === 11 && splitterKit.picked === 'SPLITTER FUSÃO 1/4',
+  `kit CTO escolhe o material de cada splitter (${JSON.stringify(splitterKit)})`);
 
 //Exportar planilha: abas e linhas do projeto ativo
 const sheets = await page.evaluate(() => {
