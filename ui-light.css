@@ -1,0 +1,80 @@
+/* =====================================================================
+   Tema claro — barra branca, mais contraste nos textos e a cor da marca
+   (azul-petróleo do logo) nos destaques. Só vale fora do tema escuro.
+   Camada final: carregada depois de style.css, ui-v3.css e ui-v4.css.
+   ===================================================================== */
+html:not([data-theme="dark"]) {
+  --brand-900: #0e3341;
+  --brand-800: #144656;
+  --brand-700: #1a5669;
+  --brand-600: #1d7290;
+  --brand-500: #2a8cab;
+  --brand-100: #ddeff6;
+  --brand-50: #eff8fb;
+
+  --app-bg: #eef2f5;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-muted: #f5f8fa;
+  --color-surface-hover: #eef5f8;
+  --color-surface-active: #ddeff6;
+  --color-border: #d6e0e7;
+  --color-border-light: #e6edf1;
+  --color-text: #0f2834;
+  --color-text-muted: #3e5867;
+  --color-text-dim: #5d7685;
+  --input-border: #c6d4dd;
+  --focus-ring: 0 0 0 3px rgba(29, 114, 144, 0.22);
+  --panel-tint: #f5f8fa;
+  --panel-tint-strong: #ebf2f6;
+  --panel-border: #d6e0e7;
+
+  --topbar-bg: #ffffff;
+  --topbar-btn-bg: transparent;
+  --topbar-btn-bg-hover: #eef5f8;
+  --topbar-btn-color: #1b3a48;
+  --shadow-sm: 0 1px 2px rgba(15, 40, 52, 0.06);
+  --shadow-md: 0 10px 28px rgba(15, 40, 52, 0.12);
+  --overlay: rgba(15, 40, 52, 0.42);
+  --line-color: #cbd8e0;
+}
+
+/* ---- Barra superior branca ---- */
+html:not([data-theme="dark"]) .top-bar {
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 2px rgba(15, 40, 52, 0.05), 0 4px 14px rgba(15, 40, 52, 0.05);
+}
+html:not([data-theme="dark"]) .top-bar-brand { border-right-color: var(--color-border); }
+html:not([data-theme="dark"]) .top-bar-brand-text strong { color: var(--brand-700); }
+html:not([data-theme="dark"]) .top-bar-brand-text span { color: var(--color-text-dim); opacity: 1; }
+html:not([data-theme="dark"]) .top-bar .top-bar-button .ui-icon { color: var(--brand-600); opacity: 1; }
+html:not([data-theme="dark"]) .top-bar .dropdown-open > .top-bar-button,
+html:not([data-theme="dark"]) .top-bar .dropdown:has(.dropdown-content.show) > .top-bar-button {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-700);
+}
+html:not([data-theme="dark"]) .top-bar .top-bar-button--primary,
+html:not([data-theme="dark"]) .top-bar .top-bar-button--primary:hover { color: #fff; border-color: transparent; }
+html:not([data-theme="dark"]) .top-bar .top-bar-button--primary .ui-icon { color: #fff; }
+html:not([data-theme="dark"]) .top-bar-online {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+html:not([data-theme="dark"]) .top-bar-online:hover { background: var(--color-surface-hover); }
+html:not([data-theme="dark"]) .top-bar-account { border-left-color: var(--color-border); }
+html:not([data-theme="dark"]) .top-bar .top-bar-button.user-menu-trigger { border-color: var(--color-border); color: var(--color-text); }
+html:not([data-theme="dark"]) .user-menu-trigger__text strong { color: var(--color-text); }
+html:not([data-theme="dark"]) .user-menu-trigger__text small { color: var(--color-text-dim); opacity: 1; }
+
+/* ---- Barra lateral ---- */
+html:not([data-theme="dark"]) .sidebar-column {
+  --gepro-select: #ddeff6;
+  border-right: 1px solid var(--color-border);
+  box-shadow: 1px 0 0 rgba(15, 40, 52, 0.02), 4px 0 14px rgba(15, 40, 52, 0.04);
+}
+
+/* ---- Janelas ---- */
+html:not([data-theme="dark"]) .modal .modal-content { box-shadow: 0 24px 60px rgba(15, 40, 52, 0.22); }
