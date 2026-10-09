@@ -1830,18 +1830,25 @@ html[data-theme="dark"] .mh-row.is-total b { color: #2dd4bf; }
 .mh-card section .mh-card__note { margin: 0 0 3px; }
 
 /* Seletor Mapa/Satélite com opções em menu (Pontos do mapa, Terreno, Rótulos) */
-.map-type-control { display: flex; margin: 10px; font: 400 15px Roboto, Arial, sans-serif; box-shadow: rgba(0,0,0,.3) 0 1px 4px -1px; border-radius: 2px; }
+.map-type-control { --mtc-accent: var(--brand-600, #2a8cab); display: flex; gap: 2px; margin: 10px; padding: 3px; border: 1px solid var(--color-border-light, #e6edf1); border-radius: 12px; background: var(--color-surface, #fff); box-shadow: 0 4px 14px rgba(15, 40, 52, 0.16); font: 500 13px var(--font-sans, 'Inter', system-ui, sans-serif); }
 .mtc-item { position: relative; }
-.mtc-btn { height: 40px; padding: 0 17px; border: 0; background: #fff; color: #565656; font: inherit; cursor: pointer; }
-.mtc-item:first-child .mtc-btn { border-radius: 2px 0 0 2px; }
-.mtc-item:last-child .mtc-btn { border-radius: 0 2px 2px 0; }
-.mtc-item.is-active .mtc-btn { color: #000; font-weight: 500; }
-.mtc-btn:hover { background: #ebebeb; }
-.mtc-menu { display: none; position: absolute; top: 100%; left: 0; min-width: 100%; background: #fff; box-shadow: rgba(0,0,0,.3) 0 1px 4px -1px; border-radius: 0 0 2px 2px; padding: 4px 0; z-index: 2; }
-.mtc-item:hover .mtc-menu, .mtc-item:focus-within .mtc-menu { display: block; }
-.mtc-menu label { display: flex; align-items: center; gap: 8px; padding: 7px 12px; white-space: nowrap; color: #333; font-size: 14px; cursor: pointer; }
-.mtc-menu label:hover { background: #ebebeb; }
-.mtc-menu input { margin: 0; width: 15px; height: 15px; cursor: pointer; }
+.map-type-control .mtc-btn { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--color-text-dim, #5d7685); font: inherit; cursor: pointer; transition: background-color .15s, color .15s; }
+.map-type-control .mtc-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.map-type-control .mtc-btn:hover { background: var(--color-surface-muted, #f5f8fa); color: var(--color-text, #0f2834); }
+.map-type-control .mtc-item.is-active .mtc-btn { background: color-mix(in srgb, var(--mtc-accent) 14%, transparent); color: var(--mtc-accent); font-weight: 650; }
+.map-type-control .mtc-btn:focus-visible { outline: 2px solid var(--mtc-accent); outline-offset: 1px; }
+.mtc-menu { display: none; position: absolute; top: calc(100% + 8px); left: -3px; min-width: 190px; padding: 6px; border: 1px solid var(--color-border-light, #e6edf1); border-radius: 12px; background: var(--color-surface, #fff); box-shadow: 0 10px 28px rgba(15, 40, 52, 0.18); z-index: 2; }
+.mtc-menu::before { content: ''; position: absolute; left: 0; right: 0; top: -12px; height: 12px; }
+.mtc-item:hover .mtc-menu, .mtc-item:focus-within .mtc-menu { display: block; animation: mtc-pop .14s ease-out; }
+@keyframes mtc-pop { from { opacity: 0; transform: translateY(-4px); } }
+.map-type-control .mtc-menu label { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0; padding: 8px 10px; border-radius: 8px; white-space: nowrap; color: var(--color-text, #0f2834); font: 500 13px var(--font-sans, 'Inter', system-ui, sans-serif); cursor: pointer; }
+.map-type-control .mtc-menu label:hover { background: var(--color-surface-muted, #f5f8fa); }
+/* Interruptor no lugar da caixinha de seleção */
+.map-type-control .mtc-menu input[type="checkbox"] { order: 2; appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 30px; height: 18px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--color-border, #cbd8e0); cursor: pointer; transition: background-color .15s; }
+.map-type-control .mtc-menu input[type="checkbox"]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform .15s; }
+.map-type-control .mtc-menu input[type="checkbox"]:checked { background: var(--mtc-accent); }
+.map-type-control .mtc-menu input[type="checkbox"]:checked::after { transform: translateX(12px); }
+.map-type-control .mtc-menu input[type="checkbox"]:focus-visible { outline: 2px solid var(--mtc-accent); outline-offset: 2px; }
 
 /* Rota do cabo pelas fusões */
 .cable-route-box { width: 330px; }
