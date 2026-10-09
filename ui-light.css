@@ -78,3 +78,18 @@ html:not([data-theme="dark"]) .sidebar-column {
 
 /* ---- Janelas ---- */
 html:not([data-theme="dark"]) .modal .modal-content { box-shadow: 0 24px 60px rgba(15, 40, 52, 0.22); }
+
+/* Menos branco: lateral, cabeçalhos de painéis e janelas em tom acinzentado da marca */
+html:not([data-theme="dark"]) { --app-bg: #e6edf1; --tint-bg: #f1f6f8; --tint-bg-strong: #e8f0f4; }
+html:not([data-theme="dark"]) .sidebar-column { --gepro-bg: var(--tint-bg); --gepro-hover: #e4eef3; --gepro-select: #d3e8f0; background: var(--tint-bg); }
+html:not([data-theme="dark"]) .sidebar-header,
+html:not([data-theme="dark"]) .sidebar-column .ge-pro-panel-header { background: var(--tint-bg-strong); }
+html:not([data-theme="dark"]) .floating-box.map-tool-box .map-tool-box__header { background: var(--tint-bg); border-bottom-color: var(--color-border); }
+html:not([data-theme="dark"]) .floating-box.map-tool-box .map-tool-box__actions { background: var(--tint-bg); }
+html:not([data-theme="dark"]) .sidebar-column .sidebar { background: var(--tint-bg); }
+
+/* Barra superior em tom claro da marca, texto escuro */
+html:not([data-theme="dark"]) { --topbar-bg: linear-gradient(100deg, #d7eaf1 0%, #e2f0f5 60%, #e9f3f7 100%); --topbar-btn-bg-hover: rgba(255,255,255,.7); }
+html:not([data-theme="dark"]) .top-bar { border-bottom-color: #c9dde6; }
+html:not([data-theme="dark"]) .top-bar-online { background: rgba(255,255,255,.65); }
+html:not([data-theme="dark"]) .top-bar .top-bar-button.user-menu-trigger { background: rgba(255,255,255,.55); }
