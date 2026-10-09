@@ -1938,6 +1938,30 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && oneAtATime.dirty.afterConfirm.panelClosed && oneAtATime.dirty.afterConfirm.menuOpen && oneAtATime.dirty.afterConfirm.name === 'CTO-OT',
     `barra superior fecha a edição aberta e pergunta se houver alteração (${JSON.stringify(oneAtATime)})`);
 
+  //Dividir cabo só aparece com o cabo passando em cima do marcador (ou na beira); cliente tem "Mover"
+  const splitNear = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projDV', name: 'Projeto DV', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projDV');
+    rebuildCable({ uid: 'dv-c', folderId: 'projDV', name: 'DV-C', type: 'Cabo AS 80 FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -33, lng: -44 }, { lat: -33, lng: -43.99 }] });
+    const cable = savedCables.find(c => c.uid === 'dv-c');
+    rebuildMarker({ uid: 'mk_dv_on', folderId: 'projDV', type: 'CTO', name: 'CTO-EM-CIMA', color: '#f00', position: { lat: -33.00001, lng: -43.995 } }); //~1 m
+    rebuildMarker({ uid: 'mk_dv_off', folderId: 'projDV', type: 'CTO', name: 'CTO-LONGE', color: '#f00', position: { lat: -33.0001, lng: -43.995 } }); //~11 m
+    rebuildMarker({ uid: 'mk_dv_cli', folderId: 'projDV', type: 'CLIENTE', name: 'CLI-DV', color: '#f00', position: { lat: -33.0005, lng: -43.995 }, client: { kind: 'residencial', status: 'ativo' } });
+    const get = uid => markers.find(m => m.uid === uid);
+    const items = m => buildSidebarMenuItems({ kind: 'marker', info: m, name: m.name, row: m.listItem || document.createElement('div') });
+    const out = {
+      on: getCablesPassingThroughMarker(get('mk_dv_on')).length,
+      off: getCablesPassingThroughMarker(get('mk_dv_off')).length,
+      clientMove: items(get('mk_dv_cli')).some(i => i.action === 'move'),
+    };
+    cable.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(cable), 1);
+    markers.filter(m => m.folderId === 'projDV').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    document.querySelector('.folder-title[data-folder-id="projDV"]').closest('.folder').remove();
+    return out;
+  });
+  check(splitNear.on === 1 && splitNear.off === 0 && splitNear.clientMove, `dividir cabo só com o cabo em cima do marcador e "Mover" no cliente (${JSON.stringify(splitNear)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');
