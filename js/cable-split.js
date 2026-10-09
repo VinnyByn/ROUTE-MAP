@@ -3,7 +3,7 @@
 // (fica com o nome antigo). Os planos de fusão das caixas do trecho A passam a usar o nome novo.
 // Depende de script.js, js/persistence.js (serializeCable/rebuildCable) e js/fusion-plan.js.
 
-const CABLE_SPLIT_MAX_DISTANCE_M = 25; //Distância máxima do marcador até a linha do cabo
+const CABLE_SPLIT_MAX_DISTANCE_M = 6; //Só oferece dividir se o cabo passa em cima do marcador ou na beira dele
 const CABLE_SPLIT_TYPES = ['CEO', 'CTO', 'POP', 'RESERVA'];
 
 //Distância em metros (aproximação plana, suficiente para poucos metros)
