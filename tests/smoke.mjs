@@ -415,6 +415,43 @@ const pickerDelete = await page.evaluate(() => {
 check(pickerDelete.deleted && pickerDelete.gone && pickerDelete.empty && pickerDelete.pickerOpen,
   `excluir pela lista de projetos manda para a lixeira e tira da lista (${JSON.stringify(pickerDelete)})`);
 
+//Relatório: resumo e objetivo (automático com os números do projeto, ou escrito e gravado no projeto)
+const summaryAuto = await page.evaluate(() => {
+  window.__fakeDb.projects.projS = { id: 'projS', name: 'Projeto S', revision: 1, data: {}, updated_by: 'u1', deleted_at: null };
+  loadAndDisplayProject('projS', { sidebar: { id: 'projS', name: 'Projeto S', type: 'TCR', city: 'Lavras', neighborhood: 'Centro', isProject: true, children: [] }, markers: [], cables: [], polygons: [] }, { silent: true });
+  setProjectRevision(document.getElementById('projS').closest('.folder'), 1);
+  setupProjectSummaryEditor(); //initMap não roda nesta página (sem Google Maps)
+  document.getElementById('reportModal').style.display = 'flex';
+  showProjectReportDetails('projS', 'Projeto S');
+  return { text: document.getElementById('rv-summary').textContent, tag: !document.getElementById('rv-summary-tag').hidden };
+});
+await page.click('#editProjectSummaryButton');
+await page.fill('#projectSummaryTextarea', 'Atender o loteamento Jardim das Flores.\nReduzir a ocupação da OLT 2.');
+await page.click('#saveProjectSummaryButton');
+await page.waitForTimeout(400);
+const summarySaved = await page.evaluate(() => {
+  const data = computeProjectReportData('projS');
+  const snap = createReportPreviewSnapshot(data);
+  const html = buildReportPreviewFlowBlocks(snap).map(b => b.outerHTML).join('');
+  const out = {
+    view: document.getElementById('rv-summary').textContent,
+    tagHidden: document.getElementById('rv-summary-tag').hidden,
+    db: window.__fakeDb.projects.projS.data?.objective,
+    snap: snap.summary,
+    preview: html.includes('Resumo e objetivo') && html.includes('Jardim das Flores'),
+    modalClosed: document.getElementById('projectSummaryModal').style.display === 'none',
+  };
+  document.getElementById('reportModal').style.display = 'none';
+  removeProjectFromWorkspace('projS', document.getElementById('projS').closest('.folder'));
+  delete window.__fakeDb.projects.projS;
+  return out;
+});
+check(/^Objetivo: ampliar a rede de fibra óptica \(FTTH\) no bairro Centro, em Lavras\./.test(summaryAuto.text) && summaryAuto.tag,
+  `relatório mostra resumo automático do projeto (${JSON.stringify(summaryAuto)})`);
+check(summarySaved.view.startsWith('Atender o loteamento') && summarySaved.tagHidden && summarySaved.db === summarySaved.snap
+  && summarySaved.snap.includes('\n') && summarySaved.preview && summarySaved.modalClosed,
+  `resumo escrito é gravado no projeto e sai na prévia do PDF/Word (${JSON.stringify(summarySaved)})`);
+
 const errorsLogged = await page.evaluate(async () => {
   const fire = (message) => window.dispatchEvent(new ErrorEvent('error', { message, filename: location.origin + '/js/x.js', lineno: 1, colno: 2, error: new Error(message) }));
   fire('Erro de teste do registro');

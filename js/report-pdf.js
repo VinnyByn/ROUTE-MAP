@@ -307,7 +307,7 @@ async function exportReportPdfNative(snapshot, filename) {
     const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
     if (typeof doc.autoTable !== 'function') throw new Error('Complemento de tabelas do PDF não carregado. Recarregue a página.');
     const pdf = new ReportPdfWriter(doc);
-    const options = snapshot.options || { bom: true, labor: true, notes: true };
+    const options = snapshot.options || { summary: true, bom: true, labor: true, notes: true };
     const logo = await loadReportLogo();
 
     //Capa: marca, empresa, data, título e local
@@ -340,6 +340,11 @@ async function exportReportPdfNative(snapshot, filename) {
         cx += w + 3;
     });
     pdf.y += chips.length ? 12 : 4;
+
+    if (options.summary !== false && snapshot.summary && snapshot.summary.trim()) {
+        pdf.sectionTitle('Resumo e objetivo', { keepWith: 20 });
+        pdf.notesBox(snapshot.summary.trim());
+    }
 
     pdf.sectionTitle('Indicadores', { keepWith: 26 });
     pdf.kpis(snapshot.kpis || []);
