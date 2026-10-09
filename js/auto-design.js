@@ -25,7 +25,8 @@ const AUTO_DESIGN_EDGE_TOL_M = 25;   //Rua (ou poste, ou casa) em cima do limite
 const AUTO_DESIGN_TABLE_MAX = 100;   //Caixas na tabela de distâncias pela rua (acima disso, linha reta)
 const AUTO_DESIGN_GRID_M = 15;       //Casas espalhadas pela área: um ponto a cada 15 m
 const AUTO_DESIGN_MAX_POINTS = 6000; //Áreas grandes usam pontos mais espaçados
-const AUTO_DESIGN_COVER_M = 150;     //Alcance de uma CTO (drop) em linha reta
+const AUTO_DESIGN_COVER_M = 150;     //Raio da CTO (alcance do drop, em linha reta) quando não informado
+const AUTO_DESIGN_COVER_MIN = 30, AUTO_DESIGN_COVER_MAX = 1000;
 const AUTO_DESIGN_SNAP_MAX_M = 80;   //Só puxa a caixa para a rua se a rua estiver até 80 m
 const AUTO_DESIGN_EDIT_SNAP_M = 60;  //Caixa arrastada na prévia vai para o poste/rua mais perto até 60 m
 const AUTO_DESIGN_MIN_COVERAGE = 0.95;
@@ -251,6 +252,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
     return {
         proj, polyXY, demand, sites, demandKind, siteKind, totalWeight, houses,
         housesPerWeight: totalWeight ? houses / totalWeight : 0,
+        coverRadius: getAutoDesignCoverRadius(params),
         streetsOk: !!streets,
         poleGraph: siteKind === 'poles' ? buildAutoDesignPoleGraph(sites) : null,
     };
@@ -404,10 +406,13 @@ function evaluateAutoDesignCenters(model, points, centers = null) {
         if (!points.length) return;
         load[best] += n.w;
         total += n.w;
-        if (Math.sqrt(bestD) <= AUTO_DESIGN_COVER_M) covered += n.w;
+        if (Math.sqrt(bestD) <= (model.coverRadius || AUTO_DESIGN_COVER_M)) covered += n.w;
     });
     return { centers, load, coverage: total ? covered / total : 1 };
 }
+
+//Raio da CTO: até onde o drop chega (linha reta); define quantas caixas são precisas para cobrir a área
+const getAutoDesignCoverRadius = (params) => Math.min(AUTO_DESIGN_COVER_MAX, Math.max(AUTO_DESIGN_COVER_MIN, parseInt(params?.coverRadius, 10) || AUTO_DESIGN_COVER_M));
 
 //Portas usadas por CTO: a ocupação máxima deixa portas livres para crescer
 const getAutoDesignUsablePorts = (params) => Math.max(1, Math.floor(params.ports * (Number(params.maxFill) || 100) / 100));
@@ -1086,7 +1091,7 @@ const formatAutoDesignMoneyShort = (value) => `R$ ${Math.round(Number(value) || 
 
 const AUTO_DESIGN_DEFAULTS = {
     occupancy: 30, ports: 8, levels: 1, primary: 8, feederFiber: 'FO-48', distributionFiber: 'FO-12', span: 'AS 80',
-    fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true,
+    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true,
 };
 const AUTO_DESIGN_STORED_KEYS = Object.keys(AUTO_DESIGN_DEFAULTS);
 
@@ -1226,7 +1231,10 @@ function renderAutoDesign() {
             <div class="map-tool-field"><label for="autoDesignFeeder">Alimentação (mín.)</label><select id="autoDesignFeeder"${start?.type === 'POP' ? '' : ' disabled title="Só quando parte de um POP"'}>${fiberOptions(p.feederFiber)}</select></div>
             <div class="map-tool-field"><label for="autoDesignDistribution">Distribuição (mín.)</label><select id="autoDesignDistribution">${fiberOptions(p.distributionFiber)}</select></div>
         </div>
-        <div class="map-tool-field"><label>Vão</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>
+        <div class="map-tool-field-row">
+            <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO (m)</label><input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO (em linha reta)"></div>
+            <div class="map-tool-field"><label>Vão</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>
+        </div>
         <details class="auto-design__more" id="autoDesignMore"${s.moreOpen ? ' open' : ''}>
             <summary>Mais opções</summary>
             <div class="map-tool-field-row">
@@ -1273,6 +1281,7 @@ function readAutoDesignForm() {
     p.distributionFiber = value('autoDesignDistribution') || p.distributionFiber;
     p.fiberSpare = number('autoDesignSpare', p.fiberSpare, 0, 200);
     p.maxFill = number('autoDesignFill', p.maxFill, 25, 100);
+    p.coverRadius = number('autoDesignRadius', getAutoDesignCoverRadius(p), AUTO_DESIGN_COVER_MIN, AUTO_DESIGN_COVER_MAX);
     p.reserveEvery = number('autoDesignReserve', p.reserveEvery, 0, 100000);
     p.ceoMax = number('autoDesignCeoMax', p.ceoMax, 0, 1000);
     const useHouses = document.getElementById('autoDesignUseHouses');
@@ -1495,7 +1504,7 @@ function drawAutoDesignPreview() {
         strokeColor: '#64748b', strokeOpacity: 0.8, strokeWeight: 1, fillColor: '#64748b', fillOpacity: 0.18,
     })));
     plan.ctos.forEach(cto => add(new google.maps.Circle({
-        map, center: cto.position, radius: AUTO_DESIGN_COVER_M, clickable: false, zIndex: 40,
+        map, center: cto.position, radius: plan.model.coverRadius, clickable: false, zIndex: 40,
         strokeColor: '#16a34a', strokeOpacity: 0.35, strokeWeight: 1, fillColor: '#16a34a', fillOpacity: 0.06,
     })));
     plan.cables.forEach(cable => add(new google.maps.Polyline({
@@ -1535,7 +1544,7 @@ const AUTO_DESIGN_ROLE_LABELS = { feeder: 'Alimentação', trunk: 'Entre CEOs', 
 function getAutoDesignWarnings(plan, params) {
     const st = plan.stats;
     const warnings = [];
-    if (st.uncoveredHouses > 0) warnings.push(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${AUTO_DESIGN_COVER_M} m de uma CTO.`);
+    if (st.uncoveredHouses > 0) warnings.push(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${plan.model.coverRadius} m de uma CTO (raio da CTO).`);
     if (st.overloaded > 0) warnings.push(`${st.overloaded} CTO(s) podem precisar de mais de ${st.usablePorts} portas${st.usablePorts < params.ports ? ' (ocupação máxima)' : ''}.`);
     if (st.noStreets) warnings.push('Não consegui ler as ruas da área agora: as caixas foram espalhadas pela área toda. Confira as que caíram fora das casas (mato, pasto) e tente gerar de novo mais tarde.');
     if (st.tooMany) warnings.push(`Área grande: ${st.straight} cabo(s) ficaram em linha reta (traçar tudo pelas ruas sobrecarregaria o servidor). Ajuste no mapa ou divida a área.`);
@@ -1588,7 +1597,7 @@ function renderAutoDesignPreviewPanel() {
         <p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || 'Arraste as caixas no mapa para mover; a rede, as fibras e o custo se refazem sozinhos.')}</p>
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
         ${warnings.map(w => `<div class="auto-design__warn">${esc(w)}</div>`).join('')}
-        <p class="map-tool-help">Tracejado = ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria.</p>`;
+        <p class="map-tool-help">Tracejado = ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
         <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>

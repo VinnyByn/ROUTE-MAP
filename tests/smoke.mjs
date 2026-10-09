@@ -2277,6 +2277,17 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     plan = autoDesign.result;
     out.exclude = { phase: autoDesign.phase, none: plan.ctos.every(c => !(c.position.lat() < a.lat() && c.position.lng() < b.lng())), listed: /trecho\(s\) sem casas/.test(document.getElementById('autoDesignBody').textContent) };
     await clearAutoDesignExclusions();
+    //Raio da CTO menor → mais caixas para cobrir a mesma área, e os círculos da prévia com o raio novo
+    const before150 = autoDesign.result.ctos.length;
+    document.querySelector('[data-auto-design="adjust"]').click();
+    const radiusInput = document.getElementById('autoDesignRadius');
+    out.radius = { field: !!radiusInput && radiusInput.value === '150' };
+    radiusInput.value = '80';
+    await generateAutoDesign();
+    out.radius.more = autoDesign.result.ctos.length > before150;
+    out.radius.circles = autoDesign.overlays.filter(o => o.get?.('radius') !== undefined).every(o => o.get('radius') === 80) && autoDesign.result.model.coverRadius === 80;
+    out.radius.kept = loadAutoDesignParams().coverRadius === 80;
+    autoDesign.params.coverRadius = 150;
     //2 níveis (CEO 1:8 + CTO 1:8), até 8 CTOs por CEO e reserva técnica a cada 300 m
     document.querySelector('[data-auto-design="adjust"]').click();
     Object.assign(autoDesign.params, { ports: 8, levels: 2, primary: 8, ceoMax: 8, reserveEvery: 300 });
@@ -2346,6 +2357,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(autoDesign2.compare.rows === 2 && autoDesign2.compare.current === 8 && autoDesign2.compare.fewer && autoDesign2.compare.table && autoDesign2.compare.used === 16,
     `pré-projeto: comparar 1:8 × 1:16 e usar o outro cenário (${JSON.stringify(autoDesign2.compare)})`);
   check(Object.values(autoDesign2.edit).every(Boolean), `pré-projeto: incluir, tirar e arrastar CTO na prévia refaz a rede (${JSON.stringify(autoDesign2.edit)})`);
+  check(Object.values(autoDesign2.radius).every(Boolean), `pré-projeto: raio da CTO no painel muda a quantidade de caixas e os círculos (${JSON.stringify(autoDesign2.radius)})`);
   check(autoDesign2.exclude.phase === 'preview' && autoDesign2.exclude.none && autoDesign2.exclude.listed, `pré-projeto: trecho sem casas fica sem caixa (${JSON.stringify(autoDesign2.exclude)})`);
   check(autoDesign2.levels.form2 && autoDesign2.levels.ceos === autoDesign2.levels.expected.ceos && autoDesign2.levels.ceos >= 2 && autoDesign2.levels.trunks
     && autoDesign2.levels.primaries === autoDesign2.levels.expected.pons && autoDesign2.levels.reserves === autoDesign2.levels.expected.reserves && autoDesign2.levels.reserves > 0
