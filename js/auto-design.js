@@ -8,12 +8,15 @@
 // e a lista de materiais é refeita. Depois de criado, "Desfazer pré-projeto" tira tudo de uma vez.
 // Depende de script.js, js/persistence.js, js/marker-panel.js, js/marker-icons.js, js/fusion.js
 // (buildFusionCableCard, buildFusionSplitterCard), js/catalog.js, js/bom.js, js/labor.js,
-// js/clients.js (fetchOsrmRoute) e js/cable-route-suggest.js (simplifyPathMeters).
+// js/clients.js (fetchOsrmRoute, reserva quando o OSRM de carro falha) e js/cable-route-suggest.js (simplifyPathMeters).
 
-//Servidores OSRM públicos (gratuitos, sem chave); o primeiro usa o perfil a pé (segue as ruas sem contramão)
+//Servidores OSRM públicos (gratuitos, sem chave). Primeiro o perfil de carro: só ruas de verdade, sem
+//vielas, escadarias e caminhos de pedestre que passam entre as casas (onde caixa e cabo não vão).
+//O perfil a pé fica por último, só para quando os de carro não responderem.
 const AUTO_DESIGN_OSRM_SERVERS = [
-    'https://routing.openstreetmap.de/routed-foot',
-    'https://router.project-osrm.org',
+    { base: 'https://routing.openstreetmap.de/routed-car', profile: 'driving' },
+    { base: 'https://router.project-osrm.org', profile: 'driving' },
+    { base: 'https://routing.openstreetmap.de/routed-foot', profile: 'foot' },
 ];
 const AUTO_DESIGN_SAMPLE_MAX = 400;  //Pontos da área consultados para achar as ruas
 const AUTO_DESIGN_SAMPLE_CHUNK = 80; //Pontos por consulta (cabe na tabela do OSRM público)
@@ -100,14 +103,14 @@ const isInAutoDesignArea = (xy, polyXY) => pointInPolygonXY(xy, polyXY) || distT
 // OSRM: consultas com vários pontos de uma vez
 // ---------------------------------------------------------------
 
-//service = 'table' | 'nearest'; points = [{ lat, lng }]. Devolve a resposta (code Ok) ou null.
+//service = 'table' | 'nearest' | 'route'; points = [{ lat, lng }]. Devolve a resposta (code Ok) ou null.
 async function fetchAutoDesignOsrm(service, points, query) {
     const coords = points.map(p => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
-    for (const server of AUTO_DESIGN_OSRM_SERVERS) {
+    for (const { base, profile } of AUTO_DESIGN_OSRM_SERVERS) {
         try {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 15000);
-            const response = await fetch(`${server}/${service}/v1/foot/${coords}?${query}`, { signal: controller.signal });
+            const response = await fetch(`${base}/${service}/v1/${profile}/${coords}?${query}`, { signal: controller.signal });
             clearTimeout(timer);
             if (!response.ok) continue;
             const data = await response.json();
@@ -831,6 +834,25 @@ function getAutoDesignPolePath(plan, from, to) {
     return [from.position, ...points, to.position];
 }
 
+//Rota pelas ruas entre duas caixas (perfil de carro: não corta por vielas entre as casas). Rua de mão única
+//pode dar uma volta: aí vale a rota no sentido contrário, se for mais curta (o cabo não tem sentido).
+async function fetchAutoDesignRoute(from, to) {
+    const spherical = google.maps.geometry.spherical;
+    const get = async (a, b) => {
+        const data = await fetchAutoDesignOsrm('route', [{ lat: a.lat(), lng: a.lng() }, { lat: b.lat(), lng: b.lng() }], 'overview=full&geometries=geojson');
+        const line = data?.routes?.[0]?.geometry?.coordinates;
+        return line?.length ? line.map(([lng, lat]) => new google.maps.LatLng(lat, lng)) : null;
+    };
+    let route = await get(from, to);
+    const direct = spherical.computeDistanceBetween(from, to);
+    if (!route || spherical.computeLength(route) > Math.max(direct * 1.5, direct + 150)) {
+        const back = await get(to, from);
+        if (back && (!route || spherical.computeLength(back) < spherical.computeLength(route))) route = back.reverse();
+    }
+    if (route) return route;
+    return typeof fetchOsrmRoute === 'function' ? fetchOsrmRoute(from, to) : null;
+}
+
 //Ponto de rua mais perto (OSRM nearest, gratuito); null se nenhum servidor responder
 async function fetchAutoDesignNearestStreet(position) {
     const data = await fetchAutoDesignOsrm('nearest', [{ lat: position.lat(), lng: position.lng() }], 'number=1');
@@ -886,7 +908,7 @@ async function routeAutoDesignCables(plan, isCurrent) {
         await runAutoDesignLimited(viaStreets, 3, async (cable) => {
             const from = cable.from.position, to = cable.to.position;
             let route = null;
-            try { route = typeof fetchOsrmRoute === 'function' ? await fetchOsrmRoute(from, to) : null; } catch (e) { route = null; }
+            try { route = await fetchAutoDesignRoute(from, to); } catch (e) { route = null; }
             if (!isCurrent()) return;
             const path = route?.length ? simplify([from, ...route, to]) : null;
             //Rota que dá uma volta enorme (rua sem saída, rio no meio) fica em linha reta para ajustar à mão

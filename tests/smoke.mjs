@@ -2078,15 +2078,19 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       { lat: LAT0, lng: LNG0 }, { lat: LAT0, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 } ] });
     const realFetch = window.fetch, realOsrm = window.fetchOsrmRoute;
     let osrmUp = true, tableCalls = 0, matrixCalls = 0;
+    const osrmUrls = [];
     //Ruas (com nome) a cada ~100 m só nos 70% da esquerda; à direita é mato (rua mais perto a 200 m)
     const STREET_LNG = LNG0 + W * 0.7, ROW = 0.0009;
     const rowLat = (lat) => LAT0 - Math.round((LAT0 - lat) / ROW) * ROW;
     window.fetch = async (url, opts) => {
-      const m = /\/(table|nearest)\/v1\/foot\/([^?]+)\?(.*)$/.exec(String(url));
+      const m = /\/(table|nearest|route)\/v1\/(?:foot|driving)\/([^?]+)\?(.*)$/.exec(String(url));
       if (!m) return realFetch(url, opts);
+      osrmUrls.push(String(url));
       if (!osrmUp) return new Response('down', { status: 503 });
       const pts = m[2].split(';').map(c => c.split(',').map(Number));
       const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      //Rota em "L" pelas ruas
+      if (m[1] === 'route') return json({ code: 'Ok', routes: [{ geometry: { coordinates: [pts[0], [pts[1][0], pts[0][1]], pts[1]] } }] });
       if (/annotations=distance/.test(m[3])) {
         matrixCalls++;
         const d = (a, b) => (Math.abs(a[0] - b[0]) * 111320 * Math.cos(LAT0 * Math.PI / 180) + Math.abs(a[1] - b[1]) * 110540);
@@ -2119,6 +2123,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       noStreets: autoDesign.result?.stats.noStreets && [...document.querySelectorAll('#autoDesignBox .auto-design__warn')].some(w => /espalhadas pela área toda/.test(w.textContent)) };
     document.querySelector('[data-auto-design="adjust"]').click();
     osrmUp = true;
+    osrmUrls.length = 0;
     await generateAutoDesign();
     const plan = autoDesign.result;
     const preview = {
@@ -2129,6 +2134,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       overlays: autoDesign.overlays.length > 0,
       coverage: plan.stats.coverage >= 0.95,
       onStreets: plan.onStreets && plan.byRoad && !plan.stats.noStreets && tableCalls > 0 && matrixCalls === 1,
+      //Ruas de carro primeiro (sem vielas entre as casas)
+      carProfile: osrmUrls.length > 0 && osrmUrls.every(u => /routed-car\/(table|nearest|route)\/v1\/driving\//.test(u)) && osrmUrls.some(u => /\/route\/v1\//.test(u)),
       noForest: plan.ctos.every(c => c.position.lng() <= STREET_LNG + 1e-9),
       onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
@@ -2191,7 +2198,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `pré-projeto automático: sem servidor de rotas, gera em linha reta e avisa (${JSON.stringify(autoDesignOut.down)})`);
   check(autoDesignOut.menu && autoDesignOut.opened && autoDesignOut.form && /60 clientes → 8 CTOs com splitter 1:8/.test(autoDesignOut.calc)
     && autoDesignOut.preview.phase === 'preview' && autoDesignOut.preview.enough && autoDesignOut.preview.inside && autoDesignOut.preview.overlays
-    && autoDesignOut.preview.coverage && autoDesignOut.preview.onStreets && autoDesignOut.preview.noForest && autoDesignOut.preview.onRows && autoDesignOut.preview.routed,
+    && autoDesignOut.preview.coverage && autoDesignOut.preview.onStreets && autoDesignOut.preview.carProfile && autoDesignOut.preview.noForest && autoDesignOut.preview.onRows && autoDesignOut.preview.routed,
     `pré-projeto automático: casas, penetração e splitagem → CTOs só nas ruas (nada no mato), ligadas pela rua (${JSON.stringify(autoDesignOut.preview)} ${autoDesignOut.calc})`);
   check(autoDesignOut.closed && autoDesignOut.folder === 'Pré-projeto Bairro AD' && autoDesignOut.ceo === 'CEO-01:Nova'
     && autoDesignOut.ctos === autoDesignOut.preview.ctos && autoDesignOut.cables === autoDesignOut.ctos + 1 && autoDesignOut.splitters
@@ -2219,10 +2226,11 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const realFetch = window.fetch, realOsrm = window.fetchOsrmRoute;
     const queries = [];
     window.fetch = async (url, opts) => {
-      const m = /\/(table|nearest)\/v1\/foot\/([^?]+)\?(.*)$/.exec(String(url));
+      const m = /\/(table|nearest|route)\/v1\/(?:foot|driving)\/([^?]+)\?(.*)$/.exec(String(url));
       if (!m) return realFetch(url, opts);
       const pts = m[2].split(';').map(c => c.split(',').map(Number));
       const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (m[1] === 'route') return json({ code: 'Ok', routes: [{ geometry: { coordinates: [pts[0], [pts[1][0], pts[0][1]], pts[1]] } }] });
       if (/annotations=distance/.test(m[3])) {
         queries.push(m[3]);
         const d = (a, b) => (Math.abs(a[0] - b[0]) * 111320 * Math.cos(LAT0 * Math.PI / 180) + Math.abs(a[1] - b[1]) * 110540);
@@ -2347,6 +2355,25 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `pré-projeto: caixas nos postes e cabos de poste em poste (${JSON.stringify(autoDesign2.poles)})`);
   check(autoDesign2.houses.value === '150' && autoDesign2.houses.disabled && autoDesign2.houses.option && autoDesign2.houses.kind === 'houses' && autoDesign2.houses.casa === 0 && autoDesign2.houses.report === 150,
     `pré-projeto: usa as casas marcadas no mapa (${JSON.stringify(autoDesign2.houses)})`);
+  //Mão única: a rota de ida dá a volta no quarteirão, a de volta é direta → o cabo usa a mais curta
+  const oneWay = await sp.evaluate(async () => {
+    const realFetch = window.fetch;
+    const urls = [];
+    window.fetch = async (url) => {
+      urls.push(String(url));
+      const m = /\/route\/v1\/driving\/([^?]+)/.exec(String(url));
+      const pts = m[1].split(';').map(c => c.split(',').map(Number));
+      const detour = pts[0][0] < pts[1][0]
+        ? [pts[0], [pts[0][0], pts[0][1] - 0.01], [pts[1][0], pts[1][1] - 0.01], pts[1]]
+        : [pts[0], pts[1]];
+      return new Response(JSON.stringify({ code: 'Ok', routes: [{ geometry: { coordinates: detour } }] }), { status: 200 });
+    };
+    const from = new google.maps.LatLng(-38, -44), to = new google.maps.LatLng(-38, -43.995);
+    const route = await fetchAutoDesignRoute(from, to);
+    window.fetch = realFetch;
+    return { points: route.length, starts: route[0].lng() === -44, calls: urls.length };
+  });
+  check(oneWay.points === 2 && oneWay.starts && oneWay.calls === 2, `pré-projeto: rua de mão única usa a rota mais curta no sentido contrário (${JSON.stringify(oneWay)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
