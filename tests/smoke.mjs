@@ -2090,7 +2090,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       if (/annotations=distance/.test(m[3])) {
         matrixCalls++;
         const d = (a, b) => (Math.abs(a[0] - b[0]) * 111320 * Math.cos(LAT0 * Math.PI / 180) + Math.abs(a[1] - b[1]) * 110540);
-        return json({ code: 'Ok', distances: pts.map(a => pts.map(b => d(a, b))) });
+        const src = /sources=([\d;]+)/.exec(m[3]);
+        const rows = src ? src[1].split(';').map(i => pts[+i]) : pts;
+        return json({ code: 'Ok', distances: rows.map(a => pts.map(b => d(a, b))) });
       }
       tableCalls++;
       const destinations = pts.map(([lng, lat]) => (lng <= STREET_LNG
@@ -2131,6 +2133,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
     };
+    const previewText = document.getElementById('autoDesignBody').textContent;
     const beforeMarkers = markers.length, beforeCables = savedCables.length;
     document.querySelector('[data-auto-design="accept"]').click();
     const folder = document.querySelector('#projAD > .folder-wrapper > .folder-title');
@@ -2138,9 +2141,26 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const byUid = new Map(markers.map(m => [m.uid, m]));
     const ctoMarkers = newMarkers.filter(m => m.type === 'CTO');
     const report = computeProjectReportData('projAD');
+    //Planos de fusão: cada fibra do cabo de alimentação chega numa CTO (fusões na CEO e passagens nas CTOs)
+    const graph = buildFiberGraph();
+    const feederCable = newCables.find(c => byUid.get(c.startAnchorUid)?.uid === 'mk_ad_pop');
+    const reached = new Set();
+    let oneEach = true;
+    for (let f = 1; f <= ctoMarkers.length; f++) {
+      const t = traceFiberRoute(graph, feederCable, f);
+      if (t.ctos.length !== 1) oneEach = false;
+      t.ctos.forEach(c => reached.add(c.box.uid));
+    }
+    const ceoMarker = newMarkers.find(m => m.type === 'CEO');
+    const ceoPlan = readFusionPlan(ceoMarker);
+    const ctoInputs = ctoMarkers.every(m => { const p = readFusionPlan(m); return p.cables.length >= 1 && p.connectedIds.has(p.splitters[0].inputIds[0]); });
+    const bomTotal = summarizeBomCosts(projectBoms.projAD).grandTotal;
     const out = {
       menu, opened, form, calc, preview, down,
-      closed: document.getElementById('autoDesignBox').classList.contains('hidden') && !autoDesign,
+      closed: autoDesign?.phase === 'done' && /Desfazer/.test(document.getElementById('autoDesignActions').textContent),
+      fusion: { oneEach, all: reached.size === ctoMarkers.length, ceoLines: ceoPlan.lines.length, trays: ceoPlan.trayQuantity, ctoInputs },
+      cost: { estimate: Math.round(plan.cost.materials), bom: Math.round(bomTotal), perPort: plan.cost.perPort > 0, labor: plan.cost.labor > 0,
+        shown: /por porta/.test(previewText) },
       folder: folder?.dataset.folderName,
       ceo: newMarkers.filter(m => m.type === 'CEO').map(m => `${m.name}:${m.ceoStatus}`).join(','),
       ctos: ctoMarkers.filter(m => m.ctoStatus === 'Nova').length,
@@ -2155,9 +2175,13 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       names: newCables.every(c => c.name === `${getFiberType(c.type)}-${byUid.get(c.endAnchorUid).name}` && c.status === 'Novo' && c.width === 4),
       inFolder: newMarkers.concat(newCables).every(i => i.folderId === folder?.closest('.folder-wrapper')?.querySelector('.subfolders')?.id),
     };
+    //Desfazer: some a pasta e tudo o que foi criado nela
+    document.querySelector('[data-auto-design="undo"]').click();
+    out.undo = { markers: markers.length === beforeMarkers, cables: savedCables.length === beforeCables, folder: !document.querySelector('#projAD > .folder-wrapper'), phase: autoDesign?.phase };
+    closeAutoDesign();
     window.fetch = realFetch;
     window.fetchOsrmRoute = realOsrm;
-    newCables.forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    newCables.forEach(c => { c.polyline?.setMap(null); if (savedCables.includes(c)) savedCables.splice(savedCables.indexOf(c), 1); });
     markers.filter(m => getItemProjectId(m) === 'projAD').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
     polygon.polygonObject.setMap(null); savedPolygons.splice(savedPolygons.indexOf(polygon), 1);
     document.querySelector('.folder-title[data-folder-id="projAD"]').closest('.folder').remove();
@@ -2174,6 +2198,155 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && autoDesignOut.casa === '200' && autoDesignOut.report.ports === autoDesignOut.ctos * 8 && autoDesignOut.report.houses === 200
     && autoDesignOut.anchored && autoDesignOut.everyCtoFed && autoDesignOut.feeder === 'FO-48-CEO-01|Cabo AS 80 FO-48' && autoDesignOut.names && autoDesignOut.inFolder,
     `pré-projeto automático: aceitar cria pasta, CEO, CTOs com splitter, casas e cabos ligados caixa a caixa (${JSON.stringify(autoDesignOut)})`);
+  check(autoDesignOut.fusion.oneEach && autoDesignOut.fusion.all && autoDesignOut.fusion.ceoLines === autoDesignOut.ctos && autoDesignOut.fusion.trays === Math.ceil(autoDesignOut.ctos / 12) && autoDesignOut.fusion.ctoInputs,
+    `pré-projeto automático: planos de fusão prontos (cada fibra da alimentação chega numa CTO) (${JSON.stringify(autoDesignOut.fusion)})`);
+  check(autoDesignOut.cost.estimate > 0 && Math.abs(autoDesignOut.cost.estimate - autoDesignOut.cost.bom) <= Math.max(5, autoDesignOut.cost.bom * 0.01) && autoDesignOut.cost.perPort && autoDesignOut.cost.labor && autoDesignOut.cost.shown,
+    `pré-projeto automático: custo estimado da prévia bate com a lista de materiais (${JSON.stringify(autoDesignOut.cost)})`);
+  check(autoDesignOut.undo.markers && autoDesignOut.undo.cables && autoDesignOut.undo.folder && autoDesignOut.undo.phase === 'form',
+    `pré-projeto automático: desfazer tira tudo o que foi criado (${JSON.stringify(autoDesignOut.undo)})`);
+
+  //Pré-projeto: comparar 1:8 × 1:16, editar a prévia, trecho sem casas, 2 níveis com várias CEOs e reservas, postes e casas do mapa
+  const autoDesign2 = await sp.evaluate(async () => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projAE', name: 'Projeto AE', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projAE');
+    const LAT0 = -37, LNG0 = -44, H = 0.0045, W = 0.0072, ROW = 0.0009, STREET_LNG = LNG0 + W * 0.7;
+    const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
+    rebuildMarker({ uid: 'mk_ae_pop', folderId: 'projAE', type: 'POP', name: 'POP-AE', color: '#7c3aed', position: { lat: LAT0 + 0.006, lng: LNG0 } });
+    rebuildPolygon({ uid: 'pg_ae', folderId: 'projAE', name: 'Bairro AE', color: '#2dd4bf', opacity: 0.2, path: [
+      { lat: LAT0, lng: LNG0 }, { lat: LAT0, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 } ] });
+    const rowLat = (lat) => LAT0 - Math.round((LAT0 - lat) / ROW) * ROW;
+    const realFetch = window.fetch, realOsrm = window.fetchOsrmRoute;
+    const queries = [];
+    window.fetch = async (url, opts) => {
+      const m = /\/(table|nearest)\/v1\/foot\/([^?]+)\?(.*)$/.exec(String(url));
+      if (!m) return realFetch(url, opts);
+      const pts = m[2].split(';').map(c => c.split(',').map(Number));
+      const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (/annotations=distance/.test(m[3])) {
+        queries.push(m[3]);
+        const d = (a, b) => (Math.abs(a[0] - b[0]) * 111320 * Math.cos(LAT0 * Math.PI / 180) + Math.abs(a[1] - b[1]) * 110540);
+        const src = /sources=([\d;]+)/.exec(m[3]);
+        return json({ code: 'Ok', distances: (src ? src[1].split(';').map(i => pts[+i]) : pts).map(a => pts.map(b => d(a, b))) });
+      }
+      const destinations = pts.map(([lng, lat]) => (lng <= STREET_LNG
+        ? { location: [lng, rowLat(lat)], name: 'Rua', distance: Math.abs(lat - rowLat(lat)) * 110540 }
+        : { location: [lng, lat], name: '', distance: 200 }));
+      return json({ code: 'Ok', destinations, sources: destinations.slice(0, 1) });
+    };
+    window.fetchOsrmRoute = async (from, to) => [from, LL(from.lat(), to.lng()), to];
+    const polygon = savedPolygons.find(p => p.uid === 'pg_ae');
+    const onRow = (p) => Math.abs(p.lat() - rowLat(p.lat())) < 1e-9;
+    const out = {};
+    openAutoDesign(polygon);
+    document.getElementById('autoDesignHouses').value = '200';
+    await generateAutoDesign();
+    //Comparar: os dois cenários lado a lado; "Usar 1:16" refaz com a outra splitagem
+    const n8 = autoDesign.result.ctos.length;
+    await compareAutoDesign();
+    const rows = autoDesign.compare.rows;
+    out.compare = { rows: rows.length, current: rows.find(r => r.current)?.ports, fewer: rows.find(r => r.ports === 16)?.plan.ctos.length < n8,
+      table: /Por porta/.test(document.getElementById('autoDesignBody').textContent) && !!document.querySelector('[data-auto-design="use-ports"]') };
+    document.querySelector('[data-auto-design="use-ports"]').click();
+    await new Promise(r => { const t = setInterval(() => { if (autoDesign.phase === 'preview') { clearInterval(t); r(); } }, 20); });
+    out.compare.used = autoDesign.result.params.ports;
+    //Editar a prévia: incluir, tirar e arrastar CTO (a rede se refaz; só a linha nova vai para o OSRM)
+    let plan = autoDesign.result;
+    const n = plan.ctos.length;
+    queries.length = 0;
+    await addAutoDesignCto(LL(LAT0 - ROW * 2 + 0.0001, LNG0 + 0.0011));
+    const added = autoDesign.result.ctos.length;
+    const partial = queries.some(q => /sources=/.test(q));
+    await removeAutoDesignCto(autoDesign.result.ctos[0]);
+    const target = autoDesign.result.ctos[1];
+    await moveAutoDesignBox(target, LL(LAT0 - ROW * 3 - 0.0002, LNG0 + 0.0025));
+    plan = autoDesign.result;
+    out.edit = { added: added === n + 1, removed: plan.ctos.length === n, partial, snapped: onRow(target.position),
+      names: plan.ctos.every((c, i) => c.name === `CTO-${String(i + 1).padStart(2, '0')}`), fed: plan.ctos.every(c => c.in && plan.cables.includes(c.in)) };
+    //Trecho sem casas: nenhuma caixa dentro dele
+    const a = LL(LAT0 - ROW * 1.5, LNG0 - 0.0001), b = LL(LAT0 - H - 0.0001, LNG0 + W * 0.3);
+    await addAutoDesignExclusion(a, b);
+    plan = autoDesign.result;
+    out.exclude = { phase: autoDesign.phase, none: plan.ctos.every(c => !(c.position.lat() < a.lat() && c.position.lng() < b.lng())), listed: /trecho\(s\) sem casas/.test(document.getElementById('autoDesignBody').textContent) };
+    await clearAutoDesignExclusions();
+    //2 níveis (CEO 1:8 + CTO 1:8), até 8 CTOs por CEO e reserva técnica a cada 300 m
+    document.querySelector('[data-auto-design="adjust"]').click();
+    Object.assign(autoDesign.params, { ports: 8, levels: 2, primary: 8, ceoMax: 8, reserveEvery: 300 });
+    renderAutoDesign();
+    const form2 = !!document.getElementById('autoDesignPrimary') && !!document.getElementById('autoDesignCeoMax') && !!document.getElementById('autoDesignReserve');
+    await generateAutoDesign();
+    plan = autoDesign.result;
+    const before = { markers: markers.length, cables: savedCables.length };
+    const expected = { ceos: plan.ceos.filter(c => c.isNew).length, ctos: plan.ctos.length, reserves: plan.reserves.length, pons: plan.stats.pons };
+    document.querySelector('[data-auto-design="accept"]').click();
+    const created = markers.slice(before.markers), cables = savedCables.slice(before.cables);
+    const ceoMarkers = created.filter(m => m.type === 'CEO'), ctoMarkers = created.filter(m => m.type === 'CTO');
+    const graph = buildFiberGraph();
+    const feeder = cables.find(c => c.startAnchorUid === 'mk_ae_pop');
+    const reached = new Set();
+    for (let f = 1; f <= expected.pons; f++) traceFiberRoute(graph, feeder, f).ctos.forEach(c => reached.add(c.box.uid));
+    out.levels = {
+      form2, expected,
+      ceos: ceoMarkers.length, trunks: cables.filter(c => markers.find(m => m.uid === c.startAnchorUid)?.type === 'CEO' && markers.find(m => m.uid === c.endAnchorUid)?.type === 'CEO').length > 0
+        || cables.some(c => /CEO/.test(c.name) && !/^FO-\d+-CEO-01$/.test(c.name)),
+      primaries: ceoMarkers.reduce((s, m) => s + readFusionPlan(m).splitters.filter(sp => !sp.atendimento && /^1:8$/.test(sp.label)).length, 0),
+      reserves: created.filter(m => m.type === 'RESERVA').length,
+      reached: reached.size, ctos: ctoMarkers.length,
+      bomSplitter: Object.values(projectBoms.projAE || {}).some(i => /SPLITTER/i.test(i.materialName) && !/APC/i.test(i.materialName)),
+    };
+    document.querySelector('[data-auto-design="undo"]').click();
+    closeAutoDesign();
+    //Postes da área: caixas nos postes e cabos de poste em poste
+    const poles = [];
+    for (let r = 0; r <= 5; r++) for (let x = LNG0 + 0.0002; x <= STREET_LNG; x += 0.0004) poles.push([LAT0 - r * ROW, x]);
+    for (let y = LAT0; y >= LAT0 - H; y -= 0.0003) poles.push([y, LNG0 + 0.0026]);
+    poles.forEach(([lat, lng], i) => rebuildMarker({ uid: `mk_ae_p${i}`, folderId: 'projAE', type: 'POSTE', name: `P${i}`, color: '#555', position: { lat, lng } }));
+    const poleKeys = new Set(poles.map(([lat, lng]) => `${lat.toFixed(6)},${lng.toFixed(6)}`));
+    const isPole = (p) => poleKeys.has(`${p.lat().toFixed(6)},${p.lng().toFixed(6)}`);
+    openAutoDesign(polygon);
+    Object.assign(autoDesign.params, { levels: 1, ceoMax: 16, reserveEvery: 0, usePoles: true, useHouses: true });
+    renderAutoDesign();
+    const poleOption = /postes da área/.test(document.getElementById('autoDesignBody').textContent);
+    document.getElementById('autoDesignHouses').value = '200';
+    await generateAutoDesign();
+    plan = autoDesign.result;
+    out.poles = { option: poleOption, onPoles: plan.onPoles, boxes: plan.ctos.every(c => isPole(c.position)) && isPole(plan.ceos[0].position),
+      paths: plan.cables.filter(c => c.role !== 'feeder').every(c => c.path.every(isPole)), offPoles: plan.stats.offPoles };
+    closeAutoDesign();
+    markers.filter(m => m.type === 'POSTE' && getItemProjectId(m) === 'projAE').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    //Casas marcadas no mapa: a quantidade vem delas e não cria o marcador de casas
+    for (let i = 0; i < 30; i++) rebuildMarker({ uid: `mk_ae_c${i}`, folderId: 'projAE', type: 'CASA', name: '5', color: '#fff', position: { lat: LAT0 - (i % 5) * ROW - 0.0001, lng: LNG0 + 0.0003 + Math.floor(i / 5) * 0.0007 } });
+    openAutoDesign(polygon);
+    const housesInput = document.getElementById('autoDesignHouses');
+    out.houses = { value: housesInput.value, disabled: housesInput.disabled, option: /casas marcadas no mapa/.test(document.getElementById('autoDesignBody').textContent) };
+    await generateAutoDesign();
+    out.houses.kind = autoDesign.result.model.demandKind;
+    const beforeHouses = markers.length;
+    document.querySelector('[data-auto-design="accept"]').click();
+    out.houses.casa = markers.slice(beforeHouses).filter(m => m.type === 'CASA').length;
+    out.houses.report = computeProjectReportData('projAE').totalCasas;
+    document.querySelector('[data-auto-design="undo"]').click();
+    closeAutoDesign();
+    window.fetch = realFetch;
+    window.fetchOsrmRoute = realOsrm;
+    markers.filter(m => getItemProjectId(m) === 'projAE').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    savedCables.filter(c => getItemProjectId(c) === 'projAE').forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    polygon.polygonObject.setMap(null); savedPolygons.splice(savedPolygons.indexOf(polygon), 1);
+    document.querySelector('.folder-title[data-folder-id="projAE"]').closest('.folder').remove();
+    return out;
+  });
+  check(autoDesign2.compare.rows === 2 && autoDesign2.compare.current === 8 && autoDesign2.compare.fewer && autoDesign2.compare.table && autoDesign2.compare.used === 16,
+    `pré-projeto: comparar 1:8 × 1:16 e usar o outro cenário (${JSON.stringify(autoDesign2.compare)})`);
+  check(Object.values(autoDesign2.edit).every(Boolean), `pré-projeto: incluir, tirar e arrastar CTO na prévia refaz a rede (${JSON.stringify(autoDesign2.edit)})`);
+  check(autoDesign2.exclude.phase === 'preview' && autoDesign2.exclude.none && autoDesign2.exclude.listed, `pré-projeto: trecho sem casas fica sem caixa (${JSON.stringify(autoDesign2.exclude)})`);
+  check(autoDesign2.levels.form2 && autoDesign2.levels.ceos === autoDesign2.levels.expected.ceos && autoDesign2.levels.ceos >= 2 && autoDesign2.levels.trunks
+    && autoDesign2.levels.primaries === autoDesign2.levels.expected.pons && autoDesign2.levels.reserves === autoDesign2.levels.expected.reserves && autoDesign2.levels.reserves > 0
+    && autoDesign2.levels.reached === autoDesign2.levels.ctos && autoDesign2.levels.bomSplitter,
+    `pré-projeto: 2 níveis, várias CEOs e reservas técnicas, com as fibras chegando em todas as CTOs (${JSON.stringify(autoDesign2.levels)})`);
+  check(autoDesign2.poles.option && autoDesign2.poles.onPoles && autoDesign2.poles.boxes && autoDesign2.poles.paths && autoDesign2.poles.offPoles === 0,
+    `pré-projeto: caixas nos postes e cabos de poste em poste (${JSON.stringify(autoDesign2.poles)})`);
+  check(autoDesign2.houses.value === '150' && autoDesign2.houses.disabled && autoDesign2.houses.option && autoDesign2.houses.kind === 'houses' && autoDesign2.houses.casa === 0 && autoDesign2.houses.report === 150,
+    `pré-projeto: usa as casas marcadas no mapa (${JSON.stringify(autoDesign2.houses)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
