@@ -2103,7 +2103,7 @@ html[data-theme="dark"] .mh-signal.is-erro, html[data-theme="dark"] .fx-port__si
 
 /* Seletores segmentados (situação, vão, abas, splitter): a opção escolhida em destaque, nos dois temas */
 html { --seg-active-bg: #1d7290; --seg-active-fg: #ffffff; }
-html[data-theme="dark"] { --seg-active-bg: #2a8cab; }
+html[data-theme="dark"] { --seg-active-bg: #1a9150; }
 .floating-box.map-tool-box .map-tool-segmented button.is-active,
 .cable-route-box .route-modes button.is-active,
 .modal-content .fx-seg button.is-active {
