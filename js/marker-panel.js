@@ -597,6 +597,18 @@ function startPlacingMarker() {
 // Reset e mover posição
 // ---------------------------------------------------------------
 
+//Marcador aberto no painel teve nome, descrição, situação ou posição alterados e ainda não salvos?
+function isMarkerPanelDirty() {
+    const info = editingMarkerInfo;
+    if (!info || !isMarkerPanelOpen()) return false;
+    const form = readMarkerPanelForm();
+    const pos = info.marker?.getPosition?.();
+    const moved = !!(markerEditOriginPosition && pos && !pos.equals(markerEditOriginPosition));
+    const statusChanged = !!getMarkerTypeMeta(info.type).statuses && form.status !== (getMarkerInfrastructureStatus(info) || 'Nova');
+    const nameChanged = info.type === 'CASA' ? form.houses !== String(info.name || '') : form.name !== (info.name || '');
+    return moved || statusChanged || nameChanged || (info.type !== 'CASA' && (form.description || '') !== (info.description || ''));
+}
+
 function resetMarkerModal({ discardPositionChanges = true } = {}) {
     hideMarkerPanel();
     document.getElementById('ctoClientsPanel')?.classList.add('hidden');
