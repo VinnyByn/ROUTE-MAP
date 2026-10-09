@@ -1849,6 +1849,65 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && ctoRename.pasted === 'FO-12-CTO-RN2|mk_rncto',
     `renomear a CTO pelo painel renomeia o cabo (${JSON.stringify(ctoRename)})`);
 
+  //Marcação contínua: vários marcadores/clientes seguidos, sem reabrir o painel
+  const continuous = await sp.evaluate(() => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projCM', name: 'Projeto CM', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projCM');
+    //Mapa falso não guarda listeners: captura o clique de posicionar
+    const realAddListener = map.addListener;
+    let onMapClick = null;
+    map.addListener = (name, fn) => { if (name === 'click') onMapClick = fn; return { remove() {} }; };
+    const click = (lat, lng) => onMapClick?.({ latLng: new google.maps.LatLng(lat, lng) });
+    //Sem rota de drop pela rua (OSRM) aqui: não vaza requisições para os testes seguintes
+    const realStreet = window.requestStreetDropRoute;
+    window.requestStreetDropRoute = () => {};
+    const inProject = (type) => markers.filter(m => m.folderId === 'projCM' && m.type === type);
+    openMarkerCreatePanel('CTO');
+    const offByDefault = !document.getElementById('markerContinuousGroup').classList.contains('hidden') && !document.getElementById('markerContinuousCheckbox').checked;
+    document.getElementById('markerContinuousCheckbox').checked = true;
+    document.getElementById('confirmMarker').click();
+    click(-30, -44); click(-30, -44.001); click(-30, -44.002);
+    const out = { offByDefault, adding: isAddingMarker, bar: !document.getElementById('continuousMarkerBar').classList.contains('hidden') };
+    out.ctos = inProject('CTO').map(m => m.name).join();
+    out.barText = document.getElementById('continuousMarkerCount').textContent;
+    document.getElementById('continuousMarkerUndo').click();
+    out.afterUndo = inProject('CTO').map(m => m.name).join() + '|' + selectedMarkerData.name;
+    document.getElementById('continuousMarkerDone').click();
+    out.done = !isAddingMarker && document.getElementById('continuousMarkerBar').classList.contains('hidden');
+    openMarkerCreatePanel('CTO');
+    out.remembered = document.getElementById('markerContinuousCheckbox').checked && document.getElementById('markerName').value === 'CTO-03';
+    resetMarkerModal();
+    //Clientes: mesma CTO escolhida, porta seguinte; dados de cada cliente não se repetem
+    openClientModal(null, 'residencial');
+    out.clientOption = !document.getElementById('clientContinuousGroup').classList.contains('hidden');
+    document.getElementById('clientContinuousCheckbox').checked = true;
+    document.getElementById('clientName').value = 'Cliente 1';
+    document.getElementById('clientPhone').value = '3199999';
+    const ctoUid = inProject('CTO')[0].uid;
+    document.getElementById('clientCto').value = ctoUid;
+    document.getElementById('clientCto').dispatchEvent(new Event('change'));
+    document.getElementById('saveClientButton').click();
+    click(-30.001, -44); click(-30.001, -44.001);
+    handleEscapeKey(new KeyboardEvent('keydown', { key: 'Escape' }));
+    const clients = inProject('CLIENTE');
+    out.clients = clients.map(c => `${c.name}:${c.client.ctoUid === ctoUid ? 'cto' : '-'}${c.client.ctoPort}:${c.client.phone || ''}`).join();
+    out.ended = !isAddingMarker;
+    openMarkerEditor(inProject('CTO')[0]);
+    out.hiddenOnEdit = document.getElementById('markerContinuousGroup').classList.contains('hidden');
+    resetMarkerModal();
+    map.addListener = realAddListener;
+    window.requestStreetDropRoute = realStreet;
+    markers.filter(m => m.folderId === 'projCM').forEach(m => { m.marker?.setMap(null); m.dropLine?.setMap?.(null); markers.splice(markers.indexOf(m), 1); });
+    document.querySelector('.folder-title[data-folder-id="projCM"]').closest('.folder').remove();
+    refreshClientDrops();
+    return out;
+  });
+  check(continuous.offByDefault && continuous.adding && continuous.bar && continuous.ctos === 'CTO-01,CTO-02,CTO-03' && continuous.barText === 'CTO: 3 no mapa'
+    && continuous.afterUndo === 'CTO-01,CTO-02|CTO-03' && continuous.done && continuous.remembered && continuous.clientOption
+    && continuous.clients === 'Cliente 1:cto1:3199999,Cliente 2:cto2:' && continuous.ended && continuous.hiddenOnEdit,
+    `marcação contínua cria vários seguidos com nome em sequência (${JSON.stringify(continuous)})`);
+
   //Trecho tubulado, aba Aéreo × duto: trechos aéreos e tubulados do cabo, no mapa e no painel
   const launch = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');

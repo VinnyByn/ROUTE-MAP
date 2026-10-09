@@ -2218,3 +2218,7 @@ html[data-theme="dark"] { --seg-active-bg: #1a9150; }
 .auto-design__compare th[scope="row"] { text-align: left; font-weight: 500; color: var(--color-text-muted); }
 .auto-design__compare small { font-weight: 400; color: var(--color-text-muted); }
 .auto-design__compare td.is-best { color: #16a34a; font-weight: 700; }
+/* Marcação contínua de marcadores/clientes */
+#clientContinuousGroup { margin: 4px 0 10px; }
+.continuous-marker-bar { border-color: rgba(34,197,94,.55); }
+.continuous-marker-bar button:disabled { opacity: 0.45; cursor: default; }

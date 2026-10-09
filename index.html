@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261019a" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261020a" />
     <link rel="stylesheet" href="ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -1198,6 +1198,9 @@
           <div class="cto-port-grid" id="ctoPortGrid"></div>
           <ul id="ctoClientsList" class="cto-clients-list"></ul>
         </div>
+        <div class="marker-panel__chips hidden" id="markerContinuousGroup">
+          <label class="map-tool-chip"><input type="checkbox" id="markerContinuousCheckbox" /><span class="chip-text"><strong>Marcar vários seguidos</strong><small>Cada clique no mapa cria um, com o nome seguinte (CTO-01, CTO-02…). Esc encerra.</small></span><span class="chip-switch" aria-hidden="true"></span></label>
+        </div>
         <p class="map-tool-help" id="markerPanelHelp"></p>
       </div>
       <div class="map-tool-box__actions">
@@ -1937,6 +1940,9 @@
             <textarea id="clientNotes" rows="2" maxlength="1000"></textarea>
           </div>
 
+          <div class="marker-panel__chips" id="clientContinuousGroup">
+            <label class="map-tool-chip"><input type="checkbox" id="clientContinuousCheckbox" /><span class="chip-text"><strong>Marcar vários seguidos</strong><small>Cada clique no mapa cria um cliente igual, com o nome seguinte (Cliente 1, Cliente 2…). Esc encerra.</small></span><span class="chip-switch" aria-hidden="true"></span></label>
+          </div>
           <p class="client-form__error" id="clientFormError" role="alert" hidden></p>
           <div class="modal-footer client-modal__footer">
             <div class="client-modal__footer-left">
@@ -2513,6 +2519,11 @@
       </li>
     </template>
 
+    <div id="continuousMarkerBar" class="map-selection-bar continuous-marker-bar hidden" role="toolbar" aria-label="Marcação contínua">
+      <div class="map-selection-bar__info"><strong id="continuousMarkerCount"></strong><small id="continuousMarkerNext"></small></div>
+      <button type="button" id="continuousMarkerUndo" title="Remove o último marcador desta marcação">Desfazer último</button>
+      <button type="button" id="continuousMarkerDone" title="Encerrar (Esc)">Concluir</button>
+    </div>
     <div id="mapSelectionBar" class="map-selection-bar hidden" role="toolbar" aria-label="Itens selecionados">
       <div class="map-selection-bar__info"><strong id="mapSelectionCount"></strong><small id="mapSelectionKinds"></small></div>
       <select id="mapSelectionStatus" data-sel-edit title="Situação">
@@ -2828,11 +2839,11 @@
   <script src="js/sidebar.js?v=20261018a" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261007b" defer></script>
-  <script src="js/marker-panel.js?v=20261014h" defer></script>
+  <script src="js/marker-panel.js?v=20261020a" defer></script>
   <script src="js/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/fusion.js?v=20261014e" defer></script>
   <script src="js/account.js?v=20261005a" defer></script>
-  <script src="js/clients.js?v=20261013e" defer></script>
+  <script src="js/clients.js?v=20261020a" defer></script>
   <script src="js/optical-budget.js?v=20261010a" defer></script>
   <script src="js/project-check.js?v=20261007m" defer></script>
   <script src="js/conduit.js?v=20261013k" defer></script>

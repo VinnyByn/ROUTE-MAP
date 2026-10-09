@@ -136,6 +136,8 @@ function configureMarkerPanel(type, mode) {
     toggleMarkerPanelGroup('markerPositionRow', isEdit);
     toggleMarkerPanelGroup('deleteMarkerButton', isEdit);
     toggleMarkerPanelGroup('editPositionButton', isEdit);
+    toggleMarkerPanelGroup('markerContinuousGroup', !isEdit && !isKmlAdjust);
+    if (!isEdit) document.getElementById('markerContinuousCheckbox').checked = readContinuousMarkerPreference(type);
     document.querySelector('#labelColorGroup label').textContent = isCasa ? 'Cor do número' : 'Cor do nome';
     document.querySelector('#colorGroup label').textContent = isCasa ? 'Cor do balão' : 'Cor';
 
@@ -543,14 +545,16 @@ function handleMarkerPanelConfirm() {
     if (type === 'CEO') selectedMarkerData.ceoStatus = form.status;
     if (type === 'CORDOALHA') selectedMarkerData.cordoalhaStatus = form.status;
     if (type === 'RESERVA') selectedMarkerData.reservaStatus = form.status;
-    startPlacingMarker();
+    const continuous = !adjustingKmlMarkerInfo && !!document.getElementById('markerContinuousCheckbox')?.checked;
+    if (!adjustingKmlMarkerInfo) storeContinuousMarkerPreference(type, continuous);
+    startPlacingMarker({ continuous });
 }
 
 // ---------------------------------------------------------------
 // Posicionamento no mapa
 // ---------------------------------------------------------------
 
-function startPlacingMarker() {
+function startPlacingMarker({ continuous = false } = {}) {
     isAddingMarker = true;
     setAllPolygonsClickable(false);
     setAllCablesClickable(false);
@@ -579,18 +583,133 @@ function startPlacingMarker() {
         return;
     }
     setMapCursor('crosshair');
-    showToast('Posicione no mapa', 'Clique no local do marcador. Esc cancela.', 'progress');
+    continuousPlacement = continuous ? { placed: [] } : null;
+    if (continuous) updateContinuousMarkerBar();
+    else showToast('Posicione no mapa', 'Clique no local do marcador. Esc cancela.', 'progress');
     placeMarkerListener = map.addListener('click', (event) => {
         if (!isAddingMarker) return;
+        let placed = false;
         try {
             addCustomMarker(event.latLng);
+            placed = true;
         } catch (error) {
             console.error('Erro ao posicionar o marcador:', error);
             showToast('Erro', 'Não foi possível posicionar o marcador. Tente de novo.');
-        } finally {
-            resetMarkerModal();
         }
+        //Marcação contínua: continua no modo de posicionar, já com o próximo nome da sequência
+        if (placed && continuousPlacement) {
+            continuousPlacement.placed.push(markers[markers.length - 1]);
+            prepareNextContinuousMarker();
+            return;
+        }
+        resetMarkerModal();
     });
+}
+
+// ---------------------------------------------------------------
+// Marcação contínua: cada clique no mapa cria um marcador (ou cliente) igual ao anterior,
+// com o nome seguinte da sequência (CTO-03 → CTO-04, Cliente 7 → Cliente 8). Esc ou "Concluir" encerra.
+// ---------------------------------------------------------------
+
+const CONTINUOUS_MARKER_STORAGE_KEY = 'routeMapContinuousMarkers';
+let continuousPlacement = null;
+
+//Lembrada por tipo (ex.: ligada para casas e clientes, desligada para CTO)
+function readContinuousMarkerPreference(type) {
+    try { return localStorage.getItem(`${CONTINUOUS_MARKER_STORAGE_KEY}:${type}`) === '1'; } catch (e) { return false; }
+}
+
+function storeContinuousMarkerPreference(type, enabled) {
+    try { localStorage.setItem(`${CONTINUOUS_MARKER_STORAGE_KEY}:${type}`, enabled ? '1' : '0'); } catch (e) { /* sem armazenamento */ }
+}
+
+//Próximo nome livre da sequência no projeto; nome sem número ganha " 2"
+function getNextSequentialMarkerName(name) {
+    const text = String(name || '').trim();
+    if (!text) return '';
+    const folderIds = getProjectFolderIdsForItem(activeFolderId) || [];
+    const used = new Set(markers.filter(m => folderIds.includes(m.folderId)).map(m => String(m.name || '').toUpperCase()));
+    const match = text.match(/^(.*?)(\d+)(\D*)$/);
+    const head = match ? match[1] : `${text} `;
+    const tail = match ? match[3] : '';
+    const width = match ? match[2].length : 1;
+    let n = match ? Number(match[2]) + 1 : 2;
+    for (let guard = 0; guard < 10000; guard++, n++) {
+        const candidate = `${head}${String(n).padStart(width, '0')}${tail}`;
+        if (!used.has(candidate.toUpperCase())) return candidate;
+    }
+    return text;
+}
+
+//Dados do próximo cliente: mantém tipo, situação, plano e equipamentos; limpa o que é de cada cliente
+function getNextContinuousClientData(client = {}) {
+    const next = JSON.parse(JSON.stringify(client));
+    ['code', 'document', 'phone', 'address', 'notes'].forEach(key => { next[key] = ''; });
+    next.addressAuto = false;
+    if (next.cableName) {
+        next.cableName = null;
+        next.cableFiber = null;
+        next.cableUid = null;
+        next.ctoUid = 'auto';
+        next.ctoPort = null;
+    } else if (next.ctoUid && next.ctoUid !== 'auto') {
+        //CTO escolhida: próxima porta livre dela; cheia → volta para a automática
+        const cto = markers.find(m => m.type === 'CTO' && m.uid === next.ctoUid);
+        const port = cto && typeof findFreePort === 'function' ? findFreePort(cto) : null;
+        if (port) next.ctoPort = port;
+        else {
+            next.ctoUid = 'auto';
+            next.ctoPort = null;
+            showToast('CTO sem porta livre', 'Os próximos clientes vão para a CTO livre mais próxima.', 'progress');
+        }
+    }
+    return next;
+}
+
+function prepareNextContinuousMarker() {
+    const data = selectedMarkerData;
+    if (data.type !== 'CASA') data.name = getNextSequentialMarkerName(data.name) || data.name;
+    if (data.type === 'CLIENTE') data.client = getNextContinuousClientData(data.client);
+    updateContinuousMarkerBar();
+}
+
+function updateContinuousMarkerBar() {
+    const bar = document.getElementById('continuousMarkerBar');
+    if (!bar) return;
+    bar.classList.toggle('hidden', !continuousPlacement);
+    if (!continuousPlacement) return;
+    const count = continuousPlacement.placed.length;
+    const label = selectedMarkerData.type === 'CLIENTE' ? 'Clientes' : getMarkerTypeMeta(selectedMarkerData.type).name;
+    const next = selectedMarkerData.type === 'CASA' ? `${selectedMarkerData.name} casa(s)` : selectedMarkerData.name;
+    document.getElementById('continuousMarkerCount').textContent = `${label}: ${count ? `${count} no mapa` : 'marcação contínua'}`;
+    document.getElementById('continuousMarkerNext').textContent = `Clique no mapa para o próximo${next ? `: ${next}` : ''} · Esc encerra`;
+    document.getElementById('continuousMarkerUndo').disabled = !count;
+}
+
+//Remove o último marcador criado nesta marcação e volta o nome da sequência
+function undoLastContinuousMarker() {
+    const info = continuousPlacement?.placed.pop();
+    if (!info) return;
+    if (focusedMapMarkerInfo === info) clearMapMarkerHighlight();
+    info.marker.setMap(null);
+    info.dropLine?.setMap?.(null);
+    info.listItem.remove();
+    markers = markers.filter(m => m !== info);
+    if (info.type !== 'CASA') selectedMarkerData.name = info.name;
+    if (info.type === 'CLIENTE') {
+        refreshClientDrops();
+        refreshBomAfterProjectChange();
+    }
+    updateContinuousMarkerBar();
+}
+
+//Encerra a marcação contínua (chamado pelo reset do painel)
+function finishContinuousPlacement() {
+    if (!continuousPlacement) return;
+    const count = continuousPlacement.placed.length;
+    continuousPlacement = null;
+    updateContinuousMarkerBar();
+    if (count) showToast('Marcação concluída', `${count} marcador${count === 1 ? '' : 'es'} posicionado${count === 1 ? '' : 's'}.`);
 }
 
 // ---------------------------------------------------------------
@@ -621,6 +740,7 @@ function resetMarkerModal({ discardPositionChanges = true } = {}) {
         isAddingMarker = false;
         setMapCursor('');
     }
+    finishContinuousPlacement();
     if (editingMarkerInfo) {
         if (editingMarkerInfo.marker?.getDraggable?.()) {
             finishMarkerPositionEditSession({ reopenModal: false });
@@ -776,6 +896,8 @@ function setupMarkerPanel() {
     });
     document.getElementById('confirmMarker').addEventListener('click', handleMarkerPanelConfirm);
     document.getElementById('deleteMarkerButton').addEventListener('click', deleteEditingMarker);
+    document.getElementById('continuousMarkerUndo')?.addEventListener('click', undoLastContinuousMarker);
+    document.getElementById('continuousMarkerDone')?.addEventListener('click', () => resetMarkerModal());
     document.getElementById('editPositionButton').addEventListener('click', startMarkerPositionEditSession);
     document.getElementById('copyMarkerCoordsButton').addEventListener('click', () => {
         const text = document.getElementById('infraMarkerCoordinatesText').textContent;
