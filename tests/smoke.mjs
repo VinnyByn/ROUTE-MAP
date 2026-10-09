@@ -1962,6 +1962,44 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(splitNear.on === 1 && splitNear.off === 0 && splitNear.clientMove, `dividir cabo só com o cabo em cima do marcador e "Mover" no cliente (${JSON.stringify(splitNear)})`);
 
+  //Sugestão de rota ao desenhar: A → B direto mostra a rota pelas ruas; aceitar troca a reta, recusar mantém
+  const suggest = await sp.evaluate(async () => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projRS', name: 'Projeto RS', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projRS');
+    rebuildMarker({ uid: 'mk_rs_a', folderId: 'projRS', type: 'CEO', name: 'CEO-RS', color: '#f00', position: { lat: -34, lng: -44 } });
+    rebuildMarker({ uid: 'mk_rs_b', folderId: 'projRS', type: 'CTO', name: 'CTO-RS', color: '#f00', position: { lat: -34.002, lng: -43.998 } });
+    const a = markers.find(m => m.uid === 'mk_rs_a'), b = markers.find(m => m.uid === 'mk_rs_b');
+    const realFetch = window.fetchOsrmRoute;
+    //Rota em "L" pelas ruas: desce e depois vai para o lado
+    window.fetchOsrmRoute = async (from, to) => [from, new google.maps.LatLng(-34.001, -44), new google.maps.LatLng(-34.002, -44), new google.maps.LatLng(-34.002, -43.999), to];
+    const box = () => document.getElementById('cableRouteSuggestion');
+    const wait = () => new Promise(r => setTimeout(r, 30));
+    document.getElementById('drawCableButton').click();
+    handleAnchorMarkerClickDuringCableDraw(a);
+    handleAnchorMarkerClickDuringCableDraw(b);
+    await wait();
+    const shown = !box().classList.contains('hidden') && !!document.getElementById('acceptCableRouteSuggestion') && !!cableRouteSuggestion?.overlay;
+    document.getElementById('acceptCableRouteSuggestion').click();
+    const accepted = { points: cableMarkers.length, hidden: box().classList.contains('hidden'), ends: `${cableMarkers[0].getPosition().lat()}|${cableMarkers[cableMarkers.length - 1].getPosition().lat()}` };
+    cancelCableDrawingSession();
+    //Recusar: fica a reta e some a sugestão
+    document.getElementById('drawCableButton').click();
+    handleAnchorMarkerClickDuringCableDraw(a);
+    handleAnchorMarkerClickDuringCableDraw(b);
+    await wait();
+    document.getElementById('dismissCableRouteSuggestion').click();
+    const dismissed = { points: cableMarkers.length, hidden: box().classList.contains('hidden'), overlay: !!cableRouteSuggestion };
+    cancelCableDrawingSession();
+    window.fetchOsrmRoute = realFetch;
+    [a, b].forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    document.querySelector('.folder-title[data-folder-id="projRS"]').closest('.folder').remove();
+    return { shown, accepted, dismissed };
+  });
+  check(suggest.shown && suggest.accepted.points === 3 && suggest.accepted.hidden && suggest.accepted.ends === '-34|-34.002'
+    && suggest.dismissed.points === 2 && suggest.dismissed.hidden && !suggest.dismissed.overlay,
+    `sugestão de rota ao ligar A → B: aceitar usa a rota, recusar mantém a reta (${JSON.stringify(suggest)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');
