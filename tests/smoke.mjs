@@ -2077,14 +2077,26 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     rebuildPolygon({ uid: 'pg_ad', folderId: 'projAD', name: 'Bairro AD', color: '#2dd4bf', opacity: 0.2, path: [
       { lat: LAT0, lng: LNG0 }, { lat: LAT0, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 } ] });
     const realFetch = window.fetch, realOsrm = window.fetchOsrmRoute;
-    let osrmUp = true, nearestCalls = 0;
-    //Rua mais perto: 20 m ao leste; rota: em "L" pelas ruas
+    let osrmUp = true, tableCalls = 0, matrixCalls = 0;
+    //Ruas (com nome) a cada ~100 m só nos 70% da esquerda; à direita é mato (rua mais perto a 200 m)
+    const STREET_LNG = LNG0 + W * 0.7, ROW = 0.0009;
+    const rowLat = (lat) => LAT0 - Math.round((LAT0 - lat) / ROW) * ROW;
     window.fetch = async (url, opts) => {
-      const m = /\/nearest\/v1\/foot\/(-?[\d.]+),(-?[\d.]+)/.exec(String(url));
+      const m = /\/(table|nearest)\/v1\/foot\/([^?]+)\?(.*)$/.exec(String(url));
       if (!m) return realFetch(url, opts);
-      nearestCalls++;
       if (!osrmUp) return new Response('down', { status: 503 });
-      return new Response(JSON.stringify({ code: 'Ok', waypoints: [{ location: [Number(m[1]) + 0.0002, Number(m[2])] }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const pts = m[2].split(';').map(c => c.split(',').map(Number));
+      const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (/annotations=distance/.test(m[3])) {
+        matrixCalls++;
+        const d = (a, b) => (Math.abs(a[0] - b[0]) * 111320 * Math.cos(LAT0 * Math.PI / 180) + Math.abs(a[1] - b[1]) * 110540);
+        return json({ code: 'Ok', distances: pts.map(a => pts.map(b => d(a, b))) });
+      }
+      tableCalls++;
+      const destinations = pts.map(([lng, lat]) => (lng <= STREET_LNG
+        ? { location: [lng, rowLat(lat)], name: 'Rua ' + Math.round((LAT0 - rowLat(lat)) / ROW), distance: Math.abs(lat - rowLat(lat)) * 110540 }
+        : { location: [lng, lat], name: '', distance: 200 }));
+      return json({ code: 'Ok', destinations, sources: destinations.slice(0, 1) });
     };
     window.fetchOsrmRoute = async (from, to) => (osrmUp ? [from, new google.maps.LatLng(from.lat(), to.lng()), to] : null);
     const polygon = savedPolygons.find(p => p.uid === 'pg_ad');
@@ -2101,10 +2113,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     osrmUp = false;
     await generateAutoDesign();
     const down = { phase: autoDesign.phase, straight: autoDesign.result?.stats.straight, cables: autoDesign.result ? getAutoDesignAllCables(autoDesign.result).length : 0,
-      warn: [...document.querySelectorAll('#autoDesignBox .auto-design__warn')].some(w => /linha reta/.test(w.textContent)) };
+      warn: [...document.querySelectorAll('#autoDesignBox .auto-design__warn')].some(w => /linha reta/.test(w.textContent)),
+      noStreets: autoDesign.result?.stats.noStreets && [...document.querySelectorAll('#autoDesignBox .auto-design__warn')].some(w => /espalhadas pela área toda/.test(w.textContent)) };
     document.querySelector('[data-auto-design="adjust"]').click();
     osrmUp = true;
-    nearestCalls = 0;
     await generateAutoDesign();
     const plan = autoDesign.result;
     const preview = {
@@ -2114,7 +2126,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       inside: plan.ctos.every(c => c.position.lat() <= LAT0 && c.position.lat() >= LAT0 - H && c.position.lng() >= LNG0 && c.position.lng() <= LNG0 + W + 0.0003),
       overlays: autoDesign.overlays.length > 0,
       coverage: plan.stats.coverage >= 0.95,
-      snapped: plan.stats.snapped === plan.ctos.length + 1 && nearestCalls === plan.ctos.length + 1,
+      onStreets: plan.onStreets && plan.byRoad && !plan.stats.noStreets && tableCalls > 0 && matrixCalls === 1,
+      noForest: plan.ctos.every(c => c.position.lng() <= STREET_LNG + 1e-9),
+      onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
     };
     const beforeMarkers = markers.length, beforeCables = savedCables.length;
@@ -2149,12 +2163,12 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     document.querySelector('.folder-title[data-folder-id="projAD"]').closest('.folder').remove();
     return out;
   });
-  check(autoDesignOut.down.phase === 'preview' && autoDesignOut.down.straight === autoDesignOut.down.cables && autoDesignOut.down.cables > 0 && autoDesignOut.down.warn,
+  check(autoDesignOut.down.phase === 'preview' && autoDesignOut.down.straight === autoDesignOut.down.cables && autoDesignOut.down.cables > 0 && autoDesignOut.down.warn && autoDesignOut.down.noStreets,
     `pré-projeto automático: sem servidor de rotas, gera em linha reta e avisa (${JSON.stringify(autoDesignOut.down)})`);
   check(autoDesignOut.menu && autoDesignOut.opened && autoDesignOut.form && /60 clientes → 8 CTOs com splitter 1:8/.test(autoDesignOut.calc)
     && autoDesignOut.preview.phase === 'preview' && autoDesignOut.preview.enough && autoDesignOut.preview.inside && autoDesignOut.preview.overlays
-    && autoDesignOut.preview.coverage && autoDesignOut.preview.snapped && autoDesignOut.preview.routed,
-    `pré-projeto automático: casas, penetração e splitagem → CTOs na rua e cabos pelas ruas (${JSON.stringify(autoDesignOut.preview)} ${autoDesignOut.calc})`);
+    && autoDesignOut.preview.coverage && autoDesignOut.preview.onStreets && autoDesignOut.preview.noForest && autoDesignOut.preview.onRows && autoDesignOut.preview.routed,
+    `pré-projeto automático: casas, penetração e splitagem → CTOs só nas ruas (nada no mato), ligadas pela rua (${JSON.stringify(autoDesignOut.preview)} ${autoDesignOut.calc})`);
   check(autoDesignOut.closed && autoDesignOut.folder === 'Pré-projeto Bairro AD' && autoDesignOut.ceo === 'CEO-01:Nova'
     && autoDesignOut.ctos === autoDesignOut.preview.ctos && autoDesignOut.cables === autoDesignOut.ctos + 1 && autoDesignOut.splitters
     && autoDesignOut.casa === '200' && autoDesignOut.report.ports === autoDesignOut.ctos * 8 && autoDesignOut.report.houses === 200

@@ -1,16 +1,22 @@
 // Pré-projeto automático: a partir de um polígono, da quantidade de casas, da taxa de penetração e da
-// splitagem da CTO, distribui as caixas pela área, puxa cada uma para a rua mais perto e liga tudo com
-// cabos traçados pelas ruas (OSRM, o mesmo da sugestão de rota). Mostra uma prévia tracejada; nada é
+// splitagem da CTO, descobre onde há ruas (e casas) dentro da área, distribui as caixas por elas e liga
+// cada CTO na caixa mais perto pela rua, com cabos traçados pelas ruas (OSRM, o mesmo da sugestão de
+// rota). Mato, pasto e rio sem rua ficam sem caixa. Mostra uma prévia tracejada; nada é
 // salvo até "Aceitar e criar": aí as caixas (CTOs já com o splitter), os cabos e as casas entram como
 // Novo numa pasta própria, com os nomes automáticos, e a lista de materiais é refeita.
 // Depende de script.js, js/persistence.js, js/marker-panel.js, js/marker-icons.js, js/fusion.js
 // (buildFusionSplitterCard), js/clients.js (fetchOsrmRoute) e js/cable-route-suggest.js (simplifyPathMeters).
 
-//Servidores OSRM públicos (gratuitos, sem chave) para achar o ponto de rua mais perto de cada caixa
-const AUTO_DESIGN_NEAREST_SERVERS = [
-    'https://routing.openstreetmap.de/routed-foot/nearest/v1/foot',
-    'https://router.project-osrm.org/nearest/v1/foot',
+//Servidores OSRM públicos (gratuitos, sem chave); o primeiro usa o perfil a pé (segue as ruas sem contramão)
+const AUTO_DESIGN_OSRM_SERVERS = [
+    'https://routing.openstreetmap.de/routed-foot',
+    'https://router.project-osrm.org',
 ];
+const AUTO_DESIGN_SAMPLE_MAX = 400;  //Pontos da área consultados para achar as ruas
+const AUTO_DESIGN_SAMPLE_CHUNK = 80; //Pontos por consulta (cabe na tabela do OSRM público)
+const AUTO_DESIGN_STREET_MAX_M = 40; //Ponto a mais de 40 m de qualquer rua = sem casas (mato, pasto, rio)
+const AUTO_DESIGN_EDGE_TOL_M = 25;   //Rua em cima do limite do polígono também entra
+const AUTO_DESIGN_TABLE_MAX = 100;   //Caixas na tabela de distâncias pela rua (acima disso, linha reta)
 const AUTO_DESIGN_GRID_M = 15;       //Casas espalhadas pela área: um ponto a cada 15 m
 const AUTO_DESIGN_MAX_POINTS = 6000; //Áreas grandes usam pontos mais espaçados
 const AUTO_DESIGN_COVER_M = 150;     //Alcance de uma CTO (drop) em linha reta
@@ -49,12 +55,109 @@ function pointInPolygonXY([x, y], poly) {
     return inside;
 }
 
+function distToSegmentXY([px, py], [ax, ay], [bx, by]) {
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+    return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+}
+
+function distToPolygonEdgeXY(p, poly) {
+    let best = Infinity;
+    for (let i = 0; i < poly.length; i++) best = Math.min(best, distToSegmentXY(p, poly[i], poly[(i + 1) % poly.length]));
+    return best;
+}
+
+function polygonAreaXY(poly) {
+    let sum = 0;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) sum += (poly[j][0] + poly[i][0]) * (poly[j][1] - poly[i][1]);
+    return Math.abs(sum / 2);
+}
+
 // ---------------------------------------------------------------
-// Pontos da área (as casas ficam espalhadas por igual)
+// OSRM: consultas com vários pontos de uma vez
+// ---------------------------------------------------------------
+
+//service = 'table' | 'nearest'; points = [{ lat, lng }]. Devolve a resposta (code Ok) ou null.
+async function fetchAutoDesignOsrm(service, points, query) {
+    const coords = points.map(p => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+    for (const server of AUTO_DESIGN_OSRM_SERVERS) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            const response = await fetch(`${server}/${service}/v1/foot/${coords}?${query}`, { signal: controller.signal });
+            clearTimeout(timer);
+            if (!response.ok) continue;
+            const data = await response.json();
+            if (data?.code === 'Ok') return data;
+        } catch (e) {
+            //Tenta o próximo servidor
+        }
+    }
+    return null;
+}
+
+//Onde há rua dentro da área: uma grade de pontos é consultada no OSRM, que devolve o ponto de rua mais
+//perto de cada um (com o nome da rua). Ponto longe de rua (mato, pasto, rio) fica de fora; o que sobra
+//são pontos em cima das ruas, onde ficam as casas e onde as caixas podem ir.
+//Devolve { points: [{ lat, lng, w }] } (vazio = não há ruas) ou null quando o OSRM não respondeu.
+async function sampleAutoDesignStreets(polygonPath, isCurrent) {
+    const proj = createAutoDesignProjection(polygonPath);
+    const polyXY = polygonPath.map(p => proj.toXY(p.lat, p.lng));
+    const xs = polyXY.map(p => p[0]), ys = polyXY.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const step = Math.max(20, Math.sqrt(polygonAreaXY(polyXY) / AUTO_DESIGN_SAMPLE_MAX));
+    const samples = [];
+    for (let x = minX + step / 2; x <= maxX; x += step) {
+        for (let y = minY + step / 2; y <= maxY; y += step) {
+            if (pointInPolygonXY([x, y], polyXY)) samples.push(proj.toLatLng([x, y]));
+        }
+    }
+    if (!samples.length) return { points: [] };
+    const chunks = [];
+    for (let i = 0; i < samples.length; i += AUTO_DESIGN_SAMPLE_CHUNK) chunks.push(samples.slice(i, i + AUTO_DESIGN_SAMPLE_CHUNK));
+    const found = [];
+    let answered = 0;
+    await runAutoDesignLimited(chunks, 2, async (chunk) => {
+        if (!isCurrent()) return;
+        //Tabela 1 × N: barata, e a resposta traz cada ponto já colocado na rua mais perto
+        const data = await fetchAutoDesignOsrm('table', chunk, 'sources=0');
+        if (!data?.destinations) return;
+        answered++;
+        found.push(...data.destinations);
+    });
+    if (!answered) return null;
+    const near = found.filter(w => Array.isArray(w.location) && Number(w.distance) <= AUTO_DESIGN_STREET_MAX_M)
+        .map(w => ({ lat: w.location[1], lng: w.location[0], named: !!(w.name || '').trim() }))
+        .filter(p => {
+            const xy = proj.toXY(p.lat, p.lng);
+            return pointInPolygonXY(xy, polyXY) || distToPolygonEdgeXY(xy, polyXY) <= AUTO_DESIGN_EDGE_TOL_M;
+        });
+    //Ruas com nome = ruas com casas (trilha e estrada de terra no mato costumam não ter nome)
+    const named = near.filter(p => p.named);
+    const use = named.length >= 6 ? named : near;
+    //Pontos repetidos (vários da grade caem no mesmo trecho de rua) somam o peso
+    const cells = new Map();
+    use.forEach(p => {
+        const [x, y] = proj.toXY(p.lat, p.lng);
+        const key = `${Math.round(x / 10)},${Math.round(y / 10)}`;
+        const cell = cells.get(key);
+        if (cell) cell.w += step;
+        else cells.set(key, { lat: p.lat, lng: p.lng, w: step });
+    });
+    return { points: [...cells.values()] };
+}
+
+// ---------------------------------------------------------------
+// Pontos da área: em cima das ruas (ou, sem OSRM, espalhados por igual)
 // ---------------------------------------------------------------
 
 //Grade de pontos dentro do polígono; w = metros de grade em volta do ponto (peso das casas)
-function buildAutoDesignGraph(polyXY) {
+function buildAutoDesignGraph(polyXY, streetPoints = null, proj = null) {
+    if (streetPoints?.length && proj) {
+        const nodes = streetPoints.map(p => { const [x, y] = proj.toXY(p.lat, p.lng); return { x, y, w: p.w }; });
+        return { nodes, streetLength: nodes.reduce((sum, n) => sum + n.w, 0), onStreets: true };
+    }
     const xs = polyXY.map(p => p[0]), ys = polyXY.map(p => p[1]);
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
     const box = (maxX - minX) * (maxY - minY);
@@ -207,10 +310,10 @@ function getAutoDesignPolygonCenter(polygon) {
 
 //Monta caixas e cabos pela área; startMarker = POP/CEO de onde a rede sai (ou null).
 //Os cabos saem em linha reta: routeAutoDesignOnStreets puxa as caixas para a rua e traça pelas ruas.
-function buildAutoDesignPlan(polygonPath, params, startMarker, names) {
+async function buildAutoDesignPlan(polygonPath, params, startMarker, names, { streets = null, isCurrent = () => true } = {}) {
     const proj = createAutoDesignProjection(polygonPath);
     const polyXY = polygonPath.map(p => proj.toXY(p.lat, p.lng));
-    const graph = buildAutoDesignGraph(polyXY);
+    const graph = buildAutoDesignGraph(polyXY, streets?.points, proj);
     if (graph.nodes.length < 4) return { error: 'A área é pequena demais para distribuir caixas. Desenhe um polígono maior.' };
     const startPos = startMarker?.marker?.getPosition?.();
     const startXY = startPos ? proj.toXY(startPos.lat(), startPos.lng()) : [0, 0];
@@ -226,10 +329,22 @@ function buildAutoDesignPlan(polygonPath, params, startMarker, names) {
     const placement = chosen;
 
     //Árvore de caixas (Prim): cada CTO liga na caixa mais perto que já está na rede, começando pela CEO.
-    //Cabos curtos de caixa em caixa, sem vários cabos saindo juntos da CEO lado a lado.
+    //"Mais perto" é pela rua (tabela de distâncias do OSRM): duas caixas de costas uma para a outra, em ruas
+    //paralelas, não se ligam atravessando a quadra. Sem a tabela, vale a distância em linha reta.
     const xyOf = (node) => [graph.nodes[node].x, graph.nodes[node].y];
     const boxes = [{ key: 'root', xy: xyOf(rootNode) }, ...placement.centers.map((node, ci) => ({ key: ci, xy: xyOf(node) }))];
-    const best = boxes.map(box => ({ d: Math.hypot(box.xy[0] - boxes[0].xy[0], box.xy[1] - boxes[0].xy[1]), parent: 0 }));
+    let roads = null;
+    if (graph.onStreets && boxes.length <= AUTO_DESIGN_TABLE_MAX) {
+        roads = (await fetchAutoDesignOsrm('table', boxes.map(box => proj.toLatLng(box.xy)), 'annotations=distance'))?.distances || null;
+        if (!isCurrent()) return { cancelled: true };
+    }
+    const edge = (i, j) => {
+        const straight = Math.hypot(boxes[i].xy[0] - boxes[j].xy[0], boxes[i].xy[1] - boxes[j].xy[1]);
+        if (!roads) return straight;
+        const road = Math.min(roads[i]?.[j] ?? Infinity, roads[j]?.[i] ?? Infinity);
+        return Number.isFinite(road) ? Math.max(road, straight) : straight * 4 + 500;
+    };
+    const best = boxes.map((_, i) => ({ d: edge(0, i), parent: 0 }));
     const inTree = boxes.map((_, i) => i === 0);
     const treeDist = boxes.map(() => 0);
     const links = [];
@@ -241,7 +356,7 @@ function buildAutoDesignPlan(polygonPath, params, startMarker, names) {
         links.push({ ci: boxes[pick].key, parent: boxes[best[pick].parent].key, dist: treeDist[pick] });
         boxes.forEach((box, i) => {
             if (inTree[i]) return;
-            const d = Math.hypot(box.xy[0] - boxes[pick].xy[0], box.xy[1] - boxes[pick].xy[1]);
+            const d = edge(pick, i);
             if (d < best[i].d) best[i] = { d, parent: pick };
         });
     }
@@ -295,6 +410,8 @@ function buildAutoDesignPlan(polygonPath, params, startMarker, names) {
     const center = proj.toLatLng(polyXY.reduce((acc, p) => [acc[0] + p[0] / polyXY.length, acc[1] + p[1] / polyXY.length], [0, 0]));
     return {
         root, ctos, cables,
+        onStreets: !!graph.onStreets,
+        byRoad: !!roads,
         houses: { count: params.houses, position: new google.maps.LatLng(center.lat, center.lng) },
         feeder: rootIsNew && startMarker ? { role: 'feeder', fiber: params.feederFiber, from: { existing: startMarker, name: startMarker.name, position: startPos }, to: root, path: [startPos, root.position] } : null,
         stats: {
@@ -306,6 +423,7 @@ function buildAutoDesignPlan(polygonPath, params, startMarker, names) {
             overloaded: placement.load.filter(w => loadToClients(w) > params.ports + 0.5).length,
             snapped: 0,
             straight: 0,
+            noStreets: !streets,
             housesPerMeter,
             totalWeight,
         },
@@ -314,22 +432,9 @@ function buildAutoDesignPlan(polygonPath, params, startMarker, names) {
 
 //Ponto de rua mais perto (OSRM nearest, gratuito); null se nenhum servidor responder
 async function fetchAutoDesignNearestStreet(position) {
-    const coords = `${position.lng().toFixed(6)},${position.lat().toFixed(6)}`;
-    for (const server of AUTO_DESIGN_NEAREST_SERVERS) {
-        try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 8000);
-            const response = await fetch(`${server}/${coords}?number=1`, { signal: controller.signal });
-            clearTimeout(timer);
-            if (!response.ok) continue;
-            const data = await response.json();
-            const location = data?.code === 'Ok' ? data.waypoints?.[0]?.location : null;
-            if (location) return new google.maps.LatLng(location[1], location[0]);
-        } catch (e) {
-            //Tenta o próximo servidor
-        }
-    }
-    return null;
+    const data = await fetchAutoDesignOsrm('nearest', [{ lat: position.lat(), lng: position.lng() }], 'number=1');
+    const location = data?.waypoints?.[0]?.location;
+    return location ? new google.maps.LatLng(location[1], location[0]) : null;
 }
 
 //Roda as tarefas com no máximo `limit` ao mesmo tempo (não sobrecarrega os servidores públicos)
@@ -355,7 +460,9 @@ async function routeAutoDesignOnStreets(plan, isCurrent) {
         return;
     }
     let snapped = 0;
-    await runAutoDesignLimited([plan.root, ...plan.ctos].filter(box => box.isNew), 4, async (box) => {
+    //Caixas tiradas dos pontos de rua já estão na rua; só as espalhadas pela área (sem OSRM antes) são puxadas
+    const loose = plan.onStreets ? [] : [plan.root, ...plan.ctos].filter(box => box.isNew);
+    await runAutoDesignLimited(loose, 4, async (box) => {
         const street = await fetchAutoDesignNearestStreet(box.position);
         if (!isCurrent() || !street) return;
         if (spherical.computeDistanceBetween(street, box.position) <= AUTO_DESIGN_SNAP_MAX_M) {
@@ -458,7 +565,7 @@ function renderAutoDesign() {
     const esc = (v) => escapeHtml(String(v ?? ''));
     if (s.phase === 'loading') {
         title.textContent = 'Gerar pré-projeto';
-        body.innerHTML = '<p class="auto-design__loading"><span class="route-suggest__spinner" aria-hidden="true"></span>Distribuindo as caixas e traçando os cabos pelas ruas…</p>';
+        body.innerHTML = `<p class="auto-design__loading"><span class="route-suggest__spinner" aria-hidden="true"></span>${esc(s.loadingText || 'Distribuindo as caixas…')}</p>`;
         actions.innerHTML = '<button type="button" class="map-tool-btn" data-auto-design="cancel">Cancelar</button>';
         return;
     }
@@ -493,7 +600,7 @@ function renderAutoDesign() {
             <div class="map-tool-field"><label for="autoDesignDistribution">Cabo distribuição</label><select id="autoDesignDistribution">${fiberOptions(p.distributionFiber)}</select></div>
         </div>
         <div class="map-tool-field"><label>Vão</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>
-        <p class="map-tool-help">As caixas são distribuídas pela área, cada uma na rua mais perto, e os cabos seguem as ruas (OpenStreetMap). Nada é salvo até você aceitar a prévia.</p>
+        <p class="map-tool-help">As caixas vão só para as ruas da área (mato, pasto e rio ficam de fora) e os cabos seguem as ruas (OpenStreetMap). Nada é salvo até você aceitar a prévia.</p>
         ${s.error ? `<div class="auto-design__warn">${esc(s.error)}</div>` : ''}`;
     renderSegmentedOptions('autoDesignPorts', AUTO_DESIGN_SPLITTERS.map(n => ({ value: String(n), label: `1:${n}` })), String(p.ports));
     renderSegmentedOptions('autoDesignSpan', [{ value: 'AS 80', label: 'AS 80' }, { value: 'AS 200', label: 'AS 200' }], p.span);
@@ -534,19 +641,32 @@ async function generateAutoDesign() {
     s.token = token;
     s.phase = 'loading';
     renderAutoDesign();
+    const isCurrent = () => autoDesign === s && s.token === token;
+    const step = (text) => { s.loadingText = text; renderAutoDesign(); };
     const polygonPath = getAutoDesignPolygonPath(s.polygon);
     const projectId = getAutoDesignProjectId(s.polygon);
-    const plan = buildAutoDesignPlan(polygonPath, s.params, getAutoDesignStartMarker(), {
+    step('Lendo as ruas da área…');
+    const streets = await sampleAutoDesignStreets(polygonPath, isCurrent);
+    if (!isCurrent()) return;
+    if (streets && !streets.points.length) {
+        s.phase = 'form';
+        s.error = 'Não encontrei ruas dentro do polígono. Confira se a área cobre as casas.';
+        renderAutoDesign();
+        return;
+    }
+    step('Distribuindo as caixas pelas ruas…');
+    const plan = await buildAutoDesignPlan(polygonPath, s.params, getAutoDesignStartMarker(), {
         ceo: getNextAutoDesignNumber(projectId, 'CEO'),
         cto: getNextAutoDesignNumber(projectId, 'CTO'),
-    });
+    }, { streets, isCurrent });
+    if (!isCurrent() || plan.cancelled) return;
     if (plan.error) {
         s.phase = 'form';
         s.error = plan.error;
         renderAutoDesign();
         return;
     }
-    const isCurrent = () => autoDesign === s && s.token === token;
+    step('Traçando os cabos pelas ruas…');
     await routeAutoDesignOnStreets(plan, isCurrent);
     if (!isCurrent()) return;
     s.result = plan;
@@ -606,6 +726,7 @@ function renderAutoDesignPreviewPanel() {
     const warnings = [];
     if (st.uncoveredHouses > 0) warnings.push(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${AUTO_DESIGN_COVER_M} m de uma CTO.`);
     if (st.overloaded > 0) warnings.push(`${st.overloaded} CTO(s) podem precisar de mais de ${s.params.ports} portas.`);
+    if (st.noStreets) warnings.push('Não consegui ler as ruas da área agora: as caixas foram espalhadas pela área toda. Confira as que caíram fora das casas (mato, pasto) e tente gerar de novo mais tarde.');
     if (st.tooMany) warnings.push(`Área grande: os ${st.straight} cabos ficaram em linha reta (traçar tudo pelas ruas sobrecarregaria o servidor). Ajuste no mapa ou divida a área.`);
     else if (st.straight > 0) warnings.push(`${st.straight} cabo(s) ficaram em linha reta: não achei uma rota pelas ruas. Confira no mapa.`);
     document.getElementById('autoDesignBody').innerHTML = `
