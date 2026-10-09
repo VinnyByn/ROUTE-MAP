@@ -1209,6 +1209,8 @@ function openClientModal(clientInfo, presetKind) {
     updateClientDropSummary();
     document.getElementById('deleteClientButton').hidden = !clientInfo;
     document.getElementById('moveClientButton').hidden = !clientInfo;
+    document.getElementById('clientContinuousGroup').classList.toggle('hidden', !!clientInfo);
+    document.getElementById('clientContinuousCheckbox').checked = !clientInfo && readContinuousMarkerPreference('CLIENTE');
     document.getElementById('saveClientButton').textContent = clientInfo ? 'Salvar' : 'Posicionar no mapa';
     if (AppSession.isViewer) document.getElementById('clientModalTitle').textContent = 'Cliente';
     lockFormsForViewer('clientModal');
@@ -1332,8 +1334,10 @@ function saveClient(event) {
         description: client.notes,
         client
     };
+    const continuous = !!document.getElementById('clientContinuousCheckbox')?.checked;
+    storeContinuousMarkerPreference('CLIENTE', continuous);
     closeClientModal();
-    startPlacingMarker();
+    startPlacingMarker({ continuous });
 }
 
 function deleteClient() {
