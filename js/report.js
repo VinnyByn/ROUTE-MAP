@@ -219,7 +219,7 @@ function computeProjectReportData(projectId) {
         outsourcedLaborDetails,
         regionalLaborDetails,
         bomItemsByCategory,
-        postCount: Math.ceil(Math.max(0, quantities.cableLength - (typeof getProjectConduitMeters === 'function' ? getProjectConduitMeters(projectId) : 0)) / getPoleSpanDistance()),
+        postCount: getProjectPoleCount(projectId, projectBomForReport),
     };
 }
 
