@@ -2017,9 +2017,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     for (let i = 0; i < 5; i++) ways.push({ type: 'way', id: 10 + i, nodes: [0, 1, 2, 3].map(j => nid(i, j)), geometry: [0, 1, 2, 3].map(j => ({ lat: LAT0 - j * DLAT, lon: LNG0 + i * DLNG })) });
     ways.push({ type: 'way', id: 99, nodes: [9001, 9002], geometry: [{ lat: LAT0 + 0.01, lon: LNG0 }, { lat: LAT0 + 0.01, lon: LNG0 + 0.004 }] });
     const realFetch = window.fetch, realOsrm = window.fetchOsrmRoute;
-    let overpassQuery = '';
+    let overpassQuery = '', overpassDown = true;
     window.fetch = async (url, opts) => {
       if (!/overpass/.test(String(url))) return realFetch(url, opts);
+      if (overpassDown) return new Response('Not Acceptable', { status: 406 });
       overpassQuery = decodeURIComponent(String(opts?.body || ''));
       return new Response(JSON.stringify({ elements: ways }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -2032,6 +2033,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     houses.value = '200';
     houses.dispatchEvent(new Event('input', { bubbles: true }));
     const calc = document.getElementById('autoDesignCalc').textContent.replace(/\s+/g, ' ').trim();
+    //Todos os servidores fora: volta ao formulário dizendo o motivo de cada um
+    await generateAutoDesign();
+    const down = { phase: autoDesign.phase, details: (autoDesign.errorDetails || []).length, shown: /406/.test(document.querySelector('#autoDesignBox .auto-design__warn')?.textContent || '') };
+    overpassDown = false;
     await generateAutoDesign();
     const plan = autoDesign.result;
     const preview = {
@@ -2049,7 +2054,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const newMarkers = markers.slice(beforeMarkers), newCables = savedCables.slice(beforeCables);
     const byUid = new Map(markers.map(m => [m.uid, m]));
     const out = {
-      menu, opened, calc, preview,
+      menu, opened, calc, preview, down,
       closed: document.getElementById('autoDesignBox').classList.contains('hidden') && !autoDesign,
       folder: folder?.dataset.folderName,
       ceo: newMarkers.filter(m => m.type === 'CEO').map(m => `${m.name}:${m.ceoStatus}`).join(','),
@@ -2070,6 +2075,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     document.querySelector('.folder-title[data-folder-id="projAD"]').closest('.folder').remove();
     return out;
   });
+  check(autoDesignOut.down.phase === 'form' && autoDesignOut.down.details === 4 && autoDesignOut.down.shown,
+    `pré-projeto automático: sem servidor de ruas, avisa o motivo de cada um (${JSON.stringify(autoDesignOut.down)})`);
   check(autoDesignOut.menu && autoDesignOut.opened && /60 clientes → 8 CTOs/.test(autoDesignOut.calc)
     && autoDesignOut.preview.phase === 'preview' && autoDesignOut.preview.enough && autoDesignOut.preview.inside && autoDesignOut.preview.overlays
     && autoDesignOut.preview.coverage && autoDesignOut.preview.poly,
