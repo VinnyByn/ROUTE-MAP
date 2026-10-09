@@ -2100,3 +2100,21 @@ html[data-theme="dark"] .mh-signal.is-erro, html[data-theme="dark"] .fx-port__si
 #labor-summary-table .labor-btn .ui-icon { width: 15px; height: 15px; }
 #regionalLaborModal .labor-auto-days { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; font-size: 13px; cursor: pointer; }
 #regionalLaborModal #regionalDaysInput:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* Seletores segmentados (situação, vão, abas, splitter): a opção escolhida em destaque, nos dois temas */
+html { --seg-active-bg: #1d7290; --seg-active-fg: #ffffff; }
+html[data-theme="dark"] { --seg-active-bg: #2a8cab; }
+.floating-box.map-tool-box .map-tool-segmented button.is-active,
+.cable-route-box .route-modes button.is-active,
+.modal-content .fx-seg button.is-active {
+  background: var(--seg-active-bg);
+  color: var(--seg-active-fg);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+}
+#fusionModal .fx-seg button.is-active {
+  --fx-btn-bg: var(--seg-active-bg);
+  --fx-btn-fg: var(--seg-active-fg);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+}
+.floating-box.map-tool-box .map-tool-segmented button:hover:not(.is-active),
+.cable-route-box .route-modes button:hover:not(.is-active) { color: var(--color-text); }
