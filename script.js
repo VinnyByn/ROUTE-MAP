@@ -4305,6 +4305,7 @@ function closeOpenMapEditors() {
     if (typeof isMarkerPanelOpen === 'function' && (isMarkerPanelOpen() || isAddingMarker)) resetMarkerModal();
     if (typeof closeNetworkImpact === 'function' && !document.getElementById('networkImpactBox')?.classList.contains('hidden')) closeNetworkImpact();
     document.getElementById('projectCheckBox')?.classList.add('hidden');
+    if (typeof isAutoDesignOpen === 'function' && isAutoDesignOpen()) closeAutoDesign();
 }
 
 document.addEventListener('click', (e) => {

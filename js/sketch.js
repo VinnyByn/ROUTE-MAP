@@ -9,6 +9,7 @@ const DEFAULT_POLYGON_OPACITY = 0.35;
 let sketchSession = null; //Sessão de desenho ativa: { shape, color, vertices, line, fill, rubber, labels, listeners }
 let rulerMode = 'distance'; //'distance' ou 'area'
 let polygonEditListeners = []; //Listeners do path do polígono em edição
+let autoDesignAfterPolygon = false; //Desenhar → Pré-projeto automático: abre o painel ao salvar o polígono (js/auto-design.js)
 
 function formatDistance(meters) {
     const m = Number(meters) || 0;
@@ -443,8 +444,11 @@ function savePolygon() {
     //Se ainda está marcando pontos, fecha a forma automaticamente
     if (sketchSession && isDrawingPolygon && !finishPolygonSketch()) return;
 
+    const openAutoDesignAfter = autoDesignAfterPolygon;
+    let savedPolygonInfo = null;
     if (editingPolygonIndex !== null) {
         const polygonInfo = savedPolygons[editingPolygonIndex];
+        savedPolygonInfo = polygonInfo;
         const polygon = polygonInfo.polygonObject;
         polygonInfo.name = name;
         polygonInfo.color = color;
@@ -477,8 +481,10 @@ function savePolygon() {
         savedPolygons.push(polygonInfo);
         refreshPolygonSidebarLabel(polygonInfo);
         wirePolygonInteractions(polygonInfo);
+        savedPolygonInfo = polygonInfo;
     }
     cancelPolygonDrawing();
+    if (openAutoDesignAfter && savedPolygonInfo && typeof openAutoDesign === 'function') openAutoDesign(savedPolygonInfo);
 }
 
 //Abre o editor do polígono (aceita o objeto ou o índice)
@@ -538,6 +544,7 @@ function cancelPolygonDrawing() {
     setMapCursor("");
     isDrawingPolygon = false;
     editingPolygonIndex = null;
+    autoDesignAfterPolygon = false;
 }
 
 //Controle de cliques em polígonos, desenhos sobre o polígono
