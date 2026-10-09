@@ -251,12 +251,7 @@ async function fetchProjectPickerPage() {
     rows.forEach(project => list.appendChild(buildProjectPickerItem(project)));
     updateProjectPickerCount(total);
     if (!projectPicker.items.length) {
-        list.innerHTML = renderProjectPickerEmptyState();
-        list.querySelector('[data-pp-clear]')?.addEventListener('click', clearProjectPickerFilters);
-        list.querySelector('[data-pp-create]')?.addEventListener('click', () => {
-            closeProjectPicker();
-            document.getElementById('createProjectButton')?.click();
-        });
+        showProjectPickerEmptyState(list);
         return;
     }
     if (!projectPicker.done) appendProjectPickerSentinel(list);
@@ -306,6 +301,15 @@ function updateProjectPickerCount(total) {
         : `${total} projeto${total === 1 ? '' : 's'}${filtered ? ' encontrado' + (total === 1 ? '' : 's') : ''}`
           + (projectPicker.items.length < total ? ` · mostrando ${projectPicker.items.length}` : '');
     document.getElementById('projectPickerClear')?.classList.toggle('hidden', !filtered);
+}
+
+function showProjectPickerEmptyState(list) {
+    list.innerHTML = renderProjectPickerEmptyState();
+    list.querySelector('[data-pp-clear]')?.addEventListener('click', clearProjectPickerFilters);
+    list.querySelector('[data-pp-create]')?.addEventListener('click', () => {
+        closeProjectPicker();
+        document.getElementById('createProjectButton')?.click();
+    });
 }
 
 function renderProjectPickerEmptyState() {
@@ -402,7 +406,10 @@ function buildProjectPickerItem(project) {
         </div>
         <div class="pp-item__side">
             <small title="${escapeHtml(new Date(project.updated_at).toLocaleString('pt-BR'))}">Atualizado ${escapeHtml(formatRelativeDate(project.updated_at))}${who}</small>
-            <button type="button" class="btn ${isOpen ? 'btn-secondary' : 'btn-success'} btn-sm load-project-btn" ${isOpen ? 'disabled' : ''}>${isOpen ? 'Aberto' : 'Abrir'}</button>
+            <div class="pp-item__actions">
+                ${AppSession.canEdit ? `<button type="button" class="pp-delete-btn" title="Excluir projeto (vai para a lixeira)" aria-label="Excluir ${escapeHtml(project.name)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg></button>` : ''}
+                <button type="button" class="btn ${isOpen ? 'btn-secondary' : 'btn-success'} btn-sm load-project-btn" ${isOpen ? 'disabled' : ''}>${isOpen ? 'Aberto' : 'Abrir'}</button>
+            </div>
         </div>`;
     const open = (event) => {
         if (document.getElementById(project.id)) return;
@@ -410,11 +417,30 @@ function buildProjectPickerItem(project) {
         event?.stopPropagation();
     };
     li.querySelector('.load-project-btn').addEventListener('click', open);
-    li.addEventListener('dblclick', open);
+    li.querySelector('.pp-delete-btn')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        deleteProjectFromPicker(project, li);
+    });
+    li.addEventListener('dblclick', (event) => {
+        if (!event.target.closest('.pp-delete-btn')) open(event);
+    });
     li.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') open(event);
     });
     return li;
+}
+
+//Excluir pela lista: vai para a lixeira (some para toda a equipe); se estiver aberto, fecha também
+function deleteProjectFromPicker(project, li) {
+    const projectElement = document.getElementById(project.id)?.closest('.folder') || null;
+    moveProjectToTrash(project.id, projectElement, project.name, () => {
+        li.remove();
+        projectPicker.items = projectPicker.items.filter(p => p.id !== project.id);
+        projectPicker.total = Math.max(0, projectPicker.total - 1);
+        updateProjectPickerCount(projectPicker.total);
+        if (!projectPicker.items.length) showProjectPickerEmptyState(document.getElementById('projectPickerList'));
+        loadProjectFacets();
+    });
 }
 
 //Setas navegam entre a busca e os projetos; Enter abre

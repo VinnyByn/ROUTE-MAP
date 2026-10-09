@@ -388,6 +388,33 @@ const restored = await page.evaluate(() => {
 });
 check(restored, 'projeto volta da lixeira');
 
+//Excluir pela janela "Abrir projeto": lixeira no item da lista, com confirmação
+await page.evaluate(() => {
+  document.getElementById('loadProjectModal').style.display = 'flex';
+  const project = { id: 'projX', name: 'Projeto X', project_type: 'TCR', city: 'Lavras', updated_at: new Date().toISOString(), summary: { ctos: 2 } };
+  projectPicker.items = [project];
+  projectPicker.total = 1;
+  const list = document.getElementById('projectPickerList');
+  list.innerHTML = '';
+  list.appendChild(buildProjectPickerItem(project));
+});
+await page.click('#projectPickerList .pp-item[data-project-id="projX"] .pp-delete-btn');
+await page.click('#confirmModalConfirmButton');
+await page.waitForTimeout(400);
+const pickerDelete = await page.evaluate(() => {
+  const out = {
+    deleted: !!window.__fakeDb.projects.projX?.deleted_at,
+    gone: !document.querySelector('#projectPickerList .pp-item[data-project-id="projX"]'),
+    empty: !!document.querySelector('#projectPickerList .pp-empty'),
+    pickerOpen: document.getElementById('loadProjectModal').style.display === 'flex',
+  };
+  window.__fakeDb.projects.projX.deleted_at = null;
+  document.getElementById('loadProjectModal').style.display = 'none';
+  return out;
+});
+check(pickerDelete.deleted && pickerDelete.gone && pickerDelete.empty && pickerDelete.pickerOpen,
+  `excluir pela lista de projetos manda para a lixeira e tira da lista (${JSON.stringify(pickerDelete)})`);
+
 const errorsLogged = await page.evaluate(async () => {
   const fire = (message) => window.dispatchEvent(new ErrorEvent('error', { message, filename: location.origin + '/js/x.js', lineno: 1, colno: 2, error: new Error(message) }));
   fire('Erro de teste do registro');
