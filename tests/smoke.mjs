@@ -2067,6 +2067,100 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && suggest.dismissed.points === 2 && suggest.dismissed.hidden && !suggest.dismissed.overlay,
     `sugestão de rota ao ligar A → B: aceitar usa a rota, recusar mantém a reta (${JSON.stringify(suggest)})`);
 
+  //Pré-projeto automático: polígono + casas + penetração + splitagem → CTOs na rua mais perto e cabos pelas ruas (OSRM)
+  const autoDesignOut = await sp.evaluate(async () => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projAD', name: 'Projeto AD', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projAD');
+    const LAT0 = -36, LNG0 = -44, H = 0.0045, W = 0.0072;
+    rebuildMarker({ uid: 'mk_ad_pop', folderId: 'projAD', type: 'POP', name: 'POP-AD', color: '#7c3aed', position: { lat: LAT0 + 0.0012, lng: LNG0 - 0.0016 } });
+    rebuildPolygon({ uid: 'pg_ad', folderId: 'projAD', name: 'Bairro AD', color: '#2dd4bf', opacity: 0.2, path: [
+      { lat: LAT0, lng: LNG0 }, { lat: LAT0, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 + W }, { lat: LAT0 - H, lng: LNG0 } ] });
+    const realFetch = window.fetch, realOsrm = window.fetchOsrmRoute;
+    let osrmUp = true, nearestCalls = 0;
+    //Rua mais perto: 20 m ao leste; rota: em "L" pelas ruas
+    window.fetch = async (url, opts) => {
+      const m = /\/nearest\/v1\/foot\/(-?[\d.]+),(-?[\d.]+)/.exec(String(url));
+      if (!m) return realFetch(url, opts);
+      nearestCalls++;
+      if (!osrmUp) return new Response('down', { status: 503 });
+      return new Response(JSON.stringify({ code: 'Ok', waypoints: [{ location: [Number(m[1]) + 0.0002, Number(m[2])] }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    window.fetchOsrmRoute = async (from, to) => (osrmUp ? [from, new google.maps.LatLng(from.lat(), to.lng()), to] : null);
+    const polygon = savedPolygons.find(p => p.uid === 'pg_ad');
+    const menu = buildSidebarMenuItems({ kind: 'polygon', info: polygon, name: polygon.name, row: polygon.listItem }).some(i => i.action === 'auto-design');
+    openAutoDesign(polygon);
+    const opened = !document.getElementById('autoDesignBox').classList.contains('hidden') && document.getElementById('autoDesignStart').value === 'mk_ad_pop';
+    const labels = document.getElementById('autoDesignBody').textContent;
+    const form = /Taxa de penetração/.test(labels) && /Splitagem da CTO/.test(labels) && /1:8/.test(labels) && /1:16/.test(labels);
+    const houses = document.getElementById('autoDesignHouses');
+    houses.value = '200';
+    houses.dispatchEvent(new Event('input', { bubbles: true }));
+    const calc = document.getElementById('autoDesignCalc').textContent.replace(/\s+/g, ' ').trim();
+    //OSRM fora do ar: a prévia sai do mesmo jeito, com os cabos em linha reta e o aviso
+    osrmUp = false;
+    await generateAutoDesign();
+    const down = { phase: autoDesign.phase, straight: autoDesign.result?.stats.straight, cables: autoDesign.result ? getAutoDesignAllCables(autoDesign.result).length : 0,
+      warn: [...document.querySelectorAll('#autoDesignBox .auto-design__warn')].some(w => /linha reta/.test(w.textContent)) };
+    document.querySelector('[data-auto-design="adjust"]').click();
+    osrmUp = true;
+    nearestCalls = 0;
+    await generateAutoDesign();
+    const plan = autoDesign.result;
+    const preview = {
+      phase: autoDesign.phase,
+      ctos: plan.ctos.length,
+      enough: plan.ctos.length >= plan.stats.byPorts,
+      inside: plan.ctos.every(c => c.position.lat() <= LAT0 && c.position.lat() >= LAT0 - H && c.position.lng() >= LNG0 && c.position.lng() <= LNG0 + W + 0.0003),
+      overlays: autoDesign.overlays.length > 0,
+      coverage: plan.stats.coverage >= 0.95,
+      snapped: plan.stats.snapped === plan.ctos.length + 1 && nearestCalls === plan.ctos.length + 1,
+      routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
+    };
+    const beforeMarkers = markers.length, beforeCables = savedCables.length;
+    document.querySelector('[data-auto-design="accept"]').click();
+    const folder = document.querySelector('#projAD > .folder-wrapper > .folder-title');
+    const newMarkers = markers.slice(beforeMarkers), newCables = savedCables.slice(beforeCables);
+    const byUid = new Map(markers.map(m => [m.uid, m]));
+    const ctoMarkers = newMarkers.filter(m => m.type === 'CTO');
+    const report = computeProjectReportData('projAD');
+    const out = {
+      menu, opened, form, calc, preview, down,
+      closed: document.getElementById('autoDesignBox').classList.contains('hidden') && !autoDesign,
+      folder: folder?.dataset.folderName,
+      ceo: newMarkers.filter(m => m.type === 'CEO').map(m => `${m.name}:${m.ceoStatus}`).join(','),
+      ctos: ctoMarkers.filter(m => m.ctoStatus === 'Nova').length,
+      splitters: ctoMarkers.every(m => { const p = readFusionPlan(m); return p?.splitters.length === 1 && p.splitters[0].atendimento && p.splitters[0].status === 'Novo' && /^1:8/.test(p.splitters[0].label); }),
+      casa: newMarkers.filter(m => m.type === 'CASA').map(m => m.name).join(','),
+      report: { ports: report.novasPortas, houses: report.totalCasas },
+      cables: newCables.length,
+      //Toda CTO é ponta de um cabo (ligada pelo uid) e todo cabo tem as duas pontas numa caixa
+      anchored: newCables.every(c => byUid.has(c.startAnchorUid) && byUid.has(c.endAnchorUid)),
+      everyCtoFed: ctoMarkers.every(m => newCables.some(c => c.endAnchorUid === m.uid)),
+      feeder: newCables.filter(c => byUid.get(c.startAnchorUid)?.uid === 'mk_ad_pop').map(c => `${c.name}|${c.type}`).join(','),
+      names: newCables.every(c => c.name === `${getFiberType(c.type)}-${byUid.get(c.endAnchorUid).name}` && c.status === 'Novo' && c.width === 4),
+      inFolder: newMarkers.concat(newCables).every(i => i.folderId === folder?.closest('.folder-wrapper')?.querySelector('.subfolders')?.id),
+    };
+    window.fetch = realFetch;
+    window.fetchOsrmRoute = realOsrm;
+    newCables.forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    markers.filter(m => getItemProjectId(m) === 'projAD').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    polygon.polygonObject.setMap(null); savedPolygons.splice(savedPolygons.indexOf(polygon), 1);
+    document.querySelector('.folder-title[data-folder-id="projAD"]').closest('.folder').remove();
+    return out;
+  });
+  check(autoDesignOut.down.phase === 'preview' && autoDesignOut.down.straight === autoDesignOut.down.cables && autoDesignOut.down.cables > 0 && autoDesignOut.down.warn,
+    `pré-projeto automático: sem servidor de rotas, gera em linha reta e avisa (${JSON.stringify(autoDesignOut.down)})`);
+  check(autoDesignOut.menu && autoDesignOut.opened && autoDesignOut.form && /60 clientes → 8 CTOs com splitter 1:8/.test(autoDesignOut.calc)
+    && autoDesignOut.preview.phase === 'preview' && autoDesignOut.preview.enough && autoDesignOut.preview.inside && autoDesignOut.preview.overlays
+    && autoDesignOut.preview.coverage && autoDesignOut.preview.snapped && autoDesignOut.preview.routed,
+    `pré-projeto automático: casas, penetração e splitagem → CTOs na rua e cabos pelas ruas (${JSON.stringify(autoDesignOut.preview)} ${autoDesignOut.calc})`);
+  check(autoDesignOut.closed && autoDesignOut.folder === 'Pré-projeto Bairro AD' && autoDesignOut.ceo === 'CEO-01:Nova'
+    && autoDesignOut.ctos === autoDesignOut.preview.ctos && autoDesignOut.cables === autoDesignOut.ctos + 1 && autoDesignOut.splitters
+    && autoDesignOut.casa === '200' && autoDesignOut.report.ports === autoDesignOut.ctos * 8 && autoDesignOut.report.houses === 200
+    && autoDesignOut.anchored && autoDesignOut.everyCtoFed && autoDesignOut.feeder === 'FO-48-CEO-01|Cabo AS 80 FO-48' && autoDesignOut.names && autoDesignOut.inFolder,
+    `pré-projeto automático: aceitar cria pasta, CEO, CTOs com splitter, casas e cabos ligados caixa a caixa (${JSON.stringify(autoDesignOut)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');
