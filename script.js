@@ -234,6 +234,7 @@ let adjustingKmlMarkerInfo = null; //Marcador importado via KML
 let hoverTooltipTimer = null; //Delay do tooltip
 let hoverTooltipElement = null; //Elemento visual do tooltip
 let projectObservations = {}; // Armazena os texto de observação por Id do projeto
+let projectObjectives = {}; // Resumo / objetivo escrito para o relatório, por Id do projeto (vazio = texto automático)
 const ABNT_FIBER_COLORS = [ //Padrão das cores de fibra óptica
   "#28a745", // 1. Verde
   "#ffc107", // 2. Amarelo
@@ -1104,6 +1105,7 @@ function initMap() {
     document.getElementById('confirmReportWordExportButton')?.addEventListener('click', confirmReportWordExport);
     document.getElementById('resetReportPreviewButton')?.addEventListener('click', resetReportPreview);
     setupReportOptions();
+    setupProjectSummaryEditor();
     //Ações gerais e sidebar
     updateSidebarEmptyState();
     document.addEventListener('keydown', (e) => {
@@ -1421,6 +1423,7 @@ function removeProjectFromWorkspace(projectId, projectElement) {
             activeFolderId = null;
         }
         delete projectObservations[projectId];
+        delete projectObjectives[projectId];
         delete projectBoms[projectId];
         updateSidebarEmptyState();
     }
@@ -1774,6 +1777,7 @@ const MODAL_ENTER_PRIMARY_SELECTORS = {
     splitterOltConfigModal: '#confirmSplitterOltConfig',
     reportPreviewModal: '#confirmReportPdfExportButton',
     observationsModal: '#saveObservationButton',
+    projectSummaryModal: '#saveProjectSummaryButton',
     lineActionModal: '#editLineButton',
     materialModal: '#saveMaterialChangesButton',
     stickersModal: '#closeStickersModalButton',

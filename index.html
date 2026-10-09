@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261017a" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261017b" />
     <link rel="stylesheet" href="ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -1597,6 +1597,17 @@
           </div>
 
           <div class="report-details-body">
+            <section class="rv-card rv-summary">
+              <div class="rv-summary__head">
+                <h4 class="rv-card__title">Resumo e objetivo</h4>
+                <span class="rv-summary__tag" id="rv-summary-tag" hidden>Gerado automaticamente</span>
+                <button type="button" id="editProjectSummaryButton" class="btn btn-secondary btn-sm">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-edit"></use></svg>Editar
+                </button>
+              </div>
+              <p class="rv-notes" id="rv-summary"></p>
+            </section>
+
             <div class="rv-kpis">
               <div class="rv-kpi rv-kpi--primary">
                 <span class="rv-kpi__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-money"></use></svg></span>
@@ -1724,6 +1735,7 @@
         <div class="report-preview-toolbar">
           <p class="report-preview-hint">Revise as folhas A4. Clique em qualquer texto para editar antes de exportar.</p>
           <div class="report-preview-options" role="group" aria-label="Conteúdo do relatório">
+            <label class="map-tool-chip"><input type="checkbox" id="rpOptSummary" checked /><span>Resumo e objetivo</span></label>
             <label class="map-tool-chip"><input type="checkbox" id="rpOptBom" checked /><span>Lista de materiais</span></label>
             <label class="map-tool-chip"><input type="checkbox" id="rpOptLabor" checked /><span>Detalhe da mão de obra</span></label>
             <label class="map-tool-chip"><input type="checkbox" id="rpOptNotes" checked /><span>Observações</span></label>
@@ -2744,6 +2756,24 @@
       </div>
     </div>
 
+    <div id="projectSummaryModal" class="modal">
+      <div class="modal-content observations-modal">
+          <span class="close" id="closeProjectSummaryModal">&times;</span>
+          <h2>Resumo e objetivo do projeto</h2>
+          <div class="modal-body-content">
+              <p class="observations-hint">Para que serve o projeto e o que ele entrega. O texto abre o relatório, o PDF e o Word. Se ficar em branco, o relatório usa o texto automático montado com os números do projeto.</p>
+              <textarea id="projectSummaryTextarea" rows="9" placeholder="Ex.: Atender o novo loteamento Jardim das Flores com 128 portas, reduzindo a ocupação da OLT 2."></textarea>
+              <button type="button" id="projectSummaryAutoButton" class="btn btn-secondary btn-sm">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg>Usar texto automático
+              </button>
+          </div>
+          <div class="modal-footer">
+              <button type="button" id="cancelProjectSummaryButton" class="btn btn-secondary">Cancelar</button>
+              <button type="button" id="saveProjectSummaryButton" class="btn btn-success">Salvar resumo</button>
+            </div>
+        </div>
+    </div>
+
     <div id="observationsModal" class="modal">
       <div class="modal-content observations-modal">
           <span class="close" id="closeObservationsModal">&times;</span>
@@ -2771,15 +2801,15 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261017b" defer></script>
-  <script src="js/persistence.js?v=20261010b" defer></script>
+  <script src="script.js?v=20261017c" defer></script>
+  <script src="js/persistence.js?v=20261017a" defer></script>
   <script src="js/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/project-safety.js?v=20261016b" defer></script>
   <script src="js/catalog.js?v=20261013h" defer></script>
   <script src="js/kml.js?v=20261007i" defer></script>
   <script src="js/bom.js?v=20261013m" defer></script>
   <script src="js/labor.js?v=20261013m" defer></script>
-  <script src="js/report.js?v=20261010b" defer></script>
+  <script src="js/report.js?v=20261017a" defer></script>
   <script src="js/sketch.js?v=20261016a" defer></script>
   <script src="js/projects.js?v=20261016b" defer></script>
   <script src="js/sidebar.js?v=20261016a" defer></script>
@@ -2801,13 +2831,13 @@
   <script src="js/undo.js?v=20261007o" defer></script>
   <script src="js/map-selection.js?v=20261013p" defer></script>
   <script src="js/tour.js?v=20261007i" defer></script>
-  <script src="js/live-sync.js?v=20261007a" defer></script>
+  <script src="js/live-sync.js?v=20261017a" defer></script>
   <script src="js/pop-plan.js?v=20261008e" defer></script>
   <script src="js/cable-route.js?v=20261013j" defer></script>
   <script src="js/cable-split.js?v=20261014i" defer></script>
   <script src="js/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/marker-hover.js?v=20261010e" defer></script>
-  <script src="js/report-pdf.js?v=20261004b" defer></script>
+  <script src="js/report-pdf.js?v=20261017a" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>

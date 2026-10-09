@@ -215,6 +215,7 @@ function computeProjectReportData(projectId) {
         materialClasseF,
         materialDataCenter,
         observations: projectObservations[projectId] || '',
+        objective: (typeof projectObjectives !== 'undefined' && projectObjectives[projectId]) || '',
         outsourcedLaborDetails,
         regionalLaborDetails,
         bomItemsByCategory,
@@ -351,6 +352,59 @@ function formatPdfNumber(value) {
     return decPart === '00' ? withDots : `${withDots},${decPart}`;
 }
 
+//Texto automático de "Resumo e objetivo" montado com os números do projeto (o usuário pode reescrever)
+function buildProjectAutoSummary(data) {
+    if (!data) return '';
+    const q = data.quantities || {};
+    const num = (value) => Math.round(Number(value) || 0).toLocaleString('pt-BR');
+    const plural = (n, one, many) => `${num(n)} ${Math.round(n) === 1 ? one : many}`;
+    const place = data.neighborhood && data.city ? ` no bairro ${data.neighborhood}, em ${data.city}`
+        : data.neighborhood ? ` no bairro ${data.neighborhood}`
+        : data.city ? ` em ${data.city}` : '';
+    const goals = {
+        MDU: 'levar a rede de fibra óptica a prédios e condomínios',
+        Backbone: 'implantar rede troncal (backbone) de fibra óptica',
+        B2B: 'atender clientes empresariais com fibra óptica',
+    };
+    let goal = `Objetivo: ${goals[data.projectType] || 'ampliar a rede de fibra óptica (FTTH)'}${place}`;
+    if (data.novasPortas > 0) {
+        goal += `, disponibilizando ${plural(data.novasPortas, 'nova porta', 'novas portas')} de atendimento`;
+        if (data.totalCasas > 0) goal += ` para uma área de ${plural(data.totalCasas, 'casa', 'casas')} (HP)`;
+    } else if (data.totalCasas > 0) {
+        goal += `, cobrindo uma área de ${plural(data.totalCasas, 'casa', 'casas')} (HP)`;
+    }
+    if (data.clients?.b2b > 0 && data.projectType === 'B2B') goal += ` e atendendo ${plural(data.clients.b2b, 'cliente empresarial', 'clientes empresariais')}`;
+    const lines = [`${goal}.`];
+
+    const scope = [];
+    if (q.cableLength > 0) scope.push(`lançamento de ${num(q.cableLength)} m de cabo óptico`);
+    if (q.ctoCount > 0) scope.push(`instalação de ${plural(q.ctoCount, 'CTO', 'CTOs')}`);
+    if (q.ceoCount > 0) scope.push(plural(q.ceoCount, 'CEO', 'CEOs'));
+    if (q.reservaCount > 0) scope.push(plural(q.reservaCount, 'reserva técnica', 'reservas técnicas'));
+    if (data.postCount > 0) scope.push(`uso estimado de ${plural(data.postCount, 'poste', 'postes')}`);
+    if (scope.length) {
+        const last = scope.pop();
+        lines.push(`Escopo: ${scope.length ? `${scope.join(', ')} e ${last}` : last}.`);
+    }
+
+    if (data.totalPortas > 0 && data.totalCasas > 0) {
+        lines.push(`Resultado esperado: a área passa a contar com ${plural(data.totalPortas, 'porta', 'portas')} no total, com taxa de penetração de ${data.penetrationRate.toFixed(1).replace('.', ',')}%.`);
+    }
+    if (data.finalCost > 0) {
+        let cost = `Investimento estimado de ${formatPdfCurrency(data.finalCost)}`;
+        if (data.costPerPort > 0) cost += ` (${formatPdfCurrency(data.costPerPort)} por nova porta)`;
+        if (data.prazoEstimado > 0) cost += `, com prazo de execução de ${plural(data.prazoEstimado, 'dia', 'dias')}`;
+        lines.push(`${cost}.`);
+    }
+    return lines.join('\n');
+}
+
+//Texto que vai para o relatório: o escrito pelo usuário ou, sem ele, o automático
+function getProjectReportSummary(data) {
+    const custom = (data?.objective || '').trim();
+    return { text: custom || buildProjectAutoSummary(data), isAuto: !custom };
+}
+
 let reportPreviewOriginalSnapshot = null;
 let reportPreviewResizeTimer = null;
 
@@ -405,7 +459,8 @@ function createReportPreviewSnapshot(data) {
         locationLine,
         generatedAt: `Gerado em ${new Date().toLocaleString('pt-BR')}`,
         //Observações entram marcadas quando existem; sem texto, a opção imprime um espaço para anotações
-        options: { bom: true, labor: true, notes: !!(data.observations && data.observations.trim()) },
+        options: { summary: true, bom: true, labor: true, notes: !!(data.observations && data.observations.trim()) },
+        summary: getProjectReportSummary(data).text,
         costShare: {
             mat: (data.materialCost / shareBase) * 100,
             lab: (data.laborCost / shareBase) * 100,
@@ -794,7 +849,7 @@ function scheduleReportPreviewRelayout() {
 
 function buildReportPreviewFlowBlocks(snapshot) {
     const blocks = [];
-    const options = snapshot.options || { bom: true, labor: true, notes: true };
+    const options = snapshot.options || { summary: true, bom: true, labor: true, notes: true };
 
     const renderDetailRows = (rows, sectionKey, { highlightLast = false } = {}) => rows.map((row, index) => `
         <div class="rp-detail-row${highlightLast && index === rows.length - 1 ? ' rp-detail-row--final' : ''}">
@@ -897,6 +952,13 @@ function buildReportPreviewFlowBlocks(snapshot) {
             ${snapshot.author ? `<span class="rp-chip rp-chip--muted">Elaborado por <span contenteditable="true" data-rp-field="author">${escapeReportPreviewHtml(snapshot.author)}</span></span>` : ''}
         </div>
     `));
+
+    if (options.summary && snapshot.summary) {
+        blocks.push(createReportPreviewFlowBlock(`
+            <div class="rp-section-title">Resumo e objetivo</div>
+            <div class="rp-summary" contenteditable="plaintext-only" data-rp-field="summary">${escapeReportPreviewHtml(snapshot.summary)}</div>
+        `, 'rp-avoid-break'));
+    }
 
     blocks.push(createReportPreviewFlowBlock(`
         <div class="rp-section-title">Indicadores</div>
@@ -1006,6 +1068,8 @@ function readReportPreviewSnapshotFromDom(baseSnapshot) {
     snapshot.locationLine = readEditableText('[data-rp-field="location"]') || snapshot.locationLine;
     snapshot.generatedAt = readEditableText('[data-rp-field="generatedAt"]') || snapshot.generatedAt;
     snapshot.author = readEditableText('[data-rp-field="author"]') || snapshot.author;
+    const summaryEl = document.querySelector('[data-rp-field="summary"]');
+    if (summaryEl) snapshot.summary = (summaryEl.innerText || '').replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     //Observações: mantém as quebras de linha e aceita ficar vazia
     const notesEl = document.querySelector('[data-rp-field="observations"]');
     if (notesEl) snapshot.observations = (notesEl.innerText || '').replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
@@ -1095,7 +1159,8 @@ function resetReportPreview() {
 }
 
 function syncReportOptionCheckboxes() {
-    const options = reportPreviewCurrentSnapshot?.options || { bom: true, labor: true, notes: true };
+    const options = reportPreviewCurrentSnapshot?.options || { summary: true, bom: true, labor: true, notes: true };
+    document.getElementById('rpOptSummary').checked = options.summary !== false;
     document.getElementById('rpOptBom').checked = !!options.bom;
     document.getElementById('rpOptLabor').checked = !!options.labor;
     document.getElementById('rpOptNotes').checked = !!options.notes;
@@ -1106,6 +1171,7 @@ function handleReportOptionChange() {
     if (!reportPreviewCurrentSnapshot) return;
     const edited = readReportPreviewSnapshotFromDom(reportPreviewCurrentSnapshot);
     edited.options = {
+        summary: document.getElementById('rpOptSummary').checked,
         bom: document.getElementById('rpOptBom').checked,
         labor: document.getElementById('rpOptLabor').checked,
         notes: document.getElementById('rpOptNotes').checked,
@@ -1114,8 +1180,68 @@ function handleReportOptionChange() {
     renderReportPreviewHtml(edited);
 }
 
+//Cartão "Resumo e objetivo" do painel do relatório
+function renderReportSummary(data) {
+    const box = document.getElementById('rv-summary');
+    if (!box) return;
+    const { text, isAuto } = getProjectReportSummary(data);
+    box.textContent = text || 'Sem dados suficientes para montar o resumo. Use o botão Editar para escrever o objetivo do projeto.';
+    box.classList.toggle('is-empty', !text);
+    document.getElementById('rv-summary-tag').hidden = !(isAuto && text);
+    const editButton = document.getElementById('editProjectSummaryButton');
+    if (editButton) editButton.hidden = !AppSession.canEdit;
+}
+
+//Janela para escrever o resumo / objetivo do projeto (em branco = texto automático)
+function setupProjectSummaryEditor() {
+    const modal = document.getElementById('projectSummaryModal');
+    const textarea = document.getElementById('projectSummaryTextarea');
+    if (!modal || !textarea) return;
+    const currentProjectId = () => document.getElementById('report-project-details').dataset.currentProjectId;
+    const close = () => { modal.style.display = 'none'; };
+    document.getElementById('editProjectSummaryButton').addEventListener('click', () => {
+        const projectId = currentProjectId();
+        const data = projectId && computeProjectReportData(projectId);
+        if (!data) {
+            showAlert('Erro', 'Não foi possível identificar o projeto.');
+            return;
+        }
+        textarea.value = getProjectReportSummary(data).text;
+        modal.style.display = 'flex';
+        setTimeout(() => textarea.focus(), 30);
+    });
+    document.getElementById('projectSummaryAutoButton').addEventListener('click', () => {
+        const data = computeProjectReportData(currentProjectId());
+        textarea.value = buildProjectAutoSummary(data);
+        textarea.focus();
+    });
+    document.getElementById('closeProjectSummaryModal').addEventListener('click', close);
+    document.getElementById('cancelProjectSummaryButton').addEventListener('click', close);
+    document.getElementById('saveProjectSummaryButton').addEventListener('click', () => {
+        const projectId = currentProjectId();
+        if (!projectId) return close();
+        const data = computeProjectReportData(projectId);
+        const text = textarea.value.trim();
+        //Igual ao automático (ou vazio) não fica gravado: continua acompanhando os números do projeto
+        if (!text || text === buildProjectAutoSummary(data).trim()) delete projectObjectives[projectId];
+        else projectObjectives[projectId] = text;
+        close();
+        renderReportSummary(computeProjectReportData(projectId));
+        const projectRoot = document.getElementById(projectId)?.closest('.folder');
+        const projectName = document.getElementById(projectId)?.previousElementSibling?.dataset.folderName || '';
+        if (projectRoot && AppSession.canEdit) {
+            persistProject(projectRoot)
+                .then(() => showToast('Resumo salvo', `Gravado no projeto "${projectName}".`))
+                .catch((error) => {
+                    console.error('Erro ao salvar o resumo:', error);
+                    showToast('Resumo guardado', 'Não foi possível gravar no banco agora. Salve o projeto para não perder.', 'progress');
+                });
+        }
+    });
+}
+
 function setupReportOptions() {
-    ['rpOptBom', 'rpOptLabor', 'rpOptNotes'].forEach((id) => {
+    ['rpOptSummary', 'rpOptBom', 'rpOptLabor', 'rpOptNotes'].forEach((id) => {
         document.getElementById(id)?.addEventListener('change', handleReportOptionChange);
     });
     //Caixa de observações vazia mostra linhas para anotar; some ao digitar
@@ -1213,6 +1339,7 @@ body { font-family: Segoe UI, Arial, sans-serif; font-size: 11pt; color: #16323f
 .rp-kpi-label { display: block; font-size: 8pt; color: #5b7483; font-weight: bold; text-transform: uppercase; margin-bottom: 4pt; }
 .rp-kpi-value { display: block; font-size: 12pt; font-weight: bold; color: #16323f; }
 .rp-kpi-primary .rp-kpi-value { color: #1f9d4a; }
+.rp-summary { padding: 8pt; border-left: 3pt solid #2f7a94; font-size: 10pt; white-space: pre-wrap; background: #f5f8fa; }
 .rp-observations { min-height: 48pt; padding: 8pt; border: 1px dashed #b8ccd6; border-radius: 6pt; font-size: 9pt; white-space: pre-wrap; background: #f5f8fa; }
 .rp-table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; font-size: 9pt; }
 .rp-table th, .rp-table td { border: 1px solid #dbe5eb; padding: 4pt 5pt; }
@@ -1461,6 +1588,7 @@ function showProjectReportDetails(projectId, projectName) {
     setRv('finalCost', money(data.finalCost));
 
     renderReportObservations(data.observations);
+    renderReportSummary(data);
 
     document.getElementById("report-project-list").classList.add("hidden");
     document.getElementById("report-project-details").classList.remove("hidden");

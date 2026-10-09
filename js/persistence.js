@@ -39,7 +39,8 @@ function buildProjectRecord(projectRootElement) {
             cables: savedCables.filter(c => allFolderIds.includes(c.folderId)).map(serializeCable),
             polygons: savedPolygons.filter(p => allFolderIds.includes(p.folderId)).map(serializePolygon),
             bom: projectBoms[projectId] || null,
-            observations: projectObservations[projectId] || null
+            observations: projectObservations[projectId] || null,
+            objective: projectObjectives[projectId] || null
         }
     };
 }
@@ -308,6 +309,9 @@ function loadAndDisplayProject(projectId, projectData, { silent = false } = {}) 
     //Carrega as observações salvas
     if (projectData.observations) {
         projectObservations[projectId] = projectData.observations;
+    }
+    if (projectData.objective) {
+        projectObjectives[projectId] = projectData.objective;
     }
     if (!silent) showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
     if (typeof resetProjectUndo === 'function') resetProjectUndo(projectId);

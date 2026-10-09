@@ -28,7 +28,7 @@ function liveSnapshot(projectId) {
     if (!root) return null;
     try {
         const data = buildProjectRecord(root).data;
-        return { sidebar: data.sidebar, observations: data.observations || null, markers: data.markers, cables: data.cables, polygons: data.polygons };
+        return { sidebar: data.sidebar, observations: data.observations || null, objective: data.objective || null, markers: data.markers, cables: data.cables, polygons: data.polygons };
     } catch (e) {
         return null;
     }
@@ -54,6 +54,7 @@ function liveDiff(prev, next) {
     });
     if (JSON.stringify(prev?.sidebar) !== JSON.stringify(next?.sidebar)) { ops.sidebar = next.sidebar; any = true; }
     if (JSON.stringify(prev?.observations) !== JSON.stringify(next?.observations)) { ops.observations = next.observations; any = true; }
+    if (JSON.stringify(prev?.objective) !== JSON.stringify(next?.objective)) { ops.objective = next.objective; any = true; }
     return any ? ops : null;
 }
 
@@ -68,6 +69,7 @@ function liveApplyOpsToSnapshot(snapshot, ops) {
     });
     if (ops.sidebar) next.sidebar = ops.sidebar;
     if ('observations' in ops) next.observations = ops.observations;
+    if ('objective' in ops) next.objective = ops.objective;
     return next;
 }
 
@@ -280,6 +282,7 @@ function applyLiveOps(projectId, msg) {
                 placeLiveRow(savedPolygons.find(p => p.uid === data.uid)?.listItem, data.order);
             });
             if ('observations' in ops) projectObservations[projectId] = ops.observations;
+            if ('objective' in ops) projectObjectives[projectId] = ops.objective;
             if (typeof refreshClientDrops === 'function') refreshClientDrops();
             updateSidebarCounts();
             refreshBomAfterProjectChange();
