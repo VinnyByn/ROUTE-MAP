@@ -1907,6 +1907,37 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(misc.closedOutside && misc.insideKeeps && misc.fusionKeeps && misc.moveItem && misc.samePole === 'mk_spceo>mk_spcto|30' && misc.width === '2|4',
     `janela fecha clicando fora, "Mover" no botão direito e cabo entre caixas no mesmo poste (${JSON.stringify(misc)})`);
 
+  //Barra superior fecha a edição aberta no mapa; com alteração não salva, pergunta antes
+  const oneAtATime = await sp.evaluate(async () => {
+    const sidebar = document.getElementById('sidebar');
+    rebuildSidebarFromJSON([{ id: 'projOT', name: 'Projeto OT', isProject: true, type: 'TCR', children: [] }], sidebar);
+    setActiveFolder('projOT');
+    rebuildMarker({ uid: 'mk_ot1', folderId: 'projOT', type: 'CTO', name: 'CTO-OT', color: '#f00', position: { lat: -32, lng: -44 } });
+    const cto = markers.find(m => m.uid === 'mk_ot1');
+    const user = document.getElementById('userMenuButton');
+    const userOpen = () => !!document.querySelector('.dropdown-user .dropdown-content.show');
+    const closeMenus = () => document.querySelectorAll('.dropdown-content.show').forEach(d => d.classList.remove('show'));
+    openMarkerEditor(cto);
+    user.click();
+    const clean = { panelClosed: !isMarkerPanelOpen(), menuOpen: userOpen() };
+    closeMenus();
+    openMarkerEditor(cto);
+    document.getElementById('markerName').value = 'CTO-OT-MUDOU';
+    user.click();
+    const confirmShown = getComputedStyle(document.getElementById('confirmModal')).display !== 'none';
+    const dirty = { asked: confirmShown, stillOpen: isMarkerPanelOpen(), menuOpen: userOpen() };
+    document.getElementById('confirmModalConfirmButton').click();
+    await new Promise(r => setTimeout(r, 20));
+    dirty.afterConfirm = { panelClosed: !isMarkerPanelOpen(), menuOpen: userOpen(), name: cto.name };
+    closeMenus();
+    cto.marker?.setMap(null); markers.splice(markers.indexOf(cto), 1);
+    document.querySelector('.folder-title[data-folder-id="projOT"]').closest('.folder').remove();
+    return { clean, dirty };
+  });
+  check(oneAtATime.clean.panelClosed && oneAtATime.clean.menuOpen && oneAtATime.dirty.asked && oneAtATime.dirty.stillOpen && !oneAtATime.dirty.menuOpen
+    && oneAtATime.dirty.afterConfirm.panelClosed && oneAtATime.dirty.afterConfirm.menuOpen && oneAtATime.dirty.afterConfirm.name === 'CTO-OT',
+    `barra superior fecha a edição aberta e pergunta se houver alteração (${JSON.stringify(oneAtATime)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');

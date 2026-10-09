@@ -4280,6 +4280,44 @@ function invertCableDirection() {
     });
 }
 
+// ---------------------------------------------------------------
+// Uma coisa aberta por vez: ao usar a barra superior (menus, conta, relatório, busca…),
+// as edições e painéis abertos no mapa fecham. Com alterações não salvas, pergunta antes.
+// ---------------------------------------------------------------
+function hasUnsavedMapEdit() {
+    if (isDrawingCable) return editingCableIndex !== null ? isEditingCableDirty() : cableMarkers.length > 0;
+    if (isDrawingPolygon) return true;
+    if (typeof dropEditSession !== 'undefined' && dropEditSession) return true;
+    return typeof isMarkerPanelDirty === 'function' && isMarkerPanelDirty();
+}
+
+function closeOpenMapEditors() {
+    if (typeof dropEditSession !== 'undefined' && dropEditSession && typeof cancelClientDropEdit === 'function') cancelClientDropEdit();
+    if (typeof isConduitToolOpen === 'function' && isConduitToolOpen()) closeConduitTool();
+    if (typeof isCableRouteOpen === 'function' && isCableRouteOpen()) closeCableRoute();
+    if (isDrawingCable) cancelCableDrawingSession();
+    if (isDrawingPolygon && typeof cancelPolygonDrawing === 'function') cancelPolygonDrawing();
+    if (isMeasuring && typeof stopRuler === 'function') stopRuler();
+    if (typeof isMarkerPanelOpen === 'function' && (isMarkerPanelOpen() || isAddingMarker)) resetMarkerModal();
+    if (typeof closeNetworkImpact === 'function' && !document.getElementById('networkImpactBox')?.classList.contains('hidden')) closeNetworkImpact();
+    document.getElementById('projectCheckBox')?.classList.add('hidden');
+}
+
+document.addEventListener('click', (e) => {
+    const button = e.target.closest?.('.top-bar button');
+    if (!button || button.id === 'quickSaveButton') return;
+    if (!hasUnsavedMapEdit()) {
+        closeOpenMapEditors();
+        return;
+    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    showConfirm('Descartar alterações?', 'Há uma edição aberta no mapa com alterações não salvas. Descartar e continuar?', () => {
+        closeOpenMapEditors();
+        setTimeout(() => button.click(), 0); //Depois do clique em "Confirmar" (que fecha os menus abertos)
+    });
+}, true);
+
 //Clicar fora da janela (no fundo escuro) fecha, como o X. O plano de fusão e a prévia do relatório,
 //onde se perde trabalho fácil, só fecham pelo botão.
 const MODALS_WITHOUT_BACKDROP_CLOSE = new Set(['fusionModal', 'reportPreviewModal']);
