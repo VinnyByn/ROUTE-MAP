@@ -106,15 +106,16 @@ function updateTrashButton(facets) {
     if (supported) button.querySelector('span').textContent = facets.trash ? `Lixeira (${facets.trash})` : 'Lixeira';
 }
 
-//Move o projeto para a lixeira (some da busca; pode ser restaurado por 30 dias)
-function moveProjectToTrash(projectId, projectElement, projectName) {
+//Move o projeto para a lixeira (some da busca; pode ser restaurado por 30 dias).
+//projectElement só existe se o projeto estiver aberto na tela; onDone roda depois de excluir.
+function moveProjectToTrash(projectId, projectElement, projectName, onDone = null) {
     if (!requireEdit('excluir projetos')) return;
     showConfirm('Excluir projeto',
         `Mover "${projectName}" para a lixeira? Ele some para toda a equipe, mas pode ser restaurado em até 30 dias (Projeto → Abrir projeto → Lixeira).`,
         async () => {
             const { data, error } = await supabaseClient.from('projects')
                 .update({ deleted_at: new Date().toISOString() }).eq('id', projectId).select('id');
-            if (error && isMissingFeatureError(error)) return deleteProjectPermanently(projectId, projectElement, projectName);
+            if (error && isMissingFeatureError(error)) return deleteProjectPermanently(projectId, projectElement, projectName, onDone);
             if (error) {
                 return showAlert('Sem permissão', /lixeira|42501/i.test(`${error.message} ${error.code}`)
                     ? 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.'
@@ -123,14 +124,17 @@ function moveProjectToTrash(projectId, projectElement, projectName) {
             if (!data.length && await projectExistsInDatabase(projectId)) {
                 return showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
             }
-            if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
-            removeProjectFromWorkspace(projectId, projectElement);
+            if (projectElement) {
+                if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
+                removeProjectFromWorkspace(projectId, projectElement);
+            }
+            onDone?.();
             showToast('Projeto na lixeira', `"${projectName}" pode ser restaurado em até 30 dias.`);
         });
 }
 
 //Exclusão definitiva (sem lixeira no banco, ou a partir da lixeira)
-async function deleteProjectPermanently(projectId, projectElement, projectName) {
+async function deleteProjectPermanently(projectId, projectElement, projectName, onDone = null) {
     const { data, error } = await supabaseClient.from('projects').delete().eq('id', projectId).select('id');
     if (error) {
         console.error('Erro ao excluir projeto:', error);
@@ -140,6 +144,7 @@ async function deleteProjectPermanently(projectId, projectElement, projectName) 
         return showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
     }
     if (projectElement) removeProjectFromWorkspace(projectId, projectElement);
+    onDone?.();
     showToast('Projeto excluído', `"${projectName}" foi apagado de vez.`);
 }
 
