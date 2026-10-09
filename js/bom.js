@@ -662,7 +662,7 @@ const CABLE_HARDWARE_MAP = {
     "Cabo AS 200 FO-144": "ALÇA PREFORMADA OPDE 1007 - 12,8MM A 14,2MM"
 };
 
-function getAggregatedCableLengthsForFerragens(projectId) {
+function getAggregatedCableLengthsForFerragens(projectId, bom = bomState) {
     const aggregated = {};
     if (!projectId) return aggregated;
 
@@ -670,7 +670,7 @@ function getAggregatedCableLengthsForFerragens(projectId) {
     syncProjectCableMeasurements(projectCables);
     Object.entries(groupCablesByType(projectCables)).forEach(([cableType, cables]) => {
         const bomKey = makeBomKey(cableType);
-        if (bomState[bomKey]?.removed) return;
+        if (bom?.[bomKey]?.removed) return;
         //Só a parte aérea vai em poste: a linha tubulada fica fora das ferragens
         const length = getCableDisplayParts(cableType, cables).aerial;
         if (length > 0) {
@@ -678,6 +678,16 @@ function getAggregatedCableLengthsForFerragens(projectId) {
         }
     });
     return aggregated;
+}
+
+//Postes do projeto pela mesma conta das ferragens da lista de materiais (plaqueta, BAP 3, SUPA):
+//vão configurável sobre a parte aérea de cada tipo de cabo que leva alça
+function getProjectPoleCount(projectId, bom) {
+    const span = getPoleSpanDistance();
+    const lengths = getAggregatedCableLengthsForFerragens(projectId, bom);
+    return Object.entries(lengths).reduce((total, [cableName, length]) => (
+        length > 0 && getCableAlca(cableName) ? total + Math.ceil(length / span) : total
+    ), 0);
 }
 
 function applyCableFerragensToBom(projectId, addOrUpdateMaterialFn) {

@@ -876,6 +876,8 @@ const conduit = await page.evaluate(() => {
   //Metade do cabo em duto
   setCableConduitRanges(cable, [{ from: 0, to: 500 }]);
   const half = { meters: Math.round(getCableConduitMeters(cable)), bap: qty('ABRAÇADEIRA BAP 3'), cabo: qty('CFOA SM ASU 80 S 12 FIBRAS NR'), tubo: qty(TUBED), stored: cable.conduit.length, report: getProjectConduitMeters('projT') > 0, hover: /Tubulado<\/span><b>500 m/.test(buildCableHoverHtml(cable)) };
+  //Postes do relatório = mesma conta da BAP 3 da lista de materiais (sem o trecho tubulado)
+  const poles = { report: computeProjectReportData('projT')?.postCount, bap: qty('ABRAÇADEIRA BAP 3') / (per || 1) };
   //Dois trechos que se tocam viram um só; fora do cabo é cortado
   setCableConduitRanges(cable, [{ from: 0, to: 300 }, { from: 250, to: 600 }, { from: -20, to: 5 }]);
   const merged = getCableConduitRanges(cable).map(r => `${Math.round(r.from)}-${Math.round(r.to)}`).join();
@@ -938,9 +940,10 @@ const conduit = await page.evaluate(() => {
   activeFolderId = previousFolder; bomState = {};
   document.querySelector('[data-folder-id="projT"]').closest('li').remove();
   window.google = realGoogle;
-  return { per, span, exact, drawn: measure.lancamento, before, half, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back, highlight, surcharge, duct,
+  return { per, span, exact, drawn: measure.lancamento, before, half, poles, merged, parts: `${parts.first.length}|${parts.second.length}`, all, back, highlight, surcharge, duct,
     expectHalf: Math.ceil((before.cabo - 500) / span) * per, expectSurchargeBap: Math.ceil((before.cabo - 500) / span) * per, expectBefore: Math.ceil(before.cabo / span) * per };
 });
+check(conduit.poles.report > 0 && conduit.poles.report === conduit.poles.bap, `postes do relatório iguais à BAP 3 da lista de materiais (${JSON.stringify(conduit.poles)})`);
 check(conduit.per > 0 && conduit.before.bap === conduit.expectBefore && conduit.half.meters === 500 && conduit.half.bap === conduit.expectHalf && conduit.half.bap < conduit.before.bap
   && conduit.half.cabo === conduit.before.cabo - 500 && conduit.half.tubo === 510 && conduit.half.report && conduit.half.hover,
   `trecho tubulado vira linha própria na lista e sai das ferragens de poste (${JSON.stringify({ before: conduit.before, half: conduit.half, expectHalf: conduit.expectHalf })})`);
