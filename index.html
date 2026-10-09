@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261015b" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261016a" />
     <link rel="stylesheet" href="ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -115,7 +115,6 @@
             <a href="#" id="drawCableButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg><span>Cabo</span></a>
             <a href="#" id="addMarkerButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg><span>Marcador</span><small>CTO, CEO, cliente…</small></a>
             <a href="#" id="drawPolygonButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Polígono</span></a>
-            <a href="#" id="autoDesignMenuButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cto"></use></svg><span>Pré-projeto automático</span><small>Área + casas → caixas e cabos</small></a>
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="rulerButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ruler"></use></svg><span>Régua de medição</span></a>
           </div>
@@ -2617,18 +2616,6 @@
       </div>
     </div>
   
-    <div id="autoDesignBox" class="floating-box map-tool-box auto-design hidden" role="dialog" aria-labelledby="autoDesignTitle">
-      <div class="map-tool-box__header">
-        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cto"></use></svg></span>
-        <h3 id="autoDesignTitle">Gerar pré-projeto</h3>
-        <button type="button" class="map-tool-box__close" id="closeAutoDesignButton" title="Fechar (Esc)" aria-label="Fechar">
-          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
-        </button>
-      </div>
-      <div class="map-tool-box__body" id="autoDesignBody"></div>
-      <div class="map-tool-box__actions" id="autoDesignActions"></div>
-    </div>
-
     <div id="loadProjectModal" class="modal">
       <div class="modal-content project-picker" role="dialog" aria-labelledby="loadProjectTitle">
         <span class="close" id="closeLoadProjectModal">&times;</span>
@@ -2784,7 +2771,7 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261015a" defer></script>
+  <script src="script.js?v=20261016a" defer></script>
   <script src="js/persistence.js?v=20261010b" defer></script>
   <script src="js/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/project-safety.js?v=20261007a" defer></script>
@@ -2793,9 +2780,9 @@
   <script src="js/bom.js?v=20261013m" defer></script>
   <script src="js/labor.js?v=20261013m" defer></script>
   <script src="js/report.js?v=20261010b" defer></script>
-  <script src="js/sketch.js?v=20261015a" defer></script>
+  <script src="js/sketch.js?v=20261016a" defer></script>
   <script src="js/projects.js?v=20261005a" defer></script>
-  <script src="js/sidebar.js?v=20261015a" defer></script>
+  <script src="js/sidebar.js?v=20261016a" defer></script>
   <script src="js/permissions.js?v=20261004b" defer></script>
   <script src="js/marker-icons.js?v=20261007b" defer></script>
   <script src="js/marker-panel.js?v=20261014h" defer></script>
@@ -2819,7 +2806,6 @@
   <script src="js/cable-route.js?v=20261013j" defer></script>
   <script src="js/cable-split.js?v=20261014i" defer></script>
   <script src="js/cable-route-suggest.js?v=20261014j" defer></script>
-  <script src="js/auto-design.js?v=20261015b" defer></script>
   <script src="js/marker-hover.js?v=20261010e" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>

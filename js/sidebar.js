@@ -139,7 +139,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -201,7 +201,6 @@ function buildSidebarMenuItems(entity) {
             }));
         }
         if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Cadastro de equipamentos', hint: 'OLTs, placas, DGOs e switches' });
-        if (canEdit && entity.kind === 'polygon') items.push({ action: 'auto-design', label: 'Gerar pré-projeto', hint: 'CTOs e cabos pelas ruas da área' });
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
         if (canEdit && entity.kind === 'cable') items.push({ action: 'conduit', icon: 'cable', label: 'Trecho tubulado', hint: 'Marca o que vai em duto, sem ferragens de poste' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
@@ -433,9 +432,6 @@ function handleSidebarMenuAction(action) {
             focusMapToPolygon(info);
             openPolygonEditor(info);
         }
-        break;
-    case 'auto-design':
-        if (typeof openAutoDesign === 'function') openAutoDesign(info);
         break;
     case 'fusion':
         focusMapToMarker(info);
