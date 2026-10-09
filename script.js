@@ -77,7 +77,7 @@ const DARK_MAP_STYLES = [
     { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#5d7f93' }] }
 ];
 
-//Modo Mapa: esconde os pontos do Google (comércios, igrejas, pontos de ônibus...), como "Rótulos" no Satélite
+//"Pontos do mapa" (Mapa e Satélite): esconde comércios, igrejas, pontos de ônibus... e mantém os nomes das ruas
 const HIDE_MAP_POI_STYLES = [
     { featureType: 'poi', stylers: [{ visibility: 'off' }] },
     { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -97,38 +97,35 @@ function setMapPoiVisible(visible) {
     applyMapTheme();
 }
 
-//Seletor Mapa/Satélite próprio: "Pontos do mapa" fica dentro do menu do Mapa e "Rótulos" no do Satélite
+//Seletor Mapa/Satélite próprio: os dois menus têm "Pontos do mapa" (os nomes das ruas continuam aparecendo)
 function setupMapPoiControl() {
+    const poiOption = '<label title="Mostrar ou esconder comércios, igrejas, pontos de ônibus e outros locais do Google"><input type="checkbox" data-opt="poi"> Pontos do mapa</label>';
     const box = document.createElement('div');
     box.className = 'map-type-control';
     box.innerHTML = `
       <div class="mtc-item" data-kind="map">
         <button type="button" class="mtc-btn" data-type="roadmap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>Mapa</button>
-        <div class="mtc-menu">
-          <label title="Mostrar ou esconder comércios, igrejas, pontos de ônibus e outros locais do Google"><input type="checkbox" data-opt="poi"> Pontos do mapa</label>
-          <label><input type="checkbox" data-opt="terrain"> Terreno</label>
-        </div>
+        <div class="mtc-menu">${poiOption}</div>
       </div>
       <div class="mtc-item" data-kind="sat">
         <button type="button" class="mtc-btn" data-type="hybrid"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/></svg>Satélite</button>
-        <div class="mtc-menu"><label><input type="checkbox" data-opt="labels" checked> Rótulos</label></div>
+        <div class="mtc-menu">${poiOption}</div>
       </div>`;
-    const poi = box.querySelector('[data-opt="poi"]');
-    const terrain = box.querySelector('[data-opt="terrain"]');
-    const labels = box.querySelector('[data-opt="labels"]');
-    poi.checked = mapPoiVisible;
-    poi.addEventListener('change', () => setMapPoiVisible(poi.checked));
-    terrain.addEventListener('change', () => map.setMapTypeId(terrain.checked ? 'terrain' : 'roadmap'));
-    labels.addEventListener('change', () => map.setMapTypeId(labels.checked ? 'hybrid' : 'satellite'));
-    box.querySelector('[data-type="roadmap"]').addEventListener('click', () => map.setMapTypeId(terrain.checked ? 'terrain' : 'roadmap'));
-    box.querySelector('[data-type="hybrid"]').addEventListener('click', () => map.setMapTypeId(labels.checked ? 'hybrid' : 'satellite'));
+    const poiInputs = [...box.querySelectorAll('[data-opt="poi"]')];
+    poiInputs.forEach(input => {
+        input.checked = mapPoiVisible;
+        input.addEventListener('change', () => {
+            poiInputs.forEach(other => { other.checked = input.checked; });
+            setMapPoiVisible(input.checked);
+        });
+    });
+    box.querySelectorAll('[data-type]').forEach(button => {
+        button.addEventListener('click', () => map.setMapTypeId(button.dataset.type));
+    });
     const sync = () => {
-        const type = map.getMapTypeId();
-        const isMap = ['roadmap', 'terrain'].includes(type);
+        const isMap = ['roadmap', 'terrain'].includes(map.getMapTypeId());
         box.querySelector('[data-kind="map"]').classList.toggle('is-active', isMap);
         box.querySelector('[data-kind="sat"]').classList.toggle('is-active', !isMap);
-        terrain.checked = type === 'terrain';
-        if (!isMap) labels.checked = type === 'hybrid';
     };
     map.addListener('maptypeid_changed', sync);
     sync();
