@@ -2118,3 +2118,15 @@ html[data-theme="dark"] { --seg-active-bg: #1a9150; }
 }
 .floating-box.map-tool-box .map-tool-segmented button:hover:not(.is-active),
 .cable-route-box .route-modes button:hover:not(.is-active) { color: var(--color-text); }
+
+/* Fusão em sequência: botão "Fundir" na mesma altura e linha do campo de quantidade */
+#fusionModal .fx-seq-row { align-items: flex-end; }
+#fusionModal .fx-seq-row .fx-seq-go {
+  height: 34px !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  align-self: flex-end;
+  line-height: 1 !important;
+}
+#fusionModal .fx-seq-row > .fx-field { display: flex; flex-direction: column; gap: 4px; margin: 0 !important; }
