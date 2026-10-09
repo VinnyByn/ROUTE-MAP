@@ -11,7 +11,7 @@
     <script src="js/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="style.css?v=20261004g" />
     <link rel="stylesheet" href="ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="ui-v4.css?v=20261014g" />
+    <link rel="stylesheet" href="ui-v4.css?v=20261014k" />
     <link rel="stylesheet" href="ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -1230,6 +1230,7 @@
             <div><small>Ponta B</small><strong id="cableEndBName">—</strong></div>
           </div>
         </div>
+        <div class="route-suggest hidden" id="cableRouteSuggestion" aria-live="polite"></div>
         <div class="map-tool-readout">
           <span class="map-tool-readout__label">Total do cabo</span>
           <strong class="map-tool-readout__value" id="cableTotalDistance">0 m</strong>
@@ -2770,7 +2771,7 @@
   <script src="js/supabase-client.js?v=20261004b"></script>
   <script src="js/error-report.js?v=20261005a"></script>
   <script src="js/layering.js?v=20261005a" defer></script>
-  <script src="script.js?v=20261014h" defer></script>
+  <script src="script.js?v=20261014j" defer></script>
   <script src="js/persistence.js?v=20261010b" defer></script>
   <script src="js/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/project-safety.js?v=20261007a" defer></script>
@@ -2804,6 +2805,7 @@
   <script src="js/pop-plan.js?v=20261008e" defer></script>
   <script src="js/cable-route.js?v=20261013j" defer></script>
   <script src="js/cable-split.js?v=20261014i" defer></script>
+  <script src="js/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/marker-hover.js?v=20261010e" defer></script>
   <script src="js/report-pdf.js?v=20261004b" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDF6d9RL0ywk4CrtnDq1Bp6NW81n-OcZ7k&libraries=geometry&callback=initMap" defer></script>

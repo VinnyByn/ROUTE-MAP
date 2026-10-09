@@ -2452,6 +2452,8 @@ function handleAnchorMarkerClickDuringCableDraw(markerInfo) {
     applyCableNameAutoFill(markerInfo.name);
     showToast('Ponta B definida', `Cabo ancorado em "${markerInfo.name}". Confira o nome e salve.`);
     updatePolylineFromMarkers();
+    //Foi direto da caixa A para a caixa B: sugere uma rota pelas ruas (o usuário aceita ou desenha)
+    if (cableMarkers.length === 2 && typeof suggestCableDrawRoute === 'function') suggestCableDrawRoute();
 }
 
 function getAnchorMarkerAtPoint(point, maxDistanceM = 0.5, candidateMarkers = null) {
@@ -2850,6 +2852,7 @@ function getActiveProjectId() {
 //Atualização visual e cálculo de metragem do cabo
 function updatePolylineFromMarkers() {
     cablePath = cableMarkers.map((marker) => marker.getPosition());
+    if (typeof syncCableRouteSuggestion === 'function') syncCableRouteSuggestion();
     if (cablePolyline) cablePolyline.setMap(null);
     const fiberType = document.getElementById("cableType").value;
     cablePolyline = new google.maps.Polyline({
@@ -3133,6 +3136,7 @@ document.getElementById("drawCableButton").addEventListener("click", () => {
 });
 
 function finishCableDrawingUi() {
+    if (typeof clearCableRouteSuggestion === 'function') clearCableRouteSuggestion();
     cableMarkers.forEach((marker) => marker.setMap(null));
     cableMarkers = [];
     cablePath = [];
