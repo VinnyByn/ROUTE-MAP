@@ -5,8 +5,12 @@
 // Depende de script.js, js/persistence.js, js/marker-panel.js, js/marker-icons.js, js/clients.js
 // (fetchOsrmRoute) e js/cable-route-suggest.js (simplifyPathMeters).
 
+//Servidores públicos do Overpass que aceitam pedido direto do navegador (os mesmos do overpass turbo).
+//Todos são consultados juntos e vale a primeira resposta: algum sempre costuma estar de pé.
 const AUTO_DESIGN_OVERPASS_SERVERS = [
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
 ];
 //Ruas onde há casas (sem rodovias, acessos de estacionamento e trilhas)
@@ -64,28 +68,43 @@ function distToPolygonEdgeXY(p, poly) {
 // Ruas (Overpass) e grafo das ruas
 // ---------------------------------------------------------------
 
+//Devolve { ways } ou { failures: ['servidor: motivo'] }
 async function fetchAutoDesignStreets(polygonPath) {
     const coords = polygonPath.map(p => `${p.lat.toFixed(6)} ${p.lng.toFixed(6)}`).join(' ');
     const query = `[out:json][timeout:25];way["highway"~"^(${AUTO_DESIGN_HIGHWAYS})$"](poly:"${coords}");out geom;`;
-    for (const server of AUTO_DESIGN_OVERPASS_SERVERS) {
+    const controllers = [];
+    const failures = [];
+    const ask = async (server) => {
+        const host = new URL(server).hostname;
+        const controller = new AbortController();
+        controllers.push(controller);
+        const timer = setTimeout(() => controller.abort(), 40000);
         try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 30000);
             const response = await fetch(server, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `data=${encodeURIComponent(query)}`,
                 signal: controller.signal,
             });
-            clearTimeout(timer);
-            if (!response.ok) continue;
+            if (!response.ok) throw new Error(`resposta ${response.status}`);
             const data = await response.json();
-            return (data.elements || []).filter(e => e.type === 'way' && e.geometry?.length >= 2);
+            if (!Array.isArray(data?.elements)) throw new Error(data?.remark || 'resposta sem ruas');
+            return data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
         } catch (e) {
-            //Tenta o próximo servidor
+            const reason = e.name === 'AbortError' ? 'demorou demais' : /fetch|network|cors/i.test(e.message) ? 'bloqueado ou fora do ar' : e.message;
+            failures.push(`${host}: ${reason}`);
+            throw e;
+        } finally {
+            clearTimeout(timer);
         }
+    };
+    try {
+        const ways = await Promise.any(AUTO_DESIGN_OVERPASS_SERVERS.map(ask));
+        controllers.forEach(c => c.abort()); //Os outros não precisam mais responder
+        return { ways };
+    } catch (e) {
+        return { failures };
     }
-    return null;
 }
 
 //Nós a cada ~15 m; w = metros de rua em volta do nó (onde ficam as casas)
@@ -599,7 +618,7 @@ function renderAutoDesign() {
         </div>
         <div class="map-tool-field"><label>Vão</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>
         <p class="map-tool-help">As caixas são colocadas ao longo das ruas do polígono (OpenStreetMap) e os cabos seguem o traçado das ruas. Nada é salvo até você aceitar a prévia.</p>
-        ${s.error ? `<div class="auto-design__warn">${esc(s.error)}</div>` : ''}`;
+        ${s.error ? `<div class="auto-design__warn">${esc(s.error)}${s.errorDetails?.length ? `<small>${s.errorDetails.map(esc).join('<br>')}</small>` : ''}</div>` : ''}`;
     renderSegmentedOptions('autoDesignPorts', [{ value: '8', label: '8 portas' }, { value: '16', label: '16 portas' }], String(p.ports));
     renderSegmentedOptions('autoDesignSpan', [{ value: 'AS 80', label: 'AS 80' }, { value: 'AS 200', label: 'AS 200' }], p.span);
     document.getElementById('autoDesignPorts').addEventListener('segmented-change', (e) => { p.ports = parseInt(e.detail, 10); renderAutoDesignCalc(); });
@@ -633,6 +652,7 @@ async function generateAutoDesign() {
     }
     s.params.houses = houses;
     s.error = null;
+    s.errorDetails = null;
     autoDesignHousesByPolygon.set(s.polygon, houses);
     storeAutoDesignParams(s.params);
     const token = {};
@@ -640,11 +660,12 @@ async function generateAutoDesign() {
     s.phase = 'loading';
     renderAutoDesign();
     const polygonPath = getAutoDesignPolygonPath(s.polygon);
-    const ways = await fetchAutoDesignStreets(polygonPath);
+    const { ways, failures } = await fetchAutoDesignStreets(polygonPath);
     if (autoDesign !== s || s.token !== token) return;
     if (!ways) {
         s.phase = 'form';
-        s.error = 'Não consegui buscar as ruas no OpenStreetMap agora. Verifique a internet e tente de novo.';
+        s.error = 'Não consegui buscar as ruas no OpenStreetMap agora. Tente de novo em alguns segundos.';
+        s.errorDetails = failures;
         renderAutoDesign();
         return;
     }
