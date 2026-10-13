@@ -35,11 +35,11 @@ Resposta:
 ```bash
 cd api
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 # http://localhost:8000/materiais  ·  documentação em http://localhost:8000/docs
 ```
 
-Testes: `pip install pytest && pytest -q`
+Testes: `pip install pytest && python -m pytest -q`
 
 ## Como funciona sem servidor
 
@@ -47,7 +47,7 @@ O botão **Atualizar pela API** tenta, nesta ordem:
 
 1. a FastAPI publicada, se houver uma URL configurada;
 2. a planilha ao vivo, lida direto no navegador (mesmas regras de colunas da API);
-3. o `materiais.json` gerado por `export_json.py` a cada deploy e a cada 6 horas
+3. o `materiais.json` gerado por `scripts/export_json.py` a cada deploy e a cada 6 horas
    (GitHub Actions), publicado junto com o site.
 
 ## Publicar a FastAPI (opcional)
@@ -64,8 +64,20 @@ Variáveis de ambiente (opcionais):
 | `SHEET_ID` | planilha da empresa |
 | `SHEET_GID` | `0` (primeira aba) |
 | `CACHE_SECONDS` | `300` |
-| `ALLOWED_ORIGINS` | `https://routemap-21.web.app,https://routemap-21.firebaseapp.com,http://localhost:5000` |
+| `ALLOWED_ORIGINS` | `https://routemap-21.web.app,https://routemap-21.firebaseapp.com,...e localhost/127.0.0.1 nas portas 3000, 5000 e 5500` |
 
-Depois de publicar, coloque a URL em `DEFAULT_MATERIALS_API_URL` (em `script.js`).
+Depois de publicar, coloque a URL em `DEFAULT_MATERIALS_API_URL` (em `web/js/catalog/catalog.js`).
 Outra opção é informar a URL ao clicar em **Atualizar pela API**. Segure Shift
 ao clicar para trocar a URL.
+
+## Estrutura
+
+```
+app/        main.py (FastAPI), config.py (variáveis de ambiente), schemas.py
+  routers/    materiais.py (/materiais, /kits)
+  services/   planilhas.py, kits.py (leitura das planilhas)
+scripts/    export_json.py (gera materiais.json e kits.json no deploy)
+tests/      pytest
+```
+
+Os postes da rede (BDGD/ANEEL) não passam por esta API: veja `tools/postes/README.md`.

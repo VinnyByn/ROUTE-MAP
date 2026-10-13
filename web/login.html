@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Entrar — ROUTE MAP</title>
+    <link rel="icon" type="image/svg+xml" href="img/logo.svg">
+    <link rel="alternate icon" type="image/png" href="img/logo.png">
+    <script src="js/core/theme-init.js?v=20261004a"></script>
+    <link rel="stylesheet" href="css/login.css?v=20261003a" />
+</head>
+<body>
+    <button id="loginThemeToggle" class="login-theme-toggle" type="button" title="Alternar tema claro ou escuro">
+      <span id="loginThemeLabel">Tema escuro</span>
+    </button>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <img class="brand-logo" src="img/logo.svg" width="56" height="56" alt="ROUTE MAP" />
+            </div>
+
+            <div id="authLoading" class="auth-view auth-loading">
+                <span class="auth-spinner" aria-hidden="true"></span>
+                <p>Verificando sua sessão…</p>
+            </div>
+
+            <!-- Entrar -->
+            <section id="viewLogin" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>ROUTE MAP</h2>
+                    <p>Acesse sua conta para continuar</p>
+                </div>
+                <form id="loginForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="loginEmail">E-mail</label>
+                        <div class="input-with-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg>
+                            <input type="email" id="loginEmail" placeholder="seuemail@provedor.com" required autocomplete="email" />
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">
+                            <label for="loginPassword">Senha</label>
+                            <button type="button" class="link-button" data-go="forgot">Esqueci minha senha</button>
+                        </div>
+                        <div class="input-with-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM5 9h6v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V9z"/></svg>
+                            <input type="password" id="loginPassword" placeholder="Sua senha" required autocomplete="current-password" />
+                        </div>
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <p class="info-message" role="status"></p>
+                    <button type="submit" class="login-button">Entrar</button>
+                </form>
+                <p class="auth-switch">Ainda não tem conta? <button type="button" class="link-button" data-go="signup">Criar conta</button></p>
+            </section>
+
+            <!-- Criar conta -->
+            <section id="viewSignup" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Criar conta</h2>
+                    <p>Se você recebeu um convite, use o mesmo e-mail do convite.</p>
+                </div>
+                <form id="signupForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="signupName">Nome completo</label>
+                        <input type="text" id="signupName" class="plain" placeholder="Seu nome" required autocomplete="name" />
+                    </div>
+                    <div class="input-group">
+                        <label for="signupEmail">E-mail</label>
+                        <input type="email" id="signupEmail" class="plain" placeholder="seuemail@provedor.com" required autocomplete="email" />
+                    </div>
+                    <div class="input-group">
+                        <label for="signupPassword">Senha</label>
+                        <input type="password" id="signupPassword" class="plain" placeholder="Mínimo de 8 caracteres" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <div class="input-group">
+                        <label for="signupPasswordConfirm">Confirmar senha</label>
+                        <input type="password" id="signupPasswordConfirm" class="plain" placeholder="Repita a senha" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Criar conta</button>
+                </form>
+                <p class="auth-switch">Já tem conta? <button type="button" class="link-button" data-go="login">Entrar</button></p>
+            </section>
+
+            <!-- Confirme o e-mail -->
+            <section id="viewCheckEmail" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Confirme seu e-mail</h2>
+                    <p>Enviamos um link para <strong id="checkEmailAddress"></strong>. Abra o e-mail e clique no link para ativar sua conta.</p>
+                </div>
+                <button type="button" class="login-button login-button--secondary" data-go="login">Voltar para o login</button>
+            </section>
+
+            <!-- Esqueci a senha -->
+            <section id="viewForgot" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Recuperar senha</h2>
+                    <p>Informe seu e-mail e enviaremos um link para criar uma nova senha.</p>
+                </div>
+                <form id="forgotForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="forgotEmail">E-mail</label>
+                        <input type="email" id="forgotEmail" class="plain" placeholder="seuemail@provedor.com" required autocomplete="email" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <p class="info-message" role="status"></p>
+                    <button type="submit" class="login-button">Enviar link</button>
+                </form>
+                <p class="auth-switch"><button type="button" class="link-button" data-go="login">Voltar para o login</button></p>
+            </section>
+
+            <!-- Nova senha (link de recuperação) -->
+            <section id="viewReset" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Nova senha</h2>
+                    <p>Escolha uma nova senha para sua conta.</p>
+                </div>
+                <form id="resetForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="resetPassword">Nova senha</label>
+                        <input type="password" id="resetPassword" class="plain" placeholder="Mínimo de 8 caracteres" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <div class="input-group">
+                        <label for="resetPasswordConfirm">Confirmar nova senha</label>
+                        <input type="password" id="resetPasswordConfirm" class="plain" placeholder="Repita a senha" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Salvar nova senha</button>
+                </form>
+            </section>
+
+            <!-- Verificação em duas etapas -->
+            <section id="viewMfa" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Verificação em duas etapas</h2>
+                    <p>Abra o aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy…) e digite o código de 6 dígitos do ROUTE MAP.</p>
+                </div>
+                <form id="mfaForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="mfaCode">Código</label>
+                        <input type="text" id="mfaCode" class="plain mfa-code-input" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" required />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Verificar</button>
+                </form>
+                <p class="auth-switch"><button type="button" class="link-button" id="mfaLogoutButton">Usar outra conta</button></p>
+            </section>
+
+            <!-- Primeiro acesso: empresa -->
+            <section id="viewCompany" class="auth-view" hidden>
+                <div id="companyInvite" hidden>
+                    <div class="card-header">
+                        <h2>Você foi convidado</h2>
+                        <p>Você recebeu um convite para entrar na equipe da empresa <strong id="inviteCompanyName"></strong> com o cargo de <strong id="inviteRoleName"></strong>.</p>
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="button" id="acceptInviteButton" class="login-button">Entrar na equipe</button>
+                </div>
+                <div id="companyCreate" hidden>
+                    <div class="card-header">
+                        <h2>Cadastre sua empresa</h2>
+                        <p>Você será o administrador: define preços, kits, configurações e convida a equipe.</p>
+                    </div>
+                    <form id="companyForm" class="login-form" novalidate>
+                        <div class="input-group">
+                            <label for="companyName">Nome da empresa</label>
+                            <input type="text" id="companyName" class="plain" placeholder="Ex.: Fibra Telecom Ltda." required maxlength="120" />
+                        </div>
+                        <div class="input-group">
+                            <label for="companyDocument">CNPJ <span class="optional">(opcional)</span></label>
+                            <input type="text" id="companyDocument" class="plain" placeholder="00.000.000/0000-00" maxlength="18" inputmode="numeric" />
+                        </div>
+                        <p class="error-message" role="alert"></p>
+                        <button type="submit" class="login-button">Criar empresa</button>
+                    </form>
+                    <p class="auth-hint">Vai trabalhar na equipe de uma empresa que já usa o ROUTE MAP? Peça ao administrador para convidar <strong class="current-email"></strong> e entre novamente.</p>
+                </div>
+                <p class="auth-switch"><span class="current-email"></span> · <button type="button" class="link-button" id="companyLogoutButton">Sair</button></p>
+            </section>
+
+            <p class="login-footer">Planejamento de redes · Materiais · Relatórios</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+    <script src="js/core/supabase-client.js?v=20261004a"></script>
+    <script src="js/auth/login.js?v=20261004a"></script>
+</body>
+</html>

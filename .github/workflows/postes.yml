@@ -1,0 +1,86 @@
+name: Postes da BDGD
+
+# Base de postes do site (camada "Postes da rede" e pré-projeto automático), a partir da BDGD que a ANEEL publica
+# 1x por ano. Distribuidoras de Minas Gerais: Cemig-D (quase todo o estado) e DME (Poços de Caldas; opcional: se o
+# portal não tiver, segue só com a Cemig). Todo mês confere o portal; só quando aparece uma versão nova ele baixa
+# (~4 GB), gera os tiles
+# (tools/postes) e publica como release "postes-AAAA-MM-DD". O deploy do site (firebase-hosting.yml) pega a release
+# mais nova. Se algo falhar, nada é publicado e o site segue com a base anterior.
+on:
+  schedule:
+    - cron: '0 7 5 * *' # dia 5 de cada mês, 04h em Brasília
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: 'Gerar de novo mesmo se a versão já foi publicada'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # criar a release
+  actions: write  # disparar o deploy do site
+
+concurrency:
+  group: postes
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Procurar a BDGD mais nova de cada distribuidora (Cemig-D e DME)
+        id: bdgd
+        run: node tools/postes/bdgd-mais-nova.mjs "BDGD Cemig-D" "?BDGD DME" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Já publicada?
+        id: atual
+        run: |
+          tag="postes-${{ steps.bdgd.outputs.data_base }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" > /dev/null 2>&1 && [ "${{ inputs.forcar }}" != "true" ]; then
+            echo "A versão ${{ steps.bdgd.outputs.data_base }} já está publicada. Nada a fazer."
+            echo "pular=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar as BDGDs e gerar os tiles de postes
+        if: steps.atual.outputs.pular != 'true'
+        env:
+          ITENS: ${{ steps.bdgd.outputs.itens }}
+        run: |
+          set -o pipefail
+          n=0
+          # Uma distribuidora por vez (cada .gdb tem GBs): baixa, extrai os postes (TIP_PN = 'POS') e apaga o zip
+          for url in $(echo "$ITENS" | jq -r '.[].url'); do
+            n=$((n + 1))
+            curl -sS -L --fail --retry 5 --retry-all-errors -o "$RUNNER_TEMP/bdgd.gdb.zip" "$url"
+            gdb=$(unzip -Z1 "$RUNNER_TEMP/bdgd.gdb.zip" | grep -m1 -oE '^[^/]+\.gdb/' | tr -d '/')
+            # GDAL numa imagem fixa (lê o .gdb de dentro do zip, sem descompactar)
+            docker run --rm -v "$RUNNER_TEMP:/dados" ghcr.io/osgeo/gdal:ubuntu-small-3.9.2 \
+              ogr2ogr -f CSV "/dados/postes-$n.csv" "/vsizip//dados/bdgd.gdb.zip/$gdb" PONNOT \
+                -where "TIP_PN = 'POS'" -select TIP_PN -lco GEOMETRY=AS_XY
+            rm -f "$RUNNER_TEMP/bdgd.gdb.zip"
+          done
+          # Junta tudo (cabeçalho uma vez só) e gera os tiles
+          awk 'FNR > 1 || NR == 1' "$RUNNER_TEMP"/postes-*.csv \
+          | node tools/postes/gerar-tiles.mjs --entrada - --saida build/postes \
+              --data-base "${{ steps.bdgd.outputs.data_base }}" --arquivo "${{ steps.bdgd.outputs.titulo }}"
+          rm -f "$RUNNER_TEMP"/postes-*.csv
+          tar czf postes.tar.gz -C build postes
+
+      - name: Publicar a release e atualizar o site
+        if: steps.atual.outputs.pular != 'true'
+        run: |
+          tag="${{ steps.atual.outputs.tag }}"
+          gh release delete "$tag" --yes --cleanup-tag 2> /dev/null || true
+          gh release create "$tag" postes.tar.gz --latest=false \
+            --title "Postes BDGD ${{ steps.bdgd.outputs.data_base }}" \
+            --notes "Gerado de ${{ steps.bdgd.outputs.titulo }} (ANEEL). $(jq -r '"\(.total) postes em \(.tiles) tiles"' build/postes/manifest.json)."
+          gh workflow run firebase-hosting.yml --ref "${{ github.event.repository.default_branch }}"

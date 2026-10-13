@@ -22,8 +22,11 @@ jobs:
 
       - name: Sintaxe dos arquivos JavaScript
         run: |
-          for f in script.js js/*.js; do node --check "$f" || exit 1; done
+          for f in web/js/app.js web/js/*/*.js tools/postes/*.mjs; do node --check "$f" || exit 1; done
           echo "JavaScript OK"
+
+      - name: Testes do gerador de postes
+        run: node tools/postes/testar.mjs
 
       - name: Testes da API de materiais
         working-directory: api

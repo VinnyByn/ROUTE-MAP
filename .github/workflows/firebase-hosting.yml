@@ -29,8 +29,21 @@ jobs:
       - name: Gerar materiais.json e kits.json a partir das planilhas
         run: |
           pip install --quiet -r api/requirements.txt
-          cd api && python export_json.py ../materiais.json ../kits.json
-          python -c "import json,collections;d=json.load(open('../materiais.json'));print('SECOES',dict(collections.Counter(i['secao'] for i in d['itens'])))" || true
+          cd api && python -m scripts.export_json ../web/materiais.json ../web/kits.json
+          python -c "import json,collections;d=json.load(open('../web/materiais.json'));print('SECOES',dict(collections.Counter(i['secao'] for i in d['itens'])))" || true
+      - name: Baixar a base de postes (BDGD)
+        # Gerada pelo workflow postes.yml (release "postes-AAAA-MM-DD"). Sem release, o site sai sem a camada de postes.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("postes-"))][0].tagName // ""')
+          if [ -n "$tag" ]; then
+            gh release download "$tag" --pattern postes.tar.gz --dir "$RUNNER_TEMP"
+            tar xzf "$RUNNER_TEMP/postes.tar.gz" -C web
+            echo "Postes: $tag ($(jq -r .total web/postes/manifest.json) postes)"
+          else
+            echo "::warning::Ainda não há release de postes. Rode o workflow 'Postes da BDGD'."
+          fi
       - name: Instalar Firebase CLI
         # Instala numa pasta à parte para fixar dependências quebradas no npm (ignore@7.0.11 foi retirado do registro)
         run: |

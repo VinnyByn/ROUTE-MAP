@@ -7,13 +7,14 @@ import http from 'node:http';
 import fs from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+const repo = path.resolve(here, '..');
+const root = path.join(repo, 'web'); //pasta publicada pelo Firebase Hosting
 const failures = [];
 const check = (ok, message) => { console.log(`${ok ? '✓' : '✗'} ${message}`); if (!ok) failures.push(message); };
 
 //Servidor local com os mesmos cabeçalhos do firebase.json. A CSP, publicada em modo "só aviso",
 //aqui é aplicada de verdade: qualquer bloqueio vira falha do teste.
-const firebaseHeaders = JSON.parse(fs.readFileSync(path.join(root, 'firebase.json'), 'utf8')).hosting.headers;
+const firebaseHeaders = JSON.parse(fs.readFileSync(path.join(repo, 'firebase.json'), 'utf8')).hosting.headers;
 const globMatches = (glob, file) => glob === '**' || new RegExp('^' + glob.replace(/\./g, '\\.').replace(/\*\*\//g, '(.*/)?').replace(/\*/g, '[^/]*').replace(/\{([^}]+)\}/g, (_, g) => '(' + g.split(',').join('|') + ')') + '$').test(file);
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
@@ -341,7 +342,7 @@ await page.click('#confirmModalConfirmButton');
 await page.waitForTimeout(400);
 const trashed = await page.evaluate(() => ({ deleted: !!window.__fakeDb.projects.projX?.deleted_at, inSidebar: !!document.getElementById('projX') }));
 check(trashed.deleted && !trashed.inSidebar, 'excluir projeto manda para a lixeira (não apaga do banco)');
-//Ordem das janelas: a última aberta fica por cima, em qualquer ordem (js/layering.js)
+//Ordem das janelas: a última aberta fica por cima, em qualquer ordem (js/core/layering.js)
 const layering = await page.evaluate(async () => {
   const wait = () => new Promise(r => setTimeout(r, 30));
   const show = async (id) => { document.getElementById(id).style.display = 'flex'; await wait(); };
@@ -2169,7 +2170,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     openAutoDesign(polygon);
     const opened = !document.getElementById('autoDesignBox').classList.contains('hidden') && document.getElementById('autoDesignStart').value === 'mk_ad_pop';
     const labels = document.getElementById('autoDesignBody').textContent;
-    const form = /Taxa de penetração/.test(labels) && /Splitagem da CTO/.test(labels) && /1:8/.test(labels) && /1:16/.test(labels);
+    const form = /Penetração/.test(labels) && /Splitagem da CTO/.test(labels) && /1:8/.test(labels) && /1:16/.test(labels);
     const houses = document.getElementById('autoDesignHouses');
     houses.value = '200';
     houses.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2192,14 +2193,27 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       inside: plan.ctos.every(c => c.position.lat() <= LAT0 && c.position.lat() >= LAT0 - H && c.position.lng() >= LNG0 && c.position.lng() <= LNG0 + W + 0.0003),
       overlays: autoDesign.overlays.length > 0,
       coverage: plan.stats.coverage >= 0.95,
-      onStreets: plan.onStreets && plan.byRoad && !plan.stats.noStreets && tableCalls > 0 && matrixCalls === 1,
+      onStreets: plan.onStreets && plan.byRoad && !plan.stats.noStreets && tableCalls > 0 && matrixCalls >= 1 && matrixCalls <= AUTO_DESIGN_STRATEGIES.length,
       //Ruas de carro primeiro (sem vielas entre as casas)
       carProfile: osrmUrls.length > 0 && osrmUrls.every(u => /routed-car\/(table|nearest|route)\/v1\/driving\//.test(u)) && osrmUrls.some(u => /\/route\/v1\//.test(u)),
       noForest: plan.ctos.every(c => c.position.lng() <= STREET_LNG + 1e-9),
       onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
     };
+    //Até 3 opções (a do painel aberta), polígono fora do mapa durante a prévia e CEO 1:8 com CTO 1:16
+    const split = { ports: 16, primary: 8 };
+    const extras = {
+      options: autoDesign.options.length >= 2 && autoDesign.options.length <= 3 && plan.option.panel && document.querySelectorAll('[data-auto-design="option"]').length === autoDesign.options.length,
+      polygonHidden: polygon.polygonObject.getVisible() === false,
+      split128: clampAutoDesignPrimary(split).includes(8) && split.primary === 8,
+    };
     const previewText = document.getElementById('autoDesignBody').textContent;
+    //Outra opção e de volta: o mapa mostra a escolhida
+    const other = autoDesign.options.find(o => o !== plan);
+    if (other) selectAutoDesignOption(other.option.key);
+    extras.switch = !other || autoDesign.result === other;
+    selectAutoDesignOption(plan.option.key);
+    extras.back = autoDesign.result === plan;
     const beforeMarkers = markers.length, beforeCables = savedCables.length;
     document.querySelector('[data-auto-design="accept"]').click();
     const folder = document.querySelector('#projAD > .folder-wrapper > .folder-title');
@@ -2244,6 +2258,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     //Desfazer: some a pasta e tudo o que foi criado nela
     document.querySelector('[data-auto-design="undo"]').click();
     out.undo = { markers: markers.length === beforeMarkers, cables: savedCables.length === beforeCables, folder: !document.querySelector('#projAD > .folder-wrapper'), phase: autoDesign?.phase };
+    out.extras = { ...extras, polygonBack: polygon.polygonObject.getVisible() !== false };
     closeAutoDesign();
     window.fetch = realFetch;
     window.fetchOsrmRoute = realOsrm;
@@ -2270,6 +2285,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `pré-projeto automático: custo estimado da prévia bate com a lista de materiais (${JSON.stringify(autoDesignOut.cost)})`);
   check(autoDesignOut.undo.markers && autoDesignOut.undo.cables && autoDesignOut.undo.folder && autoDesignOut.undo.phase === 'form',
     `pré-projeto automático: desfazer tira tudo o que foi criado (${JSON.stringify(autoDesignOut.undo)})`);
+  check(Object.values(autoDesignOut.extras).every(Boolean),
+    `pré-projeto: 3 opções para escolher, polígono some na prévia (volta ao desfazer) e CEO 1:8 com CTO 1:16 (${JSON.stringify(autoDesignOut.extras)})`);
 
   //Pré-projeto: comparar 1:8 × 1:16, editar a prévia, trecho sem casas, 2 níveis com várias CEOs e reservas, postes e casas do mapa
   const autoDesign2 = await sp.evaluate(async () => {
@@ -2445,6 +2462,70 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     return { points: route.length, starts: route[0].lng() === -44, calls: urls.length };
   });
   check(oneWay.points === 2 && oneWay.starts && oneWay.calls === 2, `pré-projeto: rua de mão única usa a rota mais curta no sentido contrário (${JSON.stringify(oneWay)})`);
+  //Rotas de chegada: grade de ruas a cada 100 m cortada por um rio (x = 250 m); pontes em todas as ruas que cruzam
+  const accessRoutes = await sp.evaluate(() => {
+    const out = {};
+    const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
+    const ll = ([x, y]) => { const q = proj.toLatLng([x, y]); return [q.lat, q.lng]; };
+    const lines = [];
+    for (let i = 0; i <= 4; i++) {
+      lines.push([0, 1, 2, 3, 4].map(k => ll([k * 100, i * 100])));
+      lines.push([0, 1, 2, 3, 4].map(k => ll([i * 100, k * 100])));
+    }
+    lines.water = [[ll([250, -50]), ll([250, 450])]];
+    const index = buildAutoDesignStreetIndex(lines, proj);
+    const overlap = (a, b) => { const keys = new Map(a.edges); return b.edges.reduce((sum, [k, len]) => sum + (keys.has(k) ? len : 0), 0) / Math.min(a.length, b.length); };
+    const across = index.alternatives([0, 200], [400, 200], 30, 30);
+    const sameSide = index.alternatives([0, 0], [200, 400], 30, 30);
+    const pairs = (list) => list.every((r, i) => list.slice(i + 1).every(o => overlap(r, o) < 0.5));
+    //Postes escolhidos no mapa (clicados fora de ordem): a rota passa por eles, na ordem do caminho
+    const box = (x, y, isNew) => { const q = proj.toLatLng([x, y]); return { x, y, isNew, position: new google.maps.LatLng(q.lat, q.lng) }; };
+    const at = (x, y) => { const q = proj.toLatLng([x, y]); return { lat: q.lat, lng: q.lng }; };
+    const viaPoles = buildAutoDesignWaypointRoute({ model: { proj, streetIndex: index } }, { from: box(0, 0, false), to: box(400, 400, true) }, [at(0, 400), at(0, 200)]);
+    const xy = viaPoles.path.map(p => proj.toXY(p.lat(), p.lng()));
+    const hit = (x, y) => xy.findIndex(([px, py]) => Math.hypot(px - x, py - y) < 0.5);
+    out.waypoints = { poles: viaPoles.poles, order: hit(0, 200) > 0 && hit(0, 400) > hit(0, 200), dry: viaPoles.wet === 1, loose: viaPoles.loose === 0 };
+    return {
+      waypoints: out.waypoints,
+      across: across.length, acrossWet: across.map(r => r.wet).join(','), acrossDistinct: pairs(across),
+      same: sameSide.length, sameWet: sameSide.every(r => r.wet === 0), sameDistinct: pairs(sameSide),
+      leg: index.crossesWater([240, 0], [260, 0]) && !index.crossesWater([0, 0], [200, 0]),
+    };
+  });
+  check(accessRoutes.across === 3 && accessRoutes.acrossWet === '1,1,1' && accessRoutes.acrossDistinct && accessRoutes.same >= 2 && accessRoutes.sameWet && accessRoutes.sameDistinct && accessRoutes.leg
+    && accessRoutes.waypoints.poles === 2 && accessRoutes.waypoints.order && accessRoutes.waypoints.dry && accessRoutes.waypoints.loose,
+    `pré-projeto: até 3 rotas diferentes saindo da caixa existente, sem atravessar rio à toa, e rota pelos postes clicados (${JSON.stringify(accessRoutes)})`);
+  //Pré-projeto num polígono que já existe: Desenhar → Pré-projeto → "Usar existente" → clique no polígono; ele fica e é marcado
+  const reuse = await sp.evaluate(async () => {
+    rebuildSidebarFromJSON([{ id: 'projRU', name: 'Projeto RU', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
+    setActiveFolder('projRU');
+    const LAT0 = -39, LNG0 = -44;
+    rebuildPolygon({ uid: 'pg_ru', folderId: 'projRU', name: 'Bairro RU', color: '#2dd4bf', opacity: 0.2, path: [
+      { lat: LAT0, lng: LNG0 }, { lat: LAT0, lng: LNG0 + 0.006 }, { lat: LAT0 - 0.004, lng: LNG0 + 0.006 }, { lat: LAT0 - 0.004, lng: LNG0 }] });
+    const polygon = savedPolygons.find(p => p.uid === 'pg_ru');
+    const realFetch = window.fetch;
+    window.fetch = async (url, opts) => (/\/(table|nearest|route)\/v1\//.test(String(url)) ? new Response('down', { status: 503 }) : realFetch(url, opts));
+    document.getElementById('autoDesignMenuButton').click();
+    await new Promise(r => setTimeout(r, 50));
+    const asked = [...document.querySelectorAll('#choiceModalButtons button')].find(b => /Usar existente/.test(b.textContent));
+    asked?.click();
+    await new Promise(r => setTimeout(r, 50));
+    openPolygonEditor(polygon);
+    const opened = autoDesign?.polygon === polygon && !document.getElementById('polygonDrawingBox').classList.contains('hidden') === false;
+    document.getElementById('autoDesignHouses').value = '100';
+    await generateAutoDesign();
+    document.querySelector('[data-auto-design="accept"]').click();
+    const out = { asked: !!asked, opened, kept: savedPolygons.includes(polygon) && polygon.polygonObject.getVisible() !== false,
+      marked: !!polygon.preProjeto && /usado no pré-projeto/.test(polygon.listItem.textContent), saved: !!serializePolygon(polygon).preProjeto };
+    document.querySelector('[data-auto-design="undo"]').click();
+    out.unmarked = !polygon.preProjeto && !/usado no pré-projeto/.test(polygon.listItem.textContent);
+    closeAutoDesign();
+    window.fetch = realFetch;
+    polygon.polygonObject.setMap(null); savedPolygons.splice(savedPolygons.indexOf(polygon), 1);
+    document.querySelector('.folder-title[data-folder-id="projRU"]').closest('.folder').remove();
+    return out;
+  });
+  check(Object.values(reuse).every(Boolean), `pré-projeto: usa polígono existente e mantém ele marcado como usado (${JSON.stringify(reuse)})`);
 
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {

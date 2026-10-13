@@ -86,3 +86,6 @@ __pycache__/
 .venv/
 materiais.json
 kits.json
+
+# Postes da BDGD: gerados por tools/postes (no deploy vêm da release do GitHub)
+web/postes/
