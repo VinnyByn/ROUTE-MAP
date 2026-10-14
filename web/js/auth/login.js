@@ -222,10 +222,27 @@ supabaseClient.auth.onAuthStateChange((event) => {
         const nextTheme = theme === 'dark' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', nextTheme);
         try { localStorage.setItem('routeMapTheme', nextTheme); } catch (e) {}
-        if (label) label.textContent = nextTheme === 'dark' ? 'Tema claro' : 'Tema escuro';
+        const text = nextTheme === 'dark' ? 'Tema claro' : 'Tema escuro';
+        if (label) label.textContent = text;
+        button.title = text;
     }
     apply(document.documentElement.getAttribute('data-theme'));
     button.addEventListener('click', function () {
         apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
     });
 })();
+
+//Mostrar/ocultar a senha digitada
+document.querySelectorAll('[data-password-toggle]').forEach(button => {
+    const input = document.getElementById(button.dataset.passwordToggle);
+    if (!input) return;
+    button.addEventListener('click', () => {
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        button.setAttribute('aria-pressed', String(show));
+        const text = show ? 'Ocultar senha' : 'Mostrar senha';
+        button.setAttribute('aria-label', text);
+        button.title = text;
+        input.focus();
+    });
+});
