@@ -36,6 +36,7 @@ const AUTO_DESIGN_PREVIEW_COLOR = '#f97316'; //Cabos da prévia em laranja: não
 const AUTO_DESIGN_SAMPLE_MAX = 400;  //Pontos da área consultados para achar as ruas
 const AUTO_DESIGN_SAMPLE_CHUNK = 80; //Pontos por consulta (cabe na tabela do OSRM público)
 const AUTO_DESIGN_STREET_MAX_M = 40; //Ponto a mais de 40 m de qualquer rua = sem casas (mato, pasto, rio)
+const AUTO_DESIGN_EXISTING_GAP_M = 30; //CTO nova não vai a menos disso de uma CTO que já existe
 const AUTO_DESIGN_EDGE_TOL_M = 25;   //Rua (ou poste, ou casa) em cima do limite do polígono também entra
 const AUTO_DESIGN_TABLE_MAX = 100;   //Caixas na tabela de distâncias pela rua (acima disso, linha reta)
 const AUTO_DESIGN_GRID_M = 15;       //Casas espalhadas pela área: um ponto a cada 15 m
@@ -537,6 +538,37 @@ function findAutoDesignMarkersInArea(polygonPath, projectId, type) {
     });
 }
 
+//CTOs que já estão no projeto, dentro da área ou até 1 km dela (o raio da CTO decide quais valem): elas atendem as
+//casas por perto antes de o pré-projeto pôr CTO nova. distance = 0 dentro da área.
+function findAutoDesignExistingCtos(polygonPath, projectId) {
+    const proj = createAutoDesignProjection(polygonPath);
+    const polyXY = polygonPath.map(p => proj.toXY(p.lat, p.lng));
+    return markers
+        .filter(m => m.type === 'CTO' && m.marker?.getPosition && (!projectId || getItemProjectId(m) === projectId))
+        .map(m => {
+            const pos = m.marker.getPosition();
+            const xy = proj.toXY(pos.lat(), pos.lng());
+            return { marker: m, distance: pointInPolygonXY(xy, polyXY) ? 0 : distToPolygonEdgeXY(xy, polyXY) };
+        })
+        .filter(e => e.distance <= AUTO_DESIGN_COVER_MAX);
+}
+
+//CTOs existentes que valem com estes parâmetros (opção marcada e dentro do raio da CTO a partir da área)
+const getAutoDesignActiveExisting = (list, params) => (params.useExisting === false ? [] : (list || []).filter(e => e.distance <= getAutoDesignCoverRadius(params)));
+
+//Quantos clientes a CTO existente pode ter: portas do splitter de atendimento do plano de fusão (sem plano, as do
+//painel) com a ocupação máxima. Os clientes que ela já tem fazem parte da penetração da área.
+function getAutoDesignExistingCapacity(markerInfo, params) {
+    let ports = null;
+    try { ports = typeof getCtoPortCapacity === 'function' ? getCtoPortCapacity(markerInfo) : null; } catch (e) { ports = null; }
+    ports = ports || params.ports;
+    const clients = typeof getCtoClients === 'function' ? getCtoClients(markerInfo).length : 0;
+    return { ports, usable: Math.max(1, Math.floor(ports * (Number(params.maxFill) || 100) / 100), clients) };
+}
+
+//CTO existente com cabo chegando (ponta de algum cabo do projeto)
+const isAutoDesignCtoWired = (m) => !!m.uid && (typeof savedCables === 'undefined' ? [] : savedCables).some(c => c.startAnchorUid === m.uid || c.endAnchorUid === m.uid);
+
 //Postes da BDGD/ANEEL (base estática do site, js/map/poles-layer.js): cada poste vira um "marcador virtual" (só posição)
 async function fetchAutoDesignBdgdPoles(polygonPath) {
     const proj = createAutoDesignProjection(polygonPath);
@@ -631,6 +663,30 @@ function classifyAutoDesignPoles(poleSites, streetIndex) {
     return { kept, dropped: poleSites.length - kept.length, unmapped: keep.size };
 }
 
+//Cada CTO existente fica com as casas no raio dela, das mais perto para as mais longe, até lotar. Casa (ou ponto de
+//rua) atendida em parte fica com o resto para as CTOs novas. Sobra de menos de 1 cliente na área toda = tudo atendido.
+function serveAutoDesignDemandByExisting(demand, existing, radius, clientsPerWeight) {
+    if (!existing.length || !(clientsPerWeight > 0)) return { demand, existing };
+    const left = demand.map(n => n.w * clientsPerWeight);
+    const room = existing.map(e => e.usable);
+    const pairs = [];
+    demand.forEach((n, i) => existing.forEach((e, j) => {
+        const d = Math.hypot(n.x - e.x, n.y - e.y);
+        if (d <= radius) pairs.push([d, i, j]);
+    }));
+    pairs.sort((a, b) => a[0] - b[0]);
+    pairs.forEach(([, i, j]) => {
+        const take = Math.min(left[i], room[j]);
+        if (!(take > 0)) return;
+        left[i] -= take;
+        room[j] -= take;
+        existing[j].served += take;
+    });
+    const rest = left.reduce((s, c) => s + c, 0);
+    const residual = rest < 1 ? [] : demand.map((n, i) => ({ ...n, w: left[i] / clientsPerWeight })).filter((n, i) => left[i] > 0.01);
+    return { demand: residual, existing };
+}
+
 function buildAutoDesignModel(polygonPath, params, inputs = {}) {
     const { streets = null, streetLines = null, houseMarkers = [], poleMarkers = [], exclusions = [] } = inputs;
     const proj = createAutoDesignProjection(polygonPath);
@@ -696,10 +752,18 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
     const onPolesOffMap = (a, b) => offMapPoles.size > 0 && poleAt(allPoles, a) && poleAt(allPoles, b) && (poleAt(offMapPoles, a) || poleAt(offMapPoles, b));
     const totalWeight = demand.reduce((s, n) => s + n.w, 0);
     //Com as casas do mapa, a quantidade é a das casas que sobraram (fora dos trechos sem casas)
-    const houses = demandKind === 'houses' ? totalWeight : Number(params.houses) || 0;
+    const allHouses = demandKind === 'houses' ? totalWeight : Number(params.houses) || 0;
+    const housesPerWeight = totalWeight ? allHouses / totalWeight : 0;
+    //CTOs que já existem atendem primeiro: o que sobra é a demanda das CTOs novas
+    const served = serveAutoDesignDemandByExisting(demand, getAutoDesignActiveExisting(inputs.existingCtos, params).map(e => ({
+        ...xyOfMarker(e.marker), markerInfo: e.marker, distance: e.distance, wired: isAutoDesignCtoWired(e.marker), served: 0,
+        ...getAutoDesignExistingCapacity(e.marker, params),
+    })), getAutoDesignCoverRadius(params), housesPerWeight * params.occupancy / 100);
+    demand = served.demand;
+    const houses = demand.reduce((s, n) => s + n.w, 0) * housesPerWeight;
     return {
-        proj, polyXY, demand, sites, demandKind, siteKind, totalWeight, houses,
-        housesPerWeight: totalWeight ? houses / totalWeight : 0,
+        proj, polyXY, demand, sites, demandKind, siteKind, totalWeight, houses, allHouses, housesPerWeight,
+        existing: served.existing, existingClients: served.existing.reduce((s, e) => s + e.served, 0),
         coverRadius: getAutoDesignCoverRadius(params),
         streetsOk: !!streets,
         streetIndex, polesOffStreet, polesUnmapped: siteKind === 'poles' ? sites.filter(p => p.unmapped).length : 0, onPolesOffMap,
@@ -1078,6 +1142,10 @@ const getAutoDesignPosKey = (box) => `${box.position.lat().toFixed(6)},${box.pos
 async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inputs = {}, { isCurrent = () => true, roads = null } = {}) {
     const model = buildAutoDesignModel(polygonPath, params, inputs);
     if (model.siteKind === 'poles' && inputs.cachedPoleGraph?.sites === model.sites.length) model.poleGraph = inputs.cachedPoleGraph.graph;
+    if (model.existing.length && !model.demand.length) {
+        const clients = Math.ceil(model.allHouses * params.occupancy / 100);
+        return { error: `As ${model.existing.length} CTO(s) que já estão na área dão conta dos ≈ ${clients.toLocaleString('pt-BR')} clientes previstos: não precisa de CTO nova. Aumente a penetração ou desmarque "Considerar as CTOs que já estão no mapa".` };
+    }
     if (model.sites.length < 4 || !model.demand.length) return { error: 'A área é pequena demais (ou ficou sem casas) para distribuir caixas. Desenhe um polígono maior.' };
     const startPos = startMarker?.marker?.getPosition?.();
     const centroid = model.polyXY.reduce((s, p) => [s[0] + p[0] / model.polyXY.length, s[1] + p[1] / model.polyXY.length], [0, 0]);
@@ -1090,7 +1158,9 @@ async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inpu
         root = makeAutoDesignExistingBox(model, startMarker);
     }
     //CTO grudada na CEO não ajuda: as casas dali ficam com a CTO mais perto
-    const candidates = model.sites.map((_, i) => i).filter(i => Math.hypot(model.sites[i].x - root.x, model.sites[i].y - root.y) > 25);
+    //Nem em cima de uma CTO que já existe
+    const candidates = model.sites.map((_, i) => i).filter(i => Math.hypot(model.sites[i].x - root.x, model.sites[i].y - root.y) > 25
+        && model.existing.every(e => Math.hypot(model.sites[i].x - e.x, model.sites[i].y - e.y) > AUTO_DESIGN_EXISTING_GAP_M));
     if (!candidates.length) return { error: 'A área é pequena demais para distribuir caixas. Desenhe um polígono maior.' };
     const chosen = chooseAutoDesignCtos(model, candidates, params);
     const ctos = chosen.centers.map(site => makeAutoDesignBox(model, 'CTO', model.sites[site]));
@@ -1326,11 +1396,13 @@ function rebuildAutoDesignNetwork(plan) {
         ceos: ceos.filter(c => c.isNew).length,
         clients: Math.ceil(model.houses * params.occupancy / 100),
         existingRootSplitters: levels === 2 && !ceos[0].isNew ? ceos[0].primaries : 0,
+        existingCtos: model.existing.length,
+        existingClients: Math.round(model.existingClients),
     });
     plan.onStreets = model.siteKind === 'streets' || model.siteKind === 'poles';
     plan.onPoles = model.siteKind === 'poles';
     plan.byRoad = plan.roads.size > 0 || !!model.poleGraph;
-    plan.houses = { count: model.houses, position: (() => { const p = model.proj.toLatLng(model.polyXY.reduce((s, q) => [s[0] + q[0] / model.polyXY.length, s[1] + q[1] / model.polyXY.length], [0, 0])); return new google.maps.LatLng(p.lat, p.lng); })() };
+    plan.houses = { count: model.allHouses, position: (() => { const p = model.proj.toLatLng(model.polyXY.reduce((s, q) => [s[0] + q[0] / model.polyXY.length, s[1] + q[1] / model.polyXY.length], [0, 0])); return new google.maps.LatLng(p.lat, p.lng); })() };
     plan.feeder = cables.find(c => c.role === 'feeder') || null;
 }
 
@@ -2102,7 +2174,7 @@ const formatAutoDesignMoneyShort = (value) => `R$ ${Math.round(Number(value) || 
 
 const AUTO_DESIGN_DEFAULTS = {
     occupancy: 30, ports: 8, levels: 1, primary: 8, feederFiber: 'FO-48', distributionFiber: 'FO-12', span: 'AS 80',
-    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true,
+    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true, useExisting: true,
 };
 const AUTO_DESIGN_STORED_KEYS = Object.keys(AUTO_DESIGN_DEFAULTS);
 
@@ -2138,7 +2210,9 @@ function openAutoDesign(polygon, { drawn = false } = {}) {
     const projectId = getAutoDesignProjectId(polygon);
     const houseMarkers = findAutoDesignMarkersInArea(path, projectId, 'CASA');
     const poleMarkers = findAutoDesignMarkersInArea(path, projectId, 'POSTE');
+    const existingCtos = findAutoDesignExistingCtos(path, projectId);
     autoDesign = {
+        existingCtos,
         polygon, params, starts, phase: 'form', overlays: [], result: null, token: null,
         houseMarkers: houseMarkers.length >= AUTO_DESIGN_MIN_HOUSE_MARKERS ? houseMarkers : [],
         markedPoles: poleMarkers, poleMarkers: [], bdgdPoles: null,
@@ -2222,14 +2296,41 @@ function renderAutoDesignCalc() {
     }
     const clients = Math.ceil(n * p.occupancy / 100);
     const usable = getAutoDesignUsablePorts(p);
-    const ctos = Math.ceil(clients / usable);
+    //CTOs que já existem: entram antes (a conta exata, pela distância de cada casa, sai ao gerar)
+    const existing = getAutoDesignActiveExisting(autoDesign.existingCtos, p);
+    const existingRoom = existing.reduce((s, e) => s + getAutoDesignExistingCapacity(e.marker, p).usable, 0);
+    const fromExisting = Math.min(clients, existingRoom);
+    const ctos = Math.ceil((clients - fromExisting) / usable);
+    renderAutoDesignExistingText(existingRoom);
     const fill = usable < p.ports ? ` (até ${usable} clientes cada)` : '';
+    if (existing.length && !ctos) {
+        el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes: as <b>${existing.length}</b> CTO(s) que já existem têm até ${existingRoom.toLocaleString('pt-BR')} vagas. Pode não precisar de CTO nova (casas fora do raio delas ainda pedem uma).`;
+        return;
+    }
+    const before = existing.length ? ` − até ${fromExisting.toLocaleString('pt-BR')} nas <b>${existing.length}</b> CTO(s) existente(s)` : '';
+    const label = existing.length ? `${ctos} CTOs novas` : `${ctos} CTOs`;
     const pon = p.levels === 2
         ? ` · CEO 1:${p.primary} → 1:${p.primary * p.ports} · <b>${Math.ceil(ctos / p.primary)}</b> PON(s)`
         : ` · <b>${ctos}</b> PON(s)`;
     const tight = p.levels === 2 && p.primary * p.ports > AUTO_DESIGN_TIGHT_SPLIT
         ? `<small>Splitagem total 1:${p.primary * p.ports}: precisa de OLT/SFP classe C+ (orçamento óptico mais apertado).</small>` : '';
-    el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes → <b>${ctos} CTOs</b> com splitter 1:${p.ports}${fill}${pon}${tight}`;
+    el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes${before} → <b>${label}</b> com splitter 1:${p.ports}${fill}${pon}${tight}`;
+}
+
+//Texto da opção "Considerar as CTOs que já estão no mapa" (muda com o raio da CTO)
+function renderAutoDesignExistingText(room) {
+    const el = document.getElementById('autoDesignExistingText');
+    if (!el) return;
+    const s = autoDesign;
+    const p = s.params;
+    const inRadius = s.existingCtos.filter(e => e.distance <= getAutoDesignCoverRadius(p));
+    const inside = inRadius.filter(e => !e.distance).length;
+    const near = inRadius.length - inside;
+    const where = [inside ? `${inside} na área` : '', near ? `${near} a até ${getAutoDesignCoverRadius(p)} m dela` : ''].filter(Boolean).join(' e ');
+    const capacity = p.useExisting !== false ? room : inRadius.reduce((sum, e) => sum + getAutoDesignExistingCapacity(e.marker, p).usable, 0);
+    el.innerHTML = inRadius.length
+        ? `Considerar as CTOs que já estão no mapa (<b>${where}</b>, até ${capacity.toLocaleString('pt-BR')} clientes)`
+        : `Considerar as CTOs que já estão no mapa (nenhuma no raio de ${getAutoDesignCoverRadius(p)} m da área)`;
 }
 
 
@@ -2269,6 +2370,7 @@ function renderAutoDesign() {
             <div class="map-tool-field"><label for="autoDesignOccupancy" title="Taxa de penetração">Penetração (%)</label><input type="number" id="autoDesignOccupancy" min="1" max="100" step="1" inputmode="numeric" value="${esc(p.occupancy)}"></div>
         </div>
         ${s.houseMarkers.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUseHouses"${p.useHouses ? ' checked' : ''}><span>Usar as <b>${s.houseMarkers.length}</b> casas marcadas no mapa (${getAutoDesignMarkedHouses().toLocaleString('pt-BR')} casas, posição real)</span></label>` : ''}
+        ${s.existingCtos.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUseExisting"${p.useExisting !== false ? ' checked' : ''}><span id="autoDesignExistingText"></span></label>` : ''}
         ${s.poleMarkers.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUsePoles"${p.usePoles ? ' checked' : ''}><span>Caixas nos <b>${s.poleMarkers.length}</b> postes da área${s.bdgdPoles?.used && s.markedPoles.length ? ` (${s.markedPoles.length} marcados + ${s.bdgdPoles.used} da BDGD)` : ''} e cabos de poste em poste</span></label>` : ''}
         <div class="map-tool-field"><label>Níveis de splitagem</label><div class="map-tool-segmented" id="autoDesignLevels" role="radiogroup" aria-label="Níveis de splitagem"></div></div>
         <div class="map-tool-field-row">
@@ -2343,6 +2445,8 @@ function readAutoDesignForm() {
     if (useHouses) p.useHouses = useHouses.checked;
     const usePoles = document.getElementById('autoDesignUsePoles');
     if (usePoles) p.usePoles = usePoles.checked;
+    const useExisting = document.getElementById('autoDesignUseExisting');
+    if (useExisting) p.useExisting = useExisting.checked;
     if (autoDesign.houseMarkers.length && p.useHouses) p.houses = getAutoDesignMarkedHouses();
 }
 
@@ -2376,7 +2480,7 @@ async function collectAutoDesignInputs(s, isCurrent) {
             cache.corridorPoles = null;
         }
     }
-    return { polygonPath, streets, streetLines, corridorPoles: start.length ? cache.corridorPoles || null : null, houseMarkers: s.houseMarkers, poleMarkers: s.poleMarkers, exclusions: s.exclusions };
+    return { polygonPath, streets, streetLines, corridorPoles: start.length ? cache.corridorPoles || null : null, houseMarkers: s.houseMarkers, poleMarkers: s.poleMarkers, exclusions: s.exclusions, existingCtos: s.existingCtos };
 }
 
 function getAutoDesignNames(projectId) {
@@ -2689,6 +2793,11 @@ function drawAutoDesignPreview() {
         map, center: cto.position, radius: plan.model.coverRadius, clickable: false, zIndex: 40,
         strokeColor: '#16a34a', strokeOpacity: 0.35, strokeWeight: 1, fillColor: '#16a34a', fillOpacity: 0.06,
     })));
+    //CTOs que já existem e entraram na conta: círculo azul
+    plan.model.existing.forEach(e => add(new google.maps.Circle({
+        map, center: e.markerInfo.marker.getPosition(), radius: plan.model.coverRadius, clickable: false, zIndex: 39,
+        strokeColor: '#2563eb', strokeOpacity: 0.5, strokeWeight: 1, fillColor: '#2563eb', fillOpacity: 0.06,
+    })));
     //Postes escolhidos para a rota (clique para tirar)
     (plan.accessWaypoints || []).forEach(w => {
         const marker = add(new google.maps.Marker({
@@ -2747,6 +2856,11 @@ function getAutoDesignWarnings(plan, params) {
     if (st.offPoles > 0) warnings.push(`${st.offPoles} cabo(s) não acharam caminho de poste em poste e seguiram a rua. Cadastre os postes que faltam ou ajuste no mapa.`);
     if (params.levels === 2 && params.primary * params.ports > AUTO_DESIGN_TIGHT_SPLIT) {
         warnings.push(`Splitagem total 1:${params.primary * params.ports} (CEO 1:${params.primary} × CTO 1:${params.ports}): use OLT/SFP classe C+ e confira o orçamento óptico até a última CTO.`);
+    }
+    const loose = plan.model.existing.filter(e => !e.wired);
+    if (loose.length) {
+        const names = loose.slice(0, 3).map(e => e.markerInfo.name).join(', ') + (loose.length > 3 ? ` e mais ${loose.length - 3}` : '');
+        warnings.push(`${names} já ${loose.length > 1 ? 'estão' : 'está'} no mapa sem cabo chegando: ${loose.length > 1 ? 'entram' : 'entra'} na conta das casas atendidas, mas ${loose.length > 1 ? 'precisam' : 'precisa'} ser ligada${loose.length > 1 ? 's' : ''} à rede.`);
     }
     if (!plan.ceos[0].isNew) {
         const splitters = st.existingRootSplitters > 0 ? ` e ${st.existingRootSplitters} splitter(s) 1:${params.primary}` : '';
@@ -2843,6 +2957,7 @@ function renderAutoDesignPreviewPanel() {
             <div><dt>${plan.root.isNew || st.ceos > 1 ? 'CEO' : 'Origem'}</dt><dd>${esc(ceoText)}</dd></div>
             <div><dt>Cobertura</dt><dd>${Math.round(st.coverage * 100)}% das casas</dd></div>
             <div><dt>Clientes / portas</dt><dd>${st.clients.toLocaleString('pt-BR')} / ${ports.toLocaleString('pt-BR')}</dd></div>
+            ${st.existingCtos ? `<div><dt>CTOs existentes</dt><dd title="Já estão no mapa e entraram na conta">${st.existingCtos} · ≈ ${st.existingClients.toLocaleString('pt-BR')} clientes</dd></div>` : ''}
             <div><dt>PONs</dt><dd>${st.pons.toLocaleString('pt-BR')}</dd></div>
             ${cost ? `<div><dt>Custo estimado</dt><dd title="${esc(formatAutoDesignMoney(cost.total))}">${esc(formatAutoDesignMoneyShort(cost.total))}</dd></div>` : ''}
         </dl>
@@ -2856,7 +2971,7 @@ function renderAutoDesignPreviewPanel() {
         <p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || 'Arraste as caixas no mapa para mover; a rede, as fibras e o custo se refazem sozinhos.')}</p>
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
         ${warnings.map(w => `<div class="auto-design__warn">${esc(w)}</div>`).join('')}
-        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO.</p>`;
+        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
         <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>
@@ -3296,12 +3411,13 @@ document.addEventListener('input', (e) => {
     if (e.target.id === 'autoDesignHouses') p.houses = e.target.value;
     if (e.target.id === 'autoDesignOccupancy') p.occupancy = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 0));
     if (e.target.id === 'autoDesignFill') p.maxFill = Math.min(100, Math.max(25, parseInt(e.target.value, 10) || 100));
+    if (e.target.id === 'autoDesignRadius' && parseInt(e.target.value, 10) > 0) p.coverRadius = getAutoDesignCoverRadius({ coverRadius: e.target.value });
     renderAutoDesignCalc();
 });
 
 document.addEventListener('change', (e) => {
     if (!autoDesign || autoDesign.phase !== 'form' || !e.target.closest?.('#autoDesignBox')) return;
-    if (['autoDesignStart', 'autoDesignUseHouses', 'autoDesignUsePoles'].includes(e.target.id)) {
+    if (['autoDesignStart', 'autoDesignUseHouses', 'autoDesignUsePoles', 'autoDesignUseExisting'].includes(e.target.id)) {
         readAutoDesignForm();
         renderAutoDesign();
     }
