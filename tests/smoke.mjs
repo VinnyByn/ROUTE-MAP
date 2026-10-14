@@ -2422,6 +2422,44 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     out.houses.report = computeProjectReportData('projAE').totalCasas;
     document.querySelector('[data-auto-design="undo"]').click();
     closeAutoDesign();
+    //CTOs que já estão no mapa entram na conta antes das novas
+    openAutoDesign(polygon);
+    Object.assign(autoDesign.params, { occupancy: 10, ports: 8, maxFill: 100, coverRadius: 150, useExisting: true });
+    renderAutoDesign();
+    await generateAutoDesign();
+    const withoutExisting = autoDesign.result.ctos.length;
+    closeAutoDesign();
+    const ex = [[LAT0 - 1 * ROW - 0.0001, LNG0 + 0.0010], [LAT0 - 3 * ROW - 0.0001, LNG0 + 0.0024]];
+    ex.forEach(([lat, lng], i) => rebuildMarker({ uid: `mk_ae_ex${i}`, folderId: 'projAE', type: 'CTO', name: `CTO-EX${i + 1}`, color: '#16a34a', position: { lat, lng } }));
+    openAutoDesign(polygon);
+    const formText = document.getElementById('autoDesignBody').textContent;
+    out.existing = { option: !!document.getElementById('autoDesignUseExisting')?.checked && /2 na área/.test(formText), calc: /2<\/b> CTO\(s\) (existente|que já existem)/.test(document.getElementById('autoDesignCalc').innerHTML) };
+    await generateAutoDesign();
+    plan = autoDesign.result;
+    const exXY = plan.model.existing.map(e => [e.x, e.y]);
+    Object.assign(out.existing, {
+      without: withoutExisting, with: plan.ctos.length, fewer: plan.ctos.length < withoutExisting,
+      counted: plan.stats.existingCtos === 2 && plan.stats.existingClients > 0 && plan.stats.existingClients <= 16,
+      apart: plan.ctos.every(c => exXY.every(([x, y]) => Math.hypot(c.x - x, c.y - y) > 25)),
+      panel: /CTOs existentes/.test(document.getElementById('autoDesignBody').textContent),
+      unwired: getAutoDesignWarnings(plan, plan.params).some(w => /CTO-EX1, CTO-EX2 já estão no mapa sem cabo/.test(w)),
+      circles: autoDesign.overlays.filter(o => o.get?.('strokeColor') === '#2563eb').length === 2,
+    });
+    //Desmarcada: volta a conta sem elas
+    autoDesign.phase = 'form'; renderAutoDesign();
+    document.getElementById('autoDesignUseExisting').checked = false;
+    await generateAutoDesign();
+    out.existing.off = autoDesign.result.ctos.length === withoutExisting && !autoDesign.result.stats.existingCtos;
+    //Raio grande e pouca penetração: as existentes dão conta de tudo
+    autoDesign.phase = 'form'; renderAutoDesign();
+    Object.assign(autoDesign.params, { useExisting: true, coverRadius: 500 });
+    renderAutoDesign();
+    document.getElementById('autoDesignOccupancy').value = '5';
+    await generateAutoDesign();
+    out.existing.allServed = autoDesign.phase === 'form' && /dão conta dos/.test(autoDesign.error || '');
+    Object.assign(autoDesign.params, { occupancy: 30, coverRadius: 150 });
+    storeAutoDesignParams(autoDesign.params);
+    closeAutoDesign();
     window.fetch = realFetch;
     window.fetchOsrmRoute = realOsrm;
     markers.filter(m => getItemProjectId(m) === 'projAE').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
@@ -2434,6 +2472,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `pré-projeto: comparar 1:8 × 1:16 e usar o outro cenário (${JSON.stringify(autoDesign2.compare)})`);
   check(Object.values(autoDesign2.edit).every(Boolean), `pré-projeto: incluir, tirar e arrastar CTO na prévia refaz a rede (${JSON.stringify(autoDesign2.edit)})`);
   check(Object.values(autoDesign2.radius).every(Boolean), `pré-projeto: raio da CTO no painel muda a quantidade de caixas e os círculos (${JSON.stringify(autoDesign2.radius)})`);
+  check(Object.values(autoDesign2.existing).every(v => v !== false && v !== undefined), `pré-projeto: CTOs que já estão no mapa entram na conta antes das novas (${JSON.stringify(autoDesign2.existing)})`);
   check(autoDesign2.exclude.phase === 'preview' && autoDesign2.exclude.none && autoDesign2.exclude.listed, `pré-projeto: trecho sem casas fica sem caixa (${JSON.stringify(autoDesign2.exclude)})`);
   check(autoDesign2.levels.form2 && autoDesign2.levels.ceos === autoDesign2.levels.expected.ceos && autoDesign2.levels.ceos >= 2 && autoDesign2.levels.trunks
     && autoDesign2.levels.primaries === autoDesign2.levels.expected.pons && autoDesign2.levels.reserves === autoDesign2.levels.expected.reserves && autoDesign2.levels.reserves > 0
