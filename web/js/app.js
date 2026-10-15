@@ -52,7 +52,7 @@ function applyTheme(theme) {
     try { localStorage.setItem(THEME_STORAGE_KEY, nextTheme); } catch (e) { /* ignora */ }
     const label = document.getElementById('themeToggleLabel');
     const button = document.getElementById('themeToggleButton');
-    if (label) label.textContent = nextTheme === 'dark' ? 'Tema claro' : 'Tema escuro';
+    if (label) label.textContent = 'Tema escuro'; //O interruptor ao lado mostra se está ligado
     if (button) button.setAttribute('aria-pressed', nextTheme === 'dark' ? 'true' : 'false');
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.setAttribute('content', nextTheme === 'dark' ? '#152028' : '#2f7a94');

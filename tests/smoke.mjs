@@ -1595,6 +1595,27 @@ const accounts = await page.evaluate(async () => {
 });
 check(Object.values(accounts).every(Boolean), `equipe e painel do sistema: criar usuário, redefinir senha, nova empresa e bloqueio (${JSON.stringify(accounts)})`);
 
+//Aba Empresa: CNPJ conferido, prévia do relatório ao vivo e "Salvar" só com alteração
+const companyTab = await page.evaluate(async () => {
+  openAccountModal('company');
+  await new Promise(r => setTimeout(r, 200));
+  const type = (id, value) => { const el = document.getElementById(id); el.value = value; el.dispatchEvent(new Event('input')); };
+  const out = { cleanAtStart: document.getElementById('companySaveButton').disabled && !document.getElementById('companyDirtyState').classList.contains('is-dirty') };
+  type('companyDocumentInput', '11222333000182');
+  out.badCnpj = document.getElementById('companyDocumentState').dataset.state === 'bad' && document.getElementById('companyDocumentInput').value === '11.222.333/0001-82';
+  type('companyDocumentInput', '11222333000181');
+  out.goodCnpj = document.getElementById('companyDocumentState').dataset.state === 'ok';
+  type('companyNameInput', 'Fibra Prévia');
+  out.preview = document.getElementById('companyPreviewName').textContent === 'Fibra Prévia' && /CNPJ 11\.222\.333\/0001-81/.test(document.getElementById('companyPreviewDetails').textContent)
+    && document.getElementById('companyHeroName').textContent === 'Fibra Prévia';
+  out.dirty = !document.getElementById('companySaveButton').disabled && document.getElementById('companyDirtyState').classList.contains('is-dirty');
+  document.getElementById('companyResetButton').click();
+  out.reset = document.getElementById('companyNameInput').value === 'Empresa Teste' && document.getElementById('companySaveButton').disabled;
+  document.getElementById('accountModal').style.display = 'none';
+  return out;
+});
+check(Object.values(companyTab).every(Boolean), `aba Empresa: CNPJ conferido, prévia ao vivo e salvar só com alteração (${JSON.stringify(companyTab)})`);
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;

@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261037a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261038d" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -170,25 +170,35 @@
               <span class="user-menu-company"><span class="account-badge" data-user-role-badge></span><span class="company-name-slot"></span></span>
             </div>
           </div>
-          <a href="#" data-account-tab="profile" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"></use></svg><span>Meu perfil</span></a>
-          <a href="#" data-account-tab="security" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg><span>Senha e segurança</span><em class="user-menu-flag" id="userMenuSecurityFlag" hidden></em></a>
-          <a href="#" data-account-tab="company" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span>Empresa</span></a>
-          <a href="#" data-account-tab="team" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Equipe e acessos</span></a>
-          <a href="#" data-account-tab="preferences" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg><span>Preferências e atalhos</span></a>
-          <a href="#" id="userMenuTour" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard"></use></svg><span>Tour pelo sistema</span></a>
-          <a href="#" id="platformPanelButton" role="menuitem" hidden><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-briefcase"></use></svg><span>Painel do sistema</span></a>
-          <div class="dropdown-divider" role="separator"></div>
-          <a href="#" id="themeToggleButton" role="menuitem" title="Alternar tema claro ou escuro">
-            <span class="user-menu-theme-icons">
-              <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
-              <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-            </span>
-            <span id="themeToggleLabel">Tema escuro</span>
-          </a>
-          <div class="dropdown-divider" role="separator"></div>
-          <a href="#" id="logoutButton" class="dropdown-item-danger" role="menuitem" title="Encerrar sessão">
-            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout"></use></svg>
-            <span>Sair</span>
+          <div class="um-section">
+            <small class="um-title">Sua conta</small>
+            <a href="#" data-account-tab="profile" role="menuitem" class="um-item"><span class="um-icon um-icon--blue"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"></use></svg></span><span class="um-text"><strong>Meu perfil</strong><small>Nome, cargo, telefone e e-mail</small></span></a>
+            <a href="#" data-account-tab="security" role="menuitem" class="um-item"><span class="um-icon um-icon--amber"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg></span><span class="um-text"><strong>Senha e segurança</strong><small>Senha e verificação em 2 etapas</small></span><em class="user-menu-flag" id="userMenuSecurityFlag" hidden></em></a>
+          </div>
+          <div class="um-section">
+            <small class="um-title">Empresa</small>
+            <a href="#" data-account-tab="company" role="menuitem" class="um-item"><span class="um-icon um-icon--teal"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg></span><span class="um-text"><strong>Empresa</strong><small>Dados, logo e contato do relatório</small></span></a>
+            <a href="#" data-account-tab="team" role="menuitem" class="um-item"><span class="um-icon um-icon--green"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg></span><span class="um-text"><strong>Equipe e acessos</strong><small>Usuários, cargos e senhas</small></span></a>
+            <a href="#" id="platformPanelButton" hidden role="menuitem" class="um-item"><span class="um-icon um-icon--violet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-briefcase"></use></svg></span><span class="um-text"><strong>Painel do sistema</strong><small>Empresas clientes e acessos</small></span></a>
+          </div>
+          <div class="um-section">
+            <small class="um-title">Sistema</small>
+            <a href="#" data-account-tab="preferences" role="menuitem" class="um-item"><span class="um-icon um-icon--slate"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg></span><span class="um-text"><strong>Preferências e atalhos</strong><small>Mapa, marcadores e teclado</small></span></a>
+            <a href="#" id="userMenuTour" role="menuitem" class="um-item"><span class="um-icon um-icon--sky"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard"></use></svg></span><span class="um-text"><strong>Tour pelo sistema</strong><small>Conheça as ferramentas em 1 minuto</small></span></a>
+            <a href="#" id="themeToggleButton" role="menuitem" class="um-item um-item--theme" title="Alternar tema claro ou escuro">
+              <span class="um-icon um-icon--night">
+                <span class="user-menu-theme-icons">
+                  <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
+                  <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                </span>
+              </span>
+              <span class="um-text"><strong id="themeToggleLabel">Tema escuro</strong><small>Mais confortável à noite</small></span>
+              <span class="um-switch" aria-hidden="true"><i></i></span>
+            </a>
+          </div>
+          <a href="#" id="logoutButton" class="um-item um-item--logout dropdown-item-danger" role="menuitem" title="Encerrar sessão">
+            <span class="um-icon um-icon--red"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout"></use></svg></span>
+            <span class="um-text"><strong>Sair</strong></span>
           </a>
         </div>
       </div>
@@ -2439,45 +2449,107 @@
 
             <!-- Empresa -->
             <section class="account-panel" data-panel="company" role="tabpanel" hidden>
-              <form id="companyForm" class="account-form" novalidate>
-                <div class="form-group">
-                  <label for="companyNameInput">Nome da empresa</label>
-                  <input type="text" id="companyNameInput" maxlength="120" />
+              <div class="account-hero company-hero">
+                <div class="company-hero__logo" id="companyHeroLogo" aria-hidden="true"></div>
+                <div class="account-hero__text">
+                  <strong id="companyHeroName"></strong>
+                  <span id="companyHeroDetails"></span>
+                  <div class="account-hero__chips">
+                    <span class="account-badge" data-user-role-badge></span>
+                    <span class="account-chip" id="companyHeroTeam" hidden><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span></span></span>
+                    <span class="account-chip company-hero__progress" id="companyHeroProgress"></span>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label for="companyDocumentInput">CNPJ</label>
-                  <input type="text" id="companyDocumentInput" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" />
-                </div>
-                <div class="form-group company-logo-field">
-                  <label>Logo nos relatórios</label>
-                  <div class="company-logo">
-                    <div class="company-logo__preview" id="companyLogoPreview"><span>Sem logo</span></div>
-                    <div class="company-logo__actions" data-admin-only>
-                      <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoButton">Escolher imagem</button>
-                      <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoRemove" hidden>Remover</button>
-                      <small>PNG ou JPG. Aparece no topo do relatório e do PDF.</small>
+              </div>
+              <form id="companyForm" class="account-form company-form" novalidate>
+                <section class="company-section">
+                  <header class="company-section__head">
+                    <span class="company-section__icon company-section__icon--teal"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg></span>
+                    <div><h4>Identificação</h4><p>Nome e CNPJ que aparecem no sistema e nos relatórios.</p></div>
+                  </header>
+                  <div class="account-form-row company-form__row">
+                    <div class="form-group">
+                      <label for="companyNameInput">Nome da empresa</label>
+                      <input type="text" id="companyNameInput" maxlength="120" autocomplete="organization" />
                     </div>
-                    <input type="file" id="companyLogoFile" accept="image/png,image/jpeg" hidden />
+                    <div class="form-group">
+                      <label for="companyDocumentInput">CNPJ</label>
+                      <div class="company-input-state">
+                        <input type="text" id="companyDocumentInput" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" />
+                        <span class="company-input-state__mark" id="companyDocumentState" aria-hidden="true"></span>
+                      </div>
+                      <small class="company-hint" id="companyDocumentHint"></small>
+                    </div>
                   </div>
-                </div>
-                <div class="form-group">
-                  <label for="companyAddressInput">Endereço</label>
-                  <input type="text" id="companyAddressInput" maxlength="160" placeholder="Rua, número, cidade/UF" />
-                </div>
-                <div class="form-grid-2">
+                </section>
+
+                <section class="company-section">
+                  <header class="company-section__head">
+                    <span class="company-section__icon company-section__icon--violet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-palette"></use></svg></span>
+                    <div><h4>Logo</h4><p>Vai no topo do relatório e do PDF. Veja como fica no fundo claro e no escuro.</p></div>
+                  </header>
+                  <div class="company-logo-drop" id="companyLogoDrop" tabindex="0" role="button" aria-label="Escolher o logo da empresa">
+                    <div class="company-logo-drop__empty">
+                      <span class="company-logo-drop__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg></span>
+                      <strong>Arraste o logo aqui ou clique para escolher</strong>
+                      <small>PNG ou JPG, até 5 MB. Prefira fundo transparente.</small>
+                    </div>
+                    <div class="company-logo-drop__preview" id="companyLogoPreview">
+                      <div class="company-logo-tile company-logo-tile--light"><img alt="Logo no fundo claro" /><small>Fundo claro</small></div>
+                      <div class="company-logo-tile company-logo-tile--dark"><img alt="Logo no fundo escuro" /><small>Fundo escuro</small></div>
+                    </div>
+                  </div>
+                  <div class="company-logo__actions" data-admin-only>
+                    <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-upload"></use></svg>Escolher imagem</button>
+                    <button type="button" class="btn btn-secondary account-small-btn company-logo__remove" id="companyLogoRemove" hidden><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>Remover</button>
+                  </div>
+                  <input type="file" id="companyLogoFile" accept="image/png,image/jpeg" hidden />
+                </section>
+
+                <section class="company-section">
+                  <header class="company-section__head">
+                    <span class="company-section__icon company-section__icon--blue"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mail"></use></svg></span>
+                    <div><h4>Contato</h4><p>Aparece ao lado do nome, no cabeçalho do relatório.</p></div>
+                  </header>
                   <div class="form-group">
-                    <label for="companyPhoneInput">Telefone</label>
-                    <input type="text" id="companyPhoneInput" maxlength="40" inputmode="tel" placeholder="(00) 0000-0000" />
+                    <label for="companyAddressInput">Endereço</label>
+                    <input type="text" id="companyAddressInput" maxlength="160" placeholder="Rua, número, cidade/UF" autocomplete="street-address" />
                   </div>
-                  <div class="form-group">
-                    <label for="companyContactInput">E-mail ou site</label>
-                    <input type="text" id="companyContactInput" maxlength="120" placeholder="contato@empresa.com.br" />
+                  <div class="account-form-row company-form__row">
+                    <div class="form-group">
+                      <label for="companyPhoneInput">Telefone</label>
+                      <input type="text" id="companyPhoneInput" maxlength="40" inputmode="tel" placeholder="(00) 0000-0000" autocomplete="tel" />
+                    </div>
+                    <div class="form-group">
+                      <label for="companyContactInput">E-mail ou site</label>
+                      <input type="text" id="companyContactInput" maxlength="120" placeholder="contato@empresa.com.br" autocomplete="email" />
+                    </div>
                   </div>
-                </div>
+                </section>
+
+                <section class="company-section company-section--preview">
+                  <header class="company-section__head">
+                    <span class="company-section__icon company-section__icon--green"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-report"></use></svg></span>
+                    <div><h4>Prévia no relatório</h4><p>Muda enquanto você digita.</p></div>
+                  </header>
+                  <div class="company-report-preview" id="companyReportPreview">
+                    <div class="company-report-preview__brand">
+                      <img id="companyPreviewLogo" alt="" hidden />
+                      <span class="company-report-preview__mark" id="companyPreviewMark"></span>
+                      <div><strong id="companyPreviewName"></strong><span id="companyPreviewDetails"></span></div>
+                    </div>
+                    <div class="company-report-preview__doc"><small>Relatório do projeto</small><span id="companyPreviewDate"></span></div>
+                  </div>
+                </section>
+
                 <p class="account-note" id="companyReadonlyNote" hidden>Somente o administrador pode alterar os dados da empresa.</p>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions" data-admin-only>
-                  <button type="submit" class="btn btn-success">Salvar empresa</button>
+                <div class="company-savebar" data-admin-only>
+                  <span class="company-savebar__state" id="companyDirtyState">Tudo salvo</span>
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="button" id="companyResetButton" class="btn btn-secondary" disabled>Descartar</button>
+                    <button type="submit" id="companySaveButton" class="btn btn-success" disabled>Salvar empresa</button>
+                  </div>
                 </div>
               </form>
               <div class="account-card">
@@ -3021,7 +3093,7 @@
   <script src="js/core/supabase-client.js?v=20261037a"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
-  <script src="js/app.js?v=20261037a" defer></script>
+  <script src="js/app.js?v=20261038a" defer></script>
   <script src="js/core/persistence.js?v=20261028a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
@@ -3038,7 +3110,7 @@
   <script src="js/map/marker-panel.js?v=20261020a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
-  <script src="js/auth/account.js?v=20261037a" defer></script>
+  <script src="js/auth/account.js?v=20261038a" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/auth/platform.js?v=20261037a" defer></script>
   <script src="js/network/clients.js?v=20261020a" defer></script>
