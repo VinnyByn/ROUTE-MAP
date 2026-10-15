@@ -1382,6 +1382,43 @@ const tour = await page.evaluate(() => {
 check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
   `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
 
+//Minha conta: barra de salvar do perfil e das preferências, filtro da equipe, busca de atalhos e atalho da proteção
+const accountUi = await page.evaluate(() => {
+  const out = {};
+  const fire = (el) => el.dispatchEvent(new Event('input', { bubbles: true }));
+  openAccountModal('profile');
+  const job = document.getElementById('profileJobTitle');
+  job.value = 'Projetista líder'; fire(job);
+  out.profile = /Projetista líder/.test(document.getElementById('profileHeroDetails').textContent) && document.getElementById('profileDirtyState').textContent === 'Alterações não salvas';
+  document.getElementById('profileResetButton').click();
+  out.profileReset = document.getElementById('profileDirtyState').textContent === 'Tudo salvo';
+  setAccountTab('preferences');
+  const current = getPreferencesFormValues().theme;
+  document.querySelector(`#preferencesForm input[name="prefTheme"][value="${current === 'dark' ? 'light' : 'dark'}"]`).click();
+  out.prefs = document.getElementById('preferencesDirtyState').textContent === 'Alterações não salvas' && !document.getElementById('preferencesSaveButton').disabled;
+  document.getElementById('preferencesResetButton').click();
+  out.prefsReset = getPreferencesFormValues().theme === current && document.getElementById('preferencesSaveButton').disabled;
+  const search = document.getElementById('shortcutSearch');
+  search.value = 'desfaz'; fire(search);
+  out.shortcuts = [...document.querySelectorAll('#accountModal .shortcut-list > div')].filter(d => !d.hidden).length === 1;
+  search.value = ''; fire(search);
+  renderMembers([{ user_id: AppSession.userId, email: 'eu@x.com', role: 'admin' }, { user_id: 'x2', email: 'p@x.com', full_name: 'Paula', role: 'projetista' }, { user_id: 'x3', email: 'm@x.com', full_name: 'Mário', role: 'member' }]);
+  out.hero = /3 pessoas/.test(document.getElementById('teamHeroDetails').textContent) && document.querySelectorAll('#teamHeroChips .account-badge').length === 3;
+  document.querySelector('#teamRoleFilter [data-role="member"]').click();
+  const visible = () => [...document.querySelectorAll('#teamMembersList > li')].filter(li => !li.hidden).length;
+  out.filter = visible() === 1;
+  document.querySelector('#teamRoleFilter [data-role=""]').click();
+  const teamSearch = document.getElementById('teamSearch');
+  teamSearch.value = 'mario'; fire(teamSearch);
+  out.search = visible() === 1;
+  teamSearch.value = ''; fire(teamSearch);
+  setAccountTab('security');
+  out.goto = !!document.querySelector('#securityChecklist [data-security-goto]');
+  document.getElementById('accountModal').style.display = 'none';
+  return out;
+});
+check(Object.values(accountUi).every(Boolean), `minha conta: barras de salvar, filtro da equipe e busca de atalhos (${JSON.stringify(accountUi)})`);
+
 //Poste: painel com os dados, salvos no marcador, rótulo na barra lateral, busca e aba "Postes" na planilha
 const poste = await page.evaluate(() => {
   openMarkerCreatePanel('POSTE');
@@ -1662,7 +1699,7 @@ const lightBlocks = await page.evaluate(() => {
     modal.querySelectorAll('*').forEach(el => {
       const rect = el.getBoundingClientRect();
       if (rect.width * rect.height < 1500 || ['INPUT', 'BUTTON', 'SELECT', 'TEXTAREA', 'IMG', 'CANVAS', 'svg'].includes(el.tagName)) return;
-      if (el.closest('.mfa-qr, .report-preview-page, .rp-page')) return; //QR code e prévia do relatório (papel) são brancos de propósito
+      if (el.closest('.mfa-qr, .report-preview-page, .rp-page, .pref-thumb--light')) return; //QR code, prévia do relatório (papel) e amostra do tema claro são brancos de propósito
       const l = lum(getComputedStyle(el).backgroundColor);
       if (l !== null && l > 0.8) found.push(`${modal.id} › ${el.id ? '#' + el.id : el.tagName.toLowerCase() + '.' + [...el.classList].join('.')}`);
     });

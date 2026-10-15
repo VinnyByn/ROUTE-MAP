@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261038d" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261039b" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -2250,14 +2250,15 @@
           <div class="account-panels">
             <!-- Perfil -->
             <section class="account-panel" data-panel="profile" role="tabpanel">
-              <div class="account-hero">
-                <span class="user-avatar user-avatar--xl" data-user-initials aria-hidden="true">?</span>
+              <div class="account-hero profile-hero">
+                <span class="user-avatar user-avatar--xl" id="profileHeroAvatar" data-user-initials aria-hidden="true">?</span>
                 <div class="account-hero__text">
-                  <strong data-user-name></strong>
-                  <span data-user-email></span>
+                  <strong id="profileHeroName" data-user-name></strong>
+                  <span id="profileHeroDetails"></span>
                   <div class="account-hero__chips">
                     <span class="account-badge" data-user-role-badge></span>
                     <span class="account-chip"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span class="company-name-slot"></span></span>
+                    <span class="account-chip company-hero__progress" id="profileHeroProgress"></span>
                   </div>
                 </div>
               </div>
@@ -2266,57 +2267,75 @@
                 <div><dt>Último acesso</dt><dd id="accountLastSignIn">—</dd></div>
                 <div><dt>Verificação em 2 etapas</dt><dd id="accountMfaFact">—</dd></div>
               </dl>
-              <form id="profileForm" class="account-form" novalidate>
-                <div class="form-group">
-                  <label for="profileFullName">Nome completo</label>
-                  <input type="text" id="profileFullName" maxlength="120" autocomplete="name" />
-                </div>
-                <div class="account-form-row">
+              <form id="profileForm" class="account-form company-form" novalidate>
+                <section class="company-section">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--blue"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"></use></svg></span>
+                  <div><h4>Dados pessoais</h4><p>Aparecem para a equipe e no cartão acima enquanto você digita.</p></div>
+                </header>
                   <div class="form-group">
-                    <label for="profileJobTitle">Cargo / função</label>
-                    <input type="text" id="profileJobTitle" maxlength="80" placeholder="Ex.: Projetista" />
+                    <label for="profileFullName">Nome completo</label>
+                    <input type="text" id="profileFullName" maxlength="120" autocomplete="name" />
                   </div>
-                  <div class="form-group">
-                    <label for="profilePhone">Telefone</label>
-                    <input type="tel" id="profilePhone" maxlength="15" placeholder="(00) 00000-0000" autocomplete="tel" inputmode="numeric" />
+                  <div class="account-form-row company-form__row">
+                    <div class="form-group">
+                      <label for="profileJobTitle">Cargo / função</label>
+                      <input type="text" id="profileJobTitle" maxlength="80" placeholder="Ex.: Projetista" />
+                    </div>
+                    <div class="form-group">
+                      <label for="profilePhone">Telefone</label>
+                      <div class="company-input-state">
+                        <input type="tel" id="profilePhone" maxlength="15" placeholder="(00) 00000-0000" autocomplete="tel" inputmode="numeric" />
+                        <span class="company-input-state__mark" id="profilePhoneState" aria-hidden="true"></span>
+                      </div>
+                      <small class="company-hint" id="profilePhoneHint"></small>
+                    </div>
                   </div>
-                </div>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions">
-                  <button type="button" id="profileResetButton" class="btn btn-secondary" disabled>Descartar</button>
-                  <button type="submit" id="profileSaveButton" class="btn btn-success" disabled>Salvar perfil</button>
+                </section>
+                <div class="company-savebar">
+                  <span class="company-savebar__state" id="profileDirtyState">Tudo salvo</span>
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="button" id="profileResetButton" class="btn btn-secondary" disabled>Descartar</button>
+                    <button type="submit" id="profileSaveButton" class="btn btn-success" disabled>Salvar perfil</button>
+                  </div>
                 </div>
               </form>
 
-              <h3>E-mail de acesso</h3>
-              <div class="account-card" id="emailChangeCard">
-                <div>
-                  <strong id="profileEmailDisplay" data-user-email></strong>
-                  <p>Usado para entrar e recuperar a senha.</p>
-                </div>
-                <button type="button" id="emailChangeOpenButton" class="btn btn-secondary">Alterar e-mail</button>
-              </div>
-              <form id="emailChangeForm" class="account-form account-subform" novalidate hidden>
-                <div class="account-form-row">
-                  <div class="form-group">
-                    <label for="newEmail">Novo e-mail</label>
-                    <input type="email" id="newEmail" maxlength="160" autocomplete="email" placeholder="novo@empresa.com" />
+              <section class="company-section account-section">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--teal"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mail"></use></svg></span>
+                  <div><h4>E-mail de acesso</h4><p>O e-mail que você usa para entrar no sistema.</p></div>
+                </header>
+                <div class="account-card account-card--flat" id="emailChangeCard">
+                  <div>
+                    <strong id="profileEmailDisplay" data-user-email></strong>
+                    <p>Usado para entrar e recuperar a senha.</p>
                   </div>
-                  <div class="form-group">
-                    <label for="emailChangePassword">Senha atual</label>
-                    <div class="account-password">
-                      <input type="password" id="emailChangePassword" autocomplete="current-password" />
-                      <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                  <button type="button" id="emailChangeOpenButton" class="btn btn-secondary">Alterar e-mail</button>
+                </div>
+                <form id="emailChangeForm" class="account-form account-subform" novalidate hidden>
+                  <div class="account-form-row company-form__row">
+                    <div class="form-group">
+                      <label for="newEmail">Novo e-mail</label>
+                      <input type="email" id="newEmail" maxlength="160" autocomplete="email" placeholder="novo@empresa.com" />
+                    </div>
+                    <div class="form-group">
+                      <label for="emailChangePassword">Senha atual</label>
+                      <div class="account-password">
+                        <input type="password" id="emailChangePassword" autocomplete="current-password" />
+                        <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <p class="account-note">Por segurança, enviamos um link de confirmação. A troca só vale depois de confirmada.</p>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions">
-                  <button type="button" id="emailChangeCancelButton" class="btn btn-secondary">Cancelar</button>
-                  <button type="submit" class="btn btn-success">Enviar confirmação</button>
-                </div>
-              </form>
+                  <p class="account-note">Por segurança, enviamos um link de confirmação. A troca só vale depois de confirmada.</p>
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="button" id="emailChangeCancelButton" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Enviar confirmação</button>
+                  </div>
+                </form>
+              </section>
             </section>
 
             <!-- Segurança -->
@@ -2330,121 +2349,137 @@
                 </div>
               </div>
 
-              <h3>Alterar senha</h3>
-              <form id="passwordForm" class="account-form" novalidate>
-                <div class="form-group">
-                  <label for="currentPassword">Senha atual</label>
-                  <div class="account-password">
-                    <input type="password" id="currentPassword" autocomplete="current-password" />
-                    <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
-                  </div>
-                </div>
-                <div class="account-form-row">
+              <section class="company-section account-section" id="securityPasswordSection">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--amber"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg></span>
+                  <div><h4>Alterar senha</h4><p>Uma senha forte e só sua. As regras abaixo ficam verdes conforme você digita.</p></div>
+                </header>
+                <form id="passwordForm" class="account-form" novalidate>
                   <div class="form-group">
-                    <label for="newPassword">Nova senha</label>
+                    <label for="currentPassword">Senha atual</label>
                     <div class="account-password">
-                      <input type="password" id="newPassword" minlength="8" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" />
+                      <input type="password" id="currentPassword" autocomplete="current-password" />
                       <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
                     </div>
                   </div>
+                  <div class="account-form-row company-form__row">
+                    <div class="form-group">
+                      <label for="newPassword">Nova senha</label>
+                      <div class="account-password">
+                        <input type="password" id="newPassword" minlength="8" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" />
+                        <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="newPasswordConfirm">Confirmar nova senha</label>
+                      <div class="account-password">
+                        <input type="password" id="newPasswordConfirm" minlength="8" autocomplete="new-password" />
+                        <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="password-strength" id="passwordStrength" data-level="0">
+                    <div class="password-strength__bar"><i></i><i></i><i></i><i></i></div>
+                    <span class="password-strength__label">Digite a nova senha</span>
+                  </div>
+                  <ul class="password-rules" id="passwordRules">
+                    <li data-rule="length">Pelo menos 8 caracteres</li>
+                    <li data-rule="case">Letras maiúsculas e minúsculas</li>
+                    <li data-rule="number">Pelo menos um número</li>
+                    <li data-rule="symbol">Pelo menos um símbolo (!@#$…)</li>
+                    <li data-rule="match">As duas senhas conferem</li>
+                  </ul>
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="submit" class="btn btn-success">Alterar senha</button>
+                  </div>
+                </form>
+              </section>
+
+              <section class="company-section account-section" id="securityMfaSection">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--green"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"></use></svg></span>
+                  <div><h4>Verificação em duas etapas</h4><p>Pede um código do aplicativo do celular além da senha.</p></div>
+                </header>
+                <div class="account-card account-card--flat" id="mfaStatusCard">
+                  <div>
+                    <strong id="mfaStatusTitle">Verificando…</strong>
+                    <p id="mfaStatusText">Além da senha, pede um código do aplicativo autenticador do celular ao entrar.</p>
+                  </div>
+                  <button type="button" id="mfaEnableButton" class="btn btn-success" hidden>Ativar</button>
+                  <button type="button" id="mfaDisableButton" class="btn btn-secondary" hidden>Desativar</button>
+                </div>
+                <form id="mfaEnrollForm" class="account-subform mfa-enroll" novalidate hidden>
+                  <ol class="mfa-steps">
+                    <li>Instale um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…).</li>
+                    <li>No aplicativo, leia o QR code abaixo ou digite a chave manualmente.</li>
+                    <li>Digite o código de 6 dígitos que aparecer no aplicativo.</li>
+                  </ol>
+                  <div class="mfa-enroll__body">
+                    <img id="mfaQrImage" class="mfa-qr" alt="QR code para o aplicativo autenticador" />
+                    <div class="mfa-enroll__side">
+                      <label>Chave manual</label>
+                      <div class="mfa-secret">
+                        <code id="mfaSecretText"></code>
+                        <button type="button" class="account-icon-btn" id="mfaCopySecretButton" title="Copiar chave" aria-label="Copiar chave"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+                      </div>
+                      <label for="mfaEnrollCode">Código do aplicativo</label>
+                      <input type="text" id="mfaEnrollCode" class="mfa-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
+                    </div>
+                  </div>
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="button" id="mfaEnrollCancelButton" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Confirmar e ativar</button>
+                  </div>
+                </form>
+                <form id="mfaDisableForm" class="account-subform" novalidate hidden>
                   <div class="form-group">
-                    <label for="newPasswordConfirm">Confirmar nova senha</label>
-                    <div class="account-password">
-                      <input type="password" id="newPasswordConfirm" minlength="8" autocomplete="new-password" />
-                      <button type="button" class="account-password__toggle" data-toggle-password aria-label="Mostrar senha"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></button>
-                    </div>
+                    <label for="mfaDisableCode">Para desativar, digite o código atual do aplicativo</label>
+                    <input type="text" id="mfaDisableCode" class="mfa-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
                   </div>
-                </div>
-                <div class="password-strength" id="passwordStrength" data-level="0">
-                  <div class="password-strength__bar"><i></i><i></i><i></i><i></i></div>
-                  <span class="password-strength__label">Digite a nova senha</span>
-                </div>
-                <ul class="password-rules" id="passwordRules">
-                  <li data-rule="length">Pelo menos 8 caracteres</li>
-                  <li data-rule="case">Letras maiúsculas e minúsculas</li>
-                  <li data-rule="number">Pelo menos um número</li>
-                  <li data-rule="symbol">Pelo menos um símbolo (!@#$…)</li>
-                  <li data-rule="match">As duas senhas conferem</li>
-                </ul>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions">
-                  <button type="submit" class="btn btn-success">Alterar senha</button>
-                </div>
-              </form>
-
-              <h3>Verificação em duas etapas</h3>
-              <div class="account-card" id="mfaStatusCard">
-                <div>
-                  <strong id="mfaStatusTitle">Verificando…</strong>
-                  <p id="mfaStatusText">Além da senha, pede um código do aplicativo autenticador do celular ao entrar.</p>
-                </div>
-                <button type="button" id="mfaEnableButton" class="btn btn-success" hidden>Ativar</button>
-                <button type="button" id="mfaDisableButton" class="btn btn-secondary" hidden>Desativar</button>
-              </div>
-              <form id="mfaEnrollForm" class="account-subform mfa-enroll" novalidate hidden>
-                <ol class="mfa-steps">
-                  <li>Instale um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…).</li>
-                  <li>No aplicativo, leia o QR code abaixo ou digite a chave manualmente.</li>
-                  <li>Digite o código de 6 dígitos que aparecer no aplicativo.</li>
-                </ol>
-                <div class="mfa-enroll__body">
-                  <img id="mfaQrImage" class="mfa-qr" alt="QR code para o aplicativo autenticador" />
-                  <div class="mfa-enroll__side">
-                    <label>Chave manual</label>
-                    <div class="mfa-secret">
-                      <code id="mfaSecretText"></code>
-                      <button type="button" class="account-icon-btn" id="mfaCopySecretButton" title="Copiar chave" aria-label="Copiar chave"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copy"></use></svg></button>
-                    </div>
-                    <label for="mfaEnrollCode">Código do aplicativo</label>
-                    <input type="text" id="mfaEnrollCode" class="mfa-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="button" id="mfaDisableCancelButton" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Desativar verificação</button>
                   </div>
-                </div>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions">
-                  <button type="button" id="mfaEnrollCancelButton" class="btn btn-secondary">Cancelar</button>
-                  <button type="submit" class="btn btn-success">Confirmar e ativar</button>
-                </div>
-              </form>
-              <form id="mfaDisableForm" class="account-subform" novalidate hidden>
-                <div class="form-group">
-                  <label for="mfaDisableCode">Para desativar, digite o código atual do aplicativo</label>
-                  <input type="text" id="mfaDisableCode" class="mfa-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
-                </div>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions">
-                  <button type="button" id="mfaDisableCancelButton" class="btn btn-secondary">Cancelar</button>
-                  <button type="submit" class="btn btn-danger">Desativar verificação</button>
-                </div>
-              </form>
+                </form>
+              </section>
 
-              <h3>Sessões e bloqueio</h3>
-              <div class="account-card">
-                <div>
-                  <strong>Este dispositivo</strong>
-                  <p id="currentDeviceText">—</p>
+              <section class="company-section account-section" id="securitySessionsSection">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--slate"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"></use></svg></span>
+                  <div><h4>Sessões e bloqueio</h4><p>Onde você está conectado e quando a sessão encerra sozinha.</p></div>
+                </header>
+                <div class="account-card account-card--flat">
+                  <div>
+                    <strong>Este dispositivo</strong>
+                    <p id="currentDeviceText">—</p>
+                  </div>
+                  <button type="button" id="signOutHereButton" class="btn btn-secondary">Sair deste</button>
                 </div>
-                <button type="button" id="signOutHereButton" class="btn btn-secondary">Sair deste</button>
-              </div>
-              <div class="account-card account-card--tight">
-                <div>
-                  <strong>Bloqueio por inatividade</strong>
-                  <p>Encerra a sessão sozinho se o sistema ficar parado. Recomendado em computadores compartilhados.</p>
+                <div class="account-card account-card--flat">
+                  <div>
+                    <strong>Bloqueio por inatividade</strong>
+                    <p>Encerra a sessão sozinho se o sistema ficar parado. Recomendado em computadores compartilhados.</p>
+                  </div>
+                  <select id="prefIdleLock" class="account-inline-select" aria-label="Bloqueio por inatividade">
+                    <option value="0">Desligado</option>
+                    <option value="15">15 minutos</option>
+                    <option value="30">30 minutos</option>
+                    <option value="60">1 hora</option>
+                    <option value="120">2 horas</option>
+                  </select>
                 </div>
-                <select id="prefIdleLock" class="account-inline-select" aria-label="Bloqueio por inatividade">
-                  <option value="0">Desligado</option>
-                  <option value="15">15 minutos</option>
-                  <option value="30">30 minutos</option>
-                  <option value="60">1 hora</option>
-                  <option value="120">2 horas</option>
-                </select>
-              </div>
-              <div class="account-card account-card--danger account-card--tight">
-                <div>
-                  <strong>Sair de todos os dispositivos</strong>
-                  <p>Encerra sua sessão em todos os computadores e celulares, inclusive neste. Use se perdeu um aparelho ou desconfia de acesso indevido.</p>
-                </div>
-                <button type="button" id="signOutEverywhereButton" class="btn btn-danger">Sair de todos</button>
-              </div>
+              </section>
+
+              <section class="company-section account-section company-section--danger">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--red"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout"></use></svg></span>
+                  <div><h4>Sair de todos os dispositivos</h4><p>Encerra sua sessão em todos os computadores e celulares, inclusive neste. Use se perdeu um aparelho ou desconfia de acesso indevido.</p></div>
+                  <button type="button" id="signOutEverywhereButton" class="btn btn-danger company-section__action">Sair de todos</button>
+                </header>
+              </section>
             </section>
 
             <!-- Empresa -->
@@ -2577,20 +2612,43 @@
 
             <!-- Equipe -->
             <section class="account-panel" data-panel="team" role="tabpanel" hidden>
-              <div class="account-invite" data-admin-only>
-                <h3>Adicionar usuário</h3>
+              <div class="account-hero team-hero">
+                <div class="company-hero__logo team-hero__icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg></div>
+                <div class="account-hero__text">
+                  <strong>Equipe <span class="company-name-slot"></span></strong>
+                  <span id="teamHeroDetails">Carregando a equipe…</span>
+                  <div class="account-hero__chips" id="teamHeroChips"></div>
+                </div>
+              </div>
+              <section class="company-section account-section" data-admin-only id="teamAddSection">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--green"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg></span>
+                  <div><h4>Adicionar usuário</h4><p>Cria a conta com uma senha provisória; a pessoa troca no primeiro acesso.</p></div>
+                </header>
                 <form id="newUserForm" class="account-new-user" novalidate>
-                  <input type="text" id="newUserName" placeholder="Nome completo" maxlength="120" aria-label="Nome completo" autocomplete="off" />
-                  <input type="email" id="newUserEmail" placeholder="email@empresa.com" aria-label="E-mail" autocomplete="off" />
-                  <select id="inviteRole" aria-label="Cargo">
-                    <option value="projetista">Projetista</option>
-                    <option value="member">Membro (somente visualiza)</option>
-                    <option value="admin">Administrador</option>
-                  </select>
-                  <input type="text" id="newUserPassword" placeholder="Senha provisória (em branco: o sistema cria)" aria-label="Senha provisória" autocomplete="off" />
-                  <button type="submit" class="btn btn-success">Criar usuário</button>
+                  <div class="form-group">
+                    <label for="newUserName">Nome completo</label>
+                    <input type="text" id="newUserName" placeholder="Ex.: Maria Souza" maxlength="120" autocomplete="off" />
+                  </div>
+                  <div class="form-group">
+                    <label for="newUserEmail">E-mail</label>
+                    <input type="email" id="newUserEmail" placeholder="email@empresa.com" autocomplete="off" />
+                  </div>
+                  <div class="form-group">
+                    <label for="inviteRole">Cargo</label>
+                    <select id="inviteRole">
+                      <option value="projetista">Projetista</option>
+                      <option value="member">Membro (somente visualiza)</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="newUserPassword">Senha provisória</label>
+                    <input type="text" id="newUserPassword" placeholder="Em branco: o sistema cria" autocomplete="off" />
+                  </div>
+                  <p class="account-note account-new-user__hint" id="inviteRoleHint"></p>
+                  <button type="submit" class="btn btn-success"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg>Criar usuário</button>
                 </form>
-                <p class="account-note" id="inviteRoleHint"></p>
                 <p class="account-note">A pessoa entra em <strong class="app-url-slot"></strong> com o e-mail e a senha provisória e cria a senha dela no primeiro acesso. Só o administrador cria contas.</p>
                 <div class="account-credentials" id="accountCredentials" hidden>
                   <strong id="accountCredentialsTitle">Usuário criado</strong>
@@ -2606,77 +2664,116 @@
                 </div>
                 <p class="account-feedback" role="status"></p>
                 <ul id="pendingInvitesList" class="account-list"></ul>
-              </div>
-              <div class="account-members-head">
-                <h3>Membros</h3>
-                <span class="account-online-summary" id="teamOnlineSummary" hidden></span>
-              </div>
-              <ul id="teamMembersList" class="account-list"></ul>
-              <div class="account-roles" data-admin-only>
-                <h3>Cargos</h3>
+              </section>
+              <section class="company-section account-section">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--blue"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg></span>
+                  <div><h4>Membros</h4><p>Quem tem acesso aos projetos da empresa.</p></div>
+                  <span class="account-online-summary" id="teamOnlineSummary" hidden></span>
+                </header>
+                <div class="team-toolbar">
+                  <div class="team-search">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
+                    <input type="search" id="teamSearch" placeholder="Procurar por nome, e-mail ou função" aria-label="Procurar na equipe" autocomplete="off" data-no-autofocus />
+                  </div>
+                  <div class="team-filter" id="teamRoleFilter" role="group" aria-label="Filtrar por cargo"></div>
+                </div>
+                <ul id="teamMembersList" class="account-list"></ul>
+                <p class="team-empty" id="teamEmpty" hidden>Ninguém encontrado com esse filtro.</p>
+              </section>
+              <section class="company-section account-section account-roles" data-admin-only>
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--violet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-briefcase"></use></svg></span>
+                  <div><h4>Cargos</h4><p>O que cada cargo pode fazer no sistema.</p></div>
+                </header>
                 <dl>
                   <div><dt><span class="account-badge account-badge--admin">Administrador</span></dt><dd>Controla tudo: equipe, convites, dados da empresa, preços, kits e configurações. Vê quem está online.</dd></div>
                   <div><dt><span class="account-badge account-badge--projetista">Projetista</span></dt><dd>Cria, edita e salva projetos. Não acessa a parte administrativa.</dd></div>
                   <div><dt><span class="account-badge account-badge--member">Membro</span></dt><dd>Somente visualiza: abre e consulta projetos, sem editar nem salvar.</dd></div>
                 </dl>
-              </div>
+              </section>
             </section>
 
             <!-- Preferências -->
             <section class="account-panel" data-panel="preferences" role="tabpanel" hidden>
-              <form id="preferencesForm" class="account-form" novalidate>
-                <div class="account-form-row">
+              <form id="preferencesForm" class="account-form company-form" novalidate>
+                <section class="company-section">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--violet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-palette"></use></svg></span>
+                  <div><h4>Aparência</h4><p>Tema do sistema e tamanho dos marcadores no mapa.</p></div>
+                </header>
                   <div class="form-group">
-                    <label for="prefTheme">Tema</label>
-                    <select id="prefTheme">
-                      <option value="light">Claro</option>
-                      <option value="dark">Escuro</option>
-                    </select>
+                    <span class="pref-label" id="prefThemeLabel">Tema</span>
+                    <div class="pref-choices pref-choices--theme" role="radiogroup" aria-labelledby="prefThemeLabel">
+                      <label class="pref-choice"><input type="radio" name="prefTheme" value="light" /><span class="pref-thumb pref-thumb--light" aria-hidden="true"><i></i><i></i><i></i></span><strong>Claro</strong></label>
+                      <label class="pref-choice"><input type="radio" name="prefTheme" value="dark" /><span class="pref-thumb pref-thumb--dark" aria-hidden="true"><i></i><i></i><i></i></span><strong>Escuro</strong></label>
+                    </div>
                   </div>
                   <div class="form-group">
-                    <label for="prefMapType">Mapa ao abrir</label>
-                    <select id="prefMapType">
-                      <option value="roadmap">Mapa</option>
-                      <option value="hybrid">Satélite com ruas</option>
-                      <option value="satellite">Satélite</option>
-                      <option value="terrain">Relevo</option>
-                    </select>
+                    <span class="pref-label" id="prefMarkerScaleLabel">Tamanho dos marcadores</span>
+                    <div class="pref-choices pref-choices--size" role="radiogroup" aria-labelledby="prefMarkerScaleLabel">
+                      <label class="pref-choice pref-choice--row"><input type="radio" name="prefMarkerScale" value="pequeno" /><span class="pref-pin pref-pin--sm" aria-hidden="true"></span><strong>Pequeno</strong></label>
+                      <label class="pref-choice pref-choice--row"><input type="radio" name="prefMarkerScale" value="medio" /><span class="pref-pin pref-pin--md" aria-hidden="true"></span><strong>Médio</strong></label>
+                      <label class="pref-choice pref-choice--row"><input type="radio" name="prefMarkerScale" value="grande" /><span class="pref-pin pref-pin--lg" aria-hidden="true"></span><strong>Grande</strong></label>
+                    </div>
                   </div>
-                </div>
-                <div class="form-group">
-                  <label for="prefMarkerScale">Tamanho dos marcadores</label>
-                  <select id="prefMarkerScale">
-                    <option value="pequeno">Pequeno</option>
-                    <option value="medio">Médio</option>
-                    <option value="grande">Grande</option>
-                  </select>
-                </div>
-                <label class="account-check">
-                  <input type="checkbox" id="prefReopenLastProject" />
-                  <span>Reabrir o último projeto ao entrar</span>
-                </label>
-                <p class="account-feedback" role="status"></p>
-                <div class="account-actions">
-                  <button type="submit" class="btn btn-success">Salvar preferências</button>
+                </section>
+                <section class="company-section">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--blue"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg></span>
+                  <div><h4>Mapa</h4><p>Como o mapa abre quando você entra.</p></div>
+                </header>
+                  <div class="form-group">
+                    <span class="pref-label" id="prefMapTypeLabel">Mapa ao abrir</span>
+                    <div class="pref-choices pref-choices--map" role="radiogroup" aria-labelledby="prefMapTypeLabel">
+                      <label class="pref-choice"><input type="radio" name="prefMapType" value="roadmap" /><span class="pref-thumb pref-thumb--roadmap" aria-hidden="true"></span><strong>Mapa</strong></label>
+                      <label class="pref-choice"><input type="radio" name="prefMapType" value="hybrid" /><span class="pref-thumb pref-thumb--hybrid" aria-hidden="true"></span><strong>Satélite com ruas</strong></label>
+                      <label class="pref-choice"><input type="radio" name="prefMapType" value="satellite" /><span class="pref-thumb pref-thumb--satellite" aria-hidden="true"></span><strong>Satélite</strong></label>
+                      <label class="pref-choice"><input type="radio" name="prefMapType" value="terrain" /><span class="pref-thumb pref-thumb--terrain" aria-hidden="true"></span><strong>Relevo</strong></label>
+                    </div>
+                  </div>
+                  <label class="pref-switch">
+                    <input type="checkbox" id="prefReopenLastProject" role="switch" />
+                    <span class="pref-switch__track" aria-hidden="true"><i></i></span>
+                    <span class="pref-switch__text"><strong>Reabrir o último projeto ao entrar</strong><small>Abre direto o projeto em que você estava trabalhando.</small></span>
+                  </label>
+                </section>
+                <div class="company-savebar">
+                  <span class="company-savebar__state" id="preferencesDirtyState">Tudo salvo</span>
+                  <p class="account-feedback" role="status"></p>
+                  <div class="account-actions">
+                    <button type="button" id="preferencesResetButton" class="btn btn-secondary" disabled>Descartar</button>
+                    <button type="submit" id="preferencesSaveButton" class="btn btn-success" disabled>Salvar preferências</button>
+                  </div>
                 </div>
               </form>
-              <h3>Atalhos do teclado</h3>
-              <dl class="shortcut-list">
-                <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd></dt><dd>Busca: caixa, cliente, código, cabo, endereço ou coordenada</dd></div>
-                <div><dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Salva o projeto selecionado (com o plano de fusão aberto, salva o plano)</dd></div>
-                <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></dt><dd>Desfaz / refaz a última alteração do projeto (na régua e no polígono, o último ponto)</dd></div>
-                <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copia e cola itens da barra lateral</dd></div>
-                <div><dt><kbd>Shift</kbd> + arrastar no mapa</dt><dd>Seleciona vários marcadores e cabos (Ctrl + Shift soma à seleção)</dd></div>
-                <div><dt><kbd>Shift</kbd> + clique no marcador</dt><dd>Põe ou tira o marcador da seleção</dd></div>
-                <div><dt><kbd>Delete</kbd></dt><dd>Exclui os itens selecionados (pede confirmação)</dd></div>
-                <div><dt>Clique direito no mapa ou na barra lateral</dt><dd>Abre as ações do item (editar, plano de fusão, ver rota, excluir…)</dd></div>
-                <div><dt>Clique direito ao desenhar</dt><dd>Remove o ponto do cabo, da régua ou do polígono</dd></div>
-                <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
-                <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela, cancela a ferramenta ou limpa a seleção</dd></div>
-                <div><dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move o mapa enquanto desenha ou edita</dd></div>
-                <div><dt><kbd>?</kbd></dt><dd>Mostra esta lista de atalhos</dd></div>
-              </dl>
-              <button type="button" class="btn btn-secondary" id="startTourButton">Fazer o tour pelo sistema</button>
+              <section class="company-section account-section" id="shortcutsSection">
+                <header class="company-section__head">
+                  <span class="company-section__icon company-section__icon--slate"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard"></use></svg></span>
+                  <div><h4>Atalhos do teclado</h4><p>Aperte <kbd>?</kbd> em qualquer tela para abrir esta lista.</p></div>
+                  <button type="button" class="btn btn-secondary account-small-btn company-section__action" id="startTourButton"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-route"></use></svg>Fazer o tour</button>
+                </header>
+                <div class="team-search">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
+                  <input type="search" id="shortcutSearch" placeholder="Procurar atalho (ex.: desfazer, seleção, salvar)" aria-label="Procurar atalho" autocomplete="off" data-no-autofocus />
+                </div>
+                <dl class="shortcut-list">
+                  <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd></dt><dd>Busca: caixa, cliente, código, cabo, endereço ou coordenada</dd></div>
+                  <div><dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Salva o projeto selecionado (com o plano de fusão aberto, salva o plano)</dd></div>
+                  <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></dt><dd>Desfaz / refaz a última alteração do projeto (na régua e no polígono, o último ponto)</dd></div>
+                  <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copia e cola itens da barra lateral</dd></div>
+                  <div><dt><kbd>Shift</kbd> + arrastar no mapa</dt><dd>Seleciona vários marcadores e cabos (Ctrl + Shift soma à seleção)</dd></div>
+                  <div><dt><kbd>Shift</kbd> + clique no marcador</dt><dd>Põe ou tira o marcador da seleção</dd></div>
+                  <div><dt><kbd>Delete</kbd></dt><dd>Exclui os itens selecionados (pede confirmação)</dd></div>
+                  <div><dt>Clique direito no mapa ou na barra lateral</dt><dd>Abre as ações do item (editar, plano de fusão, ver rota, excluir…)</dd></div>
+                  <div><dt>Clique direito ao desenhar</dt><dd>Remove o ponto do cabo, da régua ou do polígono</dd></div>
+                  <div><dt><kbd>Enter</kbd></dt><dd>Confirma a janela ou painel aberto</dd></div>
+                  <div><dt><kbd>Esc</kbd></dt><dd>Fecha a janela, cancela a ferramenta ou limpa a seleção</dd></div>
+                  <div><dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move o mapa enquanto desenha ou edita</dd></div>
+                  <div><dt><kbd>?</kbd></dt><dd>Mostra esta lista de atalhos</dd></div>
+                </dl>
+                <p class="team-empty" id="shortcutEmpty" hidden>Nenhum atalho com esse nome.</p>
+              </section>
             </section>
           </div>
         </div>
@@ -3110,7 +3207,7 @@
   <script src="js/map/marker-panel.js?v=20261020a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
-  <script src="js/auth/account.js?v=20261038a" defer></script>
+  <script src="js/auth/account.js?v=20261039a" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/auth/platform.js?v=20261037a" defer></script>
   <script src="js/network/clients.js?v=20261020a" defer></script>
