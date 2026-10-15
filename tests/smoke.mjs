@@ -1595,6 +1595,27 @@ const accounts = await page.evaluate(async () => {
 });
 check(Object.values(accounts).every(Boolean), `equipe e painel do sistema: criar usuário, redefinir senha, nova empresa e bloqueio (${JSON.stringify(accounts)})`);
 
+//Aba Empresa: CNPJ conferido, prévia do relatório ao vivo e "Salvar" só com alteração
+const companyTab = await page.evaluate(async () => {
+  openAccountModal('company');
+  await new Promise(r => setTimeout(r, 200));
+  const type = (id, value) => { const el = document.getElementById(id); el.value = value; el.dispatchEvent(new Event('input')); };
+  const out = { cleanAtStart: document.getElementById('companySaveButton').disabled && !document.getElementById('companyDirtyState').classList.contains('is-dirty') };
+  type('companyDocumentInput', '11222333000182');
+  out.badCnpj = document.getElementById('companyDocumentState').dataset.state === 'bad' && document.getElementById('companyDocumentInput').value === '11.222.333/0001-82';
+  type('companyDocumentInput', '11222333000181');
+  out.goodCnpj = document.getElementById('companyDocumentState').dataset.state === 'ok';
+  type('companyNameInput', 'Fibra Prévia');
+  out.preview = document.getElementById('companyPreviewName').textContent === 'Fibra Prévia' && /CNPJ 11\.222\.333\/0001-81/.test(document.getElementById('companyPreviewDetails').textContent)
+    && document.getElementById('companyHeroName').textContent === 'Fibra Prévia';
+  out.dirty = !document.getElementById('companySaveButton').disabled && document.getElementById('companyDirtyState').classList.contains('is-dirty');
+  document.getElementById('companyResetButton').click();
+  out.reset = document.getElementById('companyNameInput').value === 'Empresa Teste' && document.getElementById('companySaveButton').disabled;
+  document.getElementById('accountModal').style.display = 'none';
+  return out;
+});
+check(Object.values(companyTab).every(Boolean), `aba Empresa: CNPJ conferido, prévia ao vivo e salvar só com alteração (${JSON.stringify(companyTab)})`);
+
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {
   window.__xss = 0;
@@ -2454,6 +2475,31 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     out.radius.circles = autoDesign.overlays.filter(o => o.get?.('radius') !== undefined).every(o => o.get('radius') === 80) && autoDesign.result.model.coverRadius === 80;
     out.radius.kept = loadAutoDesignParams().coverRadius === 80;
     autoDesign.params.coverRadius = 150;
+    //Distância entre CTOs: em branco vale só o raio; preenchida, nenhuma CTO fica mais perto que ela de outra na mesma rua
+    const closest = (plan) => Math.min(...plan.ctos.flatMap((c, i) => plan.ctos.slice(i + 1)
+      .filter(o => areAutoDesignBoxesTooClose(plan.model, c, o, 1e9)).map(o => Math.hypot(c.x - o.x, c.y - o.y))));
+    document.querySelector('[data-auto-design="adjust"]').click();
+    const spacingInput = document.getElementById('autoDesignSpacing');
+    out.spacing = { field: !!spacingInput && spacingInput.value === '' && spacingInput.placeholder === 'Pelo raio' };
+    await generateAutoDesign();
+    const freeCtos = autoDesign.result.ctos.length, freeGap = closest(autoDesign.result);
+    const gap = Math.round(freeGap / 10) * 10 + 60;
+    document.querySelector('[data-auto-design="adjust"]').click();
+    document.getElementById('autoDesignSpacing').value = String(gap);
+    await generateAutoDesign();
+    Object.assign(out.spacing, {
+      off: autoDesign.result !== null && freeGap < gap, model: autoDesign.result.model.ctoSpacing === gap,
+      apart: autoDesign.options.every(o => closest(o) >= gap), fewer: autoDesign.result.ctos.length <= freeCtos,
+      detail: autoDesign.options.length < 2 || new RegExp(`CTOs a ${gap} m ou mais`).test(document.getElementById('autoDesignBody').textContent),
+      kept: loadAutoDesignParams().ctoSpacing === gap,
+    });
+    //Arrastar uma CTO para perto de outra: aviso
+    const [c0, c1] = autoDesign.result.ctos;
+    await moveAutoDesignBox(c1, LL(c0.position.lat(), c0.position.lng() + 0.0002));
+    out.spacing.warned = getAutoDesignWarnings(autoDesign.result, autoDesign.result.params).some(w => /a menos de \d+ m de outra na mesma rua/.test(w));
+    out.spacing.info = { freeCtos, freeGap: Math.round(freeGap), gap, ctos: autoDesign.result.ctos.length };
+    autoDesign.params.ctoSpacing = '';
+    storeAutoDesignParams(autoDesign.params);
     //2 níveis (CEO 1:8 + CTO 1:8), até 8 CTOs por CEO e reserva técnica a cada 300 m
     document.querySelector('[data-auto-design="adjust"]').click();
     Object.assign(autoDesign.params, { ports: 8, levels: 2, primary: 8, ceoMax: 8, reserveEvery: 300 });
@@ -2562,6 +2608,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `pré-projeto: comparar 1:8 × 1:16 e usar o outro cenário (${JSON.stringify(autoDesign2.compare)})`);
   check(Object.values(autoDesign2.edit).every(Boolean), `pré-projeto: incluir, tirar e arrastar CTO na prévia refaz a rede (${JSON.stringify(autoDesign2.edit)})`);
   check(Object.values(autoDesign2.radius).every(Boolean), `pré-projeto: raio da CTO no painel muda a quantidade de caixas e os círculos (${JSON.stringify(autoDesign2.radius)})`);
+  check(Object.entries(autoDesign2.spacing).every(([k, v]) => k === 'info' || v === true), `pré-projeto: distância entre CTOs na mesma rua (${JSON.stringify(autoDesign2.spacing)})`);
   check(Object.values(autoDesign2.existing).every(v => v !== false && v !== undefined), `pré-projeto: CTOs que já estão no mapa entram na conta antes das novas (${JSON.stringify(autoDesign2.existing)})`);
   check(autoDesign2.exclude.phase === 'preview' && autoDesign2.exclude.none && autoDesign2.exclude.listed, `pré-projeto: trecho sem casas fica sem caixa (${JSON.stringify(autoDesign2.exclude)})`);
   check(autoDesign2.levels.form2 && autoDesign2.levels.ceos === autoDesign2.levels.expected.ceos && autoDesign2.levels.ceos >= 2 && autoDesign2.levels.trunks

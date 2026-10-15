@@ -99,6 +99,7 @@ function setAccountTab(tab) {
     document.querySelectorAll('#accountModal .account-feedback').forEach(el => { el.hidden = true; });
     if (tab === 'team') loadTeam();
     if (tab === 'company' && AppSession.isAdmin) loadClientErrors();
+    if (tab === 'company') loadCompanyTeamCount();
     const firstInput = document.querySelector(`#accountModal [data-panel="${tab}"] input:not([disabled])`);
     if (firstInput) setTimeout(() => firstInput.focus(), 40);
 }
@@ -116,17 +117,11 @@ function fillAccountForms() {
     document.getElementById('prefIdleLock').value = String(prefs.idleLockMinutes || 0);
     document.getElementById('currentDeviceText').textContent = `${describeThisDevice()} · conectado agora`;
     refreshAuthDetails();
-    document.getElementById('companyNameInput').value = AppSession.company?.name || '';
-    document.getElementById('companyDocumentInput').value = AppSession.company?.document || '';
-    const branding = typeof getCompanyBranding === 'function' ? getCompanyBranding() : {};
-    document.getElementById('companyAddressInput').value = branding.address || '';
-    document.getElementById('companyPhoneInput').value = branding.phone || '';
-    document.getElementById('companyContactInput').value = branding.contact || '';
-    pendingCompanyLogo = branding.logo || '';
-    renderCompanyLogoPreview();
+    fillCompanyForm();
     const readOnly = !AppSession.isAdmin;
     ['companyNameInput', 'companyDocumentInput', 'companyAddressInput', 'companyPhoneInput', 'companyContactInput']
         .forEach(id => { document.getElementById(id).disabled = readOnly; });
+    document.getElementById('companyLogoDrop')?.classList.toggle('is-readonly', readOnly);
     document.getElementById('companyReadonlyNote').hidden = !readOnly;
     document.getElementById('leaveCompanyCard').hidden = AppSession.isAdmin;
     const roleCard = document.getElementById('myRoleDescription');
@@ -588,18 +583,149 @@ async function saveCompany(event) {
         const saved = await persistLancamentoConfig();
         renderUserIdentity();
         if (typeof refreshCompanySetup === 'function') refreshCompanySetup();
+        if (saved) companyFormSnapshot = JSON.stringify(getCompanyFormValues());
+        updateCompanyFormState();
         setFeedback(panel, saved ? 'Dados da empresa atualizados.' : 'O nome foi salvo, mas o logo e o contato não. Tente de novo.', saved ? 'success' : 'error');
-    });
+    });    updateCompanyFormState(); //runBusy reativa o botão: volta ao estado certo (sem alterações = desativado)
+}
+
+// Aba Empresa: cartão da empresa, CNPJ conferido, prévia do relatório ao vivo e "Salvar" só com alteração
+let companyFormSnapshot = '';
+
+function fillCompanyForm() {
+    const branding = typeof getCompanyBranding === 'function' ? getCompanyBranding() : {};
+    document.getElementById('companyNameInput').value = AppSession.company?.name || '';
+    document.getElementById('companyDocumentInput').value = formatCnpj(AppSession.company?.document || '');
+    document.getElementById('companyAddressInput').value = branding.address || '';
+    document.getElementById('companyPhoneInput').value = branding.phone || '';
+    document.getElementById('companyContactInput').value = branding.contact || '';
+    pendingCompanyLogo = branding.logo || '';
+    companyFormSnapshot = JSON.stringify(getCompanyFormValues());
+    renderCompanyLogoPreview();
+}
+
+function getCompanyFormValues() {
+    const value = (id) => document.getElementById(id)?.value.trim() || '';
+    return {
+        name: value('companyNameInput'), document: value('companyDocumentInput'), address: value('companyAddressInput'),
+        phone: value('companyPhoneInput'), contact: value('companyContactInput'), logo: pendingCompanyLogo,
+    };
+}
+
+function formatCnpj(value) {
+    const d = String(value || '').replace(/\D/g, '').slice(0, 14);
+    if (!d) return String(value || '').trim();
+    return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+//Dígitos verificadores do CNPJ
+function isValidCnpj(value) {
+    const d = String(value || '').replace(/\D/g, '');
+    if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
+    const digit = (len) => {
+        const weights = len === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+        const sum = weights.reduce((acc, w, i) => acc + Number(d[i]) * w, 0);
+        const rest = sum % 11;
+        return rest < 2 ? 0 : 11 - rest;
+    };
+    return digit(12) === Number(d[12]) && digit(13) === Number(d[13]);
+}
+
+function getCompanyInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w));
+    return (words.slice(0, 2).map(w => w[0]).join('') || '?').toUpperCase();
+}
+
+//Atualiza o cartão da empresa, a prévia do relatório, o estado do CNPJ e a barra de salvar
+function updateCompanyFormState() {
+    const v = getCompanyFormValues();
+    const name = v.name || 'Sua empresa';
+    const details = [v.document ? `CNPJ ${v.document}` : '', v.phone, v.contact, v.address].filter(Boolean).join(' · ');
+    const heroLogo = document.getElementById('companyHeroLogo');
+    if (heroLogo) heroLogo.innerHTML = v.logo ? `<img src="${v.logo}" alt="">` : `<span>${escapeHtml(getCompanyInitials(name))}</span>`;
+    heroLogo?.classList.toggle('has-logo', !!v.logo);
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('companyHeroName', name);
+    set('companyHeroDetails', details || 'Complete os dados abaixo para aparecerem nos relatórios.');
+    //Quanto do cadastro da empresa está preenchido
+    const filled = [v.name, v.document, v.logo, v.address, v.phone || v.contact].filter(Boolean).length;
+    const progress = document.getElementById('companyHeroProgress');
+    if (progress) {
+        progress.textContent = filled === 5 ? 'Cadastro completo' : `Cadastro ${filled} de 5`;
+        progress.classList.toggle('is-complete', filled === 5);
+    }
+    //Prévia do topo do relatório
+    const previewLogo = document.getElementById('companyPreviewLogo');
+    if (previewLogo) {
+        previewLogo.hidden = !v.logo;
+        if (v.logo) previewLogo.src = v.logo;
+        else previewLogo.removeAttribute('src');
+    }
+    const mark = document.getElementById('companyPreviewMark');
+    if (mark) { mark.hidden = !!v.logo; mark.textContent = getCompanyInitials(name); }
+    set('companyPreviewName', name);
+    set('companyPreviewDetails', details || 'CNPJ, telefone e contato aparecem aqui');
+    set('companyPreviewDate', `Gerado em ${new Date().toLocaleDateString('pt-BR')}`);
+    //CNPJ: confere os dígitos
+    const docState = document.getElementById('companyDocumentState');
+    const docHint = document.getElementById('companyDocumentHint');
+    const digits = v.document.replace(/\D/g, '');
+    const docOk = digits.length === 14 && isValidCnpj(digits);
+    const docBad = digits.length === 14 && !docOk;
+    if (docState) docState.dataset.state = docOk ? 'ok' : docBad ? 'bad' : '';
+    if (docHint) {
+        docHint.textContent = docOk ? 'CNPJ válido' : docBad ? 'Confira o CNPJ: os dígitos não conferem' : (digits && digits.length < 14 ? `${14 - digits.length} dígito(s) faltando` : '');
+        docHint.dataset.state = docOk ? 'ok' : docBad ? 'bad' : '';
+    }
+    //Barra de salvar
+    const dirty = JSON.stringify(v) !== companyFormSnapshot;
+    const state = document.getElementById('companyDirtyState');
+    if (state) {
+        state.textContent = dirty ? 'Alterações não salvas' : 'Tudo salvo';
+        state.classList.toggle('is-dirty', dirty);
+    }
+    const saveButton = document.getElementById('companySaveButton');
+    const resetButton = document.getElementById('companyResetButton');
+    if (saveButton && saveButton.textContent !== 'Salvando…') saveButton.disabled = !dirty || !AppSession.isAdmin;
+    if (resetButton) resetButton.disabled = !dirty;
+}
+
+//Quantas pessoas há na equipe (chip do cartão da empresa)
+async function loadCompanyTeamCount() {
+    const chip = document.getElementById('companyHeroTeam');
+    if (!chip) return;
+    const { data, error } = await supabaseClient.rpc('list_company_members');
+    if (error || !Array.isArray(data)) return;
+    chip.querySelector('span').textContent = `${data.length} ${data.length === 1 ? 'pessoa' : 'pessoas'} na equipe`;
+    chip.hidden = false;
+}
+
+async function loadCompanyLogoFile(file) {
+    const panel = document.querySelector('#accountModal [data-panel="company"]');
+    try {
+        pendingCompanyLogo = await readCompanyLogoFile(file);
+        renderCompanyLogoPreview();
+        setFeedback(panel, 'Logo carregado. Clique em "Salvar empresa" para guardar.');
+    } catch (error) {
+        setFeedback(panel, error.message, 'error');
+    }
 }
 
 //Logo da empresa: reduzida no navegador (até 480 × 160) para caber nas configurações e no PDF
 let pendingCompanyLogo = '';
 
 function renderCompanyLogoPreview() {
-    const preview = document.getElementById('companyLogoPreview');
-    if (!preview) return;
-    preview.innerHTML = pendingCompanyLogo ? `<img src="${pendingCompanyLogo}" alt="Logo da empresa">` : '<span>Sem logo</span>';
+    const drop = document.getElementById('companyLogoDrop');
+    if (!drop) return;
+    drop.classList.toggle('has-logo', !!pendingCompanyLogo);
+    drop.querySelectorAll('.company-logo-tile img').forEach(img => {
+        if (pendingCompanyLogo) img.src = pendingCompanyLogo;
+        else img.removeAttribute('src');
+    });
     document.getElementById('companyLogoRemove').hidden = !pendingCompanyLogo;
+    document.getElementById('companyLogoButton').lastChild.textContent = pendingCompanyLogo ? 'Trocar imagem' : 'Escolher imagem';
+    updateCompanyFormState();
 }
 
 function readCompanyLogoFile(file) {
@@ -986,17 +1112,40 @@ function setupAccountMenu() {
     document.getElementById('companyForm').addEventListener('submit', saveCompany);
     document.getElementById('companyLogoButton')?.addEventListener('click', () => document.getElementById('companyLogoFile').click());
     document.getElementById('companyLogoRemove')?.addEventListener('click', () => { pendingCompanyLogo = ''; renderCompanyLogoPreview(); });
-    document.getElementById('companyLogoFile')?.addEventListener('change', async (event) => {
+    document.getElementById('companyLogoFile')?.addEventListener('change', (event) => {
         const file = event.target.files?.[0];
         event.target.value = '';
-        if (!file) return;
-        try {
-            pendingCompanyLogo = await readCompanyLogoFile(file);
-            renderCompanyLogoPreview();
-            setFeedback(document.querySelector('#accountModal [data-panel="company"]'), 'Logo carregado. Clique em "Salvar empresa" para guardar.');
-        } catch (error) {
-            setFeedback(document.querySelector('#accountModal [data-panel="company"]'), error.message, 'error');
-        }
+        if (file) loadCompanyLogoFile(file);
+    });
+    //Logo: clique, Enter/Espaço ou arrastar e soltar na área
+    const logoDrop = document.getElementById('companyLogoDrop');
+    const canEditLogo = () => AppSession.isAdmin;
+    logoDrop?.addEventListener('click', () => { if (canEditLogo()) document.getElementById('companyLogoFile').click(); });
+    logoDrop?.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && canEditLogo()) { e.preventDefault(); document.getElementById('companyLogoFile').click(); }
+    });
+    ['dragenter', 'dragover'].forEach(type => logoDrop?.addEventListener(type, (e) => {
+        if (!canEditLogo()) return;
+        e.preventDefault();
+        logoDrop.classList.add('is-dragging');
+    }));
+    ['dragleave', 'drop'].forEach(type => logoDrop?.addEventListener(type, () => logoDrop.classList.remove('is-dragging')));
+    logoDrop?.addEventListener('drop', (e) => {
+        if (!canEditLogo()) return;
+        e.preventDefault();
+        const file = e.dataTransfer?.files?.[0];
+        if (file) loadCompanyLogoFile(file);
+    });
+    //Máscaras e estado ao digitar
+    document.getElementById('companyDocumentInput')?.addEventListener('input', (e) => { e.target.value = formatCnpj(e.target.value); updateCompanyFormState(); });
+    document.getElementById('companyPhoneInput')?.addEventListener('input', (e) => {
+        if (/^[\d\s()-]*$/.test(e.target.value)) e.target.value = formatPhone(e.target.value);
+        updateCompanyFormState();
+    });
+    ['companyNameInput', 'companyAddressInput', 'companyContactInput'].forEach(id => document.getElementById(id)?.addEventListener('input', updateCompanyFormState));
+    document.getElementById('companyResetButton')?.addEventListener('click', () => {
+        fillCompanyForm();
+        setFeedback(document.querySelector('#accountModal [data-panel="company"]'), '');
     });
     document.getElementById('preferencesForm').addEventListener('submit', savePreferencesForm);
     document.getElementById('newUserForm').addEventListener('submit', createTeamUser);
