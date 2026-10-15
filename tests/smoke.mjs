@@ -2840,6 +2840,59 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `edição ao vivo: cabo, espera a edição em andamento, avisa a revisão salva e quem entra depois recebe o estado (${live.cable})`);
 }
 
+//Empresa nova: começa sem os preços de outra empresa e sem planilhas; informa as suas no catálogo
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const np = await ctx.newPage();
+  watchCsp(np);
+  await np.addInitScript(() => { window.__fakeNewCompany = true; try { localStorage.setItem('routeMapTourDone', '1'); } catch (e) {} });
+  await np.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+  await np.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+  //Sem acesso às CDNs: SMOKE_LIBS aponta para a cópia local do SheetJS (mesmo arquivo, passa na integridade)
+  if (process.env.SMOKE_LIBS) {
+    await np.route('**/xlsx@0.18.5/dist/xlsx.full.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'xlsx-0.18.5/dist/xlsx.full.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+  }
+  await np.goto(baseUrl + '/index.html');
+  await np.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
+  await np.evaluate(() => { initMaterialCatalog(); setupMaterialCatalogUI(); }); //initMap não roda sem o Google Maps
+  await np.waitForFunction(() => materialCatalog.blankSeed === true, null, { timeout: 15000 });
+  const fresh = await np.evaluate(async () => {
+    const out = {};
+    out.blank = materialCatalog.materials.length > 0 && materialCatalog.materials.every(m => !m.price) && !MATERIAL_PRICES['FITA ISOLANTE']?.price;
+    out.noSheets = !getCompanySheets().prices && !getCompanySheets().kits;
+    let alerted = '';
+    const realAlert = window.showAlert;
+    window.showAlert = (title, message) => { alerted = message; };
+    await syncCatalogFromApi();
+    out.asksSheet = /planilha de preços/.test(alerted) && catalogActiveTab === 'config';
+    out.parse = JSON.stringify(parseGoogleSheetLink('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit#gid=77')) === '{"id":"1AbCdEfGhIjKlMnOpQrStUvWxYz012345","gid":"77"}'
+      && parseGoogleSheetLink('https://exemplo.com/planilha') === null;
+    const kitsCsv = 'LEVANTAMENTO DE CUSTO PARA NOVO POP,,,,,\nEspecificações,Quantidade,Unidade,Valor,Total,Código\nEquipamentos Passivos,,,,,\nRACK 44U,1,UN,"R$ 1.500,00","R$ 1.500,00",123\nKIT OLT,,,,,\nCHASSI OLT,1,un,"10.000,50",,-\n';
+    const kits = parseKitsSheetCsv(kitsCsv).kits;
+    out.kits = `${Object.keys(kits).join()}:${kits['KIT POP'][0].valor_unitario}:${kits['KIT OLT'][0].valor_unitario}:${kits['KIT POP'][0].codigo}`;
+    //Salvar o link: confere a planilha e grava no catálogo da empresa
+    const realFetch = window.fetch;
+    window.fetch = async (url, opts) => (/gviz\/tq/.test(String(url))
+      ? new Response('Descrição,Unidade,Valor unitário\nFITA ISOLANTE,un,"7,50"\nCABO X,m,"2,10"\n', { status: 200 })
+      : realFetch(url, opts));
+    openMaterialCatalogModal();
+    setCatalogTab('config');
+    document.getElementById('companyPricesSheet').value = 'https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit#gid=77';
+    await saveCompanySheetsHandler();
+    out.saved = getCompanySheets().prices?.id === '1AbCdEfGhIjKlMnOpQrStUvWxYz012345' && window.__fakeDb.settings?.material_catalog?.sources?.prices?.gid === '77';
+    out.status = document.getElementById('companyPricesSheetStatus').textContent;
+    await syncCatalogFromApi();
+    out.preview = document.getElementById('materialImportModal').style.display === 'flex' && /2 itens/.test(document.getElementById('importFileName').textContent);
+    window.fetch = realFetch;
+    window.showAlert = realAlert;
+    return out;
+  });
+  check(fresh.blank && fresh.noSheets && fresh.asksSheet && fresh.parse && fresh.kits === 'KIT POP,KIT OLT:1500:10000.5:123'
+    && fresh.saved && /2 itens/.test(fresh.status) && fresh.preview,
+    `empresa nova: sem preços de outra empresa e com a planilha dela (${JSON.stringify(fresh)})`);
+  await ctx.close();
+}
+
 const before = cspViolations.length;
 const inlineRan = await page.evaluate(async () => {
   window.__inlineRan = false;

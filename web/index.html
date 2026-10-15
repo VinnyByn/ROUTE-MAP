@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261024a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261025a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -422,9 +422,9 @@
               Importar planilha
             </button>
             <input type="file" id="catalogImportFile" accept=".xlsx,.xls,.csv" style="display:none;" />
-            <button type="button" id="catalogApiSyncButton" class="btn btn-secondary catalog-import-btn" title="Buscar os preços atualizados na API de materiais (planilha da empresa)">
+            <button type="button" id="catalogApiSyncButton" class="btn btn-secondary catalog-import-btn" title="Buscar os preços atualizados na planilha de preços da empresa (Google Sheets)">
               <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg>
-              Atualizar pela API
+              Atualizar da planilha
             </button>
             <button type="button" id="catalogAddButton" class="btn btn-success catalog-add-btn">+ Adicionar</button>
           </div>
@@ -463,6 +463,31 @@
           </div>
 
           <div id="catalogConfigView" class="catalog-view cat3-config" style="display:none;">
+            <section class="cat3-card" id="companySheetsCard">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--sheet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg></span>
+                <div>
+                  <h3>Planilhas da empresa</h3>
+                  <p>Links do Google Sheets com os preços e os kits da empresa. Cada empresa usa só as suas.</p>
+                </div>
+              </header>
+              <div class="company-sheets">
+                <label class="company-sheets__field">
+                  <span>Planilha de preços</span>
+                  <input type="url" id="companyPricesSheet" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" />
+                  <small id="companyPricesSheetStatus">Colunas <b>Descrição</b> e <b>Valor unitário</b> (Código e Unidade opcionais).</small>
+                </label>
+                <label class="company-sheets__field">
+                  <span>Planilha de kits <em>(opcional)</em></span>
+                  <input type="url" id="companyKitsSheet" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" />
+                  <small id="companyKitsSheetStatus">Blocos "KIT POP", "KIT OLT" e "KIT PLACA" com Especificações, Quantidade, Unidade, Valor, Total e Código.</small>
+                </label>
+                <p class="company-sheets__help">Compartilhe cada planilha como <b>Qualquer pessoa com o link: Leitor</b>. Depois de salvar, use <b>Atualizar da planilha</b> na aba Materiais para trazer os preços.</p>
+                <div class="company-sheets__actions" data-admin-only>
+                  <button type="button" id="saveCompanySheets" class="btn btn-success">Salvar planilhas</button>
+                </div>
+              </div>
+            </section>
             <section class="cat3-card">
               <header class="cat3-card__head">
                 <span class="cat3-card__icon cat3-card__icon--cable"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
@@ -2829,7 +2854,7 @@
   <script src="js/core/persistence.js?v=20261028a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
-  <script src="js/catalog/catalog.js?v=20261013h" defer></script>
+  <script src="js/catalog/catalog.js?v=20261015a" defer></script>
   <script src="js/map/kml.js?v=20261007i" defer></script>
   <script src="js/catalog/bom.js?v=20261018a" defer></script>
   <script src="js/catalog/labor.js?v=20261013m" defer></script>
