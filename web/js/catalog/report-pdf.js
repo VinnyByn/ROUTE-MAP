@@ -25,6 +25,16 @@ const RPDF = {
 
 let reportLogoDataUrl = null;
 
+//Tamanho natural da imagem (para o logo da empresa não sair distorcido no PDF)
+function getReportImageSize(dataUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img.width && img.height ? { width: img.width, height: img.height } : null);
+        img.onerror = () => resolve(null);
+        img.src = dataUrl;
+    });
+}
+
 async function loadReportLogo() {
     if (reportLogoDataUrl) return reportLogoDataUrl;
     try {
@@ -310,13 +320,25 @@ async function exportReportPdfNative(snapshot, filename) {
     const options = snapshot.options || { summary: true, bom: true, labor: true, notes: true };
     const logo = await loadReportLogo();
 
-    //Capa: marca, empresa, data, título e local
-    if (logo) doc.addImage(logo, 'PNG', RPDF.mx, 14, 12, 12);
-    const brandX = RPDF.mx + (logo ? 15 : 0);
+    //Capa: marca (logo da empresa, se tiver), empresa, data, título e local
+    let brandX = RPDF.mx;
+    const companyLogo = snapshot.companyLogo ? await getReportImageSize(snapshot.companyLogo) : null;
+    if (companyLogo) {
+        //Logo da empresa: até 34 × 12 mm, sem distorcer
+        const scale = Math.min(34 / companyLogo.width, 12 / companyLogo.height);
+        const w = companyLogo.width * scale, h = companyLogo.height * scale;
+        doc.addImage(snapshot.companyLogo, /^data:image\/jpeg/.test(snapshot.companyLogo) ? 'JPEG' : 'PNG', RPDF.mx, 14 + (12 - h) / 2, w, h);
+        brandX = RPDF.mx + w + 3;
+    } else if (logo) {
+        doc.addImage(logo, 'PNG', RPDF.mx, 14, 12, 12);
+        brandX = RPDF.mx + 15;
+    }
+    const brandWidth = RPDF.w - RPDF.mx - 48 - brandX;
     pdf.font(13, 'bold', RPDF.head);
-    pdf.text('ROUTE MAP', brandX, 19.5);
-    pdf.font(8.8, 'normal', RPDF.muted);
-    pdf.text(snapshot.company || 'Redes de fibra óptica', brandX, 24.5);
+    pdf.text(doc.splitTextToSize(pdfText(companyLogo && snapshot.company ? snapshot.company : 'ROUTE MAP'), brandWidth)[0], brandX, 19.5);
+    pdf.font(8, 'normal', RPDF.muted);
+    const brandLine = companyLogo ? (snapshot.companyDetails || '') : [snapshot.company || 'Redes de fibra óptica', snapshot.companyDetails].filter(Boolean).join(' · ');
+    pdf.text(doc.splitTextToSize(pdfText(brandLine), brandWidth)[0] || '', brandX, 24.5);
     pdf.font(7, 'bold', RPDF.muted);
     pdf.text('RELATÓRIO DO PROJETO', RPDF.w - RPDF.mx, 19, { align: 'right' });
     pdf.font(8.5, 'normal', RPDF.ink);

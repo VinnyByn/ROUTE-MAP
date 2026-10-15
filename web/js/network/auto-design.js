@@ -2122,7 +2122,7 @@ function estimateAutoDesignCost(plan) {
     const newCeos = plan.ceos.filter(c => c.isNew);
     const ctoKit = MATERIAL_PRICES.CTO?.components || [];
     plan.ctos.forEach(() => ctoKit.forEach(c => add(c.name, c.quantity, 'boxes')));
-    if (plan.ctos.length) add("FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M", Math.ceil((3 * plan.ctos.length) / 25), 'boxes');
+    if (plan.ctos.length) add("FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M", getFitaRolls(plan.ctos.length), 'boxes');
     newCeos.forEach(() => {
         add('CAIXA DE EMENDA ÓPTICA (CEO)', 1, 'boxes');
         getKitComponents('KIT CEO RAQUETE').forEach(c => add(c.name, c.quantity, 'boxes'));
@@ -2130,7 +2130,7 @@ function estimateAutoDesignCost(plan) {
     const reserves = plan.reserves || [];
     reserves.forEach(() => getKitComponents('KIT CEO RAQUETE').forEach(c => add(c.name, c.quantity, 'boxes')));
     const raquetes = newCeos.length + reserves.length;
-    if (raquetes) add('ARAME DE ESPIMAR (105 m)', Math.ceil((raquetes * 50) / 105), 'boxes');
+    if (raquetes) add('ARAME DE ESPIMAR (105 m)', getArameRolls(raquetes), 'boxes');
     //Fusão: splitters, adaptadores, tubetes (um por fusão) e bandejas da CEO
     plan.ctos.forEach(() => {
         add(resolveSplitterMaterialName(params.ports, true, 'APC'), 1, 'fusion');
@@ -2151,7 +2151,7 @@ function estimateAutoDesignCost(plan) {
     const sections = { cables: 0, hardware: 0, boxes: 0, fusion: 0 };
     items.forEach(row => { sections[row.section] += row.qty * row.price; });
     const materials = sections.cables + sections.hardware + sections.boxes + sections.fusion;
-    const service = (key) => Number((typeof DEFAULT_OUTSOURCED_SERVICES !== 'undefined' ? DEFAULT_OUTSOURCED_SERVICES : []).find(s => s.name === AUTO_DESIGN_LABOR_SERVICES[key])?.price) || 0;
+    const service = (key) => Number((typeof getOutsourcedServices === 'function' ? getOutsourcedServices() : []).find(s => s.name === AUTO_DESIGN_LABOR_SERVICES[key])?.price) || 0;
     const labor = cableMeters * service('cable') + newCeos.length * service('ceo') + plan.ctos.length * service('cto')
         + reserves.length * service('reserve') + fusions * service('fusion');
     const total = materials + labor;

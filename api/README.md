@@ -1,7 +1,7 @@
 # API de materiais (FastAPI)
 
 Lê a planilha de preços da empresa no Google Sheets e devolve os itens em JSON.
-O botão **Atualizar pela API**, no catálogo de materiais do Route Map, usa essa
+O botão **Atualizar da planilha**, no catálogo de materiais do Route Map, usa essa
 resposta para atualizar os preços, no lugar de importar a planilha à mão.
 
 ## Planilha
@@ -43,12 +43,19 @@ Testes: `pip install pytest && python -m pytest -q`
 
 ## Como funciona sem servidor
 
-O botão **Atualizar pela API** tenta, nesta ordem:
+Cada empresa informa as próprias planilhas (preços e, se quiser, kits) no catálogo, em
+**Regras de cálculo › Planilhas da empresa**. Elas ficam salvas no catálogo da empresa
+(`company_settings.material_catalog.sources`). Empresa nova começa sem preços e sem planilhas.
 
-1. a FastAPI publicada, se houver uma URL configurada;
+O botão **Atualizar da planilha** lê a planilha de preços da empresa, nesta ordem:
+
+1. a FastAPI publicada, se houver uma URL configurada (com `sheet_id` e `gid` da empresa);
 2. a planilha ao vivo, lida direto no navegador (mesmas regras de colunas da API);
 3. o `materiais.json` gerado por `scripts/export_json.py` a cada deploy e a cada 6 horas
-   (GitHub Actions), publicado junto com o site.
+   (GitHub Actions), só se ele for da mesma planilha da empresa.
+
+Os arquivos `materiais.json` e `kits.json` do deploy são das planilhas `SHEET_ID` e
+`KITS_SHEET_ID`: só as empresas que usam essas mesmas planilhas os aproveitam.
 
 ## Publicar a FastAPI (opcional)
 
@@ -67,7 +74,7 @@ Variáveis de ambiente (opcionais):
 | `ALLOWED_ORIGINS` | `https://routemap-21.web.app,https://routemap-21.firebaseapp.com,...e localhost/127.0.0.1 nas portas 3000, 5000 e 5500` |
 
 Depois de publicar, coloque a URL em `DEFAULT_MATERIALS_API_URL` (em `web/js/catalog/catalog.js`).
-Outra opção é informar a URL ao clicar em **Atualizar pela API**. Segure Shift
+Outra opção é informar a URL ao clicar em **Atualizar da planilha**. Segure Shift
 ao clicar para trocar a URL.
 
 ## Estrutura

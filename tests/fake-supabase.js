@@ -13,6 +13,13 @@ window.supabase = { createClient() {
     const st = { op: 'select', filters: [], payload: null, wantRows: false };
     const run = () => {
       if (table === 'client_errors' && st.op === 'insert') { db.client_errors.push(...[].concat(st.payload)); return { data: null, error: null }; }
+      //Configurações da empresa: por padrão, empresa que já existia (catálogo salvo, sem planilhas);
+      //window.__fakeNewCompany = true simula a empresa recém-criada (sem catálogo salvo)
+      if (table === 'company_settings') {
+        if (!('settings' in db)) db.settings = window.__fakeNewCompany ? null : { material_catalog: { materials: [], sources: {} } };
+        if (st.op === 'upsert') { db.settings = { ...(db.settings || {}), ...st.payload }; return { data: null, error: null }; }
+        return { data: st.single ? db.settings : [db.settings].filter(Boolean), error: null };
+      }
       if (table !== 'projects') return { data: st.single ? null : [], error: null };
       const rows = Object.values(db.projects).filter(r => st.filters.every(([col, val]) => r[col] === val));
       if (st.op === 'update') {

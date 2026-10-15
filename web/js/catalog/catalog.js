@@ -55,8 +55,16 @@ const MATERIAL_RENAMES = {
     "AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO 220V": "AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUs FRIO"
 };
 
+//Material da empresa para cada item que o sistema calcula (nome padrão → material do catálogo da empresa).
+//Fica no catálogo (material_catalog.aliases) e vale para a lista de materiais, o pré-projeto e os relatórios.
+let companyMaterialAliases = {};
+
+//Nome padrão do item (planilha de referência), sem a troca feita pela empresa
+const resolveDefaultMaterialName = (name) => MATERIAL_RENAMES[name] || name;
+
 function resolveMaterialName(name) {
-    return MATERIAL_RENAMES[name] || name;
+    const base = resolveDefaultMaterialName(name);
+    return companyMaterialAliases[base] || base;
 }
 
 //Banco de dados de preços e materiais (chaves com os nomes da planilha; aceita também os antigos)
@@ -248,7 +256,7 @@ const MATERIALS_NOT_IN_SHEET = [
 ];
 MATERIALS_NOT_IN_SHEET.forEach(name => { delete MATERIAL_PRICES_BASE[name]; });
 //Itens retirados que têm equivalente na planilha: kits e cálculos passam a usar o item da planilha
-//Itens da planilha usados pelos kits (preço da planilha; atualizado pelo botão "Atualizar pela API")
+//Itens da planilha usados pelos kits (preço da planilha; atualizado pelo botão "Atualizar da planilha")
 Object.assign(MATERIAL_PRICES_BASE, {
     "Rack Indoor": { price: 499.69, unit: 'un', category: 'Data Center' },
     "BANDEJA DE VENTILAÇÃO DE TETO PARA RACK SERVIDOR IPMETAL 60X60CM 2 VENT. 600 MM BI-VOLT PT": { price: 141.83, unit: 'un', category: 'Data Center' },
@@ -304,7 +312,7 @@ function isDroppedMaterial(name) {
 function normalizeKitComponents(components) {
     const merged = [];
     (components || []).forEach(c => {
-        const name = resolveMaterialName(String(c.name || '').trim());
+        const name = resolveDefaultMaterialName(String(c.name || '').trim());
         if (!name || isDroppedMaterial(name)) return;
         const existing = merged.find(m => m.name === name);
         if (existing) existing.quantity += Number(c.quantity) || 1;
@@ -381,7 +389,17 @@ const DEFAULT_LANCAMENTO_CONFIG = {
     supaPerPole: 2,      //Suportes de ancoragem (SUPAS) por poste
     alcaPerSupa: 1,      //Alças preformadas por SUPA
     dropSlack: 15,       //Metros somados a cada drop de cliente (subida, reserva e acomodação)
-    dropMaxLength: 300   //Drop mais longo que isso aparece na verificação do projeto (m)
+    dropMaxLength: 300,  //Drop mais longo que isso aparece na verificação do projeto (m)
+    //Reserva de cabo em cada ponta, por tipo de caixa (m)
+    reserveCto: 5,
+    reserveCeo: 25,
+    reserveReserva: 25,
+    reservePop: 25,
+    //Consumo de instalação
+    arameMetersPerRaquete: 50, //Arame de espinar por raquete instalada (m)
+    arameRollMeters: 105,      //Metros por rolo de arame
+    fitaMetersPerCto: 3,       //Fita de aço por CTO (m)
+    fitaRollMeters: 25,        //Metros por rolo de fita
 };
 
 const DEFAULT_LABOR_CONFIG = {
@@ -431,14 +449,42 @@ function normalizeLancamentoConfig(stored) {
         alcaPerSupa: n(src.alcaPerSupa, DEFAULT_LANCAMENTO_CONFIG.alcaPerSupa),
         dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack),
         dropMaxLength: Number(src.dropMaxLength) > 0 ? Number(src.dropMaxLength) : DEFAULT_LANCAMENTO_CONFIG.dropMaxLength,
-        optical: normalizeOpticalConfig(src.optical)
+        reserveCto: n(src.reserveCto, DEFAULT_LANCAMENTO_CONFIG.reserveCto),
+        reserveCeo: n(src.reserveCeo, DEFAULT_LANCAMENTO_CONFIG.reserveCeo),
+        reserveReserva: n(src.reserveReserva, DEFAULT_LANCAMENTO_CONFIG.reserveReserva),
+        reservePop: n(src.reservePop, DEFAULT_LANCAMENTO_CONFIG.reservePop),
+        arameMetersPerRaquete: n(src.arameMetersPerRaquete, DEFAULT_LANCAMENTO_CONFIG.arameMetersPerRaquete),
+        arameRollMeters: Number(src.arameRollMeters) > 0 ? Number(src.arameRollMeters) : DEFAULT_LANCAMENTO_CONFIG.arameRollMeters,
+        fitaMetersPerCto: n(src.fitaMetersPerCto, DEFAULT_LANCAMENTO_CONFIG.fitaMetersPerCto),
+        fitaRollMeters: Number(src.fitaRollMeters) > 0 ? Number(src.fitaRollMeters) : DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters,
+        optical: normalizeOpticalConfig(src.optical),
+        branding: normalizeCompanyBranding(src.branding),
     };
 }
+
+//Marca da empresa nos relatórios: logo (imagem pequena em data URL) e contato
+function normalizeCompanyBranding(src) {
+    const text = (value, max) => String(value || '').trim().slice(0, max);
+    const logo = typeof src?.logo === 'string' && /^data:image\/(png|jpeg);base64,/.test(src.logo) && src.logo.length < 400000 ? src.logo : '';
+    return { logo, address: text(src?.address, 160), phone: text(src?.phone, 40), contact: text(src?.contact, 120) };
+}
+
+const getCompanyBranding = () => lancamentoConfig.branding || normalizeCompanyBranding();
+
+//Rolos de arame de espinar e de fita de aço pelas regras da empresa
+const getArameRolls = (raquetes) => (raquetes > 0 ? Math.ceil((raquetes * lancamentoConfig.arameMetersPerRaquete) / lancamentoConfig.arameRollMeters) : 0);
+const getFitaRolls = (ctos) => (ctos > 0 ? Math.ceil((ctos * lancamentoConfig.fitaMetersPerCto) / lancamentoConfig.fitaRollMeters) : 0);
 
 function normalizeLaborConfig(stored) {
     const src = stored || {};
     const positive = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
+    //Preços da tabela da terceirizada da empresa (nome do serviço → R$)
+    const outsourcedPrices = {};
+    Object.entries(src.outsourcedPrices && typeof src.outsourcedPrices === 'object' ? src.outsourcedPrices : {}).forEach(([name, price]) => {
+        if (price !== null && price !== '' && Number.isFinite(Number(price)) && Number(price) >= 0) outsourcedPrices[name] = Number(price);
+    });
     return {
+        outsourcedPrices,
         hourlyRate: Number(src.hourlyRate) >= 0 && src.hourlyRate != null ? Number(src.hourlyRate) : DEFAULT_LABOR_CONFIG.hourlyRate,
         hoursPerDay: positive(src.hoursPerDay, DEFAULT_LABOR_CONFIG.hoursPerDay),
         cablePerDay: positive(src.cablePerDay, DEFAULT_LABOR_CONFIG.cablePerDay),
@@ -521,7 +567,7 @@ async function loadCompanySettings() {
             importedLegacy = true;
         }
     }
-    loadMaterialCatalog(storedCatalog);
+    loadMaterialCatalog(storedCatalog, { blank: !storedCatalog });
     lancamentoConfig = normalizeLancamentoConfig(storedLancamento);
     laborConfig = normalizeLaborConfig(storedLabor);
     applyCatalogToMaterialPrices();
@@ -536,21 +582,110 @@ async function loadCompanySettings() {
     try { syncCatalogPricesIntoBoms(); } catch (e) { /* sem listas calculadas ainda */ }
     await addMissingSheetMaterials();
     await loadSheetKits();
+    if (typeof maybeShowCompanySetup === 'function') maybeShowCompanySetup();
 }
 
-//Kits POP, OLT e placa vindos da planilha de kits (kits.json, gerado no deploy).
+// ---------------------------------------------------------------
+// Planilhas da empresa (Google Sheets): preços e kits. Cada empresa informa as suas no catálogo
+// (Regras de cálculo › Planilhas da empresa); ficam em material_catalog.sources.
+// ---------------------------------------------------------------
+
+//Planilhas que valiam para todas as empresas antes: só os catálogos de antes delas continuam com elas
+const LEGACY_COMPANY_SHEETS = {
+    prices: { id: '1vM1Oobfzbz0MnTKku1Vo6Nxpf9sOkYWBN9tiUqzjMbk', gid: '0' },
+    kits: { id: '1MVwYAzcUOhZxB7DxqHzghBKwYmU7ShSuYqF3xF-tlnE', gid: '0' },
+};
+
+//Link do Google Sheets (ou só o ID) → { id, gid }; null se não for uma planilha
+function parseGoogleSheetLink(text) {
+    const value = String(text || '').trim();
+    if (!value) return null;
+    const id = /\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/.exec(value)?.[1] || (/^[a-zA-Z0-9_-]{20,}$/.test(value) ? value : null);
+    if (!id) return null;
+    return { id, gid: /[#?&]gid=(\d+)/.exec(value)?.[1] || '0' };
+}
+
+const getGoogleSheetUrl = (sheet) => (sheet?.id ? `https://docs.google.com/spreadsheets/d/${sheet.id}/edit#gid=${sheet.gid || '0'}` : '');
+
+function normalizeCompanySheets(src) {
+    const one = (sheet) => (sheet && /^[a-zA-Z0-9_-]{20,}$/.test(String(sheet.id || '')) ? { id: String(sheet.id), gid: String(sheet.gid || '0') } : null);
+    return { prices: one(src?.prices), kits: one(src?.kits) };
+}
+
+const getCompanySheets = () => normalizeCompanySheets(materialCatalog.sources);
+
+//CSV da planilha (precisa estar compartilhada como "Qualquer pessoa com o link: Leitor")
+async function fetchGoogleSheetCsv(sheet) {
+    const url = `https://docs.google.com/spreadsheets/d/${sheet.id}/gviz/tq?tqx=out:csv&gid=${sheet.gid || '0'}&t=${Date.now()}`;
+    const response = await fetch(url);
+    const text = await response.text();
+    if (!response.ok || /^\s*</.test(text)) throw new Error('planilha não está pública');
+    return text;
+}
+
+//Arquivo gerado no deploy (materiais.json/kits.json) só vale para a empresa cuja planilha é a dele
+async function fetchDeploySheetFile(file, sheet) {
+    try {
+        const response = await fetch(`${file}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return sheet?.id && String(data?.fonte || '').includes(sheet.id) ? data : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+//Planilha de kits: blocos "LEVANTAMENTO DE CUSTO PARA POP" (ou "KIT POP"), cada um com as colunas
+//Especificações, Quantidade, Unidade, Valor, Total e Código; linhas sem quantidade são seções
+const KIT_SHEET_TITLES = { 'novo pop': 'KIT POP', pop: 'KIT POP', olt: 'KIT OLT', 'nova placa': 'KIT PLACA', placa: 'KIT PLACA' };
+
+function parseKitsSheetCsv(csvText) {
+    const wb = XLSX.read(csvText, { type: 'string', raw: true });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+    const kits = {};
+    let current = null;
+    rows.forEach(row => {
+        const cells = [...row.map(c => String(c ?? '').trim()), '', '', '', '', '', ''];
+        const title = /^(?:levantamento de custo para|kit)\s+(.+)$/.exec(normalizeSheetHeader(cells[0]))?.[1]?.trim();
+        if (title && KIT_SHEET_TITLES[title]) {
+            current = KIT_SHEET_TITLES[title];
+            kits[current] = kits[current] || [];
+            return;
+        }
+        if (!current || !cells[0] || normalizeSheetHeader(cells[0]).startsWith('especifica')) return;
+        const quantity = parseSheetPrice(cells[1]);
+        const price = parseSheetPrice(cells[3]);
+        if (quantity == null || quantity <= 0 || price == null) return;
+        kits[current].push({ codigo: ['-', '?'].includes(cells[5]) ? '' : cells[5], descricao: cells[0], quantidade: quantity, unidade: cells[2], valor_unitario: price });
+    });
+    Object.keys(kits).forEach(k => { if (!kits[k].length) delete kits[k]; });
+    return { kits };
+}
+
+//Itens da planilha de preços da empresa: arquivo do deploy (se for a mesma planilha) ou a planilha ao vivo
+async function loadCompanyPriceSheetItems() {
+    const sheet = getCompanySheets().prices;
+    if (!sheet) return null;
+    const deployed = await fetchDeploySheetFile('materiais.json', sheet);
+    if (deployed) return deployed;
+    try { return parseMaterialsSheetCsv(await fetchGoogleSheetCsv(sheet)); } catch (e) { return null; }
+}
+
+async function loadCompanyKitsSheet() {
+    const sheet = getCompanySheets().kits;
+    if (!sheet) return null;
+    const deployed = await fetchDeploySheetFile('kits.json', sheet);
+    if (deployed) return deployed;
+    try { return parseKitsSheetCsv(await fetchGoogleSheetCsv(sheet)); } catch (e) { return null; }
+}
+
+//Kits POP, OLT e placa vindos da planilha de kits da empresa.
 //Os itens e valores do kit são os da planilha; materiais que não existem no catálogo são adicionados.
 const SHEET_KIT_SOURCE = 'planilha-kits';
 
 async function loadSheetKits() {
-    let data;
-    try {
-        const response = await fetch(`kits.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) return;
-        data = await response.json();
-    } catch (e) {
-        return;
-    }
+    const data = await loadCompanyKitsSheet();
+    if (!data) return;
     const sheetKits = data?.kits || {};
     if (!Object.keys(sheetKits).length) return;
     const known = new Set(materialCatalog.materials.map(m => normalizeMaterialName(m.name)));
@@ -619,14 +754,8 @@ function hasSheetKit(kitName) {
 //Completa o catálogo com os itens da planilha de preços que ainda não existem no sistema
 //(código, unidade e valor da planilha; o que já existe não é alterado)
 async function addMissingSheetMaterials() {
-    let data;
-    try {
-        const response = await fetch(`materiais.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) return;
-        data = await response.json();
-    } catch (e) {
-        return; //Sem o arquivo (ex.: rodando localmente): fica como está
-    }
+    const data = await loadCompanyPriceSheetItems();
+    if (!data) return; //Sem planilha da empresa (ou fora do ar): fica como está
     const known = new Set(materialCatalog.materials.map(m => normalizeMaterialName(m.name)));
     const knownCodes = new Set(materialCatalog.materials.map(m => String(m.code || '').trim()).filter(c => c && c !== '?'));
     let added = 0;
@@ -736,6 +865,38 @@ const CABLE_ALCA_KIT_TYPES = [
     'Cabo AS 80 FO-144',
 ];
 
+//Itens que o sistema calcula sozinho (caixas, cabos, fusão, instalação): a empresa escolhe qual material
+//do catálogo dela entra no lugar de cada um (Regras de cálculo › Materiais usados nos cálculos)
+const MATERIAL_RULE_SLOTS = [
+    { group: 'Caixas', items: [
+        ['CAIXA DE ATENDIMENTO', 'CTO'],
+        ['CAIXA DE ATENDIMENTO PREDIAL', 'CTO predial'],
+        ['CAIXA DE EMENDA ÓPTICA (CEO)', 'CEO'],
+        ['CAIXA DE EMENDA OPTICA (CEO) 144 FUSÕES', 'CEO jumbo (144 fusões)'],
+    ] },
+    { group: 'Cabos', items: [
+        ...[...CABLE_ALCA_KIT_TYPES].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })).map(type => [type, type.replace(/^Cabo /, '')]),
+        ['CABO DROP FLAT LOW FRICTION 1F', 'Drop do cliente'],
+    ] },
+    { group: 'Fusão', items: [
+        ['TUBETE PROTETOR DE EMENDA OPTICA', 'Tubete (1 por fusão)'],
+        ['KIT DE BANDEJA PARA CAIXA DE EMENDA', 'Bandeja da CEO'],
+        ['KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA', 'Kit derivação da CEO'],
+        ['FITA ISOLANTE', 'Fita isolante'],
+        ['ADAPTADOR SC/APC COM ABAS (PASSANTE)', 'Adaptador SC/APC'],
+        ['ADAPTADOR SC/UPC COM ABAS (PASSANTE)', 'Adaptador SC/UPC'],
+        ['ADAPTADOR SC/UPC SEM ABAS (PASSANTE)', 'Adaptador SC/UPC (predial)'],
+    ] },
+    { group: 'Instalação', items: [
+        ["FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M", 'Fita de aço (CTO)'],
+        ['ARAME DE ESPIMAR (105 m)', 'Arame de espinar (raquete)'],
+        ['DERIVAÇÃO EM T', 'Derivação em T (cordoalha)'],
+        ['PTO - PONTO DE TERMINAÇÃO ÓPTICA', 'PTO do cliente'],
+    ] },
+];
+
+const getMaterialRuleSlotKeys = () => MATERIAL_RULE_SLOTS.flatMap(g => g.items.map(([system]) => resolveDefaultMaterialName(system)));
+
 function getCableAlca(cableType) {
     const custom = materialCatalog.cableAlcas?.[cableType];
     return resolveMaterialName(custom || CABLE_HARDWARE_MAP[cableType] || '') || null;
@@ -754,8 +915,9 @@ function generateCatalogId(prefix = 'mat') {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-//Constrói o catálogo inicial a partir do MATERIAL_PRICES fixo
-function buildSeedCatalog() {
+//Constrói o catálogo inicial a partir do MATERIAL_PRICES fixo. blank: empresa nova começa sem preços
+//(os valores do código são de referência; cada empresa usa os da sua planilha)
+function buildSeedCatalog({ blank = false } = {}) {
     const materials = [];
     const kits = [];
     Object.keys(MATERIAL_PRICES).forEach(name => {
@@ -773,7 +935,7 @@ function buildSeedCatalog() {
                 name,
                 category: info.category || 'Outros',
                 unit: info.unit || 'un',
-                price: Number(info.price) || 0,
+                price: blank ? 0 : Number(info.price) || 0,
                 supplier: '',
                 code: '',
                 notes: ''
@@ -795,17 +957,19 @@ function buildSeedCatalog() {
     return { materials, kits };
 }
 
-//Carrega o catálogo salvo da empresa, mesclando novos itens do seed
-function loadMaterialCatalog(stored) {
-    const seed = buildSeedCatalog();
+//Carrega o catálogo salvo da empresa, mesclando novos itens do seed.
+//Sem catálogo salvo: empresa nova (blank = sem preços e sem planilhas).
+function loadMaterialCatalog(stored, { blank = false } = {}) {
     if (!stored || !Array.isArray(stored.materials)) {
-        materialCatalog = { ...seed, cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION, splitterMaterials: {} };
+        materialCatalog = { ...buildSeedCatalog({ blank }), cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION, splitterMaterials: {}, sources: {}, blankSeed: blank, aliases: {} };
+        companyMaterialAliases = {};
         return;
     }
+    const seed = buildSeedCatalog({ blank: !!stored.blankSeed });
     //Normaliza itens salvos
     const materials = stored.materials.map(m => ({
         id: m.id || generateCatalogId('mat'),
-        name: resolveMaterialName(String(m.name || '').trim()),
+        name: resolveDefaultMaterialName(String(m.name || '').trim()),
         category: m.category || 'Outros',
         unit: m.unit || 'un',
         price: Number(m.price) || 0,
@@ -839,7 +1003,23 @@ function loadMaterialCatalog(stored) {
         cableAlcas: stored.cableAlcasVersion === CABLE_ALCA_VERSION && stored.cableAlcas && typeof stored.cableAlcas === 'object' ? { ...stored.cableAlcas } : {},
         cableAlcasVersion: CABLE_ALCA_VERSION,
         splitterMaterials: stored.splitterMaterials && typeof stored.splitterMaterials === 'object' ? { ...stored.splitterMaterials } : {},
+        //Catálogo de antes das planilhas por empresa: continua com as planilhas que valiam para todos
+        sources: normalizeCompanySheets(stored.sources !== undefined ? stored.sources : LEGACY_COMPANY_SHEETS),
+        blankSeed: !!stored.blankSeed,
+        aliases: normalizeMaterialAliases(stored.aliases),
     };
+    companyMaterialAliases = materialCatalog.aliases;
+}
+
+//Trocas válidas: só itens do sistema (MATERIAL_RULE_SLOTS) para um nome preenchido e diferente do padrão
+function normalizeMaterialAliases(src) {
+    const out = {};
+    const slots = new Set(getMaterialRuleSlotKeys());
+    Object.entries(src && typeof src === 'object' ? src : {}).forEach(([key, value]) => {
+        const name = String(value || '').trim();
+        if (slots.has(key) && name && name !== key) out[key] = name;
+    });
+    return out;
 }
 
 //Salva o catálogo da empresa no banco
@@ -850,9 +1030,16 @@ function persistMaterialCatalog() {
 //Aplica os preços/itens do catálogo ao MATERIAL_PRICES (reflete na BOM)
 function applyCatalogToMaterialPrices() {
     applyMaterialCategoryRules(materialCatalog.materials);
+    //Empresa nova: o que não está no catálogo dela não leva preço de referência para a lista de materiais
+    if (materialCatalog.blankSeed) {
+        const inCatalog = new Set(materialCatalog.materials.map(m => m.name));
+        Object.entries(MATERIAL_PRICES_BASE).forEach(([key, info]) => {
+            if (info && !inCatalog.has(key) && !Array.isArray(info.components)) info.price = 0;
+        });
+    }
     materialCatalog.materials.forEach(m => {
-        const existing = MATERIAL_PRICES[m.name] || {};
-        MATERIAL_PRICES[m.name] = {
+        const existing = MATERIAL_PRICES_BASE[m.name] || {};
+        MATERIAL_PRICES_BASE[m.name] = {
             ...existing,
             price: Number(m.price) || 0,
             unit: m.unit || 'un',
@@ -861,8 +1048,8 @@ function applyCatalogToMaterialPrices() {
         };
     });
     materialCatalog.kits.forEach(k => {
-        const existing = MATERIAL_PRICES[k.name] || {};
-        MATERIAL_PRICES[k.name] = {
+        const existing = MATERIAL_PRICES_BASE[k.name] || {};
+        MATERIAL_PRICES_BASE[k.name] = {
             ...existing,
             price: Number(existing.price) || 0,
             unit: existing.unit || 'un',
@@ -1019,6 +1206,10 @@ function renderLancamentoConfigForm() {
     set('configAlcaPerSupa', lancamentoConfig.alcaPerSupa);
     set('configDropSlack', lancamentoConfig.dropSlack);
     set('configDropMaxLength', lancamentoConfig.dropMaxLength);
+    ['reserveCto', 'reserveCeo', 'reserveReserva', 'reservePop', 'arameMetersPerRaquete', 'arameRollMeters', 'fitaMetersPerCto', 'fitaRollMeters']
+        .forEach(key => set(`config${key[0].toUpperCase()}${key.slice(1)}`, lancamentoConfig[key]));
+    renderMaterialRulesForm();
+    renderOutsourcedPricesForm();
     const optical = lancamentoConfig.optical || normalizeOpticalConfig();
     ['oltPower', 'onuSensitivity', 'lossPerKm', 'lossFusion', 'lossConnector', 'margin'].forEach(k => set(`configOptical_${k}`, optical[k]));
     Object.keys(optical.splitters).forEach(k => set(`configOpticalSplit_${k}`, optical.splitters[k]));
@@ -1029,7 +1220,123 @@ function renderLancamentoConfigForm() {
     set('configCeoPerDay', laborConfig.ceoPerDay);
     updateLancamentoPreview();
     updateLaborPreview();
+    renderCompanySheetsForm();
     applyCatalogPermissions();
+}
+
+//Materiais usados nos cálculos: para cada item do sistema, o material do catálogo da empresa
+function renderMaterialRulesForm() {
+    const box = document.getElementById('materialRulesList');
+    if (!box) return;
+    const names = new Set(materialCatalog.materials.map(m => m.name));
+    const options = document.getElementById('materialRulesOptions');
+    if (options) options.innerHTML = [...names].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+    box.innerHTML = MATERIAL_RULE_SLOTS.map(group => `
+        <div class="material-rules__group">
+            <h4>${escapeHtml(group.group)}</h4>
+            ${group.items.map(([system, label]) => {
+                const key = resolveDefaultMaterialName(system);
+                const value = companyMaterialAliases[key] || '';
+                return `<label class="material-rules__row">
+                    <span>${escapeHtml(label)}</span>
+                    <input type="text" list="materialRulesOptions" data-material-slot="${escapeHtml(key)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(key)}" title="Padrão: ${escapeHtml(key)}" autocomplete="off">
+                    <small class="material-rules__state" data-material-state="${escapeHtml(key)}"></small>
+                </label>`;
+            }).join('')}
+        </div>`).join('');
+    box.querySelectorAll('[data-material-slot]').forEach(input => {
+        input.addEventListener('input', () => updateMaterialRuleState(input, names));
+        updateMaterialRuleState(input, names);
+    });
+}
+
+//Avisa quando o material escolhido (ou o padrão) não está no catálogo: entra na lista sem preço
+function updateMaterialRuleState(input, names = new Set(materialCatalog.materials.map(m => m.name))) {
+    const state = input.parentElement.querySelector('.material-rules__state');
+    if (!state) return;
+    const name = input.value.trim() || input.dataset.materialSlot;
+    const missing = !names.has(name);
+    state.textContent = missing ? 'Não está no catálogo: entra sem preço' : '';
+    state.classList.toggle('is-missing', missing);
+}
+
+function readMaterialRulesForm() {
+    const out = {};
+    document.querySelectorAll('#materialRulesList [data-material-slot]').forEach(input => {
+        const value = input.value.trim();
+        if (value) out[input.dataset.materialSlot] = value;
+    });
+    return out;
+}
+
+//Planilhas da empresa: links salvos e situação
+function renderCompanySheetsForm() {
+    const sheets = getCompanySheets();
+    const set = (id, sheet) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = getGoogleSheetUrl(sheet); };
+    set('companyPricesSheet', sheets.prices);
+    set('companyKitsSheet', sheets.kits);
+}
+
+function setCompanySheetStatus(id, text, kind = '') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!el.dataset.help) el.dataset.help = el.innerHTML;
+    el.className = kind ? `is-${kind}` : '';
+    if (text) el.textContent = text;
+    else el.innerHTML = el.dataset.help;
+}
+
+//Salva os links e confere se cada planilha abre (pública) e tem o formato esperado
+async function saveCompanySheetsHandler() {
+    if (!AppSession.isAdmin) {
+        showAlert('Sem permissão', 'Somente o administrador da empresa pode alterar as planilhas.');
+        return;
+    }
+    const read = (id) => {
+        const raw = document.getElementById(id)?.value.trim() || '';
+        return raw ? parseGoogleSheetLink(raw) || false : null;
+    };
+    const prices = read('companyPricesSheet');
+    const kits = read('companyKitsSheet');
+    if (prices === false || kits === false) {
+        showAlert('Link inválido', 'Cole o link da planilha do Google, no formato docs.google.com/spreadsheets/d/…');
+        return;
+    }
+    const button = document.getElementById('saveCompanySheets');
+    if (button) button.disabled = true;
+    try {
+        const check = async (sheet, statusId, parse, describe) => {
+            if (!sheet) { setCompanySheetStatus(statusId, ''); return true; }
+            setCompanySheetStatus(statusId, 'Conferindo a planilha…');
+            try {
+                const result = describe(parse(await fetchGoogleSheetCsv(sheet)));
+                setCompanySheetStatus(statusId, result.text, result.ok ? 'ok' : 'error');
+                return result.ok;
+            } catch (error) {
+                setCompanySheetStatus(statusId, /pública/.test(error.message)
+                    ? 'Não abriu: compartilhe como "Qualquer pessoa com o link: Leitor".'
+                    : `Não consegui ler a planilha: ${error.message}`, 'error');
+                return false;
+            }
+        };
+        const pricesOk = await check(prices, 'companyPricesSheetStatus', parseMaterialsSheetCsv,
+            (data) => ({ ok: data.itens.length > 0, text: data.itens.length ? `${data.itens.length} itens com preço encontrados.` : 'Nenhum item com descrição e valor unitário.' }));
+        const kitsOk = await check(kits, 'companyKitsSheetStatus', parseKitsSheetCsv, (data) => {
+            const names = Object.keys(data.kits);
+            return { ok: names.length > 0, text: names.length ? `Kits encontrados: ${names.join(', ')}.` : 'Nenhum bloco de kit (KIT POP, KIT OLT, KIT PLACA) encontrado.' };
+        });
+        materialCatalog.sources = { prices: prices || null, kits: kits || null };
+        const saved = await persistMaterialCatalog();
+        if (!saved) return;
+        if (kits && kitsOk) await loadSheetKits();
+        if (typeof refreshCompanySetup === 'function') refreshCompanySetup();
+        const pending = [prices && !pricesOk ? 'a de preços' : '', kits && !kitsOk ? 'a de kits' : ''].filter(Boolean);
+        showToast('Planilhas salvas', pending.length
+            ? `Salvas, mas ${pending.join(' e ')} não pôde ser lida agora. Confira o compartilhamento.`
+            : prices ? 'Use "Atualizar da planilha" na aba Materiais para trazer os preços.' : 'A empresa está sem planilha de preços.');
+    } finally {
+        if (button) button.disabled = false;
+    }
 }
 
 function readLaborConfigForm() {
@@ -1039,8 +1346,33 @@ function readLaborConfigForm() {
         hoursPerDay: num('configLaborHoursPerDay'),
         cablePerDay: num('configCablePerDay'),
         ctoPerDay: num('configCtoPerDay'),
-        ceoPerDay: num('configCeoPerDay')
+        ceoPerDay: num('configCeoPerDay'),
+        outsourcedPrices: readOutsourcedPricesForm(),
     });
+}
+
+//Tabela da terceirizada: preço de cada serviço da empresa
+function renderOutsourcedPricesForm() {
+    const body = document.getElementById('outsourcedPricesBody');
+    if (!body || typeof getOutsourcedServices !== 'function') return;
+    body.innerHTML = getOutsourcedServices().map(service => `
+        <tr>
+            <td>${escapeHtml(service.name)}</td>
+            <td class="cat3-num">
+                <span class="cat3-input outsourced-prices__input"><em>R$</em><input type="number" min="0" step="0.01" data-outsourced-price="${escapeHtml(service.name)}" value="${Number(service.price).toFixed(2)}" aria-label="Preço de ${escapeHtml(service.name)}" /><em>/ ${service.unit === 'm' ? 'm' : 'un'}</em></span>
+            </td>
+        </tr>`).join('');
+}
+
+function readOutsourcedPricesForm() {
+    const inputs = document.querySelectorAll('#outsourcedPricesBody [data-outsourced-price]');
+    if (!inputs.length) return laborConfig.outsourcedPrices;
+    const out = {};
+    inputs.forEach(input => {
+        const value = parseFloat(input.value);
+        if (Number.isFinite(value) && value >= 0) out[input.dataset.outsourcedPrice] = value;
+    });
+    return out;
 }
 
 function updateLaborPreview() {
@@ -1108,9 +1440,22 @@ async function saveLancamentoConfigHandler() {
         alcaPerSupa: num('configAlcaPerSupa', 1),
         dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack),
         dropMaxLength: num('configDropMaxLength', DEFAULT_LANCAMENTO_CONFIG.dropMaxLength) || DEFAULT_LANCAMENTO_CONFIG.dropMaxLength,
-        optical: readOpticalConfigForm()
+        reserveCto: num('configReserveCto', DEFAULT_LANCAMENTO_CONFIG.reserveCto),
+        reserveCeo: num('configReserveCeo', DEFAULT_LANCAMENTO_CONFIG.reserveCeo),
+        reserveReserva: num('configReserveReserva', DEFAULT_LANCAMENTO_CONFIG.reserveReserva),
+        reservePop: num('configReservePop', DEFAULT_LANCAMENTO_CONFIG.reservePop),
+        arameMetersPerRaquete: num('configArameMetersPerRaquete', DEFAULT_LANCAMENTO_CONFIG.arameMetersPerRaquete),
+        arameRollMeters: num('configArameRollMeters', DEFAULT_LANCAMENTO_CONFIG.arameRollMeters) || DEFAULT_LANCAMENTO_CONFIG.arameRollMeters,
+        fitaMetersPerCto: num('configFitaMetersPerCto', DEFAULT_LANCAMENTO_CONFIG.fitaMetersPerCto),
+        fitaRollMeters: num('configFitaRollMeters', DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters) || DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters,
+        optical: readOpticalConfigForm(),
+        branding: lancamentoConfig.branding,
     };
-    const saved = await persistLancamentoConfig();
+    //Materiais usados nos cálculos (trocas da empresa)
+    materialCatalog.aliases = normalizeMaterialAliases(readMaterialRulesForm());
+    companyMaterialAliases = materialCatalog.aliases;
+    const savedCatalog = await persistMaterialCatalog();
+    const saved = savedCatalog && await persistLancamentoConfig();
     if (typeof refreshClientDrops === 'function') refreshClientDrops();
     renderLancamentoConfigForm();
     //Recalcula a lista de materiais do projeto ativo, se houver
@@ -1844,8 +2189,6 @@ function handleCatalogImportFile(file) {
 // ---------------------------------------------------------------
 const MATERIALS_API_URL_KEY = 'routeMapMaterialsApiUrl';
 const DEFAULT_MATERIALS_API_URL = ''; //URL da FastAPI, se for publicada num servidor (ex.: https://routemap-materiais.onrender.com)
-const MATERIALS_SHEET_ID = '1vM1Oobfzbz0MnTKku1Vo6Nxpf9sOkYWBN9tiUqzjMbk';
-const MATERIALS_SHEET_GID = '0';
 const MATERIALS_HEADER_ALIASES = {
     codigo: ['codigo', 'cod', 'cod.', 'codigo do item', 'item', 'sku', 'referencia', 'ref'],
     descricao: ['descricao', 'descricao do item', 'material', 'produto', 'nome'],
@@ -1906,28 +2249,27 @@ function parseMaterialsSheetCsv(csvText) {
 }
 
 async function fetchMaterialsData() {
+    const sheet = getCompanySheets().prices;
+    if (!sheet) {
+        const error = new Error('A empresa ainda não informou a planilha de preços.');
+        error.noSheet = true;
+        throw error;
+    }
     const errors = [];
     const apiUrl = getMaterialsApiUrl();
     if (apiUrl) {
         try {
-            const response = await fetch(`${apiUrl}/materiais?atualizar=true`);
+            const response = await fetch(`${apiUrl}/materiais?atualizar=true&sheet_id=${encodeURIComponent(sheet.id)}&gid=${encodeURIComponent(sheet.gid)}`);
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.detail || `Erro ${response.status}`);
             return { data, source: 'API de materiais' };
         } catch (error) { errors.push(`API: ${error.message}`); }
     }
     try {
-        const url = `https://docs.google.com/spreadsheets/d/${MATERIALS_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${MATERIALS_SHEET_GID}&t=${Date.now()}`;
-        const response = await fetch(url);
-        const text = await response.text();
-        if (!response.ok || /^\s*</.test(text)) throw new Error('planilha não está pública');
-        return { data: parseMaterialsSheetCsv(text), source: 'planilha (ao vivo)' };
+        return { data: parseMaterialsSheetCsv(await fetchGoogleSheetCsv(sheet)), source: 'planilha (ao vivo)' };
     } catch (error) { errors.push(`Planilha: ${error.message}`); }
-    try {
-        const response = await fetch(`materiais.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Erro ${response.status}`);
-        return { data: await response.json(), source: 'materiais.json (gerado no deploy)' };
-    } catch (error) { errors.push(`materiais.json: ${error.message}`); }
+    const deployed = await fetchDeploySheetFile('materiais.json', sheet);
+    if (deployed) return { data: deployed, source: 'materiais.json (gerado no deploy)' };
     throw new Error(errors.join(' · '));
 }
 
@@ -1951,6 +2293,14 @@ async function syncCatalogFromApi() {
         if (toggleAll) toggleAll.checked = false;
         document.getElementById('materialImportModal').style.display = 'flex';
     } catch (error) {
+        if (error.noSheet) {
+            setCatalogTab('config');
+            document.getElementById('companySheetsCard')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            showAlert('Planilha de preços', AppSession.isAdmin
+                ? 'Informe o link da planilha de preços da empresa em "Planilhas da empresa" e salve. Depois é só clicar em "Atualizar da planilha".'
+                : 'O administrador da empresa ainda não informou a planilha de preços.');
+            return;
+        }
         console.error('Erro ao buscar a planilha de materiais:', error);
         showAlert('Não foi possível ler a planilha', `Confira se a planilha está compartilhada como "Qualquer pessoa com o link: Leitor". Detalhes: ${error.message}`);
     } finally {
@@ -2101,6 +2451,7 @@ function setupMaterialCatalogUI() {
 
     //Configurações de lançamento
     document.getElementById('saveLancamentoConfig')?.addEventListener('click', saveLancamentoConfigHandler);
+    document.getElementById('saveCompanySheets')?.addEventListener('click', saveCompanySheetsHandler);
     ['configPoleSpan', 'configPlaquetaPerPole', 'configBapPerPole', 'configSupaPerPole', 'configAlcaPerSupa'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', updateLancamentoPreview);
     });

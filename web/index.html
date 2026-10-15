@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261024a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261036c" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -131,6 +131,7 @@
             <a href="#" id="laborButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Mão de obra do projeto</span></a>
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="materialCatalogButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-package"></use></svg><span>Preços, kits e configurações</span></a>
+            <a href="#" id="companySetupMenuItem" role="menuitem" data-admin-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"></use></svg><span>Primeiros passos da empresa</span></a>
           </div>
         </div>
         <button id="projectReportButton" class="top-bar-button" type="button">
@@ -422,9 +423,9 @@
               Importar planilha
             </button>
             <input type="file" id="catalogImportFile" accept=".xlsx,.xls,.csv" style="display:none;" />
-            <button type="button" id="catalogApiSyncButton" class="btn btn-secondary catalog-import-btn" title="Buscar os preços atualizados na API de materiais (planilha da empresa)">
+            <button type="button" id="catalogApiSyncButton" class="btn btn-secondary catalog-import-btn" title="Buscar os preços atualizados na planilha de preços da empresa (Google Sheets)">
               <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg>
-              Atualizar pela API
+              Atualizar da planilha
             </button>
             <button type="button" id="catalogAddButton" class="btn btn-success catalog-add-btn">+ Adicionar</button>
           </div>
@@ -463,6 +464,31 @@
           </div>
 
           <div id="catalogConfigView" class="catalog-view cat3-config" style="display:none;">
+            <section class="cat3-card" id="companySheetsCard">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--sheet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg></span>
+                <div>
+                  <h3>Planilhas da empresa</h3>
+                  <p>Links do Google Sheets com os preços e os kits da empresa. Cada empresa usa só as suas.</p>
+                </div>
+              </header>
+              <div class="company-sheets">
+                <label class="company-sheets__field">
+                  <span>Planilha de preços</span>
+                  <input type="url" id="companyPricesSheet" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" />
+                  <small id="companyPricesSheetStatus">Colunas <b>Descrição</b> e <b>Valor unitário</b> (Código e Unidade opcionais).</small>
+                </label>
+                <label class="company-sheets__field">
+                  <span>Planilha de kits <em>(opcional)</em></span>
+                  <input type="url" id="companyKitsSheet" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" />
+                  <small id="companyKitsSheetStatus">Blocos "KIT POP", "KIT OLT" e "KIT PLACA" com Especificações, Quantidade, Unidade, Valor, Total e Código.</small>
+                </label>
+                <p class="company-sheets__help">Compartilhe cada planilha como <b>Qualquer pessoa com o link: Leitor</b>. Depois de salvar, use <b>Atualizar da planilha</b> na aba Materiais para trazer os preços.</p>
+                <div class="company-sheets__actions" data-admin-only>
+                  <button type="button" id="saveCompanySheets" class="btn btn-success">Salvar planilhas</button>
+                </div>
+              </div>
+            </section>
             <section class="cat3-card">
               <header class="cat3-card__head">
                 <span class="cat3-card__icon cat3-card__icon--cable"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cable"></use></svg></span>
@@ -517,6 +543,63 @@
                   <small>Acima disso, avisa na verificação do projeto</small>
                 </label>
               </div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--box"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-reserve"></use></svg></span>
+                <div>
+                  <h3>Reservas e consumo</h3>
+                  <p>Reserva de cabo em cada ponta, por tipo de caixa, e consumo de arame e fita na instalação.</p>
+                </div>
+              </header>
+              <div class="cat3-fields">
+                <label class="cat3-field">
+                  <span>Reserva na CTO</span>
+                  <span class="cat3-input"><input type="number" id="configReserveCto" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Reserva na CEO</span>
+                  <span class="cat3-input"><input type="number" id="configReserveCeo" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Reserva técnica</span>
+                  <span class="cat3-input"><input type="number" id="configReserveReserva" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Reserva no POP</span>
+                  <span class="cat3-input"><input type="number" id="configReservePop" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Arame por raquete</span>
+                  <span class="cat3-input"><input type="number" id="configArameMetersPerRaquete" min="0" step="1" /><em>m</em></span>
+                  <small>Arame de espinar</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Rolo de arame</span>
+                  <span class="cat3-input"><input type="number" id="configArameRollMeters" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Fita de aço por CTO</span>
+                  <span class="cat3-input"><input type="number" id="configFitaMetersPerCto" min="0" step="0.5" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Rolo de fita</span>
+                  <span class="cat3-input"><input type="number" id="configFitaRollMeters" min="0" step="1" /><em>m</em></span>
+                </label>
+              </div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--sheet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-package"></use></svg></span>
+                <div>
+                  <h3>Materiais usados nos cálculos</h3>
+                  <p>Qual material do seu catálogo entra no lugar de cada item que o sistema calcula. Em branco, vale o nome padrão.</p>
+                </div>
+              </header>
+              <div class="material-rules" id="materialRulesList"></div>
+              <datalist id="materialRulesOptions"></datalist>
             </section>
 
             <section class="cat3-card">
@@ -612,6 +695,22 @@
                 </label>
               </div>
               <div class="catalog-config-preview cat3-example" id="configLaborPreview"></div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--labor"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-money"></use></svg></span>
+                <div>
+                  <h3>Mão de obra terceirizada</h3>
+                  <p>Preços da tabela da terceirizada da empresa. Entram ao adicionar a mão de obra no projeto e no custo do pré-projeto.</p>
+                </div>
+              </header>
+              <div class="outsourced-prices">
+                <table class="cat3-table outsourced-prices__table">
+                  <thead><tr><th>Serviço</th><th class="cat3-num">Preço</th></tr></thead>
+                  <tbody id="outsourcedPricesBody"></tbody>
+                </table>
+              </div>
             </section>
 
             <div class="catalog-config-actions cat3-actions">
@@ -1955,6 +2054,23 @@
       </div>
     </div>
 
+    <div id="companySetupBox" class="floating-box map-tool-box company-setup hidden" role="dialog" aria-labelledby="companySetupTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="companySetupTitle">Primeiros passos da empresa</h3>
+          <span class="map-tool-box__subtitle" id="companySetupSubtitle"></span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeCompanySetup" title="Fechar" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body">
+        <div class="company-setup__bar"><span id="companySetupProgress"></span></div>
+        <ol class="company-setup__list" id="companySetupList"></ol>
+        <button type="button" class="company-setup__dismiss" id="dismissCompanySetup">Não mostrar de novo</button>
+      </div>
+    </div>
     <div id="projectCheckBox" class="floating-box map-tool-box cable-route-box project-check-box hidden" role="dialog" aria-labelledby="projectCheckTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg></span>
@@ -2291,6 +2407,32 @@
                 <div class="form-group">
                   <label for="companyDocumentInput">CNPJ</label>
                   <input type="text" id="companyDocumentInput" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" />
+                </div>
+                <div class="form-group company-logo-field">
+                  <label>Logo nos relatórios</label>
+                  <div class="company-logo">
+                    <div class="company-logo__preview" id="companyLogoPreview"><span>Sem logo</span></div>
+                    <div class="company-logo__actions" data-admin-only>
+                      <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoButton">Escolher imagem</button>
+                      <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoRemove" hidden>Remover</button>
+                      <small>PNG ou JPG. Aparece no topo do relatório e do PDF.</small>
+                    </div>
+                    <input type="file" id="companyLogoFile" accept="image/png,image/jpeg" hidden />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="companyAddressInput">Endereço</label>
+                  <input type="text" id="companyAddressInput" maxlength="160" placeholder="Rua, número, cidade/UF" />
+                </div>
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="companyPhoneInput">Telefone</label>
+                    <input type="text" id="companyPhoneInput" maxlength="40" inputmode="tel" placeholder="(00) 0000-0000" />
+                  </div>
+                  <div class="form-group">
+                    <label for="companyContactInput">E-mail ou site</label>
+                    <input type="text" id="companyContactInput" maxlength="120" placeholder="contato@empresa.com.br" />
+                  </div>
                 </div>
                 <p class="account-note" id="companyReadonlyNote" hidden>Somente o administrador pode alterar os dados da empresa.</p>
                 <p class="account-feedback" role="status"></p>
@@ -2825,15 +2967,15 @@
   <script src="js/core/supabase-client.js?v=20261004b"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
-  <script src="js/app.js?v=20261020a" defer></script>
+  <script src="js/app.js?v=20261036a" defer></script>
   <script src="js/core/persistence.js?v=20261028a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
-  <script src="js/catalog/catalog.js?v=20261013h" defer></script>
+  <script src="js/catalog/catalog.js?v=20261036a" defer></script>
   <script src="js/map/kml.js?v=20261007i" defer></script>
-  <script src="js/catalog/bom.js?v=20261018a" defer></script>
-  <script src="js/catalog/labor.js?v=20261013m" defer></script>
-  <script src="js/catalog/report.js?v=20261018a" defer></script>
+  <script src="js/catalog/bom.js?v=20261036a" defer></script>
+  <script src="js/catalog/labor.js?v=20261036a" defer></script>
+  <script src="js/catalog/report.js?v=20261036a" defer></script>
   <script src="js/map/sketch.js?v=20261028a" defer></script>
   <script src="js/projects/projects.js?v=20261016b" defer></script>
   <script src="js/projects/sidebar.js?v=20261028a" defer></script>
@@ -2842,7 +2984,8 @@
   <script src="js/map/marker-panel.js?v=20261020a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
-  <script src="js/auth/account.js?v=20261005a" defer></script>
+  <script src="js/auth/account.js?v=20261036a" defer></script>
+  <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/network/clients.js?v=20261020a" defer></script>
   <script src="js/network/optical-budget.js?v=20261010a" defer></script>
   <script src="js/network/project-check.js?v=20261007m" defer></script>
@@ -2861,10 +3004,10 @@
   <script src="js/network/cable-split.js?v=20261014i" defer></script>
   <script src="js/network/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
-  <script src="js/network/auto-design.js?v=20261034a" defer></script>
+  <script src="js/network/auto-design.js?v=20261036a" defer></script>
   <script src="js/map/marker-hover.js?v=20261010e" defer></script>
   <script src="js/map/poles-layer.js?v=20261021c" defer></script>
-  <script src="js/catalog/report-pdf.js?v=20261017a" defer></script>
+  <script src="js/catalog/report-pdf.js?v=20261036a" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBJ1hRvY2dPKEo8ESMl5T5LK_irRuLfbJg&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>
