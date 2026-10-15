@@ -416,6 +416,14 @@ function escapeReportPreviewHtml(value) {
         .replace(/"/g, '&quot;');
 }
 
+//CNPJ, telefone, e-mail/site e endereço da empresa numa linha (topo do relatório)
+function getReportCompanyDetails() {
+    const branding = typeof getCompanyBranding === 'function' ? getCompanyBranding() : {};
+    const cnpj = AppSession.company?.document ? `CNPJ ${AppSession.company.document}` : '';
+    return [cnpj, branding.phone, branding.contact, branding.address].filter(Boolean).join(' · ');
+}
+
+
 function createReportPreviewSnapshot(data) {
     const bom = data.bomItemsByCategory || {};
     const q = data.quantities || {};
@@ -454,6 +462,9 @@ function createReportPreviewSnapshot(data) {
         projectCode: data.projectCode || data.projectName,
         projectType: data.projectType,
         company: AppSession.company?.name || '',
+        //Marca da empresa (Minha conta › Empresa): logo e contato no topo do relatório
+        companyLogo: typeof getCompanyBranding === 'function' ? getCompanyBranding().logo : '',
+        companyDetails: getReportCompanyDetails(),
         author: AppSession.displayName || '',
         title: data.projectName,
         locationLine,
@@ -936,10 +947,12 @@ function buildReportPreviewFlowBlocks(snapshot) {
     //Capa: marca, empresa, projeto e local
     blocks.push(createReportPreviewFlowBlock(`
         <div class="rp-brand">
-            <img class="rp-brand__logo" src="img/logo.png" alt="" width="34" height="34" />
+            ${snapshot.companyLogo
+                ? `<img class="rp-brand__logo rp-brand__logo--company" src="${snapshot.companyLogo}" alt="" />`
+                : '<img class="rp-brand__logo" src="img/logo.png" alt="" width="34" height="34" />'}
             <div class="rp-brand__text">
-                <strong>ROUTE MAP</strong>
-                <span>${escapeReportPreviewHtml(snapshot.company || 'Redes de fibra óptica')}</span>
+                <strong>${escapeReportPreviewHtml(snapshot.companyLogo && snapshot.company ? snapshot.company : 'ROUTE MAP')}</strong>
+                <span>${escapeReportPreviewHtml(snapshot.companyLogo ? (snapshot.companyDetails || '') : [snapshot.company || 'Redes de fibra óptica', snapshot.companyDetails].filter(Boolean).join(' · '))}</span>
             </div>
             <div class="rp-brand__doc">
                 <small>Relatório do projeto</small>
@@ -1306,7 +1319,7 @@ function decorateReportPdf(pdf, snapshot) {
         pdf.text(pdfText(footerLabel), marginX, height - 8.5);
         pdf.text(`Página ${page} de ${total}`, width - marginX, height - 8.5, { align: 'right' });
         if (page > 1) {
-            pdf.text('ROUTE MAP · Relatório do projeto', marginX, 8);
+            pdf.text(pdfText(`${snapshot.company || 'ROUTE MAP'} · Relatório do projeto`), marginX, 8);
             pdf.text(pdfText(snapshot.title || ''), width - marginX, 8, { align: 'right' });
             pdf.line(marginX, 10.2, width - marginX, 10.2);
         }

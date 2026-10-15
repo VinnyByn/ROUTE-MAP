@@ -2151,7 +2151,7 @@ function estimateAutoDesignCost(plan) {
     const sections = { cables: 0, hardware: 0, boxes: 0, fusion: 0 };
     items.forEach(row => { sections[row.section] += row.qty * row.price; });
     const materials = sections.cables + sections.hardware + sections.boxes + sections.fusion;
-    const service = (key) => Number((typeof DEFAULT_OUTSOURCED_SERVICES !== 'undefined' ? DEFAULT_OUTSOURCED_SERVICES : []).find(s => s.name === AUTO_DESIGN_LABOR_SERVICES[key])?.price) || 0;
+    const service = (key) => Number((typeof getOutsourcedServices === 'function' ? getOutsourcedServices() : []).find(s => s.name === AUTO_DESIGN_LABOR_SERVICES[key])?.price) || 0;
     const labor = cableMeters * service('cable') + newCeos.length * service('ceo') + plan.ctos.length * service('cto')
         + reserves.length * service('reserve') + fusions * service('fusion');
     const total = materials + labor;

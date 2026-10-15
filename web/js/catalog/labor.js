@@ -473,6 +473,17 @@ const DEFAULT_OUTSOURCED_SERVICES = [
     { name: 'VALOR DO POSTE', price: 120.00, unit: 'un', defaultQtyKey: null },
 ];
 
+//Serviços da terceirizada com os preços da empresa (Regras de cálculo › Mão de obra terceirizada).
+//Sem preço salvo: empresa nova começa em zero; as que já existiam ficam com a tabela de referência.
+function getOutsourcedServices() {
+    const prices = (typeof laborConfig !== 'undefined' && laborConfig?.outsourcedPrices) || {};
+    const blank = typeof materialCatalog !== 'undefined' && !!materialCatalog?.blankSeed;
+    return DEFAULT_OUTSOURCED_SERVICES.map(service => {
+        const saved = prices[service.name];
+        return { ...service, price: saved != null && Number.isFinite(Number(saved)) ? Number(saved) : (blank ? 0 : service.price) };
+    });
+}
+
 function wireOutsourcedServiceRow(row) {
     row.querySelectorAll('.outsourced-price-input, .outsourced-qty-input, .outsourced-name-input, .outsourced-unit-input').forEach((el) => {
         el.oninput = updateOutsourcedCost;
@@ -577,7 +588,7 @@ function openOutsourcedLaborModal(itemNameForEdit = null) {
     }
     // Calcula as quantidades atuais do projeto (para preencher no modo ADIÇÃO)
     const quantities = getProjectQuantities();
-    const defaultServices = DEFAULT_OUTSOURCED_SERVICES;
+    const defaultServices = getOutsourcedServices();
     tableBody.innerHTML = '';
     let savedServicesMap = {};
     if (itemNameForEdit && bomState[itemNameForEdit]) {

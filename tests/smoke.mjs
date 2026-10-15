@@ -2856,8 +2856,12 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   await np.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
   await np.evaluate(() => { initMaterialCatalog(); setupMaterialCatalogUI(); }); //initMap não roda sem o Google Maps
   await np.waitForFunction(() => materialCatalog.blankSeed === true, null, { timeout: 15000 });
+  //Primeiros passos abrem sozinhos para o administrador da empresa nova
+  const setupShown = await np.waitForFunction(() => !document.getElementById('companySetupBox').classList.contains('hidden'), null, { timeout: 8000 }).then(() => true, () => false);
   const fresh = await np.evaluate(async () => {
     const out = {};
+    const setupDone = () => [...document.querySelectorAll('#companySetupList .company-setup__step')].map(li => li.classList.contains('is-done') ? 1 : 0).join('');
+    out.setupBefore = setupDone();
     out.blank = materialCatalog.materials.length > 0 && materialCatalog.materials.every(m => !m.price) && !MATERIAL_PRICES['FITA ISOLANTE']?.price;
     out.noSheets = !getCompanySheets().prices && !getCompanySheets().kits;
     let alerted = '';
@@ -2907,14 +2911,41 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       reserve: getReserveForMarkerType('CEO') === 10 && getReserveForMarkerType('CTO') === 5,
       arame: getArameRolls(3) === 2 && getFitaRolls(9) === 2,
     };
+    //Mão de obra terceirizada: empresa nova começa sem preço; a tabela é da empresa
+    const laborBefore = getOutsourcedServices().every(sv => sv.price === 0);
+    const ctoInput = document.querySelector('#outsourcedPricesBody [data-outsourced-price="INSTALAÇÃO DE CAIXA DE ATENDIMENTO (CTO)"]');
+    ctoInput.value = '95';
+    await saveLancamentoConfigHandler();
+    out.labor = laborBefore && getOutsourcedServices().find(sv => sv.name === 'INSTALAÇÃO DE CAIXA DE ATENDIMENTO (CTO)').price === 95
+      && window.__fakeDb.settings?.labor_config?.outsourcedPrices?.['INSTALAÇÃO DE CAIXA DE ATENDIMENTO (CTO)'] === 95;
+    //Logo e dados da empresa no relatório
+    const canvas = document.createElement('canvas');
+    canvas.width = 120; canvas.height = 40;
+    const g = canvas.getContext('2d'); g.fillStyle = '#c00'; g.fillRect(0, 0, 120, 40);
+    openAccountModal('company');
+    pendingCompanyLogo = canvas.toDataURL('image/png');
+    document.getElementById('companyDocumentInput').value = '12.345.678/0001-90';
+    document.getElementById('companyPhoneInput').value = '(31) 3333-4444';
+    document.getElementById('companyContactInput').value = 'contato@fibra.com';
+    await saveCompany({ preventDefault() {}, submitter: null });
+    out.brandSaved = window.__fakeDb.settings?.lancamento_config?.branding?.logo?.startsWith('data:image/png') && getCompanyBranding().phone === '(31) 3333-4444';
+    rebuildSidebarFromJSON([{ id: 'projN', name: 'Projeto N', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
+    setActiveFolder('projN');
+    const snap = createReportPreviewSnapshot(computeProjectReportData('projN'));
+    const html = buildReportPreviewFlowBlocks(snap).map(b => b.outerHTML).join('');
+    out.report = /rp-brand__logo--company" src="data:image\/png/.test(html) && html.includes('Empresa Teste') && html.includes('CNPJ 12.345.678/0001-90') && html.includes('contato@fibra.com');
+    document.getElementById('accountModal').style.display = 'none';
+    out.setupAfter = setupDone();
     window.fetch = realFetch;
     window.showAlert = realAlert;
     return out;
   });
+  check(setupShown && fresh.setupBefore === '00000' && /^1.\d1/.test(fresh.setupAfter) && fresh.labor && fresh.brandSaved && fresh.report,
+    `empresa nova: primeiros passos, mão de obra e marca no relatório (${JSON.stringify({ setupShown, before: fresh.setupBefore, after: fresh.setupAfter, labor: fresh.labor, brandSaved: fresh.brandSaved, report: fresh.report })})`);
   check(Object.values(fresh.rules).every(Boolean), `regras da empresa: material de cada item, reservas e consumo (${JSON.stringify(fresh.rules)})`);
   check(fresh.blank && fresh.noSheets && fresh.asksSheet && fresh.parse && fresh.kits === 'KIT POP,KIT OLT:1500:10000.5:123'
     && fresh.saved && /2 itens/.test(fresh.status) && fresh.preview,
-    `empresa nova: sem preços de outra empresa e com a planilha dela (${JSON.stringify({ ...fresh, rules: undefined })})`);
+    `empresa nova: sem preços de outra empresa e com a planilha dela (${JSON.stringify({ ...fresh, rules: undefined, setupBefore: undefined, setupAfter: undefined })})`);
   await ctx.close();
 }
 

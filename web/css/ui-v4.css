@@ -2319,3 +2319,37 @@ html[data-theme="dark"] .cat3-card__icon--box { background: #2e1f4f; color: #c4b
 .material-rules__state { grid-column: 2; font-size: 11px; color: #b45309; min-height: 0; }
 .material-rules__state:empty { display: none; }
 html[data-theme="dark"] .material-rules__state { color: #fbbf24; }
+
+/* Mão de obra terceirizada da empresa (catálogo › Regras de cálculo) */
+.outsourced-prices { overflow-x: auto; }
+.outsourced-prices__table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.outsourced-prices__table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-muted); padding: 6px 8px; border-bottom: 1px solid var(--color-border-light); }
+.outsourced-prices__table td { padding: 6px 8px; border-bottom: 1px solid var(--color-border-light); color: var(--color-text); }
+.outsourced-prices__table .cat3-num { text-align: right; width: 210px; }
+#catalogConfigView .outsourced-prices__input { display: inline-flex; align-items: center; gap: 6px; }
+#catalogConfigView .outsourced-prices__input input { width: 96px; height: 30px; text-align: right; }
+.catalog-readonly .outsourced-prices__input input { pointer-events: none; }
+
+/* Logo da empresa (Minha conta › Empresa) */
+.company-logo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.company-logo__preview { width: 180px; height: 64px; border: 1px dashed var(--color-border-light); border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
+.company-logo__preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.company-logo__preview span { font-size: 12px; color: #94a3b8; }
+.company-logo__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.company-logo__actions small { flex-basis: 100%; font-size: 11.5px; color: var(--color-text-muted); }
+.report-preview-page .rp-brand__logo--company { width: auto; height: auto; max-width: 128px; max-height: 44px; border-radius: 0; object-fit: contain; }
+
+/* Primeiros passos da empresa */
+#companySetupBox { width: min(420px, calc(100vw - 32px)); }
+.company-setup__bar { height: 6px; border-radius: 999px; background: var(--color-border-light); overflow: hidden; margin-bottom: 12px; }
+.company-setup__bar span { display: block; height: 100%; width: 0; background: #22c55e; transition: width .3s; }
+.company-setup__list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.company-setup__step { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); }
+.company-setup__step strong { display: block; font-size: 13px; color: var(--color-text); }
+.company-setup__step small { display: block; font-size: 11.5px; line-height: 1.4; color: var(--color-text-muted); }
+.company-setup__mark { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 700 12px var(--font-sans); background: var(--color-border-light); color: var(--color-text-muted); }
+.company-setup__step.is-done .company-setup__mark { background: #22c55e; color: #fff; }
+.company-setup__step.is-done strong { color: var(--color-text-muted); }
+#companySetupBox .company-setup__step .map-tool-btn { height: 30px; padding: 0 12px; font-size: 12px; }
+#companySetupBox .company-setup__dismiss { width: 100%; padding: 7px; border: 1px solid var(--color-border-light); border-radius: 8px; background: transparent; color: var(--color-text-muted); font: 600 12.5px var(--font-sans); cursor: pointer; }
+#companySetupBox .company-setup__dismiss:hover { color: var(--color-text); background: var(--color-border-light); }

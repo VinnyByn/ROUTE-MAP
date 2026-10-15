@@ -457,9 +457,19 @@ function normalizeLancamentoConfig(stored) {
         arameRollMeters: Number(src.arameRollMeters) > 0 ? Number(src.arameRollMeters) : DEFAULT_LANCAMENTO_CONFIG.arameRollMeters,
         fitaMetersPerCto: n(src.fitaMetersPerCto, DEFAULT_LANCAMENTO_CONFIG.fitaMetersPerCto),
         fitaRollMeters: Number(src.fitaRollMeters) > 0 ? Number(src.fitaRollMeters) : DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters,
-        optical: normalizeOpticalConfig(src.optical)
+        optical: normalizeOpticalConfig(src.optical),
+        branding: normalizeCompanyBranding(src.branding),
     };
 }
+
+//Marca da empresa nos relatórios: logo (imagem pequena em data URL) e contato
+function normalizeCompanyBranding(src) {
+    const text = (value, max) => String(value || '').trim().slice(0, max);
+    const logo = typeof src?.logo === 'string' && /^data:image\/(png|jpeg);base64,/.test(src.logo) && src.logo.length < 400000 ? src.logo : '';
+    return { logo, address: text(src?.address, 160), phone: text(src?.phone, 40), contact: text(src?.contact, 120) };
+}
+
+const getCompanyBranding = () => lancamentoConfig.branding || normalizeCompanyBranding();
 
 //Rolos de arame de espinar e de fita de aço pelas regras da empresa
 const getArameRolls = (raquetes) => (raquetes > 0 ? Math.ceil((raquetes * lancamentoConfig.arameMetersPerRaquete) / lancamentoConfig.arameRollMeters) : 0);
@@ -468,7 +478,13 @@ const getFitaRolls = (ctos) => (ctos > 0 ? Math.ceil((ctos * lancamentoConfig.fi
 function normalizeLaborConfig(stored) {
     const src = stored || {};
     const positive = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
+    //Preços da tabela da terceirizada da empresa (nome do serviço → R$)
+    const outsourcedPrices = {};
+    Object.entries(src.outsourcedPrices && typeof src.outsourcedPrices === 'object' ? src.outsourcedPrices : {}).forEach(([name, price]) => {
+        if (price !== null && price !== '' && Number.isFinite(Number(price)) && Number(price) >= 0) outsourcedPrices[name] = Number(price);
+    });
     return {
+        outsourcedPrices,
         hourlyRate: Number(src.hourlyRate) >= 0 && src.hourlyRate != null ? Number(src.hourlyRate) : DEFAULT_LABOR_CONFIG.hourlyRate,
         hoursPerDay: positive(src.hoursPerDay, DEFAULT_LABOR_CONFIG.hoursPerDay),
         cablePerDay: positive(src.cablePerDay, DEFAULT_LABOR_CONFIG.cablePerDay),
@@ -566,6 +582,7 @@ async function loadCompanySettings() {
     try { syncCatalogPricesIntoBoms(); } catch (e) { /* sem listas calculadas ainda */ }
     await addMissingSheetMaterials();
     await loadSheetKits();
+    if (typeof maybeShowCompanySetup === 'function') maybeShowCompanySetup();
 }
 
 // ---------------------------------------------------------------
@@ -1192,6 +1209,7 @@ function renderLancamentoConfigForm() {
     ['reserveCto', 'reserveCeo', 'reserveReserva', 'reservePop', 'arameMetersPerRaquete', 'arameRollMeters', 'fitaMetersPerCto', 'fitaRollMeters']
         .forEach(key => set(`config${key[0].toUpperCase()}${key.slice(1)}`, lancamentoConfig[key]));
     renderMaterialRulesForm();
+    renderOutsourcedPricesForm();
     const optical = lancamentoConfig.optical || normalizeOpticalConfig();
     ['oltPower', 'onuSensitivity', 'lossPerKm', 'lossFusion', 'lossConnector', 'margin'].forEach(k => set(`configOptical_${k}`, optical[k]));
     Object.keys(optical.splitters).forEach(k => set(`configOpticalSplit_${k}`, optical.splitters[k]));
@@ -1311,6 +1329,7 @@ async function saveCompanySheetsHandler() {
         const saved = await persistMaterialCatalog();
         if (!saved) return;
         if (kits && kitsOk) await loadSheetKits();
+        if (typeof refreshCompanySetup === 'function') refreshCompanySetup();
         const pending = [prices && !pricesOk ? 'a de preços' : '', kits && !kitsOk ? 'a de kits' : ''].filter(Boolean);
         showToast('Planilhas salvas', pending.length
             ? `Salvas, mas ${pending.join(' e ')} não pôde ser lida agora. Confira o compartilhamento.`
@@ -1327,8 +1346,33 @@ function readLaborConfigForm() {
         hoursPerDay: num('configLaborHoursPerDay'),
         cablePerDay: num('configCablePerDay'),
         ctoPerDay: num('configCtoPerDay'),
-        ceoPerDay: num('configCeoPerDay')
+        ceoPerDay: num('configCeoPerDay'),
+        outsourcedPrices: readOutsourcedPricesForm(),
     });
+}
+
+//Tabela da terceirizada: preço de cada serviço da empresa
+function renderOutsourcedPricesForm() {
+    const body = document.getElementById('outsourcedPricesBody');
+    if (!body || typeof getOutsourcedServices !== 'function') return;
+    body.innerHTML = getOutsourcedServices().map(service => `
+        <tr>
+            <td>${escapeHtml(service.name)}</td>
+            <td class="cat3-num">
+                <span class="cat3-input outsourced-prices__input"><em>R$</em><input type="number" min="0" step="0.01" data-outsourced-price="${escapeHtml(service.name)}" value="${Number(service.price).toFixed(2)}" aria-label="Preço de ${escapeHtml(service.name)}" /><em>/ ${service.unit === 'm' ? 'm' : 'un'}</em></span>
+            </td>
+        </tr>`).join('');
+}
+
+function readOutsourcedPricesForm() {
+    const inputs = document.querySelectorAll('#outsourcedPricesBody [data-outsourced-price]');
+    if (!inputs.length) return laborConfig.outsourcedPrices;
+    const out = {};
+    inputs.forEach(input => {
+        const value = parseFloat(input.value);
+        if (Number.isFinite(value) && value >= 0) out[input.dataset.outsourcedPrice] = value;
+    });
+    return out;
 }
 
 function updateLaborPreview() {
@@ -1404,7 +1448,8 @@ async function saveLancamentoConfigHandler() {
         arameRollMeters: num('configArameRollMeters', DEFAULT_LANCAMENTO_CONFIG.arameRollMeters) || DEFAULT_LANCAMENTO_CONFIG.arameRollMeters,
         fitaMetersPerCto: num('configFitaMetersPerCto', DEFAULT_LANCAMENTO_CONFIG.fitaMetersPerCto),
         fitaRollMeters: num('configFitaRollMeters', DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters) || DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters,
-        optical: readOpticalConfigForm()
+        optical: readOpticalConfigForm(),
+        branding: lancamentoConfig.branding,
     };
     //Materiais usados nos cálculos (trocas da empresa)
     materialCatalog.aliases = normalizeMaterialAliases(readMaterialRulesForm());

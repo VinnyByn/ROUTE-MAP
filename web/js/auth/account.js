@@ -118,9 +118,15 @@ function fillAccountForms() {
     refreshAuthDetails();
     document.getElementById('companyNameInput').value = AppSession.company?.name || '';
     document.getElementById('companyDocumentInput').value = AppSession.company?.document || '';
+    const branding = typeof getCompanyBranding === 'function' ? getCompanyBranding() : {};
+    document.getElementById('companyAddressInput').value = branding.address || '';
+    document.getElementById('companyPhoneInput').value = branding.phone || '';
+    document.getElementById('companyContactInput').value = branding.contact || '';
+    pendingCompanyLogo = branding.logo || '';
+    renderCompanyLogoPreview();
     const readOnly = !AppSession.isAdmin;
-    document.getElementById('companyNameInput').disabled = readOnly;
-    document.getElementById('companyDocumentInput').disabled = readOnly;
+    ['companyNameInput', 'companyDocumentInput', 'companyAddressInput', 'companyPhoneInput', 'companyContactInput']
+        .forEach(id => { document.getElementById(id).disabled = readOnly; });
     document.getElementById('companyReadonlyNote').hidden = !readOnly;
     document.getElementById('leaveCompanyCard').hidden = AppSession.isAdmin;
     const roleCard = document.getElementById('myRoleDescription');
@@ -572,8 +578,49 @@ async function saveCompany(event) {
         const { error } = await supabaseClient.from('companies').update({ name, document: documentNumber }).eq('id', AppSession.company.id);
         if (error) return setFeedback(panel, `Não foi possível salvar: ${error.message}`, 'error');
         AppSession.company = { ...AppSession.company, name, document: documentNumber };
+        //Logo e contato (relatórios) ficam nas configurações da empresa
+        lancamentoConfig.branding = normalizeCompanyBranding({
+            logo: pendingCompanyLogo,
+            address: document.getElementById('companyAddressInput').value,
+            phone: document.getElementById('companyPhoneInput').value,
+            contact: document.getElementById('companyContactInput').value,
+        });
+        const saved = await persistLancamentoConfig();
         renderUserIdentity();
-        setFeedback(panel, 'Dados da empresa atualizados.');
+        if (typeof refreshCompanySetup === 'function') refreshCompanySetup();
+        setFeedback(panel, saved ? 'Dados da empresa atualizados.' : 'O nome foi salvo, mas o logo e o contato não. Tente de novo.', saved ? 'success' : 'error');
+    });
+}
+
+//Logo da empresa: reduzida no navegador (até 480 × 160) para caber nas configurações e no PDF
+let pendingCompanyLogo = '';
+
+function renderCompanyLogoPreview() {
+    const preview = document.getElementById('companyLogoPreview');
+    if (!preview) return;
+    preview.innerHTML = pendingCompanyLogo ? `<img src="${pendingCompanyLogo}" alt="Logo da empresa">` : '<span>Sem logo</span>';
+    document.getElementById('companyLogoRemove').hidden = !pendingCompanyLogo;
+}
+
+function readCompanyLogoFile(file) {
+    return new Promise((resolve, reject) => {
+        if (!file || !/^image\/(png|jpeg)$/.test(file.type)) return reject(new Error('Use uma imagem PNG ou JPG.'));
+        if (file.size > 5 * 1024 * 1024) return reject(new Error('Imagem muito grande (máximo 5 MB).'));
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const scale = Math.min(1, 480 / img.width, 160 / img.height);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            let data = canvas.toDataURL('image/png');
+            if (data.length > 300000) data = canvas.toDataURL('image/jpeg', 0.85);
+            resolve(data);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não consegui abrir a imagem.')); };
+        img.src = url;
     });
 }
 
@@ -901,6 +948,20 @@ function setupAccountMenu() {
     document.getElementById('signOutHereButton').addEventListener('click', signOutHere);
     document.getElementById('prefIdleLock').addEventListener('change', saveIdleLock);
     document.getElementById('companyForm').addEventListener('submit', saveCompany);
+    document.getElementById('companyLogoButton')?.addEventListener('click', () => document.getElementById('companyLogoFile').click());
+    document.getElementById('companyLogoRemove')?.addEventListener('click', () => { pendingCompanyLogo = ''; renderCompanyLogoPreview(); });
+    document.getElementById('companyLogoFile')?.addEventListener('change', async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        try {
+            pendingCompanyLogo = await readCompanyLogoFile(file);
+            renderCompanyLogoPreview();
+            setFeedback(document.querySelector('#accountModal [data-panel="company"]'), 'Logo carregado. Clique em "Salvar empresa" para guardar.');
+        } catch (error) {
+            setFeedback(document.querySelector('#accountModal [data-panel="company"]'), error.message, 'error');
+        }
+    });
     document.getElementById('preferencesForm').addEventListener('submit', savePreferencesForm);
     document.getElementById('inviteForm').addEventListener('submit', sendInvite);
     document.getElementById('signOutEverywhereButton').addEventListener('click', signOutEverywhere);

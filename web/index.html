@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261025b" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261036c" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -131,6 +131,7 @@
             <a href="#" id="laborButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Mão de obra do projeto</span></a>
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="materialCatalogButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-package"></use></svg><span>Preços, kits e configurações</span></a>
+            <a href="#" id="companySetupMenuItem" role="menuitem" data-admin-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"></use></svg><span>Primeiros passos da empresa</span></a>
           </div>
         </div>
         <button id="projectReportButton" class="top-bar-button" type="button">
@@ -694,6 +695,22 @@
                 </label>
               </div>
               <div class="catalog-config-preview cat3-example" id="configLaborPreview"></div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--labor"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-money"></use></svg></span>
+                <div>
+                  <h3>Mão de obra terceirizada</h3>
+                  <p>Preços da tabela da terceirizada da empresa. Entram ao adicionar a mão de obra no projeto e no custo do pré-projeto.</p>
+                </div>
+              </header>
+              <div class="outsourced-prices">
+                <table class="cat3-table outsourced-prices__table">
+                  <thead><tr><th>Serviço</th><th class="cat3-num">Preço</th></tr></thead>
+                  <tbody id="outsourcedPricesBody"></tbody>
+                </table>
+              </div>
             </section>
 
             <div class="catalog-config-actions cat3-actions">
@@ -2037,6 +2054,23 @@
       </div>
     </div>
 
+    <div id="companySetupBox" class="floating-box map-tool-box company-setup hidden" role="dialog" aria-labelledby="companySetupTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="companySetupTitle">Primeiros passos da empresa</h3>
+          <span class="map-tool-box__subtitle" id="companySetupSubtitle"></span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeCompanySetup" title="Fechar" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body">
+        <div class="company-setup__bar"><span id="companySetupProgress"></span></div>
+        <ol class="company-setup__list" id="companySetupList"></ol>
+        <button type="button" class="company-setup__dismiss" id="dismissCompanySetup">Não mostrar de novo</button>
+      </div>
+    </div>
     <div id="projectCheckBox" class="floating-box map-tool-box cable-route-box project-check-box hidden" role="dialog" aria-labelledby="projectCheckTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"></use></svg></span>
@@ -2373,6 +2407,32 @@
                 <div class="form-group">
                   <label for="companyDocumentInput">CNPJ</label>
                   <input type="text" id="companyDocumentInput" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" />
+                </div>
+                <div class="form-group company-logo-field">
+                  <label>Logo nos relatórios</label>
+                  <div class="company-logo">
+                    <div class="company-logo__preview" id="companyLogoPreview"><span>Sem logo</span></div>
+                    <div class="company-logo__actions" data-admin-only>
+                      <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoButton">Escolher imagem</button>
+                      <button type="button" class="btn btn-secondary account-small-btn" id="companyLogoRemove" hidden>Remover</button>
+                      <small>PNG ou JPG. Aparece no topo do relatório e do PDF.</small>
+                    </div>
+                    <input type="file" id="companyLogoFile" accept="image/png,image/jpeg" hidden />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="companyAddressInput">Endereço</label>
+                  <input type="text" id="companyAddressInput" maxlength="160" placeholder="Rua, número, cidade/UF" />
+                </div>
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="companyPhoneInput">Telefone</label>
+                    <input type="text" id="companyPhoneInput" maxlength="40" inputmode="tel" placeholder="(00) 0000-0000" />
+                  </div>
+                  <div class="form-group">
+                    <label for="companyContactInput">E-mail ou site</label>
+                    <input type="text" id="companyContactInput" maxlength="120" placeholder="contato@empresa.com.br" />
+                  </div>
                 </div>
                 <p class="account-note" id="companyReadonlyNote" hidden>Somente o administrador pode alterar os dados da empresa.</p>
                 <p class="account-feedback" role="status"></p>
@@ -2911,11 +2971,11 @@
   <script src="js/core/persistence.js?v=20261028a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
-  <script src="js/catalog/catalog.js?v=20261015b" defer></script>
+  <script src="js/catalog/catalog.js?v=20261036a" defer></script>
   <script src="js/map/kml.js?v=20261007i" defer></script>
   <script src="js/catalog/bom.js?v=20261036a" defer></script>
-  <script src="js/catalog/labor.js?v=20261013m" defer></script>
-  <script src="js/catalog/report.js?v=20261018a" defer></script>
+  <script src="js/catalog/labor.js?v=20261036a" defer></script>
+  <script src="js/catalog/report.js?v=20261036a" defer></script>
   <script src="js/map/sketch.js?v=20261028a" defer></script>
   <script src="js/projects/projects.js?v=20261016b" defer></script>
   <script src="js/projects/sidebar.js?v=20261028a" defer></script>
@@ -2924,7 +2984,8 @@
   <script src="js/map/marker-panel.js?v=20261020a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
-  <script src="js/auth/account.js?v=20261005a" defer></script>
+  <script src="js/auth/account.js?v=20261036a" defer></script>
+  <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/network/clients.js?v=20261020a" defer></script>
   <script src="js/network/optical-budget.js?v=20261010a" defer></script>
   <script src="js/network/project-check.js?v=20261007m" defer></script>
@@ -2946,7 +3007,7 @@
   <script src="js/network/auto-design.js?v=20261036a" defer></script>
   <script src="js/map/marker-hover.js?v=20261010e" defer></script>
   <script src="js/map/poles-layer.js?v=20261021c" defer></script>
-  <script src="js/catalog/report-pdf.js?v=20261017a" defer></script>
+  <script src="js/catalog/report-pdf.js?v=20261036a" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBJ1hRvY2dPKEo8ESMl5T5LK_irRuLfbJg&libraries=geometry&callback=initMap" defer></script>
   </body>
 </html>
