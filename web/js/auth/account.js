@@ -100,7 +100,7 @@ function setAccountTab(tab) {
     if (tab === 'team') loadTeam();
     if (tab === 'company' && AppSession.isAdmin) loadClientErrors();
     if (tab === 'company') loadCompanyTeamCount();
-    const firstInput = document.querySelector(`#accountModal [data-panel="${tab}"] input:not([disabled])`);
+    const firstInput = document.querySelector(`#accountModal [data-panel="${tab}"] input:not([disabled]):not([data-no-autofocus]):not([type="radio"]):not([type="checkbox"])`);
     if (firstInput) setTimeout(() => firstInput.focus(), 40);
 }
 
@@ -126,10 +126,14 @@ function fillAccountForms() {
     document.getElementById('leaveCompanyCard').hidden = AppSession.isAdmin;
     const roleCard = document.getElementById('myRoleDescription');
     if (roleCard) roleCard.textContent = ROLE_DESCRIPTIONS[AppSession.role] || '';
-    document.getElementById('prefTheme').value = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-    document.getElementById('prefMapType').value = prefs.mapType || 'roadmap';
-    document.getElementById('prefReopenLastProject').checked = !!prefs.reopenLastProject;
-    document.getElementById('prefMarkerScale').value = prefs.markerScale || 'medio';
+    fillPreferencesForm({
+        theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+        mapType: prefs.mapType || 'roadmap',
+        markerScale: prefs.markerScale || 'medio',
+        reopenLastProject: !!prefs.reopenLastProject,
+    });
+    const search = document.getElementById('shortcutSearch');
+    if (search) { search.value = ''; filterShortcuts(); }
 }
 
 // ---------------------------------------------------------------
@@ -144,15 +148,50 @@ function getProfileFormValues() {
     };
 }
 
-//Salvar/Descartar só ficam ativos com alteração pendente
+//Barra de salvar: o estado aparece na barra e Salvar/Descartar só ficam ativos com alteração pendente
+function setSavebarState(stateId, dirty) {
+    const state = document.getElementById(stateId);
+    if (!state) return;
+    state.textContent = dirty ? 'Alterações não salvas' : 'Tudo salvo';
+    state.classList.toggle('is-dirty', dirty);
+}
+
 function updateProfileDirtyState() {
     const profile = AppSession.profile || {};
     const current = getProfileFormValues();
     const dirty = current.full_name !== (profile.full_name || '')
         || (current.job_title || '') !== (profile.job_title || '')
         || (current.phone || '') !== formatPhone(profile.phone);
-    document.getElementById('profileSaveButton').disabled = !dirty;
+    const saveButton = document.getElementById('profileSaveButton');
+    if (saveButton.textContent !== 'Salvando…') saveButton.disabled = !dirty;
     document.getElementById('profileResetButton').disabled = !dirty;
+    setSavebarState('profileDirtyState', dirty);
+    updateProfileHero(current);
+}
+
+//Cartão do perfil acompanha o que é digitado; telefone conferido; quanto do perfil está preenchido
+function updateProfileHero(values = getProfileFormValues()) {
+    const name = values.full_name || AppSession.email || '';
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('profileHeroName', name);
+    set('profileHeroAvatar', getInitials(values.full_name || AppSession.email));
+    set('profileHeroDetails', [AppSession.email, values.job_title, values.phone].filter(Boolean).join(' · '));
+    const digits = String(values.phone || '').replace(/\D/g, '');
+    const phoneOk = digits.length === 10 || digits.length === 11;
+    const phoneState = digits ? (phoneOk ? 'ok' : 'bad') : '';
+    const mark = document.getElementById('profilePhoneState');
+    if (mark) mark.dataset.state = phoneOk ? 'ok' : '';
+    const hint = document.getElementById('profilePhoneHint');
+    if (hint) {
+        hint.textContent = phoneState === 'ok' ? 'Telefone completo' : phoneState === 'bad' ? 'Use DDD + número' : '';
+        hint.dataset.state = phoneState === 'ok' ? 'ok' : '';
+    }
+    const filled = [values.full_name.length >= 2, values.job_title, phoneOk].filter(Boolean).length;
+    const progress = document.getElementById('profileHeroProgress');
+    if (progress) {
+        progress.textContent = filled === 3 ? 'Perfil completo' : `Perfil ${filled} de 3`;
+        progress.classList.toggle('is-complete', filled === 3);
+    }
 }
 
 async function saveProfile(event) {
@@ -395,9 +434,9 @@ async function confirmMfaDisable(event) {
 function renderSecurityLevel() {
     const idle = Number(AppSession.profile?.preferences?.idleLockMinutes) || 0;
     const checks = [
-        { ok: true, text: 'Senha cadastrada' },
-        { ok: !!mfaState.factor, text: 'Verificação em duas etapas' },
-        { ok: idle > 0, text: 'Bloqueio por inatividade' },
+        { ok: true, text: 'Senha cadastrada', target: 'securityPasswordSection' },
+        { ok: !!mfaState.factor, text: 'Verificação em duas etapas', target: 'securityMfaSection', focus: 'mfaEnableButton' },
+        { ok: idle > 0, text: 'Bloqueio por inatividade', target: 'securitySessionsSection', focus: 'prefIdleLock' },
     ];
     const score = checks.filter(c => c.ok).length;
     const level = ['Baixa', 'Básica', 'Boa', 'Forte'][score];
@@ -406,8 +445,11 @@ function renderSecurityLevel() {
     box.dataset.level = String(score);
     document.getElementById('securityLevelLabel').textContent = level;
     document.getElementById('securityLevelBar').style.width = `${(score / checks.length) * 100}%`;
+    //O que falta leva até a seção que resolve
     document.getElementById('securityChecklist').innerHTML = checks
-        .map(c => `<li class="${c.ok ? 'is-ok' : ''}">${escapeHtml(c.text)}</li>`).join('');
+        .map(c => (c.ok
+            ? `<li class="is-ok">${escapeHtml(c.text)}</li>`
+            : `<li><button type="button" class="account-shield__goto" data-security-goto="${c.target}" data-security-focus="${c.focus || ''}" title="Ir para ${escapeHtml(c.text.toLowerCase())}">${escapeHtml(c.text)}</button></li>`)).join('');
     const flag = document.getElementById('userMenuSecurityFlag');
     if (flag) {
         flag.hidden = !mfaState.available || !!mfaState.factor;
@@ -508,18 +550,65 @@ function saveUserPreferences(patch) {
     });
 }
 
+//Preferências: escolhas em cartões (tema, mapa, marcadores) e interruptor
+let preferencesFormSnapshot = '';
+const getPrefChoice = (name) => document.querySelector(`#preferencesForm input[name="${name}"]:checked`)?.value || '';
+function setPrefChoice(name, value) {
+    document.querySelectorAll(`#preferencesForm input[name="${name}"]`).forEach(input => { input.checked = input.value === value; });
+}
+
+function getPreferencesFormValues() {
+    return {
+        theme: getPrefChoice('prefTheme') || 'light',
+        mapType: getPrefChoice('prefMapType') || 'roadmap',
+        markerScale: getPrefChoice('prefMarkerScale') || 'medio',
+        reopenLastProject: !!document.getElementById('prefReopenLastProject')?.checked,
+    };
+}
+
+function fillPreferencesForm(values) {
+    setPrefChoice('prefTheme', values.theme);
+    setPrefChoice('prefMapType', values.mapType);
+    setPrefChoice('prefMarkerScale', values.markerScale);
+    document.getElementById('prefReopenLastProject').checked = !!values.reopenLastProject;
+    preferencesFormSnapshot = JSON.stringify(getPreferencesFormValues());
+    updatePreferencesDirtyState();
+}
+
+function updatePreferencesDirtyState() {
+    const dirty = JSON.stringify(getPreferencesFormValues()) !== preferencesFormSnapshot;
+    setSavebarState('preferencesDirtyState', dirty);
+    const saveButton = document.getElementById('preferencesSaveButton');
+    if (saveButton) saveButton.disabled = !dirty;
+    const resetButton = document.getElementById('preferencesResetButton');
+    if (resetButton) resetButton.disabled = !dirty;
+}
+
 async function savePreferencesForm(event) {
     event.preventDefault();
     const panel = document.querySelector('#accountModal [data-panel="preferences"]');
-    const theme = document.getElementById('prefTheme').value;
-    const mapType = document.getElementById('prefMapType').value;
-    const reopenLastProject = document.getElementById('prefReopenLastProject').checked;
-    const markerScale = document.getElementById('prefMarkerScale').value;
+    const { theme, mapType, reopenLastProject, markerScale } = getPreferencesFormValues();
     applyTheme(theme);
     applyMarkerScale(markerScale);
     if (typeof map !== 'undefined' && map) map.setMapTypeId(mapType);
     const ok = await saveUserPreferences({ theme, mapType, reopenLastProject, markerScale });
+    if (ok) preferencesFormSnapshot = JSON.stringify(getPreferencesFormValues());
+    updatePreferencesDirtyState();
     setFeedback(panel, ok ? 'Preferências salvas.' : 'Não foi possível salvar as preferências.', ok ? 'success' : 'error');
+}
+
+//Procurar atalho pelo texto da tecla ou da ação (sem acento)
+const foldText = (text) => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function filterShortcuts() {
+    const query = foldText(document.getElementById('shortcutSearch')?.value.trim());
+    let shown = 0;
+    document.querySelectorAll('#accountModal .shortcut-list > div').forEach(row => {
+        const match = !query || foldText(row.textContent).includes(query);
+        row.hidden = !match;
+        if (match) shown++;
+    });
+    const empty = document.getElementById('shortcutEmpty');
+    if (empty) empty.hidden = shown > 0;
 }
 
 function lastProjectStorageKey() {
@@ -841,9 +930,49 @@ function describePresence(member, isSelf) {
     return { online: false, text: 'Ainda não acessou' };
 }
 
+//Cartão da equipe: quantas pessoas, quantas online (administrador) e quantas em cada cargo
+let teamRoleFilter = '';
+function renderTeamHero(members) {
+    const online = members.filter(m => m.user_id === AppSession.userId || m.is_online).length;
+    const details = document.getElementById('teamHeroDetails');
+    if (details) {
+        details.textContent = `${members.length} ${members.length === 1 ? 'pessoa' : 'pessoas'} com acesso`
+            + (AppSession.isAdmin ? ` · ${online} online agora` : '');
+    }
+    const counts = Object.fromEntries(['admin', 'projetista', 'member'].map(role => [role, members.filter(m => m.role === role).length]));
+    const plural = { admin: ['administrador', 'administradores'], projetista: ['projetista', 'projetistas'], member: ['membro', 'membros'] };
+    const chips = document.getElementById('teamHeroChips');
+    if (chips) {
+        chips.innerHTML = Object.entries(counts).filter(([, n]) => n > 0)
+            .map(([role, n]) => `<span class="account-badge account-badge--${role}">${n} ${plural[role][n === 1 ? 0 : 1]}</span>`).join('');
+    }
+    const filter = document.getElementById('teamRoleFilter');
+    if (filter) {
+        if (teamRoleFilter && !counts[teamRoleFilter]) teamRoleFilter = '';
+        const options = [['', 'Todos', members.length], ...['admin', 'projetista', 'member'].map(role => [role, ROLE_LABELS[role], counts[role]])];
+        filter.innerHTML = options.filter(([role, , n]) => !role || n > 0)
+            .map(([role, label, n]) => `<button type="button" class="team-filter__chip${role === teamRoleFilter ? ' is-active' : ''}" data-role="${role}" aria-pressed="${role === teamRoleFilter}">${escapeHtml(label)} <b>${n}</b></button>`).join('');
+    }
+}
+
+//Busca e filtro por cargo na lista de membros
+function filterTeamMembers() {
+    const query = foldText(document.getElementById('teamSearch')?.value.trim());
+    let shown = 0;
+    const items = document.querySelectorAll('#teamMembersList > li[data-role]');
+    items.forEach(li => {
+        const match = (!teamRoleFilter || li.dataset.role === teamRoleFilter) && (!query || li.dataset.search.includes(query));
+        li.hidden = !match;
+        if (match) shown++;
+    });
+    const empty = document.getElementById('teamEmpty');
+    if (empty) empty.hidden = !items.length || shown > 0;
+}
+
 function renderMembers(members) {
     const list = document.getElementById('teamMembersList');
     list.innerHTML = '';
+    renderTeamHero(members);
     const onlineCount = members.filter(m => m.user_id === AppSession.userId || m.is_online).length;
     const summary = document.getElementById('teamOnlineSummary');
     if (summary) {
@@ -854,6 +983,8 @@ function renderMembers(members) {
         const isSelf = member.user_id === AppSession.userId;
         const li = document.createElement('li');
         li.className = 'account-list__item';
+        li.dataset.role = member.role;
+        li.dataset.search = foldText([member.full_name, member.email, member.job_title].filter(Boolean).join(' '));
         const canManage = AppSession.isAdmin && !isSelf;
         const presence = AppSession.isAdmin ? describePresence(member, isSelf) : null;
         const roleOptions = ['admin', 'projetista', 'member']
@@ -881,6 +1012,7 @@ function renderMembers(members) {
         }
         list.appendChild(li);
     });
+    filterTeamMembers();
 }
 
 function renderInvites(invites) {
@@ -979,6 +1111,7 @@ async function changeMemberRole(member, select) {
         return showAlert('Não foi possível alterar', error.message);
     }
     member.role = next;
+    loadTeam();
     showToast('Cargo alterado', `${member.full_name || member.email} agora é ${ROLE_LABELS[next]}.`);
 }
 
@@ -1148,6 +1281,35 @@ function setupAccountMenu() {
         setFeedback(document.querySelector('#accountModal [data-panel="company"]'), '');
     });
     document.getElementById('preferencesForm').addEventListener('submit', savePreferencesForm);
+    document.getElementById('preferencesForm').addEventListener('change', updatePreferencesDirtyState);
+    document.getElementById('preferencesResetButton').addEventListener('click', () => {
+        fillPreferencesForm(JSON.parse(preferencesFormSnapshot || '{}'));
+        setFeedback(document.querySelector('#accountModal [data-panel="preferences"]'), '');
+    });
+    document.getElementById('shortcutSearch')?.addEventListener('input', filterShortcuts);
+    document.getElementById('teamSearch')?.addEventListener('input', filterTeamMembers);
+    document.getElementById('teamRoleFilter')?.addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-role]');
+        if (!chip) return;
+        teamRoleFilter = chip.dataset.role;
+        document.querySelectorAll('#teamRoleFilter [data-role]').forEach(b => {
+            b.classList.toggle('is-active', b === chip);
+            b.setAttribute('aria-pressed', String(b === chip));
+        });
+        filterTeamMembers();
+    });
+    //Item que falta na proteção da conta: rola até a seção e destaca
+    document.getElementById('securityChecklist')?.addEventListener('click', (e) => {
+        const link = e.target.closest('[data-security-goto]');
+        const target = link && document.getElementById(link.dataset.securityGoto);
+        if (!target) return;
+        target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        target.classList.remove('is-highlight');
+        void target.offsetWidth;
+        target.classList.add('is-highlight');
+        const focus = document.getElementById(link.dataset.securityFocus);
+        if (focus && !focus.hidden) focus.focus({ preventScroll: true });
+    });
     document.getElementById('newUserForm').addEventListener('submit', createTeamUser);
     document.getElementById('copyAccountCredentials').addEventListener('click', copyAccountCredentials);
     document.getElementById('closeAccountCredentials').addEventListener('click', () => { document.getElementById('accountCredentials').hidden = true; });
