@@ -2685,3 +2685,8 @@ html[data-theme="dark"] .company-section__icon--red { background: rgba(239, 68, 
 #accountModal .team-filter__chip { background-color: var(--color-surface) !important; color: var(--color-text-muted) !important; }
 #accountModal .team-filter__chip:hover { color: var(--color-text) !important; box-shadow: none; }
 #accountModal .team-filter__chip.is-active { background-color: #2f7a94 !important; color: #fff !important; }
+/* Pré-projeto: aviso que leva ao lugar no mapa */
+#autoDesignBox button.auto-design__warn--go { display: block; width: 100%; margin: 0; padding: 8px 10px; border: 1px solid rgba(245, 158, 11, 0.42); border-radius: 8px; text-align: left; font: inherit; font-size: 12px; font-weight: 400; line-height: 1.4; color: var(--color-text); cursor: pointer; transition: background-color .15s, border-color .15s; }
+#autoDesignBox button.auto-design__warn--go:hover, #autoDesignBox button.auto-design__warn--go:focus-visible { background: rgba(245, 158, 11, 0.22); border-color: rgba(245, 158, 11, 0.75); outline: none; }
+#autoDesignBox .auto-design__warn-go { display: block; margin-top: 4px; font-weight: 700; font-size: 11.5px; color: #b45309; }
+html[data-theme="dark"] #autoDesignBox .auto-design__warn-go { color: #fcd34d; }
