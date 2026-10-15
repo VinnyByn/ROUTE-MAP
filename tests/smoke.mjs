@@ -1372,14 +1372,26 @@ const tour = await page.evaluate(() => {
   const total = layer.querySelector('.tour-step').textContent;
   layer.querySelector('[data-tour="next"]').click();
   const second = layer.querySelector('.tour-title').textContent;
+  //O passo de menu abre o menu junto (e o clique no tour não fecha)
+  const menuOpen = document.getElementById('projectDropdown').classList.contains('show');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  const closed = !document.getElementById('tourLayer');
+  const closed = !document.getElementById('tourLayer') && !document.getElementById('projectDropdown').classList.contains('show');
+  //Primeiro acesso: boas-vindas, Enter começa; no fim, as dicas
+  startTour({ welcome: true });
+  const welcome = /^(Olá|Boas-vindas)/.test(document.querySelector('#tourLayer .tour-title').textContent) && !!document.querySelector('#tourLayer [data-tour="start"]');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const started = document.querySelector('#tourLayer .tour-title').textContent === 'Projetos e pastas';
+  showTourStep(99);
+  const end = /^Pronto/.test(document.querySelector('#tourLayer .tour-title').textContent) && document.querySelectorAll('#tourLayer .tour-tips li').length === 3;
+  document.querySelector('#tourLayer [data-tour="done"]').click();
+  const done = !document.getElementById('tourLayer');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
   const shortcuts = document.getElementById('accountModal').style.display !== 'none' && !document.querySelector('#accountModal [data-panel="preferences"]').hidden;
   document.getElementById('accountModal').style.display = 'none';
-  return { first, total, second, closed, shortcuts, items: document.querySelectorAll('#accountModal .shortcut-list > div').length };
+  return { first, total, second, menuOpen, closed, welcome, started, end, done, shortcuts, items: document.querySelectorAll('#accountModal .shortcut-list > div').length };
 });
-check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
+check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.menuOpen && tour.closed
+  && tour.welcome && tour.started && tour.end && tour.done && tour.shortcuts && tour.items >= 12,
   `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
 
 //Minha conta: barra de salvar do perfil e das preferências, filtro da equipe, busca de atalhos e atalho da proteção
@@ -2534,6 +2546,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const [c0, c1] = autoDesign.result.ctos;
     await moveAutoDesignBox(c1, LL(c0.position.lat(), c0.position.lng() + 0.0002));
     out.spacing.warned = getAutoDesignWarnings(autoDesign.result, autoDesign.result.params).some(w => /a menos de \d+ m de outra na mesma rua/.test(w));
+    //Aviso clicável: leva até a CTO no mapa e destaca
+    const goBtn = [...document.querySelectorAll('#autoDesignBox [data-auto-design="warn-goto"]')].find(b => /a menos de/.test(b.textContent));
+    goBtn?.click();
+    out.spacing.goto = !!goBtn && /^CTO-\d+/.test(goBtn.querySelector('.auto-design__warn-go').textContent) && !!autoDesign.flash;
     out.spacing.info = { freeCtos, freeGap: Math.round(freeGap), gap, ctos: autoDesign.result.ctos.length };
     autoDesign.params.ctoSpacing = '';
     storeAutoDesignParams(autoDesign.params);
@@ -2544,6 +2560,13 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const form2 = !!document.getElementById('autoDesignPrimary') && !!document.getElementById('autoDesignCeoMax') && !!document.getElementById('autoDesignReserve');
     await generateAutoDesign();
     plan = autoDesign.result;
+    //Sinal estimado: com a OLT padrão 1:8 × 1:8 fecha (sem aviso); com OLT fraca, aviso aponta as CTOs
+    const realOptical = lancamentoConfig.optical;
+    const signalOk = estimateAutoDesignSignal(plan).every(r => r.status === 'ok') && !getAutoDesignWarnings(plan, plan.params).some(w => /sinal estimado/.test(w));
+    lancamentoConfig.optical = { ...(realOptical || DEFAULT_OPTICAL_CONFIG), oltPower: -8 };
+    const weakWarn = getAutoDesignWarnings(plan, plan.params).find(w => /abaixo do mínimo da ONU/.test(w));
+    lancamentoConfig.optical = realOptical;
+    const signal = { ok: signalOk, weak: !!weakWarn && weakWarn.targets.length > 0 && /CTO-\d+/.test(weakWarn.text) };
     const before = { markers: markers.length, cables: savedCables.length };
     const expected = { ceos: plan.ceos.filter(c => c.isNew).length, ctos: plan.ctos.length, reserves: plan.reserves.length, pons: plan.stats.pons };
     document.querySelector('[data-auto-design="accept"]').click();
@@ -2554,7 +2577,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const reached = new Set();
     for (let f = 1; f <= expected.pons; f++) traceFiberRoute(graph, feeder, f).ctos.forEach(c => reached.add(c.box.uid));
     out.levels = {
-      form2, expected,
+      form2, expected, signal,
       ceos: ceoMarkers.length, trunks: cables.filter(c => markers.find(m => m.uid === c.startAnchorUid)?.type === 'CEO' && markers.find(m => m.uid === c.endAnchorUid)?.type === 'CEO').length > 0
         || cables.some(c => /CEO/.test(c.name) && !/^FO-\d+-CEO-01$/.test(c.name)),
       primaries: ceoMarkers.reduce((s, m) => s + readFusionPlan(m).splitters.filter(sp => !sp.atendimento && /^1:8$/.test(sp.label)).length, 0),
@@ -2648,6 +2671,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(Object.entries(autoDesign2.spacing).every(([k, v]) => k === 'info' || v === true), `pré-projeto: distância entre CTOs na mesma rua (${JSON.stringify(autoDesign2.spacing)})`);
   check(Object.values(autoDesign2.existing).every(v => v !== false && v !== undefined), `pré-projeto: CTOs que já estão no mapa entram na conta antes das novas (${JSON.stringify(autoDesign2.existing)})`);
   check(autoDesign2.exclude.phase === 'preview' && autoDesign2.exclude.none && autoDesign2.exclude.listed, `pré-projeto: trecho sem casas fica sem caixa (${JSON.stringify(autoDesign2.exclude)})`);
+  check(autoDesign2.levels.signal.ok && autoDesign2.levels.signal.weak, `pré-projeto: sinal estimado de cada CTO só avisa quando não fecha (${JSON.stringify(autoDesign2.levels.signal)})`);
   check(autoDesign2.levels.form2 && autoDesign2.levels.ceos === autoDesign2.levels.expected.ceos && autoDesign2.levels.ceos >= 2 && autoDesign2.levels.trunks
     && autoDesign2.levels.primaries === autoDesign2.levels.expected.pons && autoDesign2.levels.reserves === autoDesign2.levels.expected.reserves && autoDesign2.levels.reserves > 0
     && autoDesign2.levels.reached === autoDesign2.levels.ctos && autoDesign2.levels.bomSplitter,

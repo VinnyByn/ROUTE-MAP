@@ -52,7 +52,6 @@ const AUTO_DESIGN_FIBERS = [6, 12, 24, 36, 48, 72, 144];
 const AUTO_DESIGN_SPLITTERS = [8, 16];
 const AUTO_DESIGN_PRIMARY_SPLITTERS = [2, 4, 8];
 const AUTO_DESIGN_MAX_SPLIT = 128;   //Splitagem total (CEO × CTO) até 1:128 (CEO 1:8 + CTO 1:16, OLT classe C+)
-const AUTO_DESIGN_TIGHT_SPLIT = 64;  //Acima de 1:64 o orçamento óptico fica apertado: a prévia avisa
 const AUTO_DESIGN_RESERVE_STEPS = [0, 300, 500, 1000];
 const AUTO_DESIGN_CEO_LIMITS = [0, 8, 12, 16, 24, 32];
 const AUTO_DESIGN_FUSIONS_PER_TRAY = 12;
@@ -660,7 +659,7 @@ function classifyAutoDesignPoles(poleSites, streetIndex) {
     keep.forEach(p => { p.unmapped = true; });
     const offSet = new Set(off);
     const kept = poleSites.filter(p => !offSet.has(p) || keep.has(p));
-    return { kept, dropped: poleSites.length - kept.length, unmapped: keep.size };
+    return { kept, dropped: poleSites.length - kept.length, droppedSites: poleSites.filter(p => offSet.has(p) && !keep.has(p)), unmapped: keep.size };
 }
 
 //Cada CTO existente fica com as casas no raio dela, das mais perto para as mais longe, até lotar. Casa (ou ponto de
@@ -711,7 +710,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
         demand = buildAutoDesignGrid(polyXY);
         demandKind = 'grid';
     }
-    let sites, siteKind, polesOffStreet = 0, polesUnmapped = 0;
+    let sites, siteKind, polesOffStreet = 0, polesUnmapped = 0, polesOffStreetSites = [];
     //Poste a 15–40 m de uma rua conhecida está dentro do lote (ou o cadastro errou) e poste sozinho longe de tudo também:
     //não recebem caixa nem cabo, o cabo passaria sobre casas. Já uma fileira de postes longe das ruas do mapa é uma rua
     //que falta no mapa: vale.
@@ -720,6 +719,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
         const sorted = classifyAutoDesignPoles(poleSites, streetIndex);
         poleSites = sorted.kept;
         polesOffStreet = sorted.dropped;
+        polesOffStreetSites = sorted.droppedSites;
         polesUnmapped = sorted.unmapped;
     }
     if (params.usePoles && poleSites.length >= AUTO_DESIGN_MIN_POLES) {
@@ -767,7 +767,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
         coverRadius: getAutoDesignCoverRadius(params),
         ctoSpacing: getAutoDesignCtoSpacing(params),
         streetsOk: !!streets,
-        streetIndex, polesOffStreet, polesUnmapped: siteKind === 'poles' ? sites.filter(p => p.unmapped).length : 0, onPolesOffMap,
+        streetIndex, polesOffStreet, polesOffStreetSites, polesUnmapped: siteKind === 'poles' ? sites.filter(p => p.unmapped).length : 0, onPolesOffMap,
         poleGraph: siteKind === 'poles' && !(inputs.cachedPoleGraph?.sites === sites.length) ? buildAutoDesignPoleGraph(sites, streetIndex) : null,
     };
 }
@@ -2054,29 +2054,39 @@ async function selectAutoDesignAccessRoute(index) {
 }
 
 //Cabos que atravessam rio ou lago (por ponte ou de poste em poste)
-function countAutoDesignCablesOverWater(plan) {
+const countAutoDesignCablesOverWater = (plan) => findAutoDesignCablesOverWater(plan).length;
+
+//Cabos que atravessam rio ou lago, com o ponto da travessia
+function findAutoDesignCablesOverWater(plan) {
     const streets = plan.model.streetIndex;
-    if (!streets) return 0;
+    if (!streets) return [];
     const proj = plan.model.proj;
-    return plan.cables.filter(cable => {
+    return plan.cables.map(cable => {
         const pts = (cable.path || []).map(p => proj.toXY(p.lat(), p.lng()));
-        return pts.some((p, i) => i && streets.crossesWater(pts[i - 1], p));
-    }).length;
+        const i = pts.findIndex((p, k) => k && streets.crossesWater(pts[k - 1], p));
+        return i > 0 ? { cable, at: [(pts[i - 1][0] + pts[i][0]) / 2, (pts[i - 1][1] + pts[i][1]) / 2] } : null;
+    }).filter(Boolean);
 }
 
 //Conferência final: cabo da área com algum trecho fora da rua/calçada (só a alimentação, que vem de fora, não entra)
-function countAutoDesignCablesOffStreet(plan) {
+const countAutoDesignCablesOffStreet = (plan) => findAutoDesignCablesOffStreet(plan).length;
+
+function findAutoDesignCablesOffStreet(plan) {
     const streets = plan.model.streetIndex;
-    if (!streets) return 0;
+    if (!streets) return [];
     const proj = plan.model.proj;
-    return plan.cables.filter(cable => {
-        if (cable.role === 'feeder' || !cable.path?.length) return false;
+    return plan.cables.map(cable => {
+        if (cable.role === 'feeder' || !cable.path?.length) return null;
         const pts = cable.path.map(p => proj.toXY(p.lat(), p.lng()));
         //A ligação de uma caixa que já existe (dentro de um lote) até a rua não tem como evitar: não conta
         const first = cable.from.isNew === false ? 2 : 1, last = cable.to.isNew === false ? pts.length - 2 : pts.length - 1;
-        for (let i = first; i <= last; i++) if (!streets.segmentOnStreets(pts[i - 1], pts[i]) && !plan.model.onPolesOffMap?.(pts[i - 1], pts[i])) return true;
-        return false;
-    }).length;
+        for (let i = first; i <= last; i++) {
+            if (!streets.segmentOnStreets(pts[i - 1], pts[i]) && !plan.model.onPolesOffMap?.(pts[i - 1], pts[i])) {
+                return { cable, at: [(pts[i - 1][0] + pts[i][0]) / 2, (pts[i - 1][1] + pts[i][1]) / 2] };
+            }
+        }
+        return null;
+    }).filter(Boolean);
 }
 
 // ---------------------------------------------------------------
@@ -2334,7 +2344,12 @@ function restoreAutoDesignPolygon({ polygon, parentId }) {
 
 function clearAutoDesignPreview() {
     autoDesign?.overlays.forEach(o => o.setMap(null));
-    if (autoDesign) autoDesign.overlays = [];
+    if (autoDesign) {
+        autoDesign.overlays = [];
+        clearInterval(autoDesign.flashTimer);
+        autoDesign.flash?.setMap(null);
+        autoDesign.flash = null;
+    }
 }
 
 function getAutoDesignStartMarker() {
@@ -2370,9 +2385,7 @@ function renderAutoDesignCalc() {
     const pon = p.levels === 2
         ? ` · CEO 1:${p.primary} → 1:${p.primary * p.ports} · <b>${Math.ceil(ctos / p.primary)}</b> PON(s)`
         : ` · <b>${ctos}</b> PON(s)`;
-    const tight = p.levels === 2 && p.primary * p.ports > AUTO_DESIGN_TIGHT_SPLIT
-        ? `<small>Splitagem total 1:${p.primary * p.ports}: precisa de OLT/SFP classe C+ (orçamento óptico mais apertado).</small>` : '';
-    el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes${before} → <b>${label}</b> com splitter 1:${p.ports}${fill}${pon}${tight}`;
+    el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes${before} → <b>${label}</b> com splitter 1:${p.ports}${fill}${pon}`;
 }
 
 //Texto da opção "Considerar as CTOs que já estão no mapa" (muda com o raio da CTO)
@@ -2461,8 +2474,9 @@ function renderAutoDesign() {
             </div>
             <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignReserve">Reserva técnica</label><select id="autoDesignReserve">${options(AUTO_DESIGN_RESERVE_STEPS, p.reserveEvery, v => (v ? `A cada ${v} m de cabo` : 'Não colocar'))}</select></div>
-                <div class="map-tool-field"><label for="autoDesignCeoMax">CTOs por CEO</label><select id="autoDesignCeoMax">${options(AUTO_DESIGN_CEO_LIMITS, p.ceoMax, v => (v ? `Até ${v}` : 'Sem limite'))}</select></div>
+                <div class="map-tool-field"><label for="autoDesignCeoMax">CTOs por CEO</label><select id="autoDesignCeoMax" title="Quantas CTOs cada CEO alimenta. Passou disso, o pré-projeto coloca outra CEO no meio do próximo grupo de CTOs.">${options(AUTO_DESIGN_CEO_LIMITS, p.ceoMax, v => (v ? `Até ${v}` : 'Sem limite'))}</select></div>
             </div>
+            <p class="map-tool-help"><b>CTOs por CEO:</b> quantas CTOs saem de cada CEO. Passou disso, entra outra CEO no meio do próximo grupo de CTOs, para os cabos não ficarem longos nem a CEO lotada.</p>
         </details>
         <p class="map-tool-help">Saem até 3 opções (a do painel, a de menor custo e a com mais folga) para você escolher. As caixas vão só para as ruas da área (mato, pasto e rio ficam de fora) e os cabos seguem as ruas (OpenStreetMap). Nada é salvo até você aceitar.</p>
         ${s.error ? `<div class="auto-design__warn">${esc(s.error)}</div>` : ''}`;
@@ -2903,37 +2917,133 @@ function summarizeAutoDesignCables(plan) {
 
 const AUTO_DESIGN_ROLE_LABELS = { feeder: 'Alimentação', trunk: 'Entre CEOs', distribution: 'Distribuição' };
 
+//Aviso do pré-projeto; os que têm lugares (targets) viram botão que leva até cada um no mapa
+const makeAutoDesignWarning = (text, targets = []) => ({ text, targets: targets.filter(t => t?.position), toString() { return text; } });
+
+const autoDesignLatLng = (model, [x, y]) => { const q = model.proj.toLatLng([x, y]); return new google.maps.LatLng(q.lat, q.lng); };
+const listAutoDesignNames = (boxes, max = 4) => boxes.slice(0, max).map(b => b.name).join(', ') + (boxes.length > max ? ` e mais ${boxes.length - max}` : '');
+
+//Pontos próximos viram um só lugar (o de mais peso), até "max" lugares
+function groupAutoDesignTargets(model, points, label, gap = 80, max = 12) {
+    const picked = [];
+    [...points].sort((a, b) => (b.w || 1) - (a.w || 1)).forEach(p => {
+        if (picked.length < max && picked.every(q => Math.hypot(q.x - p.x, q.y - p.y) > gap)) picked.push(p);
+    });
+    return picked.map(p => ({ position: autoDesignLatLng(model, [p.x, p.y]), label }));
+}
+
+//Sinal estimado na casa mais longe de cada CTO nova: potência da OLT menos conectores, fibra (cabos até a CTO + drop
+//do tamanho do raio), fusões e splitters. Só dá para estimar quando se sabe de onde a rede sai.
+function estimateAutoDesignSignal(plan) {
+    if (typeof getSplitterLoss !== 'function' || typeof classifyOpticalPower !== 'function') return [];
+    const cfg = (typeof lancamentoConfig !== 'undefined' && lancamentoConfig?.optical) || DEFAULT_OPTICAL_CONFIG;
+    const p = plan.params;
+    const length = (cable) => (cable.path?.length > 1 ? google.maps.geometry.spherical.computeLength(cable.path) : cable.estLength || 0);
+    const splitLoss = getSplitterLoss({ label: `1:${p.ports}` }, cfg) + (p.levels === 2 ? getSplitterLoss({ label: `1:${p.primary}` }, cfg) : 0);
+    return plan.ctos.map(cto => {
+        let meters = plan.model.coverRadius, boxes = 0, box = cto;
+        while (box?.in) { meters += length(box.in); boxes++; box = box.in.from; }
+        //Conectores: saída da OLT/DIO, porta da CTO e ONU; fusões: entrada e saída de cada caixa no caminho + DIO
+        const dbm = cfg.oltPower - 3 * cfg.lossConnector - (meters / 1000) * cfg.lossPerKm - (boxes * 2 + 2) * cfg.lossFusion - splitLoss;
+        return { cto, dbm, status: classifyOpticalPower(dbm, cfg), cfg };
+    });
+}
+
 function getAutoDesignWarnings(plan, params) {
     const st = plan.stats;
+    const model = plan.model;
     const warnings = [];
-    if (st.uncoveredHouses > 0) warnings.push(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${plan.model.coverRadius} m de uma CTO (raio da CTO).`);
-    if (st.overloaded > 0) warnings.push(`${st.overloaded} CTO(s) podem precisar de mais de ${st.usablePorts} portas${st.usablePorts < params.ports ? ' (ocupação máxima)' : ''}.`);
+    const add = (text, targets) => warnings.push(makeAutoDesignWarning(text, targets));
+    const boxTarget = (box, label = box.name) => ({ position: box.position, label });
+    const cableTarget = (cable, at) => ({
+        position: at ? autoDesignLatLng(model, at) : google.maps.geometry.spherical.interpolate(cable.from.position, cable.to.position, 0.5),
+        label: `${cable.from.name || 'Origem'} → ${cable.to.name || 'caixa'}`,
+    });
+    if (st.uncoveredHouses > 0) {
+        const boxes = [...plan.ctos, ...model.existing];
+        const far = model.demand.filter(n => boxes.every(b => Math.hypot(b.x - n.x, b.y - n.y) > model.coverRadius));
+        add(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${model.coverRadius} m de uma CTO (raio da CTO).`, groupAutoDesignTargets(model, far, 'Casas fora do raio'));
+    }
+    if (st.overloaded > 0) {
+        const full = plan.ctos.filter(c => c.clients > st.usablePorts + 0.5);
+        add(`${full.length} CTO(s) podem precisar de mais de ${st.usablePorts} portas${st.usablePorts < params.ports ? ' (ocupação máxima)' : ''}: ${listAutoDesignNames(full)}.`,
+            full.map(c => boxTarget(c, `${c.name} · ≈ ${Math.round(c.clients)} clientes`)));
+    }
     if (st.spacingLimited && (st.uncoveredHouses > 0 || st.overloaded > 0)) {
-        warnings.push(`A distância mínima entre CTOs (${plan.model.ctoSpacing} m na mesma rua) não deixou colocar mais caixas. Diminua a distância ou deixe em branco para valer só o raio.`);
+        add(`A distância mínima entre CTOs (${model.ctoSpacing} m na mesma rua) não deixou colocar mais caixas. Diminua a distância ou deixe em branco para valer só o raio.`);
     }
-    if (st.tooCloseCtos > 0) warnings.push(`${st.tooCloseCtos} CTO(s) estão a menos de ${plan.model.ctoSpacing} m de outra na mesma rua (distância entre CTOs).`);
-    if (st.noStreets) warnings.push('Não consegui ler as ruas da área agora: as caixas foram espalhadas pela área toda. Confira as que caíram fora das casas (mato, pasto) e tente gerar de novo mais tarde.');
-    if (st.tooMany) warnings.push(`Área grande: ${st.straight} cabo(s) ficaram em linha reta (traçar tudo pelas ruas sobrecarregaria o servidor). Ajuste no mapa ou divida a área.`);
-    else if (st.straight > 0) warnings.push(`${st.straight} cabo(s) ficaram em linha reta: não achei uma rota pelas ruas. Confira no mapa.`);
-    if (st.offStreet > 0) warnings.push(`${st.offStreet} cabo(s) têm trecho fora da rua (passam sobre lotes). Ajuste no mapa antes de aceitar.`);
-    if (st.noStreetLines) warnings.push('Não consegui ler o traçado das ruas (OpenStreetMap) agora: confira no mapa se algum cabo passa por cima de casas, ou gere de novo mais tarde.');
-    if (st.wetCables > 0) warnings.push(`${st.wetCables} cabo(s) atravessam rio ou lago (pela ponte ou de poste em poste, onde não há outro caminho). Confira no satélite.`);
-    if (st.polesUnmapped > 0) warnings.push(`${st.polesUnmapped} poste(s) estão em ruas que não aparecem no mapa (OpenStreetMap): as caixas e os cabos ali seguem os postes. Confira no satélite.`);
-    if (st.polesOffStreet > 0) warnings.push(`${st.polesOffStreet} poste(s) da área parecem estar dentro de lotes ou soltos, longe das ruas (cadastro impreciso), e não foram usados.`);
-    if (st.offPoles > 0) warnings.push(`${st.offPoles} cabo(s) não acharam caminho de poste em poste e seguiram a rua. Cadastre os postes que faltam ou ajuste no mapa.`);
-    if (params.levels === 2 && params.primary * params.ports > AUTO_DESIGN_TIGHT_SPLIT) {
-        warnings.push(`Splitagem total 1:${params.primary * params.ports} (CEO 1:${params.primary} × CTO 1:${params.ports}): use OLT/SFP classe C+ e confira o orçamento óptico até a última CTO.`);
+    if (st.tooCloseCtos > 0) {
+        const close = plan.ctos.filter((c, i) => plan.ctos.some((o, j) => j !== i && areAutoDesignBoxesTooClose(model, c, o)) || model.existing.some(e => areAutoDesignBoxesTooClose(model, c, e)));
+        add(`${close.length} CTO(s) estão a menos de ${model.ctoSpacing} m de outra na mesma rua (distância entre CTOs): ${listAutoDesignNames(close)}.`, close.map(c => boxTarget(c)));
     }
-    const loose = plan.model.existing.filter(e => !e.wired);
+    if (st.noStreets) add('Não consegui ler as ruas da área agora: as caixas foram espalhadas pela área toda. Confira as que caíram fora das casas (mato, pasto) e tente gerar de novo mais tarde.');
+    const straight = plan.cables.filter(c => !getAutoDesignCachedRoute(plan, c)).map(c => cableTarget(c));
+    if (st.tooMany) add(`Área grande: ${st.straight} cabo(s) ficaram em linha reta (traçar tudo pelas ruas sobrecarregaria o servidor). Ajuste no mapa ou divida a área.`, straight);
+    else if (st.straight > 0) add(`${st.straight} cabo(s) ficaram em linha reta: não achei uma rota pelas ruas. Confira no mapa.`, straight);
+    if (st.offStreet > 0) add(`${st.offStreet} cabo(s) têm trecho fora da rua (passam sobre lotes). Ajuste no mapa antes de aceitar.`, findAutoDesignCablesOffStreet(plan).map(({ cable, at }) => cableTarget(cable, at)));
+    if (st.noStreetLines) add('Não consegui ler o traçado das ruas (OpenStreetMap) agora: confira no mapa se algum cabo passa por cima de casas, ou gere de novo mais tarde.');
+    if (st.wetCables > 0) add(`${st.wetCables} cabo(s) atravessam rio ou lago (pela ponte ou de poste em poste, onde não há outro caminho). Confira no satélite.`, findAutoDesignCablesOverWater(plan).map(({ cable, at }) => cableTarget(cable, at)));
+    if (st.polesUnmapped > 0) add(`${st.polesUnmapped} poste(s) estão em ruas que não aparecem no mapa (OpenStreetMap): as caixas e os cabos ali seguem os postes. Confira no satélite.`,
+        groupAutoDesignTargets(model, model.sites.filter(p => p.unmapped), 'Postes fora do mapa de ruas', 120));
+    if (st.polesOffStreet > 0) add(`${st.polesOffStreet} poste(s) da área parecem estar dentro de lotes ou soltos, longe das ruas (cadastro impreciso), e não foram usados.`,
+        groupAutoDesignTargets(model, model.polesOffStreetSites || [], 'Poste não usado', 1, 30));
+    if (st.offPoles > 0) {
+        const offPoles = plan.cables.filter(c => c.role !== 'feeder' && !getAutoDesignCachedRoute(plan, c)?.poles).map(c => cableTarget(c));
+        add(`${st.offPoles} cabo(s) não acharam caminho de poste em poste e seguiram a rua. Cadastre os postes que faltam ou ajuste no mapa.`, offPoles);
+    }
+    //Sinal: só avisa quando a conta mostra que falta potência na casa mais longe
+    const signal = estimateAutoDesignSignal(plan);
+    const weak = signal.filter(r => r.status === 'erro').sort((a, b) => a.dbm - b.dbm);
+    const tight = signal.filter(r => r.status === 'aviso').sort((a, b) => a.dbm - b.dbm);
+    const dbmText = (r) => `${r.cto.name} (${formatDbm(r.dbm)})`;
+    const signalTarget = (r) => boxTarget(r.cto, `${r.cto.name} · ${formatDbm(r.dbm)}`);
+    if (weak.length) {
+        add(`${weak.length} CTO(s) com sinal estimado abaixo do mínimo da ONU (${formatDbm(weak[0].cfg.onuSensitivity)}) na casa mais longe: ${weak.slice(0, 3).map(dbmText).join(', ')}${weak.length > 3 ? '…' : ''}. Use OLT/SFP mais forte, splitagem menor ou cabo mais curto.`, weak.map(signalTarget));
+    } else if (tight.length) {
+        add(`${tight.length} CTO(s) com sinal estimado sem a margem de segurança de ${tight[0].cfg.margin} dB: ${tight.slice(0, 3).map(dbmText).join(', ')}${tight.length > 3 ? '…' : ''}. Funciona, mas sobra pouco para emendas e conectores sujos.`, tight.map(signalTarget));
+    }
+    const loose = model.existing.filter(e => !e.wired);
     if (loose.length) {
         const names = loose.slice(0, 3).map(e => e.markerInfo.name).join(', ') + (loose.length > 3 ? ` e mais ${loose.length - 3}` : '');
-        warnings.push(`${names} já ${loose.length > 1 ? 'estão' : 'está'} no mapa sem cabo chegando: ${loose.length > 1 ? 'entram' : 'entra'} na conta das casas atendidas, mas ${loose.length > 1 ? 'precisam' : 'precisa'} ser ligada${loose.length > 1 ? 's' : ''} à rede.`);
+        add(`${names} já ${loose.length > 1 ? 'estão' : 'está'} no mapa sem cabo chegando: ${loose.length > 1 ? 'entram' : 'entra'} na conta das casas atendidas, mas ${loose.length > 1 ? 'precisam' : 'precisa'} ser ligada${loose.length > 1 ? 's' : ''} à rede.`,
+            loose.map(e => ({ position: e.markerInfo.marker?.getPosition?.(), label: e.markerInfo.name })));
     }
     if (!plan.ceos[0].isNew) {
         const splitters = st.existingRootSplitters > 0 ? ` e ${st.existingRootSplitters} splitter(s) 1:${params.primary}` : '';
-        warnings.push(`O plano de fusão da CEO existente ${plan.ceos[0].name} não é alterado: ligue nele as fibras dos cabos novos${splitters}.`);
+        add(`O plano de fusão da CEO existente ${plan.ceos[0].name} não é alterado: ligue nele as fibras dos cabos novos${splitters}.`, [boxTarget(plan.ceos[0])]);
     }
     return warnings;
+}
+
+//Clique no aviso: vai para o próximo lugar dele no mapa e destaca por alguns segundos
+function gotoAutoDesignWarning(index, button) {
+    const s = autoDesign;
+    const warning = s?.warnings?.[index];
+    if (!warning?.targets.length || typeof map === 'undefined' || !map) return;
+    s.warnCursor = s.warnCursor || new Map();
+    const n = ((s.warnCursor.get(warning.text) ?? -1) + 1) % warning.targets.length;
+    s.warnCursor.set(warning.text, n);
+    const target = warning.targets[n];
+    map.panTo(target.position);
+    if ((map.getZoom() || 0) < 18) map.setZoom(18);
+    flashAutoDesignTarget(target.position);
+    const go = button?.querySelector('.auto-design__warn-go');
+    if (go) go.textContent = `${target.label}${warning.targets.length > 1 ? ` · ${n + 1} de ${warning.targets.length}` : ''} →`;
+}
+
+function flashAutoDesignTarget(position) {
+    const s = autoDesign;
+    clearInterval(s.flashTimer);
+    s.flash?.setMap(null);
+    const ring = new google.maps.Circle({ map, center: position, radius: 14, strokeColor: '#dc2626', strokeWeight: 3, strokeOpacity: 1, fillColor: '#dc2626', fillOpacity: 0.12, clickable: false, zIndex: 80 });
+    s.flash = ring;
+    let tick = 0;
+    s.flashTimer = setInterval(() => {
+        tick++;
+        ring.setRadius(14 + (tick % 10) * 2.4);
+        ring.setOptions({ strokeOpacity: 1 - (tick % 10) / 12 });
+        if (tick >= 40) { clearInterval(s.flashTimer); ring.setMap(null); if (s.flash === ring) s.flash = null; }
+    }, 90);
 }
 
 function renderAutoDesignOptions(s) {
@@ -3007,6 +3117,7 @@ function renderAutoDesignPreviewPanel() {
     const rows = summarizeAutoDesignCables(plan).map(r => `
         <li><span><i style="background:${esc(getCableColor(r.fiber))}"></i>${AUTO_DESIGN_ROLE_LABELS[r.role]} ${esc(r.fiber)}${r.count > 1 ? ` <small>· ${r.count} cabos</small>` : ''}</span><b>${esc(formatAutoDesignMeters(r.length))}</b></li>`).join('');
     const warnings = getAutoDesignWarnings(plan, p);
+    s.warnings = warnings;
     const ports = plan.ctos.length * p.ports;
     const ceoText = st.ceos > 1 ? `${st.ceos} CEOs novas` : plan.root.isNew ? plan.root.name : `Sai de ${plan.root.name}`;
     const split = p.levels === 2 ? `1:${p.primary} × 1:${p.ports}` : `1:${p.ports}`;
@@ -3037,7 +3148,9 @@ function renderAutoDesignPreviewPanel() {
         </div>
         <p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || 'Arraste as caixas no mapa para mover; a rede, as fibras e o custo se refazem sozinhos.')}</p>
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
-        ${warnings.map(w => `<div class="auto-design__warn">${esc(w)}</div>`).join('')}
+        ${warnings.map((w, i) => (w.targets.length
+        ? `<button type="button" class="auto-design__warn auto-design__warn--go" data-auto-design="warn-goto" data-warn="${i}" title="Clique para ver no mapa${w.targets.length > 1 ? ' (cada clique vai para o próximo)' : ''}">${esc(w.text)}<span class="auto-design__warn-go">Ver no mapa${w.targets.length > 1 ? ` (${w.targets.length})` : ''} →</span></button>`
+        : `<div class="auto-design__warn">${esc(w.text)}</div>`)).join('')}
         <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
@@ -3400,6 +3513,7 @@ document.addEventListener('click', (e) => {
         else if (action === 'compare') compareAutoDesign();
         else if (action === 'undo') undoAutoDesign();
         else if (action === 'clear-exclusions') clearAutoDesignExclusions();
+        else if (action === 'warn-goto') gotoAutoDesignWarning(parseInt(button.dataset.warn, 10), button);
         else if (action === 'option') selectAutoDesignOption(button.dataset.option);
         else if (action === 'access-route') selectAutoDesignAccessRoute(parseInt(button.dataset.route, 10));
         else if (action === 'clear-poles') clearAutoDesignAccessPoles();
