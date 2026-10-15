@@ -2690,3 +2690,54 @@ html[data-theme="dark"] .company-section__icon--red { background: rgba(239, 68, 
 #autoDesignBox button.auto-design__warn--go:hover, #autoDesignBox button.auto-design__warn--go:focus-visible { background: rgba(245, 158, 11, 0.22); border-color: rgba(245, 158, 11, 0.75); outline: none; }
 #autoDesignBox .auto-design__warn-go { display: block; margin-top: 4px; font-weight: 700; font-size: 11.5px; color: #b45309; }
 html[data-theme="dark"] #autoDesignBox .auto-design__warn-go { color: #fcd34d; }
+
+/* =================================================================
+   Tour pelo sistema: boas-vindas, passos com ícone, seta, progresso e fim com dicas
+   ================================================================= */
+.tour-layer { background: transparent; }
+.tour-layer.is-card .tour-spot { left: 50% !important; top: 50% !important; width: 0 !important; height: 0 !important; outline: none; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62); }
+.tour-spot { outline: 2px solid #22c55e; animation: tourSpotPulse 1.8s ease-in-out infinite; }
+@keyframes tourSpotPulse { 50% { outline-color: rgba(34, 197, 94, .45); outline-offset: 3px; } }
+.tour-pop { width: min(340px, calc(100vw - 24px)); gap: 8px; padding: 16px 16px 14px; animation: tourPopIn .22s ease-out; }
+@keyframes tourPopIn { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+.tour-pop::before { content: ""; position: absolute; width: 14px; height: 14px; background: inherit; border: 1px solid var(--color-border-light); transform: rotate(45deg); display: none; }
+.tour-pop[data-side="bottom"]::before { display: block; top: -8px; left: calc(var(--arrow-x, 50%) - 7px); border-right: 0; border-bottom: 0; }
+.tour-pop[data-side="top"]::before { display: block; bottom: -8px; left: calc(var(--arrow-x, 50%) - 7px); border-left: 0; border-top: 0; }
+.tour-pop[data-side="right"]::before { display: block; left: -8px; top: calc(var(--arrow-y, 50%) - 7px); border-right: 0; border-top: 0; }
+.tour-pop[data-side="left"]::before { display: block; right: -8px; top: calc(var(--arrow-y, 50%) - 7px); border-left: 0; border-bottom: 0; }
+.tour-head { display: flex; align-items: center; gap: 10px; }
+.tour-head > div { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.tour-icon { flex: none; width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2f7a94, #1f9d4a); color: #fff; box-shadow: 0 6px 14px rgba(31, 122, 90, .3); }
+.tour-icon .ui-icon { width: 19px; height: 19px; }
+.tour-keys { flex: none; display: inline-flex; align-items: center; gap: 3px; }
+.tour-pop kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border: 1px solid var(--color-border); border-bottom-width: 2px; border-radius: 5px; background: var(--color-surface-muted, var(--color-surface)); font: 700 11px/1.5 var(--font-sans); color: var(--color-text); text-align: center; }
+.tour-pop kbd + i, .tour-keys i { font-style: normal; font-size: 11px; color: var(--color-text-dim); }
+.tour-progress { height: 4px; border-radius: 999px; background: var(--color-border-light); overflow: hidden; }
+.tour-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2f7a94, #22c55e); transition: width .3s ease; }
+.tour-dots { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.tour-pop .tour-dot { width: 8px; height: 8px; min-height: 0; padding: 0; border-radius: 50%; border: 0; background: var(--color-border-light); cursor: pointer; transition: transform .15s, background-color .15s, width .2s; }
+.tour-pop .tour-dot.is-done { background: color-mix(in srgb, #22c55e 55%, var(--color-border-light)); }
+.tour-pop .tour-dot.is-active { width: 20px; border-radius: 999px; background: #22c55e; }
+.tour-pop .tour-dot:hover { transform: scale(1.25); }
+.tour-pop .tour-dot.is-active:hover { transform: none; }
+.tour-foot { font-size: 11.5px; color: var(--color-text-dim); text-align: center; }
+
+/* Boas-vindas e fim: no meio da tela */
+.tour-pop--card { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); width: min(400px, calc(100vw - 24px)); padding: 22px 22px 16px; text-align: center; justify-items: center; animation: tourCardIn .28s ease-out; }
+@keyframes tourCardIn { from { opacity: 0; transform: translate(-50%, -46%) scale(.97); } }
+.tour-pop--card .tour-title { font-size: 19px; }
+.tour-pop--card .tour-actions { width: 100%; }
+.tour-hero { width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2f7a94, #1f9d4a); color: #fff; box-shadow: 0 12px 28px rgba(31, 122, 90, .35); margin-bottom: 4px; }
+.tour-hero .ui-icon { width: 30px; height: 30px; }
+.tour-hero--done { background: linear-gradient(135deg, #16a34a, #22c55e); }
+.tour-parts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 2px 0 6px; padding: 0; list-style: none; }
+.tour-parts li { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-border-light); background: color-mix(in srgb, #2f7a94 7%, var(--color-surface)); font-size: 12px; font-weight: 600; color: var(--color-text); }
+.tour-parts .ui-icon { width: 13px; height: 13px; color: #2f7a94; }
+html[data-theme="dark"] .tour-parts .ui-icon { color: #7dd3fc; }
+.tour-tips { width: 100%; display: grid; gap: 6px; margin: 2px 0 6px; padding: 0; list-style: none; text-align: left; }
+.tour-tips li { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.tour-tips li span { margin-left: 8px; font-size: 12.5px; color: var(--color-text); }
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-pop, .tour-pop--card { animation: none; }
+  .tour-progress i, .tour-pop .tour-dot { transition: none; }
+}

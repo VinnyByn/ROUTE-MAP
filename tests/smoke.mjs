@@ -1372,14 +1372,26 @@ const tour = await page.evaluate(() => {
   const total = layer.querySelector('.tour-step').textContent;
   layer.querySelector('[data-tour="next"]').click();
   const second = layer.querySelector('.tour-title').textContent;
+  //O passo de menu abre o menu junto (e o clique no tour não fecha)
+  const menuOpen = document.getElementById('projectDropdown').classList.contains('show');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  const closed = !document.getElementById('tourLayer');
+  const closed = !document.getElementById('tourLayer') && !document.getElementById('projectDropdown').classList.contains('show');
+  //Primeiro acesso: boas-vindas, Enter começa; no fim, as dicas
+  startTour({ welcome: true });
+  const welcome = /^(Olá|Boas-vindas)/.test(document.querySelector('#tourLayer .tour-title').textContent) && !!document.querySelector('#tourLayer [data-tour="start"]');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const started = document.querySelector('#tourLayer .tour-title').textContent === 'Projetos e pastas';
+  showTourStep(99);
+  const end = /^Pronto/.test(document.querySelector('#tourLayer .tour-title').textContent) && document.querySelectorAll('#tourLayer .tour-tips li').length === 3;
+  document.querySelector('#tourLayer [data-tour="done"]').click();
+  const done = !document.getElementById('tourLayer');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
   const shortcuts = document.getElementById('accountModal').style.display !== 'none' && !document.querySelector('#accountModal [data-panel="preferences"]').hidden;
   document.getElementById('accountModal').style.display = 'none';
-  return { first, total, second, closed, shortcuts, items: document.querySelectorAll('#accountModal .shortcut-list > div').length };
+  return { first, total, second, menuOpen, closed, welcome, started, end, done, shortcuts, items: document.querySelectorAll('#accountModal .shortcut-list > div').length };
 });
-check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.closed && tour.shortcuts && tour.items >= 12,
+check(tour.first === 'Projetos e pastas' && /^1 de \d+$/.test(tour.total) && tour.second === 'Menu Projeto' && tour.menuOpen && tour.closed
+  && tour.welcome && tour.started && tour.end && tour.done && tour.shortcuts && tour.items >= 12,
   `tour pelo sistema e "?" abre os atalhos (${JSON.stringify(tour)})`);
 
 //Minha conta: barra de salvar do perfil e das preferências, filtro da equipe, busca de atalhos e atalho da proteção
