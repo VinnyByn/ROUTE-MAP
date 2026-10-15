@@ -2883,13 +2883,38 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     out.status = document.getElementById('companyPricesSheetStatus').textContent;
     await syncCatalogFromApi();
     out.preview = document.getElementById('materialImportModal').style.display === 'flex' && /2 itens/.test(document.getElementById('importFileName').textContent);
+    //Regras da empresa: material de cada item calculado, reservas e consumo
+    materialCatalog.materials.push({ id: 'm-ceo', name: 'MINHA CEO 24F', category: 'Fusão', unit: 'un', price: 150, supplier: '', code: '', notes: '' });
+    setCatalogTab('config');
+    const ceoInput = document.querySelector('#materialRulesList [data-material-slot="CAIXAS DE FUSÃO - 24F (EXPANSIVA)"]');
+    ceoInput.value = 'CEO QUE NÃO EXISTE';
+    ceoInput.dispatchEvent(new Event('input'));
+    const missingBefore = ceoInput.parentElement.querySelector('.material-rules__state').textContent;
+    ceoInput.value = 'MINHA CEO 24F';
+    ceoInput.dispatchEvent(new Event('input'));
+    document.getElementById('configReserveCeo').value = '10';
+    document.getElementById('configArameMetersPerRaquete').value = '40';
+    document.getElementById('configArameRollMeters').value = '100';
+    await saveLancamentoConfigHandler();
+    applyCatalogToMaterialPrices();
+    out.rules = {
+      rows: document.querySelectorAll('#materialRulesList [data-material-slot]').length >= 20,
+      missingBefore: /sem preço/.test(missingBefore),
+      okAfter: !ceoInput.parentElement.querySelector('.material-rules__state').textContent,
+      alias: resolveMaterialName('CAIXA DE EMENDA ÓPTICA (CEO)') === 'MINHA CEO 24F' && MATERIAL_PRICES['CAIXA DE EMENDA ÓPTICA (CEO)']?.price === 150,
+      saved: window.__fakeDb.settings?.material_catalog?.aliases?.['CAIXAS DE FUSÃO - 24F (EXPANSIVA)'] === 'MINHA CEO 24F'
+        && window.__fakeDb.settings?.lancamento_config?.reserveCeo === 10,
+      reserve: getReserveForMarkerType('CEO') === 10 && getReserveForMarkerType('CTO') === 5,
+      arame: getArameRolls(3) === 2 && getFitaRolls(9) === 2,
+    };
     window.fetch = realFetch;
     window.showAlert = realAlert;
     return out;
   });
+  check(Object.values(fresh.rules).every(Boolean), `regras da empresa: material de cada item, reservas e consumo (${JSON.stringify(fresh.rules)})`);
   check(fresh.blank && fresh.noSheets && fresh.asksSheet && fresh.parse && fresh.kits === 'KIT POP,KIT OLT:1500:10000.5:123'
     && fresh.saved && /2 itens/.test(fresh.status) && fresh.preview,
-    `empresa nova: sem preços de outra empresa e com a planilha dela (${JSON.stringify(fresh)})`);
+    `empresa nova: sem preços de outra empresa e com a planilha dela (${JSON.stringify({ ...fresh, rules: undefined })})`);
   await ctx.close();
 }
 

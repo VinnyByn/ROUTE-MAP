@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261025a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261025b" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -542,6 +542,63 @@
                   <small>Acima disso, avisa na verificação do projeto</small>
                 </label>
               </div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--box"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-reserve"></use></svg></span>
+                <div>
+                  <h3>Reservas e consumo</h3>
+                  <p>Reserva de cabo em cada ponta, por tipo de caixa, e consumo de arame e fita na instalação.</p>
+                </div>
+              </header>
+              <div class="cat3-fields">
+                <label class="cat3-field">
+                  <span>Reserva na CTO</span>
+                  <span class="cat3-input"><input type="number" id="configReserveCto" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Reserva na CEO</span>
+                  <span class="cat3-input"><input type="number" id="configReserveCeo" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Reserva técnica</span>
+                  <span class="cat3-input"><input type="number" id="configReserveReserva" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Reserva no POP</span>
+                  <span class="cat3-input"><input type="number" id="configReservePop" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Arame por raquete</span>
+                  <span class="cat3-input"><input type="number" id="configArameMetersPerRaquete" min="0" step="1" /><em>m</em></span>
+                  <small>Arame de espinar</small>
+                </label>
+                <label class="cat3-field">
+                  <span>Rolo de arame</span>
+                  <span class="cat3-input"><input type="number" id="configArameRollMeters" min="0" step="1" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Fita de aço por CTO</span>
+                  <span class="cat3-input"><input type="number" id="configFitaMetersPerCto" min="0" step="0.5" /><em>m</em></span>
+                </label>
+                <label class="cat3-field">
+                  <span>Rolo de fita</span>
+                  <span class="cat3-input"><input type="number" id="configFitaRollMeters" min="0" step="1" /><em>m</em></span>
+                </label>
+              </div>
+            </section>
+
+            <section class="cat3-card">
+              <header class="cat3-card__head">
+                <span class="cat3-card__icon cat3-card__icon--sheet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-package"></use></svg></span>
+                <div>
+                  <h3>Materiais usados nos cálculos</h3>
+                  <p>Qual material do seu catálogo entra no lugar de cada item que o sistema calcula. Em branco, vale o nome padrão.</p>
+                </div>
+              </header>
+              <div class="material-rules" id="materialRulesList"></div>
+              <datalist id="materialRulesOptions"></datalist>
             </section>
 
             <section class="cat3-card">
@@ -2850,13 +2907,13 @@
   <script src="js/core/supabase-client.js?v=20261004b"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
-  <script src="js/app.js?v=20261020a" defer></script>
+  <script src="js/app.js?v=20261036a" defer></script>
   <script src="js/core/persistence.js?v=20261028a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
-  <script src="js/catalog/catalog.js?v=20261015a" defer></script>
+  <script src="js/catalog/catalog.js?v=20261015b" defer></script>
   <script src="js/map/kml.js?v=20261007i" defer></script>
-  <script src="js/catalog/bom.js?v=20261018a" defer></script>
+  <script src="js/catalog/bom.js?v=20261036a" defer></script>
   <script src="js/catalog/labor.js?v=20261013m" defer></script>
   <script src="js/catalog/report.js?v=20261018a" defer></script>
   <script src="js/map/sketch.js?v=20261028a" defer></script>
@@ -2886,7 +2943,7 @@
   <script src="js/network/cable-split.js?v=20261014i" defer></script>
   <script src="js/network/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
-  <script src="js/network/auto-design.js?v=20261034a" defer></script>
+  <script src="js/network/auto-design.js?v=20261036a" defer></script>
   <script src="js/map/marker-hover.js?v=20261010e" defer></script>
   <script src="js/map/poles-layer.js?v=20261021c" defer></script>
   <script src="js/catalog/report-pdf.js?v=20261017a" defer></script>

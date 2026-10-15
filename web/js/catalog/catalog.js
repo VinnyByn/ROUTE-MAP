@@ -55,8 +55,16 @@ const MATERIAL_RENAMES = {
     "AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO 220V": "AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUs FRIO"
 };
 
+//Material da empresa para cada item que o sistema calcula (nome padrão → material do catálogo da empresa).
+//Fica no catálogo (material_catalog.aliases) e vale para a lista de materiais, o pré-projeto e os relatórios.
+let companyMaterialAliases = {};
+
+//Nome padrão do item (planilha de referência), sem a troca feita pela empresa
+const resolveDefaultMaterialName = (name) => MATERIAL_RENAMES[name] || name;
+
 function resolveMaterialName(name) {
-    return MATERIAL_RENAMES[name] || name;
+    const base = resolveDefaultMaterialName(name);
+    return companyMaterialAliases[base] || base;
 }
 
 //Banco de dados de preços e materiais (chaves com os nomes da planilha; aceita também os antigos)
@@ -304,7 +312,7 @@ function isDroppedMaterial(name) {
 function normalizeKitComponents(components) {
     const merged = [];
     (components || []).forEach(c => {
-        const name = resolveMaterialName(String(c.name || '').trim());
+        const name = resolveDefaultMaterialName(String(c.name || '').trim());
         if (!name || isDroppedMaterial(name)) return;
         const existing = merged.find(m => m.name === name);
         if (existing) existing.quantity += Number(c.quantity) || 1;
@@ -381,7 +389,17 @@ const DEFAULT_LANCAMENTO_CONFIG = {
     supaPerPole: 2,      //Suportes de ancoragem (SUPAS) por poste
     alcaPerSupa: 1,      //Alças preformadas por SUPA
     dropSlack: 15,       //Metros somados a cada drop de cliente (subida, reserva e acomodação)
-    dropMaxLength: 300   //Drop mais longo que isso aparece na verificação do projeto (m)
+    dropMaxLength: 300,  //Drop mais longo que isso aparece na verificação do projeto (m)
+    //Reserva de cabo em cada ponta, por tipo de caixa (m)
+    reserveCto: 5,
+    reserveCeo: 25,
+    reserveReserva: 25,
+    reservePop: 25,
+    //Consumo de instalação
+    arameMetersPerRaquete: 50, //Arame de espinar por raquete instalada (m)
+    arameRollMeters: 105,      //Metros por rolo de arame
+    fitaMetersPerCto: 3,       //Fita de aço por CTO (m)
+    fitaRollMeters: 25,        //Metros por rolo de fita
 };
 
 const DEFAULT_LABOR_CONFIG = {
@@ -431,9 +449,21 @@ function normalizeLancamentoConfig(stored) {
         alcaPerSupa: n(src.alcaPerSupa, DEFAULT_LANCAMENTO_CONFIG.alcaPerSupa),
         dropSlack: n(src.dropSlack, DEFAULT_LANCAMENTO_CONFIG.dropSlack),
         dropMaxLength: Number(src.dropMaxLength) > 0 ? Number(src.dropMaxLength) : DEFAULT_LANCAMENTO_CONFIG.dropMaxLength,
+        reserveCto: n(src.reserveCto, DEFAULT_LANCAMENTO_CONFIG.reserveCto),
+        reserveCeo: n(src.reserveCeo, DEFAULT_LANCAMENTO_CONFIG.reserveCeo),
+        reserveReserva: n(src.reserveReserva, DEFAULT_LANCAMENTO_CONFIG.reserveReserva),
+        reservePop: n(src.reservePop, DEFAULT_LANCAMENTO_CONFIG.reservePop),
+        arameMetersPerRaquete: n(src.arameMetersPerRaquete, DEFAULT_LANCAMENTO_CONFIG.arameMetersPerRaquete),
+        arameRollMeters: Number(src.arameRollMeters) > 0 ? Number(src.arameRollMeters) : DEFAULT_LANCAMENTO_CONFIG.arameRollMeters,
+        fitaMetersPerCto: n(src.fitaMetersPerCto, DEFAULT_LANCAMENTO_CONFIG.fitaMetersPerCto),
+        fitaRollMeters: Number(src.fitaRollMeters) > 0 ? Number(src.fitaRollMeters) : DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters,
         optical: normalizeOpticalConfig(src.optical)
     };
 }
+
+//Rolos de arame de espinar e de fita de aço pelas regras da empresa
+const getArameRolls = (raquetes) => (raquetes > 0 ? Math.ceil((raquetes * lancamentoConfig.arameMetersPerRaquete) / lancamentoConfig.arameRollMeters) : 0);
+const getFitaRolls = (ctos) => (ctos > 0 ? Math.ceil((ctos * lancamentoConfig.fitaMetersPerCto) / lancamentoConfig.fitaRollMeters) : 0);
 
 function normalizeLaborConfig(stored) {
     const src = stored || {};
@@ -818,6 +848,38 @@ const CABLE_ALCA_KIT_TYPES = [
     'Cabo AS 80 FO-144',
 ];
 
+//Itens que o sistema calcula sozinho (caixas, cabos, fusão, instalação): a empresa escolhe qual material
+//do catálogo dela entra no lugar de cada um (Regras de cálculo › Materiais usados nos cálculos)
+const MATERIAL_RULE_SLOTS = [
+    { group: 'Caixas', items: [
+        ['CAIXA DE ATENDIMENTO', 'CTO'],
+        ['CAIXA DE ATENDIMENTO PREDIAL', 'CTO predial'],
+        ['CAIXA DE EMENDA ÓPTICA (CEO)', 'CEO'],
+        ['CAIXA DE EMENDA OPTICA (CEO) 144 FUSÕES', 'CEO jumbo (144 fusões)'],
+    ] },
+    { group: 'Cabos', items: [
+        ...[...CABLE_ALCA_KIT_TYPES].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })).map(type => [type, type.replace(/^Cabo /, '')]),
+        ['CABO DROP FLAT LOW FRICTION 1F', 'Drop do cliente'],
+    ] },
+    { group: 'Fusão', items: [
+        ['TUBETE PROTETOR DE EMENDA OPTICA', 'Tubete (1 por fusão)'],
+        ['KIT DE BANDEJA PARA CAIXA DE EMENDA', 'Bandeja da CEO'],
+        ['KIT DERIVAÇÃO PARA CAIXA DE EMENDA OPTICA', 'Kit derivação da CEO'],
+        ['FITA ISOLANTE', 'Fita isolante'],
+        ['ADAPTADOR SC/APC COM ABAS (PASSANTE)', 'Adaptador SC/APC'],
+        ['ADAPTADOR SC/UPC COM ABAS (PASSANTE)', 'Adaptador SC/UPC'],
+        ['ADAPTADOR SC/UPC SEM ABAS (PASSANTE)', 'Adaptador SC/UPC (predial)'],
+    ] },
+    { group: 'Instalação', items: [
+        ["FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M", 'Fita de aço (CTO)'],
+        ['ARAME DE ESPIMAR (105 m)', 'Arame de espinar (raquete)'],
+        ['DERIVAÇÃO EM T', 'Derivação em T (cordoalha)'],
+        ['PTO - PONTO DE TERMINAÇÃO ÓPTICA', 'PTO do cliente'],
+    ] },
+];
+
+const getMaterialRuleSlotKeys = () => MATERIAL_RULE_SLOTS.flatMap(g => g.items.map(([system]) => resolveDefaultMaterialName(system)));
+
 function getCableAlca(cableType) {
     const custom = materialCatalog.cableAlcas?.[cableType];
     return resolveMaterialName(custom || CABLE_HARDWARE_MAP[cableType] || '') || null;
@@ -882,14 +944,15 @@ function buildSeedCatalog({ blank = false } = {}) {
 //Sem catálogo salvo: empresa nova (blank = sem preços e sem planilhas).
 function loadMaterialCatalog(stored, { blank = false } = {}) {
     if (!stored || !Array.isArray(stored.materials)) {
-        materialCatalog = { ...buildSeedCatalog({ blank }), cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION, splitterMaterials: {}, sources: {}, blankSeed: blank };
+        materialCatalog = { ...buildSeedCatalog({ blank }), cableAlcas: {}, cableAlcasVersion: CABLE_ALCA_VERSION, splitterMaterials: {}, sources: {}, blankSeed: blank, aliases: {} };
+        companyMaterialAliases = {};
         return;
     }
     const seed = buildSeedCatalog({ blank: !!stored.blankSeed });
     //Normaliza itens salvos
     const materials = stored.materials.map(m => ({
         id: m.id || generateCatalogId('mat'),
-        name: resolveMaterialName(String(m.name || '').trim()),
+        name: resolveDefaultMaterialName(String(m.name || '').trim()),
         category: m.category || 'Outros',
         unit: m.unit || 'un',
         price: Number(m.price) || 0,
@@ -926,7 +989,20 @@ function loadMaterialCatalog(stored, { blank = false } = {}) {
         //Catálogo de antes das planilhas por empresa: continua com as planilhas que valiam para todos
         sources: normalizeCompanySheets(stored.sources !== undefined ? stored.sources : LEGACY_COMPANY_SHEETS),
         blankSeed: !!stored.blankSeed,
+        aliases: normalizeMaterialAliases(stored.aliases),
     };
+    companyMaterialAliases = materialCatalog.aliases;
+}
+
+//Trocas válidas: só itens do sistema (MATERIAL_RULE_SLOTS) para um nome preenchido e diferente do padrão
+function normalizeMaterialAliases(src) {
+    const out = {};
+    const slots = new Set(getMaterialRuleSlotKeys());
+    Object.entries(src && typeof src === 'object' ? src : {}).forEach(([key, value]) => {
+        const name = String(value || '').trim();
+        if (slots.has(key) && name && name !== key) out[key] = name;
+    });
+    return out;
 }
 
 //Salva o catálogo da empresa no banco
@@ -939,14 +1015,14 @@ function applyCatalogToMaterialPrices() {
     applyMaterialCategoryRules(materialCatalog.materials);
     //Empresa nova: o que não está no catálogo dela não leva preço de referência para a lista de materiais
     if (materialCatalog.blankSeed) {
-        const inCatalog = new Set(materialCatalog.materials.map(m => materialPriceKey(m.name)));
+        const inCatalog = new Set(materialCatalog.materials.map(m => m.name));
         Object.entries(MATERIAL_PRICES_BASE).forEach(([key, info]) => {
             if (info && !inCatalog.has(key) && !Array.isArray(info.components)) info.price = 0;
         });
     }
     materialCatalog.materials.forEach(m => {
-        const existing = MATERIAL_PRICES[m.name] || {};
-        MATERIAL_PRICES[m.name] = {
+        const existing = MATERIAL_PRICES_BASE[m.name] || {};
+        MATERIAL_PRICES_BASE[m.name] = {
             ...existing,
             price: Number(m.price) || 0,
             unit: m.unit || 'un',
@@ -955,8 +1031,8 @@ function applyCatalogToMaterialPrices() {
         };
     });
     materialCatalog.kits.forEach(k => {
-        const existing = MATERIAL_PRICES[k.name] || {};
-        MATERIAL_PRICES[k.name] = {
+        const existing = MATERIAL_PRICES_BASE[k.name] || {};
+        MATERIAL_PRICES_BASE[k.name] = {
             ...existing,
             price: Number(existing.price) || 0,
             unit: existing.unit || 'un',
@@ -1113,6 +1189,9 @@ function renderLancamentoConfigForm() {
     set('configAlcaPerSupa', lancamentoConfig.alcaPerSupa);
     set('configDropSlack', lancamentoConfig.dropSlack);
     set('configDropMaxLength', lancamentoConfig.dropMaxLength);
+    ['reserveCto', 'reserveCeo', 'reserveReserva', 'reservePop', 'arameMetersPerRaquete', 'arameRollMeters', 'fitaMetersPerCto', 'fitaRollMeters']
+        .forEach(key => set(`config${key[0].toUpperCase()}${key.slice(1)}`, lancamentoConfig[key]));
+    renderMaterialRulesForm();
     const optical = lancamentoConfig.optical || normalizeOpticalConfig();
     ['oltPower', 'onuSensitivity', 'lossPerKm', 'lossFusion', 'lossConnector', 'margin'].forEach(k => set(`configOptical_${k}`, optical[k]));
     Object.keys(optical.splitters).forEach(k => set(`configOpticalSplit_${k}`, optical.splitters[k]));
@@ -1125,6 +1204,51 @@ function renderLancamentoConfigForm() {
     updateLaborPreview();
     renderCompanySheetsForm();
     applyCatalogPermissions();
+}
+
+//Materiais usados nos cálculos: para cada item do sistema, o material do catálogo da empresa
+function renderMaterialRulesForm() {
+    const box = document.getElementById('materialRulesList');
+    if (!box) return;
+    const names = new Set(materialCatalog.materials.map(m => m.name));
+    const options = document.getElementById('materialRulesOptions');
+    if (options) options.innerHTML = [...names].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+    box.innerHTML = MATERIAL_RULE_SLOTS.map(group => `
+        <div class="material-rules__group">
+            <h4>${escapeHtml(group.group)}</h4>
+            ${group.items.map(([system, label]) => {
+                const key = resolveDefaultMaterialName(system);
+                const value = companyMaterialAliases[key] || '';
+                return `<label class="material-rules__row">
+                    <span>${escapeHtml(label)}</span>
+                    <input type="text" list="materialRulesOptions" data-material-slot="${escapeHtml(key)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(key)}" title="Padrão: ${escapeHtml(key)}" autocomplete="off">
+                    <small class="material-rules__state" data-material-state="${escapeHtml(key)}"></small>
+                </label>`;
+            }).join('')}
+        </div>`).join('');
+    box.querySelectorAll('[data-material-slot]').forEach(input => {
+        input.addEventListener('input', () => updateMaterialRuleState(input, names));
+        updateMaterialRuleState(input, names);
+    });
+}
+
+//Avisa quando o material escolhido (ou o padrão) não está no catálogo: entra na lista sem preço
+function updateMaterialRuleState(input, names = new Set(materialCatalog.materials.map(m => m.name))) {
+    const state = input.parentElement.querySelector('.material-rules__state');
+    if (!state) return;
+    const name = input.value.trim() || input.dataset.materialSlot;
+    const missing = !names.has(name);
+    state.textContent = missing ? 'Não está no catálogo: entra sem preço' : '';
+    state.classList.toggle('is-missing', missing);
+}
+
+function readMaterialRulesForm() {
+    const out = {};
+    document.querySelectorAll('#materialRulesList [data-material-slot]').forEach(input => {
+        const value = input.value.trim();
+        if (value) out[input.dataset.materialSlot] = value;
+    });
+    return out;
 }
 
 //Planilhas da empresa: links salvos e situação
@@ -1272,9 +1396,21 @@ async function saveLancamentoConfigHandler() {
         alcaPerSupa: num('configAlcaPerSupa', 1),
         dropSlack: num('configDropSlack', DEFAULT_LANCAMENTO_CONFIG.dropSlack),
         dropMaxLength: num('configDropMaxLength', DEFAULT_LANCAMENTO_CONFIG.dropMaxLength) || DEFAULT_LANCAMENTO_CONFIG.dropMaxLength,
+        reserveCto: num('configReserveCto', DEFAULT_LANCAMENTO_CONFIG.reserveCto),
+        reserveCeo: num('configReserveCeo', DEFAULT_LANCAMENTO_CONFIG.reserveCeo),
+        reserveReserva: num('configReserveReserva', DEFAULT_LANCAMENTO_CONFIG.reserveReserva),
+        reservePop: num('configReservePop', DEFAULT_LANCAMENTO_CONFIG.reservePop),
+        arameMetersPerRaquete: num('configArameMetersPerRaquete', DEFAULT_LANCAMENTO_CONFIG.arameMetersPerRaquete),
+        arameRollMeters: num('configArameRollMeters', DEFAULT_LANCAMENTO_CONFIG.arameRollMeters) || DEFAULT_LANCAMENTO_CONFIG.arameRollMeters,
+        fitaMetersPerCto: num('configFitaMetersPerCto', DEFAULT_LANCAMENTO_CONFIG.fitaMetersPerCto),
+        fitaRollMeters: num('configFitaRollMeters', DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters) || DEFAULT_LANCAMENTO_CONFIG.fitaRollMeters,
         optical: readOpticalConfigForm()
     };
-    const saved = await persistLancamentoConfig();
+    //Materiais usados nos cálculos (trocas da empresa)
+    materialCatalog.aliases = normalizeMaterialAliases(readMaterialRulesForm());
+    companyMaterialAliases = materialCatalog.aliases;
+    const savedCatalog = await persistMaterialCatalog();
+    const saved = savedCatalog && await persistLancamentoConfig();
     if (typeof refreshClientDrops === 'function') refreshClientDrops();
     renderLancamentoConfigForm();
     //Recalcula a lista de materiais do projeto ativo, se houver

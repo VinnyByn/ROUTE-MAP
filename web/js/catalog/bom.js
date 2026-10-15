@@ -840,15 +840,14 @@ function calculateBomState() {
         }
     });
     //Cálculos de ferragens
+    //Arame e fita pelas regras da empresa (metros por instalação e por rolo)
     if (raqueteInstallCount > 0) {
-        const totalArameNeeded = raqueteInstallCount * 50;
-        const arameRolls = Math.ceil(totalArameNeeded / 105);
-        addOrUpdateMaterial("ARAME DE ESPIMAR (105 m)", arameRolls, 'unit', 'Instalação Raquete', `${raqueteInstallCount} instalação(ões)`);
+        addOrUpdateMaterial("ARAME DE ESPIMAR (105 m)", getArameRolls(raqueteInstallCount), 'unit', 'Instalação Raquete', `${raqueteInstallCount} instalação(ões)`);
     }
 
     if (ctoCount > 0) {
         const fitaName = "FITA DE AÇO INOX 3/4'' (FITA FUSIMEC) ROLO DE 25M";
-        addOrUpdateMaterial(fitaName, Math.ceil((3 * ctoCount) / 25), 'unit', 'CTO', `${ctoCount} CTO(s)`);
+        addOrUpdateMaterial(fitaName, getFitaRolls(ctoCount), 'unit', 'CTO', `${ctoCount} CTO(s)`);
     }
     //Drops e kits de instalação dos clientes
     addClientMaterialsToBom(projectMarkers, addOrUpdateMaterial);

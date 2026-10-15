@@ -2597,17 +2597,12 @@ function isCableConnectedToMarker(cable, markerInfo) {
         || endMatches(cable.endAnchorUid, cable.endAnchorMarkerName, cable.path[cable.path.length - 1]);
 }
 
+//Reserva de cabo na ponta, pelas regras da empresa (catálogo › Regras de cálculo › Reservas e consumo)
 function getReserveForMarkerType(type) {
-    switch (type) {
-        case 'CEO':
-        case 'RESERVA':
-        case 'POP':
-            return 25;
-        case 'CTO':
-            return 5;
-        default:
-            return 0;
-    }
+    const key = { CEO: 'reserveCeo', RESERVA: 'reserveReserva', POP: 'reservePop', CTO: 'reserveCto' }[type];
+    if (!key) return 0;
+    const value = Number(lancamentoConfig?.[key]);
+    return Number.isFinite(value) && value >= 0 ? value : DEFAULT_LANCAMENTO_CONFIG[key];
 }
 
 function getReserveForMarker(markerInfo) {
