@@ -765,6 +765,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
         proj, polyXY, demand, sites, demandKind, siteKind, totalWeight, houses, allHouses, housesPerWeight,
         existing: served.existing, existingClients: served.existing.reduce((s, e) => s + e.served, 0),
         coverRadius: getAutoDesignCoverRadius(params),
+        ctoSpacing: getAutoDesignCtoSpacing(params),
         streetsOk: !!streets,
         streetIndex, polesOffStreet, polesUnmapped: siteKind === 'poles' ? sites.filter(p => p.unmapped).length : 0, onPolesOffMap,
         poleGraph: siteKind === 'poles' && !(inputs.cachedPoleGraph?.sites === sites.length) ? buildAutoDesignPoleGraph(sites, streetIndex) : null,
@@ -978,6 +979,7 @@ function placeAutoDesignCtos(model, candidates, k, seed = 0) {
         centers = next;
         if (!changed) break;
     }
+    centers = enforceAutoDesignCtoSpacing(model, centers, candidates);
     return evaluateAutoDesignCenters(model, centers.map(c => sites[c]), centers);
 }
 
@@ -1002,6 +1004,51 @@ function evaluateAutoDesignCenters(model, points, centers = null) {
 //Raio da CTO: até onde o drop chega (linha reta); define quantas caixas são precisas para cobrir a área
 const getAutoDesignCoverRadius = (params) => Math.min(AUTO_DESIGN_COVER_MAX, Math.max(AUTO_DESIGN_COVER_MIN, parseInt(params?.coverRadius, 10) || AUTO_DESIGN_COVER_M));
 
+//Distância mínima entre duas CTOs na mesma rua, em linha reta (0 = sem regra: vale só o raio)
+const getAutoDesignCtoSpacing = (params) => {
+    const value = parseInt(params?.ctoSpacing, 10);
+    return Number.isFinite(value) && value > 0 ? Math.min(AUTO_DESIGN_COVER_MAX * 2, Math.max(10, value)) : 0;
+};
+
+//Duas caixas "na mesma rua" e perto demais: a reta entre elas segue a rua (sem o traçado das ruas, qualquer par)
+function areAutoDesignBoxesTooClose(model, a, b, spacing = model.ctoSpacing) {
+    if (!(spacing > 0)) return false;
+    if (Math.hypot(a.x - b.x, a.y - b.y) >= spacing) return false;
+    return !model.streetIndex || model.streetIndex.segmentOnStreets([a.x, a.y], [b.x, b.y]);
+}
+
+//Distância entre CTOs: as que atendem mais casas ficam; uma CTO perto demais de outra na mesma rua vai para o
+//local permitido mais próximo que respeita a distância (até o raio dela) ou sai
+function enforceAutoDesignCtoSpacing(model, centers, candidates) {
+    const spacing = model.ctoSpacing;
+    if (!(spacing > 0) || centers.length < 2) return centers;
+    const { sites } = model;
+    const load = evaluateAutoDesignCenters(model, centers.map(c => sites[c])).load;
+    const order = centers.map((c, i) => [c, load[i]]).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    const kept = [];
+    const fits = (site) => kept.every(k => !areAutoDesignBoxesTooClose(model, sites[site], sites[k]))
+        && model.existing.every(e => !areAutoDesignBoxesTooClose(model, sites[site], e));
+    order.forEach(c => {
+        if (fits(c)) { kept.push(c); return; }
+        const reach = Math.max(spacing, model.coverRadius);
+        let best = -1, bestD = Infinity;
+        candidates.forEach(i => {
+            if (kept.includes(i)) return;
+            const d = Math.hypot(sites[i].x - sites[c].x, sites[i].y - sites[c].y);
+            if (d < bestD && d <= reach && fits(i)) { best = i; bestD = d; }
+        });
+        if (best >= 0) kept.push(best);
+    });
+    return kept;
+}
+
+//CTOs novas perto demais de outra (nova ou que já existe) na mesma rua: acontece quando a caixa é movida no mapa
+function countAutoDesignTooCloseCtos(model, ctos) {
+    if (!(model.ctoSpacing > 0)) return 0;
+    return ctos.filter((c, i) => ctos.some((o, j) => j !== i && areAutoDesignBoxesTooClose(model, c, o))
+        || model.existing.some(e => areAutoDesignBoxesTooClose(model, c, e))).length;
+}
+
 //Portas usadas por CTO: a ocupação máxima deixa portas livres para crescer
 const getAutoDesignUsablePorts = (params) => Math.max(1, Math.floor(params.ports * (Number(params.maxFill) || 100) / 100));
 
@@ -1013,8 +1060,17 @@ function chooseAutoDesignCtos(model, candidates, params) {
     const toClients = (w) => w * model.housesPerWeight * params.occupancy / 100;
     let k = byPorts;
     let placement = null;
+    let limitedTries = 0;
     for (let tries = 0; tries < 40; tries++) {
+        const previous = placement;
         placement = placeAutoDesignCtos(model, candidates, k, params.layoutSeed || 0);
+        //Distância entre CTOs não deixa caber mais caixas: pedir mais não adianta
+        if (placement.centers.length < k) {
+            limitedTries++;
+            placement.spacingLimited = true;
+            if (previous && placement.coverage <= previous.coverage + 0.001) { placement = previous.coverage >= placement.coverage ? { ...previous, spacingLimited: true } : placement; break; }
+            if (limitedTries >= 3) break;
+        }
         //A conta de clientes por caixa é estimativa: aceita poucas caixas um pouco acima das portas
         const clientsPerCto = placement.load.map(toClients);
         const over = clientsPerCto.filter(c => c > usable + 0.5).length;
@@ -1160,7 +1216,8 @@ async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inpu
     //CTO grudada na CEO não ajuda: as casas dali ficam com a CTO mais perto
     //Nem em cima de uma CTO que já existe
     const candidates = model.sites.map((_, i) => i).filter(i => Math.hypot(model.sites[i].x - root.x, model.sites[i].y - root.y) > 25
-        && model.existing.every(e => Math.hypot(model.sites[i].x - e.x, model.sites[i].y - e.y) > AUTO_DESIGN_EXISTING_GAP_M));
+        && model.existing.every(e => Math.hypot(model.sites[i].x - e.x, model.sites[i].y - e.y) > AUTO_DESIGN_EXISTING_GAP_M
+            && !areAutoDesignBoxesTooClose(model, model.sites[i], e)));
     if (!candidates.length) return { error: 'A área é pequena demais para distribuir caixas. Desenhe um polígono maior.' };
     const chosen = chooseAutoDesignCtos(model, candidates, params);
     const ctos = chosen.centers.map(site => makeAutoDesignBox(model, 'CTO', model.sites[site]));
@@ -1176,7 +1233,7 @@ async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inpu
         routes: new Map(),
         byPorts: chosen.byPorts,
         clients: chosen.clients,
-        stats: { snapped: 0, straight: 0, noStreets: !model.streetsOk, tooMany: false },
+        stats: { snapped: 0, straight: 0, noStreets: !model.streetsOk, tooMany: false, spacingLimited: !!chosen.spacingLimited },
     };
     plan.root = plan.ceos[0];
     await ensureAutoDesignRoadDistances(plan);
@@ -1398,6 +1455,7 @@ function rebuildAutoDesignNetwork(plan) {
         existingRootSplitters: levels === 2 && !ceos[0].isNew ? ceos[0].primaries : 0,
         existingCtos: model.existing.length,
         existingClients: Math.round(model.existingClients),
+        tooCloseCtos: countAutoDesignTooCloseCtos(model, ctos),
     });
     plan.onStreets = model.siteKind === 'streets' || model.siteKind === 'poles';
     plan.onPoles = model.siteKind === 'poles';
@@ -2174,7 +2232,7 @@ const formatAutoDesignMoneyShort = (value) => `R$ ${Math.round(Number(value) || 
 
 const AUTO_DESIGN_DEFAULTS = {
     occupancy: 30, ports: 8, levels: 1, primary: 8, feederFiber: 'FO-48', distributionFiber: 'FO-12', span: 'AS 80',
-    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true, useExisting: true,
+    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true, useExisting: true, ctoSpacing: '',
 };
 const AUTO_DESIGN_STORED_KEYS = Object.keys(AUTO_DESIGN_DEFAULTS);
 
@@ -2390,6 +2448,9 @@ function renderAutoDesign() {
         </div>
         <div class="map-tool-field-row">
             <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO (m)</label><input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO (em linha reta)"></div>
+            <div class="map-tool-field"><label for="autoDesignSpacing">Distância entre CTOs (m)</label><input type="number" id="autoDesignSpacing" min="10" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="Pelo raio" value="${esc(getAutoDesignCtoSpacing(p) || '')}" title="Mínimo entre duas CTOs na mesma rua, em linha reta. Em branco: vale só o raio"></div>
+        </div>
+        <div class="map-tool-field-row">
             <div class="map-tool-field"><label>Vão</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>
         </div>
         <details class="auto-design__more" id="autoDesignMore"${s.moreOpen ? ' open' : ''}>
@@ -2439,6 +2500,8 @@ function readAutoDesignForm() {
     p.fiberSpare = number('autoDesignSpare', p.fiberSpare, 0, 200);
     p.maxFill = number('autoDesignFill', p.maxFill, 25, 100);
     p.coverRadius = number('autoDesignRadius', getAutoDesignCoverRadius(p), AUTO_DESIGN_COVER_MIN, AUTO_DESIGN_COVER_MAX);
+    const spacing = value('autoDesignSpacing');
+    if (spacing !== undefined) p.ctoSpacing = getAutoDesignCtoSpacing({ ctoSpacing: spacing }) || '';
     p.reserveEvery = number('autoDesignReserve', p.reserveEvery, 0, 100000);
     p.ceoMax = number('autoDesignCeoMax', p.ceoMax, 0, 1000);
     const useHouses = document.getElementById('autoDesignUseHouses');
@@ -2845,6 +2908,10 @@ function getAutoDesignWarnings(plan, params) {
     const warnings = [];
     if (st.uncoveredHouses > 0) warnings.push(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${plan.model.coverRadius} m de uma CTO (raio da CTO).`);
     if (st.overloaded > 0) warnings.push(`${st.overloaded} CTO(s) podem precisar de mais de ${st.usablePorts} portas${st.usablePorts < params.ports ? ' (ocupação máxima)' : ''}.`);
+    if (st.spacingLimited && (st.uncoveredHouses > 0 || st.overloaded > 0)) {
+        warnings.push(`A distância mínima entre CTOs (${plan.model.ctoSpacing} m na mesma rua) não deixou colocar mais caixas. Diminua a distância ou deixe em branco para valer só o raio.`);
+    }
+    if (st.tooCloseCtos > 0) warnings.push(`${st.tooCloseCtos} CTO(s) estão a menos de ${plan.model.ctoSpacing} m de outra na mesma rua (distância entre CTOs).`);
     if (st.noStreets) warnings.push('Não consegui ler as ruas da área agora: as caixas foram espalhadas pela área toda. Confira as que caíram fora das casas (mato, pasto) e tente gerar de novo mais tarde.');
     if (st.tooMany) warnings.push(`Área grande: ${st.straight} cabo(s) ficaram em linha reta (traçar tudo pelas ruas sobrecarregaria o servidor). Ajuste no mapa ou divida a área.`);
     else if (st.straight > 0) warnings.push(`${st.straight} cabo(s) ficaram em linha reta: não achei uma rota pelas ruas. Confira no mapa.`);
@@ -2884,7 +2951,7 @@ function renderAutoDesignOptions(s) {
     const plan = s.result;
     const km = (plan.cost?.cableMeters || 0) / 1000;
     const detail = [
-        `raio de ${plan.model.coverRadius} m`, `CTOs com até ${getAutoDesignUsablePorts(plan.params)} clientes`,
+        `raio de ${plan.model.coverRadius} m`, plan.model.ctoSpacing ? `CTOs a ${plan.model.ctoSpacing} m ou mais na mesma rua` : '', `CTOs com até ${getAutoDesignUsablePorts(plan.params)} clientes`,
         km ? `${km.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km de cabo` : '', `${getAutoDesignFreePorts(plan)} portas livres`,
     ].filter(Boolean).join(' · ');
     return `<div class="auto-design__options" role="radiogroup" aria-label="Opções de projeto">${cards}</div>
