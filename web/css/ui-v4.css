@@ -2353,3 +2353,51 @@ html[data-theme="dark"] .material-rules__state { color: #fbbf24; }
 #companySetupBox .company-setup__step .map-tool-btn { height: 30px; padding: 0 12px; font-size: 12px; }
 #companySetupBox .company-setup__dismiss { width: 100%; padding: 7px; border: 1px solid var(--color-border-light); border-radius: 8px; background: transparent; color: var(--color-text-muted); font: 600 12.5px var(--font-sans); cursor: pointer; }
 #companySetupBox .company-setup__dismiss:hover { color: var(--color-text); background: var(--color-border-light); }
+
+/* Equipe: adicionar usuário com senha provisória */
+#accountModal .account-new-user { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#accountModal .account-new-user input, #accountModal .account-new-user select { width: 100%; box-sizing: border-box; padding: 9px 10px; border-radius: var(--radius-sm, 8px); border: 1px solid var(--input-border, var(--color-border-light)); background: var(--input-bg, var(--color-surface)); color: var(--color-text); font: 14px var(--font-sans); min-width: 0; }
+#accountModal .account-new-user button { grid-column: 2; justify-self: end; }
+@media (max-width: 640px) { #accountModal .account-new-user { grid-template-columns: 1fr; } #accountModal .account-new-user button { grid-column: 1; justify-self: stretch; } }
+.account-credentials { border: 1px solid #86efac; background: #f0fdf4; border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+.account-credentials[hidden] { display: none; }
+.account-credentials strong { color: #166534; font-size: 13.5px; }
+.account-credentials p { margin: 0; font-size: 12px; color: #3f6212; }
+.account-credentials dl { margin: 4px 0 0; display: grid; gap: 4px; }
+.account-credentials dl div { display: flex; gap: 10px; font-size: 13px; }
+.account-credentials dt { width: 120px; color: #4b5563; }
+.account-credentials dd { margin: 0; font-weight: 600; color: #111827; }
+.account-credentials code { font: 600 15px ui-monospace, Consolas, monospace; letter-spacing: .04em; background: #fff; border: 1px solid #bbf7d0; border-radius: 6px; padding: 2px 8px; }
+.account-credentials__actions { display: flex; gap: 8px; justify-content: flex-end; }
+html[data-theme="dark"] .account-credentials { background: #0f2a1b; border-color: #1f5a36; }
+html[data-theme="dark"] .account-credentials strong { color: #86efac; }
+html[data-theme="dark"] .account-credentials p, html[data-theme="dark"] .account-credentials dt { color: #a7c4b1; }
+html[data-theme="dark"] .account-credentials dd { color: #e8f1f5; }
+html[data-theme="dark"] .account-credentials code { background: #0b1f14; border-color: #1f5a36; color: #e8f1f5; }
+
+/* Painel do sistema (dono do sistema) */
+.platform-modal { max-width: 860px; width: calc(100vw - 32px); }
+.platform-modal__lead { margin: -4px 0 14px; font-size: 13px; color: var(--color-text-muted); }
+.platform-card { border: 1px solid var(--color-border-light); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; display: grid; gap: 10px; background: var(--color-surface); }
+.platform-card h3 { margin: 0; font-size: 15px; color: var(--color-text); }
+.platform-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.platform-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.platform-form input { width: 100%; box-sizing: border-box; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--input-border, var(--color-border-light)); background: var(--input-bg, var(--color-surface)); color: var(--color-text); font: 14px var(--font-sans); min-width: 0; }
+.platform-form button { justify-self: end; align-self: center; }
+.platform-feedback { margin: 0; font-size: 13px; color: #15803d; }
+.platform-feedback[data-kind="error"] { color: #dc2626; }
+.platform-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.platform-list__item { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: 10px; }
+.platform-list__item.is-blocked { background: color-mix(in srgb, #dc2626 6%, transparent); }
+.platform-list__info { display: grid; gap: 2px; min-width: 0; }
+.platform-list__info strong { font-size: 14px; color: var(--color-text); }
+.platform-list__info strong em { font-style: normal; font-weight: 500; color: var(--color-text-muted); font-size: 12px; }
+.platform-list__info span { font-size: 12px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.platform-list__actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.platform-list__state { padding: 12px; font-size: 13px; color: var(--color-text-muted); text-align: center; }
+.platform-list__state--error { color: #dc2626; }
+.platform-badge { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #dcfce7; color: #166534; }
+.platform-badge.is-blocked { background: #fee2e2; color: #991b1b; }
+html[data-theme="dark"] .platform-badge { background: #12301f; color: #86efac; }
+html[data-theme="dark"] .platform-badge.is-blocked { background: #3a1c1f; color: #fca5a5; }
+@media (max-width: 640px) { .platform-form { grid-template-columns: 1fr; } .platform-form button { justify-self: stretch; } .platform-list__item { grid-template-columns: 1fr; } .platform-list__actions { justify-content: flex-start; } }

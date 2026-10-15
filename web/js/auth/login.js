@@ -1,7 +1,7 @@
 // Tela de login: entrar, criar conta, recuperar senha, código da verificação em 2 etapas e primeiro acesso
 // (criar empresa ou aceitar convite). Depende de js/core/supabase-client.js.
 
-const views = ['authLoading', 'viewLogin', 'viewSignup', 'viewCheckEmail', 'viewForgot', 'viewReset', 'viewMfa', 'viewCompany'];
+const views = ['authLoading', 'viewLogin', 'viewSignup', 'viewCheckEmail', 'viewForgot', 'viewReset', 'viewMfa', 'viewCompany', 'viewChangePassword', 'viewBlocked'];
 const goTargets = { login: 'viewLogin', signup: 'viewSignup', forgot: 'viewForgot' };
 let recoveryMode = /type=recovery/.test(location.hash);
 
@@ -48,11 +48,18 @@ async function routeAfterLogin() {
         setMessage(document.getElementById('viewLogin'), 'Não foi possível carregar sua conta. ' + translateAuthError(error));
         return;
     }
+    document.querySelectorAll('.current-email').forEach(el => { el.textContent = AppSession.email; });
+    //Senha provisória (conta criada pelo administrador): troca antes de entrar
+    if (AppSession.mustChangePassword) return showView('viewChangePassword');
+    if (AppSession.company?.blocked) {
+        document.getElementById('blockedCompanyName').textContent = AppSession.company.name;
+        document.getElementById('blockedReason').textContent = AppSession.company.blocked_reason ? ` Motivo: ${AppSession.company.blocked_reason}.` : '';
+        return showView('viewBlocked');
+    }
     if (AppSession.company) {
         window.location.replace('index.html');
         return;
     }
-    document.querySelectorAll('.current-email').forEach(el => { el.textContent = AppSession.email; });
     const invite = AppSession.pendingInvite;
     document.getElementById('companyInvite').hidden = !invite;
     document.getElementById('companyCreate').hidden = !!invite;
@@ -150,18 +157,25 @@ document.getElementById('acceptInviteButton').addEventListener('click', async (e
     });
 });
 
-document.getElementById('companyForm').addEventListener('submit', async (event) => {
+//Troca da senha provisória: o banco libera a conta assim que a senha muda
+document.getElementById('changePasswordForm').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const view = document.getElementById('companyCreate');
-    const name = document.getElementById('companyName').value.trim();
-    const documentNumber = document.getElementById('companyDocument').value.trim();
-    if (name.length < 2) return setMessage(view, 'Informe o nome da empresa.');
-    await withBusy(view.querySelector('.login-button'), 'Criando…', async () => {
-        const { error } = await supabaseClient.rpc('create_company', { p_name: name, p_document: documentNumber || null });
+    const view = document.getElementById('viewChangePassword');
+    const password = document.getElementById('newPassword').value;
+    const confirm = document.getElementById('newPasswordConfirm').value;
+    if (password.length < 8) return setMessage(view, 'A senha precisa ter pelo menos 8 caracteres.');
+    if (password !== confirm) return setMessage(view, 'As senhas não conferem.');
+    await withBusy(view.querySelector('.login-button'), 'Salvando…', async () => {
+        const { error } = await supabaseClient.auth.updateUser({ password });
         if (error) return setMessage(view, translateAuthError(error));
         await routeAfterLogin();
     });
 });
+
+document.querySelectorAll('[data-logout]').forEach(button => button.addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    showView('viewLogin');
+}));
 
 document.getElementById('mfaCode').addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);

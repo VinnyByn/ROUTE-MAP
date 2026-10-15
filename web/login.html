@@ -59,7 +59,37 @@
                     <p class="info-message" role="status"></p>
                     <button type="submit" class="login-button">Entrar</button>
                 </form>
-                <p class="auth-switch">Ainda não tem conta? <button type="button" class="link-button" data-go="signup">Criar conta</button></p>
+                <p class="auth-switch">Sem acesso? Fale com o administrador da sua empresa.</p>
+            </section>
+
+            <!-- Senha provisória: troca obrigatória no primeiro acesso -->
+            <section id="viewChangePassword" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Crie sua senha</h2>
+                    <p>Você entrou com uma senha provisória. Escolha uma senha só sua para continuar.</p>
+                </div>
+                <form id="changePasswordForm" class="login-form" novalidate>
+                    <div class="input-group">
+                        <label for="newPassword">Nova senha</label>
+                        <input type="password" id="newPassword" class="plain" placeholder="Mínimo de 8 caracteres" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <div class="input-group">
+                        <label for="newPasswordConfirm">Confirmar nova senha</label>
+                        <input type="password" id="newPasswordConfirm" class="plain" placeholder="Repita a senha" minlength="8" required autocomplete="new-password" />
+                    </div>
+                    <p class="error-message" role="alert"></p>
+                    <button type="submit" class="login-button">Salvar e entrar</button>
+                </form>
+                <p class="auth-switch"><span class="current-email"></span> · <button type="button" class="link-button" data-logout>Sair</button></p>
+            </section>
+
+            <!-- Empresa bloqueada pelo fornecedor -->
+            <section id="viewBlocked" class="auth-view" hidden>
+                <div class="card-header">
+                    <h2>Acesso suspenso</h2>
+                    <p>O acesso da empresa <strong id="blockedCompanyName"></strong> ao ROUTE MAP está suspenso no momento.<span id="blockedReason"></span> Fale com o fornecedor do sistema para reativar.</p>
+                </div>
+                <button type="button" class="login-button login-button--secondary" data-logout>Sair</button>
             </section>
 
             <!-- Criar conta -->
@@ -167,22 +197,10 @@
                 </div>
                 <div id="companyCreate" hidden>
                     <div class="card-header">
-                        <h2>Cadastre sua empresa</h2>
-                        <p>Você será o administrador: define preços, kits, configurações e convida a equipe.</p>
+                        <h2>Conta sem empresa</h2>
+                        <p>Sua conta ainda não está ligada a uma empresa. O acesso ao ROUTE MAP é liberado pelo administrador da sua empresa.</p>
                     </div>
-                    <form id="companyForm" class="login-form" novalidate>
-                        <div class="input-group">
-                            <label for="companyName">Nome da empresa</label>
-                            <input type="text" id="companyName" class="plain" placeholder="Ex.: Fibra Telecom Ltda." required maxlength="120" />
-                        </div>
-                        <div class="input-group">
-                            <label for="companyDocument">CNPJ <span class="optional">(opcional)</span></label>
-                            <input type="text" id="companyDocument" class="plain" placeholder="00.000.000/0000-00" maxlength="18" inputmode="numeric" />
-                        </div>
-                        <p class="error-message" role="alert"></p>
-                        <button type="submit" class="login-button">Criar empresa</button>
-                    </form>
-                    <p class="auth-hint">Vai trabalhar na equipe de uma empresa que já usa o ROUTE MAP? Peça ao administrador para convidar <strong class="current-email"></strong> e entre novamente.</p>
+                    <p class="auth-hint">Peça ao administrador para criar o seu acesso com o e-mail <strong class="current-email"></strong>.</p>
                 </div>
                 <p class="auth-switch"><span class="current-email"></span> · <button type="button" class="link-button" id="companyLogoutButton">Sair</button></p>
             </section>
@@ -192,7 +210,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
-    <script src="js/core/supabase-client.js?v=20261004a"></script>
-    <script src="js/auth/login.js?v=20261015a"></script>
+    <script src="js/core/supabase-client.js?v=20261037a"></script>
+    <script src="js/auth/login.js?v=20261037a"></script>
 </body>
 </html>

@@ -51,7 +51,29 @@ async function loadAppContext() {
     AppSession.profile = data.profile || {};
     AppSession.company = data.company || null;
     AppSession.pendingInvite = data.pending_invite || null;
+    //Conta criada com senha provisória (troca no 1º acesso) e dono do sistema (painel do sistema)
+    AppSession.mustChangePassword = !!(data.must_change_password ?? data.profile?.must_change_password);
+    AppSession.isPlatformAdmin = !!data.platform_admin;
     return AppSession;
+}
+
+//Função do servidor que cria usuários e redefine senhas (supabase/functions/admin-users)
+async function callAdminUsers(action, payload = {}) {
+    const { data, error } = await supabaseClient.functions.invoke('admin-users', { body: { action, ...payload } });
+    if (error) {
+        let message = '';
+        //Resposta da função com erro (403, 409…): a mensagem vem no corpo
+        try {
+            const body = await error.context?.json?.();
+            if (body?.error) message = body.error;
+        } catch (e) { /* resposta sem JSON */ }
+        if (!message && (error.context?.status === 404 || /FunctionsFetchError|FunctionsRelayError/.test(error.name || ''))) {
+            message = 'A função do servidor (admin-users) não respondeu. Confira se ela já foi publicada no Supabase.';
+        }
+        throw new Error(message || error.message || 'Não foi possível concluir a operação.');
+    }
+    if (data?.error) throw new Error(data.error);
+    return data;
 }
 
 //Mensagens de erro do Supabase Auth em português
