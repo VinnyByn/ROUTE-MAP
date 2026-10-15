@@ -15,7 +15,8 @@ const appReady = (async () => {
         }
     } catch (e) { /* MFA indisponível: segue com a senha */ }
     await loadAppContext();
-    if (!AppSession.company) {
+    //Sem empresa, com senha provisória ou com a empresa bloqueada: a tela de login mostra o que falta
+    if (!AppSession.company || AppSession.mustChangePassword || AppSession.company.blocked) {
         window.location.replace('login.html');
         return new Promise(() => {});
     }

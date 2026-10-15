@@ -74,6 +74,42 @@ await mfaPage.waitForFunction(() => typeof AppSession !== 'undefined' && AppSess
 check(/index\.html/.test(mfaPage.url()) && await mfaPage.evaluate(() => typeof AppSession !== 'undefined' && !!AppSession.company), 'código certo libera o sistema');
 await mfaPage.close();
 
+//Contas criadas pelo administrador: sem "Criar conta"; a senha provisória é trocada no primeiro acesso
+const tempPage = await browser.newPage();
+await tempPage.addInitScript(() => { window.__fakeMustChange = sessionStorage.getItem('fakeMustChange') !== 'off'; });
+await tempPage.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+await tempPage.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+await tempPage.goto(baseUrl + '/index.html');
+await tempPage.waitForURL(/login\.html/, { timeout: 10000 }).catch(() => {});
+await tempPage.waitForSelector('#viewChangePassword:not([hidden])', { timeout: 10000 }).catch(() => {});
+const tempState = await tempPage.evaluate(() => ({
+  changeView: !document.getElementById('viewChangePassword').hidden,
+  noSignup: !document.querySelector('[data-go="signup"]') && /administrador/.test(document.querySelector('#viewLogin .auth-switch').textContent),
+}));
+await tempPage.fill('#newPassword', 'curta');
+await tempPage.fill('#newPasswordConfirm', 'curta');
+await tempPage.click('#changePasswordForm button[type="submit"]');
+const tempShort = await tempPage.textContent('#viewChangePassword .error-message');
+await tempPage.fill('#newPassword', 'MinhaSenha123');
+await tempPage.fill('#newPasswordConfirm', 'MinhaSenha123');
+await tempPage.click('#changePasswordForm button[type="submit"]');
+await tempPage.waitForURL(/index\.html/, { timeout: 10000 }).catch(() => {});
+check(tempState.changeView && tempState.noSignup && /8 caracteres/.test(tempShort || '') && /index\.html/.test(tempPage.url()),
+  `senha provisória: sistema pede a troca antes de abrir e sem "Criar conta" (${JSON.stringify({ ...tempState, url: tempPage.url().replace(baseUrl, '') })})`);
+await tempPage.close();
+
+//Empresa bloqueada pelo dono do sistema: entra na tela de login com o aviso, sem abrir o sistema
+const blockedPage = await browser.newPage();
+await blockedPage.addInitScript(() => { window.__fakeBlocked = 'pagamento em aberto'; });
+await blockedPage.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+await blockedPage.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+await blockedPage.goto(baseUrl + '/index.html');
+await blockedPage.waitForURL(/login\.html/, { timeout: 10000 }).catch(() => {});
+await blockedPage.waitForSelector('#viewBlocked:not([hidden])', { timeout: 10000 }).catch(() => {});
+const blockedText = await blockedPage.textContent('#viewBlocked').catch(() => '');
+check(/login\.html/.test(blockedPage.url()) && /suspenso/.test(blockedText) && /pagamento em aberto/.test(blockedText), 'empresa bloqueada: aviso de acesso suspenso, sistema não abre');
+await blockedPage.close();
+
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
 watchCsp(page);
 await page.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
@@ -1504,6 +1540,60 @@ check(mapMenu.pos.open && mapMenu.prevented && mapMenu.markerActions.includes('f
   `botão direito no marcador do mapa abre o menu de ações (${mapMenu.markerActions.join(',')})`);
 check(mapMenu.cableActions.includes('route') && mapMenu.cableActions.includes('open') && mapMenu.head.includes('M-CABO') && mapMenu.blockedWhileDrawing,
   'botão direito no cabo do mapa abre o menu (e não atrapalha o desenho de cabo)');
+
+//Equipe: só o administrador cria usuários (senha provisória) e redefine senhas; painel do dono do sistema
+const accounts = await page.evaluate(async () => {
+  const out = {};
+  window.__fakeFunctionCalls = [];
+  window.__fakeMembers = [
+    { user_id: 'u1', email: 'teste@routemap.dev', full_name: 'Usuário Teste', role: 'admin' },
+    { user_id: 'u2', email: 'bia@empresa.com', full_name: 'Bia', role: 'projetista' },
+  ];
+  openAccountModal('team');
+  await new Promise(r => setTimeout(r, 300));
+  document.getElementById('newUserName').value = 'Carlos Lima';
+  document.getElementById('newUserEmail').value = 'Carlos@Empresa.com';
+  document.getElementById('inviteRole').value = 'member';
+  await createTeamUser({ preventDefault() {}, submitter: document.querySelector('#newUserForm [type="submit"]') });
+  const call = window.__fakeFunctionCalls.find(c => c.body.action === 'team.create');
+  out.create = call?.body.email === 'carlos@empresa.com' && call.body.role === 'member' && call.body.full_name === 'Carlos Lima'
+    && !document.getElementById('accountCredentials').hidden && document.getElementById('accountCredentialsPassword').textContent === 'Abcd-Efgh-Jkmn';
+  await new Promise(r => setTimeout(r, 200));
+  const resetButtons = document.querySelectorAll('#teamMembersList [data-member-action="reset"]');
+  out.resetOnlyOthers = resetButtons.length === 1;
+  const realConfirm = window.showConfirm;
+  window.showConfirm = (title, message, onConfirm) => onConfirm();
+  resetButtons[0]?.click();
+  await new Promise(r => setTimeout(r, 200));
+  window.showConfirm = realConfirm;
+  out.reset = window.__fakeFunctionCalls.some(c => c.body.action === 'team.reset_password' && c.body.user_id === 'u2')
+    && document.getElementById('accountCredentialsPassword').textContent === 'Prov-Isor-ia22' && /redefinida/.test(document.getElementById('accountCredentialsTitle').textContent);
+  document.getElementById('accountModal').style.display = 'none';
+  //Painel do sistema: só para o dono
+  out.menuHidden = document.getElementById('platformPanelButton').hidden;
+  AppSession.isPlatformAdmin = true;
+  openPlatformPanel();
+  await new Promise(r => setTimeout(r, 300));
+  const items = [...document.querySelectorAll('#platformCompaniesList .platform-list__item')];
+  out.list = items.length === 2 && /sua empresa/.test(items[0].textContent) && !items[0].querySelector('[data-platform="block"]')
+    && /chefe@cliente\.com/.test(items[1].textContent) && !!items[1].querySelector('[data-platform="block"]');
+  document.getElementById('platformCompanyName').value = 'Fibra Nova';
+  document.getElementById('platformAdminName').value = 'Chefe';
+  document.getElementById('platformAdminEmail').value = 'chefe@nova.com';
+  await createPlatformCompany({ preventDefault() {}, submitter: document.querySelector('#platformCompanyForm [type="submit"]') });
+  out.createCompany = window.__fakeFunctionCalls.some(c => c.body.action === 'owner.create_company' && c.body.company_name === 'Fibra Nova' && c.body.admin_email === 'chefe@nova.com')
+    && document.getElementById('platformCredentialsPassword').textContent === 'Nova-Empr-esa2';
+  window.showConfirm = (title, message, onConfirm) => onConfirm();
+  items[1].querySelector('[data-platform="block"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  window.showConfirm = realConfirm;
+  out.block = window.__fakeFunctionCalls.some(c => c.body.action === 'owner.set_blocked' && c.body.company_id === 'c2' && c.body.blocked === true);
+  closePlatformPanel();
+  AppSession.isPlatformAdmin = false;
+  window.__fakeMembers = undefined;
+  return out;
+});
+check(Object.values(accounts).every(Boolean), `equipe e painel do sistema: criar usuário, redefinir senha, nova empresa e bloqueio (${JSON.stringify(accounts)})`);
 
 //Segurança: texto digitado e planos de fusão adulterados não executam código
 const xss = await page.evaluate(async () => {

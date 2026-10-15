@@ -55,7 +55,9 @@ window.supabase = { createClient() {
       getSession: () => ok({ session: { access_token: 'teste' } }),
       onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
       getUser: () => ok({ user: { created_at: '2026-05-12T10:00:00Z', last_sign_in_at: '2026-10-03T09:12:00Z' } }),
-      signInWithPassword: () => ok({}), signOut: () => ok({}), updateUser: () => ok({}),
+      signInWithPassword: () => ok({}), signOut: () => ok({}),
+      //Trocar a senha libera a conta com senha provisória (como o gatilho do banco)
+      updateUser: (attrs) => { if (attrs?.password) { window.__fakeMustChange = false; try { sessionStorage.setItem('fakeMustChange', 'off'); } catch (e) {} } return ok({}); },
       mfa: {
         getAuthenticatorAssuranceLevel: () => ok({ currentLevel: aal(), nextLevel: mfaOn() ? 'aal2' : 'aal1' }),
         listFactors: () => ok(mfaOn()
@@ -70,8 +72,9 @@ window.supabase = { createClient() {
     },
     rpc: (name, args = {}) => name === 'get_my_context'
       ? ok({ user_id: 'u1', email: 'teste@routemap.dev', profile: { full_name: 'Usuário Teste', preferences: {} },
-             company: { id: 'c1', name: 'Empresa Teste', role: 'admin' } })
-      : name === 'list_company_members' ? ok([])
+             must_change_password: !!window.__fakeMustChange, platform_admin: !!window.__fakePlatformAdmin,
+             company: { id: 'c1', name: 'Empresa Teste', role: 'admin', blocked: !!window.__fakeBlocked, blocked_reason: window.__fakeBlocked || null } })
+      : name === 'list_company_members' ? ok(window.__fakeMembers || [])
       : name === 'list_project_versions' ? ok(db.versions.filter(v => v.project_id === args.p_project).reverse()
           .map((v, i) => ({ id: i + 1, revision: v.revision, name: 'v', saved_at: '2026-10-05T10:00:00Z', saved_by_name: 'Bia', markers: 0, cables: 0 })))
       : name === 'list_trash' ? ok(Object.values(db.projects).filter(p => p.deleted_at)
@@ -79,6 +82,22 @@ window.supabase = { createClient() {
       : name === 'project_facets' ? ok({ total: 0, trash: Object.values(db.projects).filter(p => p.deleted_at).length, types: [], cities: [] })
       : ok(null),
     from: (table) => query(table),
+    //Função do servidor admin-users simulada: guarda as chamadas em window.__fakeFunctionCalls
+    functions: {
+      invoke(fn, { body } = {}) {
+        (window.__fakeFunctionCalls = window.__fakeFunctionCalls || []).push({ fn, body });
+        const a = body?.action;
+        if (a === 'team.create') return ok({ user: { id: 'n1', email: body.email, full_name: body.full_name, role: body.role }, password: body.password || 'Abcd-Efgh-Jkmn' });
+        if (a === 'team.reset_password' || a === 'owner.reset_password') return ok({ password: 'Prov-Isor-ia22' });
+        if (a === 'owner.create_company') return ok({ company: { id: 'c9', name: body.company_name }, admin: { id: 'a9', email: body.admin_email }, password: 'Nova-Empr-esa2' });
+        if (a === 'owner.set_blocked') return ok({ blocked: !!body.blocked });
+        if (a === 'owner.list_companies') return ok({ companies: [
+          { id: 'c1', name: 'Empresa Teste', created_at: '2026-09-01T00:00:00Z', blocked: false, members: 3, admins: [{ id: 'u1', email: 'teste@routemap.dev' }] },
+          { id: 'c2', name: 'Fibra Cliente', document: '12.345.678/0001-90', created_at: '2026-10-01T00:00:00Z', blocked: false, members: 5, admins: [{ id: 'a2', email: 'chefe@cliente.com' }] },
+        ] });
+        return ok({ error: 'Ação desconhecida.' });
+      },
+    },
     //Realtime simulado entre abas do mesmo navegador (BroadcastChannel): broadcast e presença por tópico
     channel(topic, opts = {}) {
       const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('fake-realtime') : null;

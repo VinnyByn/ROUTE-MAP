@@ -741,13 +741,17 @@ function renderMembers(members) {
             </div>
             ${canManage ? `
                 <select class="account-role-select" aria-label="Cargo de ${escapeHtml(member.email)}">${roleOptions}</select>
-                <button type="button" class="account-icon-btn" title="Remover da equipe" aria-label="Remover ${escapeHtml(member.email)}">
+                <button type="button" class="account-icon-btn" data-member-action="reset" title="Redefinir senha (gera uma senha provisória)" aria-label="Redefinir a senha de ${escapeHtml(member.email)}">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg>
+                </button>
+                <button type="button" class="account-icon-btn" data-member-action="remove" title="Remover da equipe" aria-label="Remover ${escapeHtml(member.email)}">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>
                 </button>`
             : `<span class="account-badge account-badge--${member.role}">${ROLE_LABELS[member.role]}</span>`}`;
         if (canManage) {
             li.querySelector('select').addEventListener('change', (e) => changeMemberRole(member, e.target));
-            li.querySelector('button').addEventListener('click', () => removeMember(member));
+            li.querySelector('[data-member-action="reset"]').addEventListener('click', () => resetMemberPassword(member));
+            li.querySelector('[data-member-action="remove"]').addEventListener('click', () => removeMember(member));
         }
         list.appendChild(li);
     });
@@ -778,32 +782,64 @@ function renderInvites(invites) {
     });
 }
 
-async function sendInvite(event) {
+//Só o administrador cria contas: a pessoa recebe uma senha provisória e troca no primeiro acesso
+async function createTeamUser(event) {
     event.preventDefault();
     const panel = document.querySelector('#accountModal [data-panel="team"]');
-    const emailInput = document.getElementById('inviteEmail');
-    const email = emailInput.value.trim().toLowerCase();
+    const fullName = document.getElementById('newUserName').value.trim();
+    const email = document.getElementById('newUserEmail').value.trim().toLowerCase();
     const role = document.getElementById('inviteRole').value;
+    const password = document.getElementById('newUserPassword').value.trim();
+    if (fullName.length < 2) return setFeedback(panel, 'Informe o nome da pessoa.', 'error');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setFeedback(panel, 'Informe um e-mail válido.', 'error');
-    await runBusy(event.submitter || panel.querySelector('#inviteForm [type="submit"]'), 'Enviando…', async () => {
-        const { data: members } = await supabaseClient.rpc('list_company_members');
-        if ((members || []).some(m => m.email.toLowerCase() === email)) {
-            return setFeedback(panel, 'Essa pessoa já faz parte da equipe.', 'error');
+    if (password && password.length < 8) return setFeedback(panel, 'A senha provisória precisa ter pelo menos 8 caracteres (ou deixe em branco).', 'error');
+    await runBusy(event.submitter || panel.querySelector('#newUserForm [type="submit"]'), 'Criando…', async () => {
+        try {
+            const result = await callAdminUsers('team.create', { email, full_name: fullName, role, password: password || undefined });
+            document.getElementById('newUserForm').reset();
+            updateInviteRoleHint();
+            setFeedback(panel, '');
+            showAccountCredentials('Usuário criado', result.user?.email || email, result.password);
+            loadTeam();
+        } catch (error) {
+            setFeedback(panel, error.message, 'error');
         }
-        const { error } = await supabaseClient.from('company_invites').insert({
-            company_id: AppSession.company.id,
-            email,
-            role,
-            invited_by: AppSession.userId
-        });
-        if (error) {
-            const message = error.code === '23505' ? 'Já existe um convite pendente para este e-mail.' : `Não foi possível convidar: ${error.message}`;
-            return setFeedback(panel, message, 'error');
-        }
-        emailInput.value = '';
-        setFeedback(panel, `Convite registrado. Avise ${email} para criar a conta em ${location.origin}/login.html.`);
-        loadTeam();
     });
+}
+
+//Senha provisória nova para alguém da equipe (troca de novo no próximo acesso)
+function resetMemberPassword(member) {
+    const who = member.full_name || member.email;
+    showConfirm('Redefinir senha', `Gerar uma senha provisória para ${who}? A senha atual deixa de valer e a pessoa cria uma nova no próximo acesso.`, async () => {
+        try {
+            const result = await callAdminUsers('team.reset_password', { user_id: member.user_id });
+            showAccountCredentials('Senha redefinida', member.email, result.password);
+        } catch (error) {
+            showAlert('Não foi possível redefinir', error.message);
+        }
+    });
+}
+
+function showAccountCredentials(title, email, password) {
+    const box = document.getElementById('accountCredentials');
+    if (!box) return;
+    document.getElementById('accountCredentialsTitle').textContent = title;
+    document.getElementById('accountCredentialsEmail').textContent = email;
+    document.getElementById('accountCredentialsPassword').textContent = password;
+    box.hidden = false;
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+async function copyAccountCredentials() {
+    const email = document.getElementById('accountCredentialsEmail').textContent;
+    const password = document.getElementById('accountCredentialsPassword').textContent;
+    const text = `Acesso ao ROUTE MAP\n${location.origin}/login.html\nE-mail: ${email}\nSenha provisória: ${password}\n(Você cria a sua senha no primeiro acesso.)`;
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('Copiado', 'Os dados de acesso foram copiados.');
+    } catch (e) {
+        showAlert('Copie os dados', text);
+    }
 }
 
 async function changeMemberRole(member, select) {
@@ -963,7 +999,9 @@ function setupAccountMenu() {
         }
     });
     document.getElementById('preferencesForm').addEventListener('submit', savePreferencesForm);
-    document.getElementById('inviteForm').addEventListener('submit', sendInvite);
+    document.getElementById('newUserForm').addEventListener('submit', createTeamUser);
+    document.getElementById('copyAccountCredentials').addEventListener('click', copyAccountCredentials);
+    document.getElementById('closeAccountCredentials').addEventListener('click', () => { document.getElementById('accountCredentials').hidden = true; });
     document.getElementById('signOutEverywhereButton').addEventListener('click', signOutEverywhere);
     document.getElementById('leaveCompanyButton').addEventListener('click', leaveCompany);
     document.getElementById('clearClientErrorsButton').addEventListener('click', clearClientErrors);

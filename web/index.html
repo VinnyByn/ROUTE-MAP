@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261004g" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261036c" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261037a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -173,9 +173,10 @@
           <a href="#" data-account-tab="profile" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"></use></svg><span>Meu perfil</span></a>
           <a href="#" data-account-tab="security" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg><span>Senha e segurança</span><em class="user-menu-flag" id="userMenuSecurityFlag" hidden></em></a>
           <a href="#" data-account-tab="company" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-building"></use></svg><span>Empresa</span></a>
-          <a href="#" data-account-tab="team" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Equipe e convites</span></a>
+          <a href="#" data-account-tab="team" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"></use></svg><span>Equipe e acessos</span></a>
           <a href="#" data-account-tab="preferences" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"></use></svg><span>Preferências e atalhos</span></a>
           <a href="#" id="userMenuTour" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard"></use></svg><span>Tour pelo sistema</span></a>
+          <a href="#" id="platformPanelButton" role="menuitem" hidden><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-briefcase"></use></svg><span>Painel do sistema</span></a>
           <div class="dropdown-divider" role="separator"></div>
           <a href="#" id="themeToggleButton" role="menuitem" title="Alternar tema claro ou escuro">
             <span class="user-menu-theme-icons">
@@ -2184,6 +2185,45 @@
       </div>
     </div>
 
+    <div id="platformModal" class="modal" role="dialog" aria-labelledby="platformModalTitle">
+      <div class="modal-content platform-modal">
+        <span class="close" id="closePlatformModal" aria-label="Fechar">&times;</span>
+        <h2 id="platformModalTitle">Painel do sistema</h2>
+        <p class="platform-modal__lead">Empresas clientes do ROUTE MAP. Cada empresa nova já sai com o administrador, que cria os usuários da equipe.</p>
+        <section class="platform-card">
+          <h3>Nova empresa</h3>
+          <form id="platformCompanyForm" class="platform-form" novalidate>
+            <input type="text" id="platformCompanyName" placeholder="Nome da empresa" maxlength="120" aria-label="Nome da empresa" autocomplete="off" />
+            <input type="text" id="platformCompanyDocument" placeholder="CNPJ (opcional)" maxlength="18" inputmode="numeric" aria-label="CNPJ" autocomplete="off" />
+            <input type="text" id="platformAdminName" placeholder="Nome do administrador" maxlength="120" aria-label="Nome do administrador" autocomplete="off" />
+            <input type="email" id="platformAdminEmail" placeholder="E-mail do administrador" aria-label="E-mail do administrador" autocomplete="off" />
+            <input type="text" id="platformAdminPassword" placeholder="Senha provisória (em branco: o sistema cria)" aria-label="Senha provisória" autocomplete="off" />
+            <button type="submit" class="btn btn-success">Criar empresa</button>
+          </form>
+          <p class="platform-feedback" id="platformFeedback" role="status" hidden></p>
+          <div class="account-credentials" id="platformCredentials" hidden>
+            <strong id="platformCredentialsTitle">Empresa criada</strong>
+            <p>Passe estes dados para o administrador. A senha provisória não aparece de novo; ele cria a senha dele no primeiro acesso.</p>
+            <dl>
+              <div><dt>E-mail</dt><dd id="platformCredentialsEmail"></dd></div>
+              <div><dt>Senha provisória</dt><dd><code id="platformCredentialsPassword"></code></dd></div>
+            </dl>
+            <div class="account-credentials__actions">
+              <button type="button" class="btn btn-secondary account-small-btn" id="copyPlatformCredentials">Copiar</button>
+              <button type="button" class="btn btn-secondary account-small-btn" id="closePlatformCredentials">Fechar</button>
+            </div>
+          </div>
+        </section>
+        <section class="platform-card">
+          <div class="platform-card__head">
+            <h3>Empresas</h3>
+            <button type="button" class="btn btn-secondary account-small-btn" id="reloadPlatformCompanies">Atualizar</button>
+          </div>
+          <ul class="platform-list" id="platformCompaniesList"></ul>
+        </section>
+      </div>
+    </div>
+
     <div id="accountModal" class="modal" role="dialog" aria-labelledby="accountModalTitle">
       <div class="modal-content account-modal">
         <span class="close" id="closeAccountModal" aria-label="Fechar">&times;</span>
@@ -2457,7 +2497,7 @@
               <div class="account-card account-card--danger" id="leaveCompanyCard" hidden>
                 <div>
                   <strong>Sair da empresa</strong>
-                  <p>Você perde o acesso aos projetos da equipe. Poderá entrar em outra empresa por convite.</p>
+                  <p>Você perde o acesso aos projetos da equipe. Para voltar, o administrador precisa liberar o seu acesso de novo.</p>
                 </div>
                 <button type="button" id="leaveCompanyButton" class="btn btn-danger">Sair da empresa</button>
               </div>
@@ -2466,18 +2506,32 @@
             <!-- Equipe -->
             <section class="account-panel" data-panel="team" role="tabpanel" hidden>
               <div class="account-invite" data-admin-only>
-                <h3>Convidar pessoa</h3>
-                <form id="inviteForm" class="account-invite-form" novalidate>
-                  <input type="email" id="inviteEmail" placeholder="email@empresa.com" aria-label="E-mail do convidado" />
+                <h3>Adicionar usuário</h3>
+                <form id="newUserForm" class="account-new-user" novalidate>
+                  <input type="text" id="newUserName" placeholder="Nome completo" maxlength="120" aria-label="Nome completo" autocomplete="off" />
+                  <input type="email" id="newUserEmail" placeholder="email@empresa.com" aria-label="E-mail" autocomplete="off" />
                   <select id="inviteRole" aria-label="Cargo">
                     <option value="projetista">Projetista</option>
                     <option value="member">Membro (somente visualiza)</option>
                     <option value="admin">Administrador</option>
                   </select>
-                  <button type="submit" class="btn btn-success">Convidar</button>
+                  <input type="text" id="newUserPassword" placeholder="Senha provisória (em branco: o sistema cria)" aria-label="Senha provisória" autocomplete="off" />
+                  <button type="submit" class="btn btn-success">Criar usuário</button>
                 </form>
                 <p class="account-note" id="inviteRoleHint"></p>
-                <p class="account-note">A pessoa cria a conta em <strong class="app-url-slot"></strong> usando este e-mail e entra direto na equipe.</p>
+                <p class="account-note">A pessoa entra em <strong class="app-url-slot"></strong> com o e-mail e a senha provisória e cria a senha dela no primeiro acesso. Só o administrador cria contas.</p>
+                <div class="account-credentials" id="accountCredentials" hidden>
+                  <strong id="accountCredentialsTitle">Usuário criado</strong>
+                  <p>Passe estes dados para a pessoa. A senha provisória não aparece de novo; se perder, use "Redefinir senha".</p>
+                  <dl>
+                    <div><dt>E-mail</dt><dd id="accountCredentialsEmail"></dd></div>
+                    <div><dt>Senha provisória</dt><dd><code id="accountCredentialsPassword"></code></dd></div>
+                  </dl>
+                  <div class="account-credentials__actions">
+                    <button type="button" class="btn btn-secondary account-small-btn" id="copyAccountCredentials">Copiar</button>
+                    <button type="button" class="btn btn-secondary account-small-btn" id="closeAccountCredentials">Fechar</button>
+                  </div>
+                </div>
                 <p class="account-feedback" role="status"></p>
                 <ul id="pendingInvitesList" class="account-list"></ul>
               </div>
@@ -2964,10 +3018,10 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js" integrity="sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" integrity="sha384-TtrQp5nveof/QP1+f/OLiEHL3GuOIRyl3IfsGxu5X45VO2vHeT4HRNmQuTR3Ea3w" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
-  <script src="js/core/supabase-client.js?v=20261004b"></script>
+  <script src="js/core/supabase-client.js?v=20261037a"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
-  <script src="js/app.js?v=20261036a" defer></script>
+  <script src="js/app.js?v=20261037a" defer></script>
   <script src="js/core/persistence.js?v=20261028a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
@@ -2984,8 +3038,9 @@
   <script src="js/map/marker-panel.js?v=20261020a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
-  <script src="js/auth/account.js?v=20261036a" defer></script>
+  <script src="js/auth/account.js?v=20261037a" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
+  <script src="js/auth/platform.js?v=20261037a" defer></script>
   <script src="js/network/clients.js?v=20261020a" defer></script>
   <script src="js/network/optical-budget.js?v=20261010a" defer></script>
   <script src="js/network/project-check.js?v=20261007m" defer></script>
