@@ -2363,10 +2363,13 @@ function renderAutoDesignCalc() {
     if (!el) return;
     const p = autoDesign.params;
     const n = parseInt(p.houses, 10);
+    const tile = (value, label, hint = '') => `<div class="auto-design__kpi"><b>${value}</b><span>${label}</span>${hint ? `<small>${hint}</small>` : ''}</div>`;
     if (!n || n < 1) {
-        el.innerHTML = 'Digite a quantidade de casas para calcular as caixas.';
+        el.classList.add('is-empty');
+        el.innerHTML = '<p class="auto-design__calc-note">Digite quantas casas tem na área para ver quantas caixas saem.</p>';
         return;
     }
+    el.classList.remove('is-empty');
     const clients = Math.ceil(n * p.occupancy / 100);
     const usable = getAutoDesignUsablePorts(p);
     //CTOs que já existem: entram antes (a conta exata, pela distância de cada casa, sai ao gerar)
@@ -2375,17 +2378,17 @@ function renderAutoDesignCalc() {
     const fromExisting = Math.min(clients, existingRoom);
     const ctos = Math.ceil((clients - fromExisting) / usable);
     renderAutoDesignExistingText(existingRoom);
-    const fill = usable < p.ports ? ` (até ${usable} clientes cada)` : '';
-    if (existing.length && !ctos) {
-        el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes: as <b>${existing.length}</b> CTO(s) que já existem têm até ${existingRoom.toLocaleString('pt-BR')} vagas. Pode não precisar de CTO nova (casas fora do raio delas ainda pedem uma).`;
-        return;
-    }
-    const before = existing.length ? ` − até ${fromExisting.toLocaleString('pt-BR')} nas <b>${existing.length}</b> CTO(s) existente(s)` : '';
-    const label = existing.length ? `${ctos} CTOs novas` : `${ctos} CTOs`;
-    const pon = p.levels === 2
-        ? ` · CEO 1:${p.primary} → 1:${p.primary * p.ports} · <b>${Math.ceil(ctos / p.primary)}</b> PON(s)`
-        : ` · <b>${ctos}</b> PON(s)`;
-    el.innerHTML = `≈ <b>${clients.toLocaleString('pt-BR')}</b> clientes${before} → <b>${label}</b> com splitter 1:${p.ports}${fill}${pon}`;
+    const fmt = (v) => v.toLocaleString('pt-BR');
+    const pons = p.levels === 2 ? Math.ceil(ctos / p.primary) : ctos;
+    const tiles = [
+        tile(`≈ ${fmt(clients)}`, 'clientes', `${p.occupancy}% de ${fmt(n)}`),
+        tile(fmt(ctos), existing.length ? 'CTOs novas' : 'CTOs', usable < p.ports ? `1:${p.ports} · até ${usable} cada` : `splitter 1:${p.ports}`),
+        tile(fmt(pons), 'PONs', p.levels === 2 ? `CEO 1:${p.primary} → 1:${p.primary * p.ports}` : '1 por CTO'),
+    ].join('');
+    let note = '';
+    if (existing.length && !ctos) note = `As <b>${existing.length}</b> CTO(s) que já existem têm até ${fmt(existingRoom)} vagas. Pode não precisar de CTO nova (casas fora do raio delas ainda pedem uma).`;
+    else if (existing.length) note = `Até ${fmt(fromExisting)} clientes vão nas <b>${existing.length}</b> CTO(s) existente(s).`;
+    el.innerHTML = `<div class="auto-design__kpis">${tiles}</div>${note ? `<p class="auto-design__calc-note">${note}</p>` : ''}`;
 }
 
 //Texto da opção "Considerar as CTOs que já estão no mapa" (muda com o raio da CTO)
@@ -2434,43 +2437,58 @@ function renderAutoDesign() {
     const start = getAutoDesignStartMarker();
     const usingHouses = s.houseMarkers.length && p.useHouses;
     title.textContent = 'Gerar pré-projeto';
+    const icon = (id) => `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"></use></svg>`;
+    const section = (n, name, hint, content) => `
+        <section class="auto-design__step" aria-label="${esc(name)}">
+            <header class="auto-design__step-head"><span class="auto-design__step-num">${n}</span><div><h4>${esc(name)}</h4><p>${hint}</p></div></header>
+            ${content}
+        </section>`;
+    //Campo numérico com a unidade dentro da caixa (%, m)
+    const unit = (input, u) => `<div class="auto-design__unit">${input}<span aria-hidden="true">${u}</span></div>`;
+    const check = (id, checked, text, sub = '') => `<label class="auto-design__check"><input type="checkbox" id="${id}"${checked ? ' checked' : ''}><span>${text}${sub ? `<small>${sub}</small>` : ''}</span></label>`;
+    const startName = start ? `${esc(start.name)} (${esc(start.type)})` : 'uma CEO nova no meio da área';
     body.innerHTML = `
-        <dl class="map-tool-stats"><div><dt>Área</dt><dd title="${esc(s.polygon.name || 'Polígono')}">${esc(s.polygon.name || 'Polígono')}</dd></div><div><dt>Tamanho</dt><dd>${esc(formatArea(area))}</dd></div></dl>
-        <div class="map-tool-field-row">
-            <div class="map-tool-field"><label for="autoDesignHouses">Casas na área</label><input type="number" id="autoDesignHouses" min="1" step="1" inputmode="numeric" value="${esc(p.houses)}" placeholder="Ex.: 320"${usingHouses ? ' disabled title="Usando as casas marcadas no mapa"' : ''}></div>
-            <div class="map-tool-field"><label for="autoDesignOccupancy" title="Taxa de penetração">Penetração (%)</label><input type="number" id="autoDesignOccupancy" min="1" max="100" step="1" inputmode="numeric" value="${esc(p.occupancy)}"></div>
+        ${s.error ? `<div class="auto-design__warn auto-design__warn--error" role="alert">${esc(s.error)}</div>` : ''}
+        <div class="auto-design__area">
+            <span class="auto-design__area-icon">${icon('i-polygon')}</span>
+            <div class="auto-design__area-text"><b title="${esc(s.polygon.name || 'Polígono')}">${esc(s.polygon.name || 'Polígono')}</b><small>${esc(formatArea(area))} · sai de ${startName}</small></div>
         </div>
-        ${s.houseMarkers.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUseHouses"${p.useHouses ? ' checked' : ''}><span>Usar as <b>${s.houseMarkers.length}</b> casas marcadas no mapa (${getAutoDesignMarkedHouses().toLocaleString('pt-BR')} casas, posição real)</span></label>` : ''}
-        ${s.existingCtos.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUseExisting"${p.useExisting !== false ? ' checked' : ''}><span id="autoDesignExistingText"></span></label>` : ''}
-        ${s.poleMarkers.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUsePoles"${p.usePoles ? ' checked' : ''}><span>Caixas nos <b>${s.poleMarkers.length}</b> postes da área${s.bdgdPoles?.used && s.markedPoles.length ? ` (${s.markedPoles.length} marcados + ${s.bdgdPoles.used} da BDGD)` : ''} e cabos de poste em poste</span></label>` : ''}
-        <div class="map-tool-field"><label>Níveis de splitagem</label><div class="map-tool-segmented" id="autoDesignLevels" role="radiogroup" aria-label="Níveis de splitagem"></div></div>
-        <div class="map-tool-field-row">
-            ${p.levels === 2 ? '<div class="map-tool-field"><label>Splitagem da CEO</label><div class="map-tool-segmented" id="autoDesignPrimary" role="radiogroup" aria-label="Splitter da CEO (1º nível)"></div></div>' : ''}
-            <div class="map-tool-field"><label>Splitagem da CTO</label><div class="map-tool-segmented" id="autoDesignPorts" role="radiogroup" aria-label="Splitter de atendimento da CTO"></div></div>
-        </div>
-        <div class="auto-design__calc" id="autoDesignCalc" aria-live="polite"></div>
-        <div class="map-tool-field"><label for="autoDesignStart">Partir de</label>
-            <select id="autoDesignStart">
-                ${s.starts.map(({ marker, distance }) => `<option value="${esc(marker.uid)}"${marker.uid === p.startUid ? ' selected' : ''}>${esc(marker.name)} · ${esc(marker.type)} · ${esc(formatDistance(distance))}</option>`).join('')}
-                <option value=""${!p.startUid ? ' selected' : ''}>Nenhum — CEO nova no meio da área</option>
-            </select>
-        </div>
-        <div class="map-tool-field-row">
-            <div class="map-tool-field"><label for="autoDesignFeeder">Alimentação (mín.)</label><select id="autoDesignFeeder"${start?.type === 'POP' ? '' : ' disabled title="Só quando parte de um POP"'}>${fiberOptions(p.feederFiber)}</select></div>
-            <div class="map-tool-field"><label for="autoDesignDistribution">Distribuição (mín.)</label><select id="autoDesignDistribution">${fiberOptions(p.distributionFiber)}</select></div>
-        </div>
-        <div class="map-tool-field-row">
-            <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO (m)</label><input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO (em linha reta)"></div>
-            <div class="map-tool-field"><label for="autoDesignSpacing">Distância entre CTOs (m)</label><input type="number" id="autoDesignSpacing" min="10" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="Pelo raio" value="${esc(getAutoDesignCtoSpacing(p) || '')}" title="Mínimo entre duas CTOs na mesma rua, em linha reta. Em branco: vale só o raio"></div>
-        </div>
-        <div class="map-tool-field-row">
-            <div class="map-tool-field"><label>Vão</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>
-        </div>
-        <details class="auto-design__more" id="autoDesignMore"${s.moreOpen ? ' open' : ''}>
-            <summary>Mais opções</summary>
+        ${section(1, 'Clientes', 'Quantas casas e quantas devem assinar', `
             <div class="map-tool-field-row">
-                <div class="map-tool-field"><label for="autoDesignSpare">Fibras de reserva (%)</label><input type="number" id="autoDesignSpare" min="0" max="200" step="5" inputmode="numeric" value="${esc(p.fiberSpare)}"></div>
-                <div class="map-tool-field"><label for="autoDesignFill" title="Ocupação máxima da CTO">Ocupação máx. (%)</label><input type="number" id="autoDesignFill" min="25" max="100" step="5" inputmode="numeric" value="${esc(p.maxFill)}"></div>
+                <div class="map-tool-field"><label for="autoDesignHouses">Casas na área</label>${unit(`<input type="number" id="autoDesignHouses" min="1" step="1" inputmode="numeric" value="${esc(p.houses)}" placeholder="Ex.: 320"${usingHouses ? ' disabled title="Usando as casas marcadas no mapa"' : ''}>`, 'casas')}</div>
+                <div class="map-tool-field"><label for="autoDesignOccupancy" title="Taxa de penetração: quantas casas devem virar clientes">Penetração</label>${unit(`<input type="number" id="autoDesignOccupancy" min="1" max="100" step="1" inputmode="numeric" value="${esc(p.occupancy)}">`, '%')}</div>
+            </div>
+            ${s.houseMarkers.length ? check('autoDesignUseHouses', p.useHouses, `Usar as <b>${s.houseMarkers.length}</b> casas marcadas no mapa`, `${getAutoDesignMarkedHouses().toLocaleString('pt-BR')} casas, na posição real`) : ''}
+            ${s.existingCtos.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUseExisting"${p.useExisting !== false ? ' checked' : ''}><span id="autoDesignExistingText"></span></label>` : ''}`)}
+        ${section(2, 'Splitagem', 'Como o sinal se divide até o cliente', `
+            <div class="map-tool-field"><label>Níveis</label><div class="map-tool-segmented" id="autoDesignLevels" role="radiogroup" aria-label="Níveis de splitagem"></div></div>
+            <div class="map-tool-field-row">
+                ${p.levels === 2 ? '<div class="map-tool-field"><label>Na CEO</label><div class="map-tool-segmented" id="autoDesignPrimary" role="radiogroup" aria-label="Splitter da CEO (1º nível)"></div></div>' : ''}
+                <div class="map-tool-field"><label>Na CTO</label><div class="map-tool-segmented" id="autoDesignPorts" role="radiogroup" aria-label="Splitter de atendimento da CTO"></div></div>
+            </div>`)}
+        ${section(3, 'Saída da rede', 'De onde a fibra chega e os cabos mínimos', `
+            <div class="map-tool-field"><label for="autoDesignStart">Partir de</label>
+                <select id="autoDesignStart">
+                    ${s.starts.map(({ marker, distance }) => `<option value="${esc(marker.uid)}"${marker.uid === p.startUid ? ' selected' : ''}>${esc(marker.name)} · ${esc(marker.type)} · ${esc(formatDistance(distance))}</option>`).join('')}
+                    <option value=""${!p.startUid ? ' selected' : ''}>Nenhum — CEO nova no meio da área</option>
+                </select>
+            </div>
+            <div class="map-tool-field-row">
+                <div class="map-tool-field"><label for="autoDesignFeeder" title="Cabo do POP até a área">Alimentação</label><select id="autoDesignFeeder"${start?.type === 'POP' ? '' : ' disabled title="Só quando parte de um POP"'}>${fiberOptions(p.feederFiber)}</select></div>
+                <div class="map-tool-field"><label for="autoDesignDistribution" title="Cabos entre as caixas">Distribuição</label><select id="autoDesignDistribution">${fiberOptions(p.distributionFiber)}</select></div>
+            </div>
+            ${s.poleMarkers.length ? check('autoDesignUsePoles', p.usePoles, `Caixas nos <b>${s.poleMarkers.length}</b> postes da área e cabos de poste em poste`, s.bdgdPoles?.used && s.markedPoles.length ? `${s.markedPoles.length} marcados + ${s.bdgdPoles.used} da BDGD` : '') : ''}`)}
+        ${section(4, 'Caixas e cabos', 'Alcance de cada CTO e tipo de cabo', `
+            <div class="map-tool-field-row">
+                <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO</label>${unit(`<input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO (em linha reta)">`, 'm')}<small class="auto-design__field-hint">Até onde vai o drop</small></div>
+                <div class="map-tool-field"><label for="autoDesignSpacing">Entre CTOs</label>${unit(`<input type="number" id="autoDesignSpacing" min="10" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="Pelo raio" value="${esc(getAutoDesignCtoSpacing(p) || '')}" title="Mínimo entre duas CTOs na mesma rua, em linha reta. Em branco: vale só o raio">`, 'm')}<small class="auto-design__field-hint">Mínimo na mesma rua</small></div>
+            </div>
+            <div class="map-tool-field"><label>Vão do cabo</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>`)}
+        <details class="auto-design__more" id="autoDesignMore"${s.moreOpen ? ' open' : ''}>
+            <summary>${icon('i-settings')}<span>Mais opções</span><small>reserva, ocupação e CEOs</small></summary>
+            <div class="map-tool-field-row">
+                <div class="map-tool-field"><label for="autoDesignSpare">Fibras de reserva</label>${unit(`<input type="number" id="autoDesignSpare" min="0" max="200" step="5" inputmode="numeric" value="${esc(p.fiberSpare)}">`, '%')}</div>
+                <div class="map-tool-field"><label for="autoDesignFill" title="Ocupação máxima da CTO">Ocupação máx.</label>${unit(`<input type="number" id="autoDesignFill" min="25" max="100" step="5" inputmode="numeric" value="${esc(p.maxFill)}">`, '%')}</div>
             </div>
             <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignReserve">Reserva técnica</label><select id="autoDesignReserve">${options(AUTO_DESIGN_RESERVE_STEPS, p.reserveEvery, v => (v ? `A cada ${v} m de cabo` : 'Não colocar'))}</select></div>
@@ -2478,8 +2496,7 @@ function renderAutoDesign() {
             </div>
             <p class="map-tool-help"><b>CTOs por CEO:</b> quantas CTOs saem de cada CEO. Passou disso, entra outra CEO no meio do próximo grupo de CTOs, para os cabos não ficarem longos nem a CEO lotada.</p>
         </details>
-        <p class="map-tool-help">Saem até 3 opções (a do painel, a de menor custo e a com mais folga) para você escolher. As caixas vão só para as ruas da área (mato, pasto e rio ficam de fora) e os cabos seguem as ruas (OpenStreetMap). Nada é salvo até você aceitar.</p>
-        ${s.error ? `<div class="auto-design__warn">${esc(s.error)}</div>` : ''}`;
+        <p class="map-tool-help auto-design__about">${icon('i-route')}<span>Saem até 3 opções para comparar (a do painel, a mais barata e a com mais folga). Caixas só nas ruas e cabos pelas ruas (OpenStreetMap). Nada é salvo até você aceitar.</span></p>`;
     clampAutoDesignPrimary(p);
     renderSegmentedOptions('autoDesignLevels', [{ value: '1', label: '1 nível (só CTO)' }, { value: '2', label: '2 níveis (CEO + CTO)' }], String(p.levels));
     renderSegmentedOptions('autoDesignPorts', AUTO_DESIGN_SPLITTERS.map(n => ({ value: String(n), label: `1:${n}` })), String(p.ports));
@@ -2491,7 +2508,9 @@ function renderAutoDesign() {
     onSegment('autoDesignPrimary', (v) => { p.primary = parseInt(v, 10); renderAutoDesignCalc(); });
     onSegment('autoDesignSpan', (v) => { p.span = v; });
     document.getElementById('autoDesignMore')?.addEventListener('toggle', (e) => { s.moreOpen = e.target.open; });
+    //O resumo fica fixo em cima dos botões: muda na hora conforme os campos
     actions.innerHTML = `
+        <div class="auto-design__calc" id="autoDesignCalc" aria-live="polite"></div>
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Cancelar</button>
         <button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="generate">Gerar opções</button>`;
     renderAutoDesignCalc();
