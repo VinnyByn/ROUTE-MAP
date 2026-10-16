@@ -2806,3 +2806,12 @@ html[data-theme="dark"] .auto-design__kpi:nth-child(2) b { color: #4ade80; }
   .auto-design__kpi { padding: 6px 8px; }
   .auto-design__kpi small { display: none !important; }
 }
+/* Seções da conta: uma coluna que nunca passa da largura do cartão (e-mail longo encolhe com reticências) */
+#accountModal .company-section { grid-template-columns: minmax(0, 1fr); }
+#accountModal .company-section > * { min-width: 0; }
+/* Membro: nome e e-mail ficam inteiros; sem espaço, cargo e botões descem para a linha de baixo */
+#accountModal #teamMembersList > li { flex-wrap: wrap; row-gap: 10px; }
+#accountModal #teamMembersList .account-list__info { flex: 1 1 200px; }
+#accountModal .account-list__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
+#accountModal .account-list__actions .account-role-select { flex: 0 1 150px; min-width: 120px; }
+#accountModal #teamMembersList > li > .account-badge { margin-left: auto; }

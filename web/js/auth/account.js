@@ -993,17 +993,17 @@ function renderMembers(members) {
             <span class="user-avatar${presence ? ' user-avatar--presence' : ''}${presence?.online ? ' is-online' : ''}">${escapeHtml(getInitials(member.full_name || member.email))}</span>
             <div class="account-list__info">
                 <strong>${escapeHtml(member.full_name || member.email)}${isSelf ? ' <em>(você)</em>' : ''}</strong>
-                <span>${escapeHtml(member.email)}${member.job_title ? ` · ${escapeHtml(member.job_title)}` : ''}</span>
+                <span title="${escapeHtml(member.email)}">${escapeHtml(member.email)}${member.job_title ? ` · ${escapeHtml(member.job_title)}` : ''}</span>
                 ${presence ? `<span class="presence-line${presence.online ? ' is-online' : ''}"><i></i>${escapeHtml(presence.text)}</span>` : ''}
             </div>
-            ${canManage ? `
+            ${canManage ? `<div class="account-list__actions">
                 <select class="account-role-select" aria-label="Cargo de ${escapeHtml(member.email)}">${roleOptions}</select>
                 <button type="button" class="account-icon-btn" data-member-action="reset" title="Redefinir senha (gera uma senha provisória)" aria-label="Redefinir a senha de ${escapeHtml(member.email)}">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"></use></svg>
                 </button>
                 <button type="button" class="account-icon-btn" data-member-action="remove" title="Remover da equipe" aria-label="Remover ${escapeHtml(member.email)}">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>
-                </button>`
+                </button></div>`
             : `<span class="account-badge account-badge--${member.role}">${ROLE_LABELS[member.role]}</span>`}`;
         if (canManage) {
             li.querySelector('select').addEventListener('change', (e) => changeMemberRole(member, e.target));
