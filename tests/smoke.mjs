@@ -2330,7 +2330,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     openAutoDesign(polygon);
     const opened = !document.getElementById('autoDesignBox').classList.contains('hidden') && document.getElementById('autoDesignStart').value === 'mk_ad_pop';
     const labels = document.getElementById('autoDesignBody').textContent;
-    const form = /Penetração/.test(labels) && /Splitagem da CTO/.test(labels) && /1:8/.test(labels) && /1:16/.test(labels);
+    const form = /Penetração/.test(labels) && /Splitagem/.test(labels) && /Na CTO/.test(labels) && /1:8/.test(labels) && /1:16/.test(labels)
+      //Formulário em 4 etapas, com o resumo fixo em cima dos botões
+      && document.querySelectorAll('#autoDesignBody .auto-design__step').length === 4 && !!document.querySelector('#autoDesignActions #autoDesignCalc')
+      && /Digite quantas casas/.test(document.getElementById('autoDesignCalc').textContent);
     const houses = document.getElementById('autoDesignHouses');
     houses.value = '200';
     houses.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2430,7 +2433,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(autoDesignOut.down.phase === 'preview' && autoDesignOut.down.straight === autoDesignOut.down.cables && autoDesignOut.down.cables > 0 && autoDesignOut.down.warn && autoDesignOut.down.noStreets,
     `pré-projeto automático: sem servidor de rotas, gera em linha reta e avisa (${JSON.stringify(autoDesignOut.down)})`);
-  check(autoDesignOut.menu && autoDesignOut.opened && autoDesignOut.form && /60 clientes → 8 CTOs com splitter 1:8/.test(autoDesignOut.calc)
+  check(autoDesignOut.menu && autoDesignOut.opened && autoDesignOut.form && /≈ 60\s*clientes\s*30% de 200\s*8\s*CTOs\s*splitter 1:8\s*8\s*PONs/.test(autoDesignOut.calc)
     && autoDesignOut.preview.phase === 'preview' && autoDesignOut.preview.enough && autoDesignOut.preview.inside && autoDesignOut.preview.overlays
     && autoDesignOut.preview.coverage && autoDesignOut.preview.onStreets && autoDesignOut.preview.carProfile && autoDesignOut.preview.noForest && autoDesignOut.preview.onRows && autoDesignOut.preview.routed,
     `pré-projeto automático: casas, penetração e splitagem → CTOs só nas ruas (nada no mato), ligadas pela rua (${JSON.stringify(autoDesignOut.preview)} ${autoDesignOut.calc})`);
