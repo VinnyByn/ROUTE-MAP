@@ -2369,6 +2369,14 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       options: autoDesign.options.length >= 2 && autoDesign.options.length <= 3 && plan.option.panel && document.querySelectorAll('[data-auto-design="option"]').length === autoDesign.options.length,
       polygonHidden: polygon.polygonObject.getVisible() === false,
       split128: clampAutoDesignPrimary(split).includes(8) && split.primary === 8,
+      //Painel baixo: nada é espremido (a lista de cabos sumia); quem rola é o painel
+      notSquashed: (() => {
+        const box = document.getElementById('autoDesignBox');
+        box.style.maxHeight = '360px';
+        const ok = [...document.querySelectorAll('#autoDesignBody > *')].every(el => el.scrollHeight <= el.clientHeight + 1 || getComputedStyle(el).overflowY === 'visible');
+        box.style.maxHeight = '';
+        return ok;
+      })(),
     };
     const previewText = document.getElementById('autoDesignBody').textContent;
     //Outra opção e de volta: o mapa mostra a escolhida

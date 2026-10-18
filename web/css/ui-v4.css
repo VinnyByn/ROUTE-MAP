@@ -2815,3 +2815,5 @@ html[data-theme="dark"] .auto-design__kpi:nth-child(2) b { color: #4ade80; }
 #accountModal .account-list__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
 #accountModal .account-list__actions .account-role-select { flex: 0 1 150px; min-width: 120px; }
 #accountModal #teamMembersList > li > .account-badge { margin-left: auto; }
+/* Pré-projeto: nada no painel encolhe (lista de cabos com overflow era espremida até sumir); o painel rola */
+#autoDesignBox .map-tool-box__body > * { flex-shrink: 0; }
