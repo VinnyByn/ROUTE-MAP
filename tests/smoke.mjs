@@ -2758,6 +2758,31 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(accessRoutes.across === 3 && accessRoutes.acrossWet === '1,1,1' && accessRoutes.acrossDistinct && accessRoutes.same >= 2 && accessRoutes.sameWet && accessRoutes.sameDistinct && accessRoutes.leg
     && accessRoutes.waypoints.poles === 2 && accessRoutes.waypoints.order && accessRoutes.waypoints.dry && accessRoutes.waypoints.loose,
     `pré-projeto: até 3 rotas diferentes saindo da caixa existente, sem atravessar rio à toa, e rota pelos postes clicados (${JSON.stringify(accessRoutes)})`);
+  //Quadras de 300 × 70 m entre ruas paralelas: poste no quintal (a 25 m da rua, mesmo em fileira) não vale; fileira a 100 m
+  //de qualquer rua (rua que falta no mapa) vale. Balão de casas no meio da quadra vira casas espalhadas pelas ruas em volta.
+  const blocks = await sp.evaluate(() => {
+    const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
+    const ll = ([x, y]) => { const q = proj.toLatLng([x, y]); return [q.lat, q.lng]; };
+    const lines = [];
+    for (let i = 0; i <= 3; i++) lines.push([ll([0, i * 70]), ll([300, i * 70])]);
+    lines.push([ll([0, 0]), ll([0, 210])], [ll([300, 0]), ll([300, 210])]);
+    const index = buildAutoDesignStreetIndex(lines, proj);
+    const poles = [];
+    for (let x = 20; x <= 280; x += 40) poles.push({ x, y: 0 }, { x, y: 25 }, { x, y: 310 });
+    const sorted = classifyAutoDesignPoles(poles, index);
+    const block = spreadAutoDesignHouseBlock({ x: 150, y: 35, w: 28 }, index);
+    const onStreet = spreadAutoDesignHouseBlock({ x: 150, y: 2, w: 5 }, index);
+    return {
+      street: sorted.kept.filter(p => p.y === 0).length === 7, inLot: !sorted.kept.some(p => p.y === 25),
+      farRow: sorted.kept.filter(p => p.y === 310 && p.unmapped).length === 7,
+      spread: block.length >= 10, total: Math.abs(block.reduce((sum, p) => sum + p.w, 0) - 28) < 1e-6,
+      edges: block.every(p => Math.min(Math.abs(p.y), Math.abs(p.y - 70), Math.abs(p.x), Math.abs(p.x - 300)) <= 12),
+      bothSides: block.some(p => p.y < 20) && block.some(p => p.y > 50), kept: onStreet.length === 1,
+      hit: JSON.stringify(index.firstHit([150, 35], [150, -100]).map(Math.round)),
+    };
+  });
+  check(Object.entries(blocks).every(([k, v]) => (k === 'hit' ? v === '[150,0]' : v === true)),
+    `pré-projeto: poste no quintal fica de fora e balão de casas se espalha pelas ruas da quadra (${JSON.stringify(blocks)})`);
   //Pré-projeto num polígono que já existe: Desenhar → Pré-projeto → "Usar existente" → clique no polígono; ele fica e é marcado
   const reuse = await sp.evaluate(async () => {
     rebuildSidebarFromJSON([{ id: 'projRU', name: 'Projeto RU', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
