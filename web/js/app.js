@@ -101,7 +101,8 @@ function setMapPoiVisible(visible) {
 //Seletor Mapa/Satélite próprio: os dois menus têm "Pontos do mapa" (os nomes das ruas continuam aparecendo)
 function setupMapPoiControl() {
     const poiOption = '<label title="Mostrar ou esconder comércios, igrejas, pontos de ônibus e outros locais do Google"><input type="checkbox" data-opt="poi"> Pontos do mapa</label>';
-    const polesOption = '<label title="Mostra os postes da rede elétrica (BDGD/ANEEL) quando o zoom está perto"><input type="checkbox" data-opt="poles"> Postes da rede</label>';
+    const polesOption = '<label title="Mostra os postes da rede elétrica (BDGD/ANEEL) quando o zoom está perto"><input type="checkbox" data-opt="poles"> Postes da rede</label>'
+        + '<label title="Selo com as portas em uso de cada CTO (verde, amarelo ou vermelho) quando o zoom está perto"><input type="checkbox" data-opt="ctoBadges"> Ocupação das CTOs</label>';
     const box = document.createElement('div');
     box.className = 'map-type-control';
     box.innerHTML = `
@@ -128,6 +129,10 @@ function setupMapPoiControl() {
             polesInputs.forEach(other => { other.checked = input.checked; });
             if (typeof setPolesLayerVisible === 'function') setPolesLayerVisible(input.checked);
         });
+    });
+    box.querySelectorAll('[data-opt="ctoBadges"]').forEach(input => {
+        input.checked = typeof networkOverlays === 'undefined' || networkOverlays.enabled;
+        input.addEventListener('change', () => { if (typeof setCtoBadgesVisible === 'function') setCtoBadgesVisible(input.checked); });
     });
     box.querySelectorAll('[data-type]').forEach(button => {
         button.addEventListener('click', () => map.setMapTypeId(button.dataset.type));

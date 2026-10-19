@@ -3548,12 +3548,8 @@ function getAutoDesignCtoHouseSources(plan) {
 const getAutoDesignCtoLevel = (sum) => (sum.over ? 'over' : sum.clients >= sum.usable * 0.9 ? 'full' : 'ok');
 const AUTO_DESIGN_CTO_LEVEL_COLORS = { ok: '#16a34a', full: '#d97706', over: '#dc2626' };
 
-//Selo "casas/cabe" embaixo da CTO (imagem SVG; âncora negativa = desenhado abaixo do ponto)
-function getAutoDesignCtoBadgeIcon(text, color) {
-    const w = Math.max(30, text.length * 7 + 12), h = 18;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="9" fill="${color}" stroke="#ffffff" stroke-width="1"/><text x="${w / 2}" y="13" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#ffffff">${text}</text></svg>`;
-    return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize: new google.maps.Size(w, h), anchor: new google.maps.Point(w / 2, -16) };
-}
+//Selo "casas/cabe" embaixo da CTO: o mesmo selo da ocupação das CTOs no mapa (js/map/network-overlays.js)
+const getAutoDesignCtoBadgeIcon = (text, color) => getMapBadgeIcon(text, color);
 
 function drawAutoDesignPreview() {
     clearAutoDesignPreview();

@@ -811,6 +811,17 @@ function renderCtoClientsPanel(cto) {
     document.getElementById('ctoClientsOccupancy').textContent = capacity
         ? `${occupied.size} de ${capacity} portas em uso`
         : `${clients.length} cliente(s) · adicione um splitter de atendimento no plano de fusão para definir as portas`;
+    //Barra de portas em uso (mesmas cores do selo do mapa: verde, amarelo a partir de 75%, vermelho cheia)
+    const bar = document.getElementById('ctoOccupancyBar');
+    if (bar) {
+        bar.hidden = !capacity;
+        if (capacity) {
+            const share = Math.min(1, occupied.size / capacity);
+            bar.dataset.level = occupied.size >= capacity ? 'full' : share >= 0.75 ? 'high' : 'ok';
+            bar.style.setProperty('--fill', `${Math.round(share * 100)}%`);
+            bar.title = `${capacity - occupied.size} ${capacity - occupied.size === 1 ? 'porta livre' : 'portas livres'}`;
+        }
+    }
     const grid = document.getElementById('ctoPortGrid');
     grid.innerHTML = '';
     for (let port = 1; port <= (capacity || 0); port++) {

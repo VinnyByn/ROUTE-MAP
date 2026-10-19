@@ -2858,3 +2858,85 @@ html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__wa
 #autoDesignBox .auto-design__cto-ok { margin-left: 6px; font-size: 11px; font-weight: 700; color: #15803d; }
 #autoDesignBox .auto-design__cto-card.is-checked { border-color: rgba(22, 163, 74, 0.45); }
 html[data-theme="dark"] #autoDesignBox .auto-design__cto-ok { color: #86efac; }
+/* Barra lateral: olho e três pontinhos só ocupam lugar com o mouse em cima (o nome não fica cortado à toa).
+   Olho riscado (item oculto) continua sempre à vista. */
+@media (hover: hover) {
+  .sidebar-column .ge-pro-row:not(:hover):not(:focus-within):not(.sb-row-menu-open) > .ge-vis-checkbox:checked,
+  .sidebar-column .ge-pro-row:not(:hover):not(:focus-within):not(.sb-row-menu-open) > .ge-pro-actions { display: none; }
+}
+/* Plano de fusão: título da seção e "Adicionar todos" numa linha só */
+#fusionModal .fx-section__head { flex-wrap: wrap; row-gap: 4px; }
+#fusionModal .fx-section__head > h4 { white-space: nowrap; }
+#fusionModal .fx-section__head > .fx-link { flex: 0 0 auto; padding: 2px 6px; white-space: nowrap; }
+/* Lista de materiais: resumo por parte, total e busca no topo; ações na última coluna */
+#materialModal .material-summary { position: sticky; top: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; padding: 10px 0; background: var(--color-surface); }
+#materialModal .material-summary__chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 8px; }
+#materialModal .material-summary__chip,
+#materialModal .material-summary__total { min-height: 0; color: var(--color-text); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface-muted); text-align: left; box-shadow: none; filter: none; cursor: pointer; }
+#materialModal .material-summary__chip:hover { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)); }
+#materialModal .material-summary__chip span,
+#materialModal .material-summary__total span { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-text-muted); }
+#materialModal .material-summary__chip b { font-size: 14px; font-weight: 750; color: var(--color-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#materialModal .material-summary__total { cursor: default; border-color: color-mix(in srgb, var(--color-btn-confirm, #16a34a) 45%, transparent); background: color-mix(in srgb, var(--color-btn-confirm, #16a34a) 9%, var(--color-surface)); }
+#materialModal .material-summary__total b { font-size: 17px; font-weight: 800; color: var(--color-btn-confirm, #16a34a); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#materialModal .material-search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text-muted); }
+#materialModal .material-search:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent); }
+#materialModal .material-search .ui-icon { width: 16px; height: 16px; flex: 0 0 auto; }
+#materialModal .material-search input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; font-size: 13.5px; color: var(--color-text); }
+#materialModal .material-search__empty { margin: 0; font-size: 12.5px; color: var(--color-text-muted); }
+#materialModal .material-col-actions { width: 84px; white-space: nowrap; }
+html[data-theme="dark"] #materialModal .material-summary__total b { color: #4ade80; }
+@media (max-width: 760px) {
+  #materialModal .material-summary__chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #materialModal .material-summary__total { grid-column: 1 / -1; }
+}
+/* Barra lateral: resumo do projeto (CTOs, km de cabo, portas em uso) numa segunda linha do título */
+.sidebar-column .ge-pro-project > .folder-title[data-summary] { flex-wrap: wrap; row-gap: 0; padding-top: 4px; padding-bottom: 5px; }
+.sidebar-column .ge-pro-project > .folder-title[data-summary]::after {
+  content: attr(data-summary);
+  order: 20;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding-left: 50px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-text-dim);
+}
+/* Painel da CTO: barra de portas em uso (mesmas cores do selo do mapa) */
+.cto-occupancy-bar { --fill: 0%; height: 6px; margin-top: 8px; border-radius: 999px; background: var(--color-border-light, #e6edf1); overflow: hidden; }
+.cto-occupancy-bar[hidden] { display: none; }
+.cto-occupancy-bar > span { display: block; width: var(--fill); height: 100%; border-radius: inherit; background: #16a34a; transition: width .2s ease; }
+.cto-occupancy-bar[data-level="high"] > span { background: #d97706; }
+.cto-occupancy-bar[data-level="full"] > span { background: #dc2626; }
+/* Legenda do mapa (canto de baixo) */
+.map-legend { margin: 0 0 10px 10px; max-width: min(300px, calc(100vw - 40px)); border: 1px solid var(--color-border-light, #e6edf1); border-radius: 12px; background: var(--color-surface, #fff); box-shadow: 0 4px 14px rgba(15, 40, 52, 0.16); font: 500 12.5px var(--font-sans, 'Inter', system-ui, sans-serif); color: var(--color-text, #0f2834); }
+#map:has(> .map-legend) { position: relative; }
+#map > .map-legend { position: absolute; left: 0; bottom: 24px; z-index: 5; }
+.map-legend__toggle { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 11px; background: transparent; color: var(--color-text-dim, #5d7685); font: inherit; font-weight: 650; cursor: pointer; }
+.map-legend__toggle:hover, .map-legend.is-open .map-legend__toggle { color: var(--color-text, #0f2834); }
+.map-legend__toggle .ui-icon { width: 16px; height: 16px; }
+.map-legend__body { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow: auto; padding: 2px 12px 12px; border-top: 1px solid var(--color-border-light, #e6edf1); }
+.map-legend__body[hidden] { display: none; }
+.map-legend__section { display: flex; flex-direction: column; gap: 5px; padding-top: 8px; }
+.map-legend__section > b { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-muted, #5d7685); }
+.map-legend__section ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.map-legend__section li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.map-legend__section li > span { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.map-legend__section li > small { flex: none; color: var(--color-text-dim, #5d7685); font-variant-numeric: tabular-nums; }
+.map-legend__section li > img { flex: none; width: 18px; height: 18px; }
+.map-legend__section p { margin: 0; color: var(--color-text-dim, #5d7685); font-size: 12px; line-height: 1.5; }
+.map-legend__line { flex: none; width: 26px; height: var(--line-width, 4px); border-radius: 2px; background: var(--line-color, #16a34a); }
+.map-legend__line.is-existing { opacity: .75; }
+.map-legend__badges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; font-size: 12px; color: var(--color-text-dim, #5d7685); }
+.map-legend__badges > span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.map-legend__badge { flex: none; padding: 0 6px; border-radius: 999px; color: #fff; font-size: 10.5px; font-weight: 700; line-height: 16px; }
+.map-legend__switch { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 12.5px; cursor: pointer; }
+.map-legend__switch input { width: 15px; height: 15px; margin: 0; accent-color: var(--brand-600, #2a8cab); }
+.map-legend__hint { font-size: 11.5px !important; }
+/* Barra lateral: a lista de cada pasta ocupa a largura que sobra depois do recuo (com 100% + recuo, cada nível
+   vazava para fora da barra e o fim dos nomes era cortado) */
+.sidebar-column .subfolders { width: auto; min-width: 0; }
+.sidebar-column .folder-wrapper > .subfolders { align-self: stretch; }
