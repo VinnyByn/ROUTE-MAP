@@ -26,6 +26,13 @@ const AUTO_DESIGN_STREET_EDGE_M = 9;    //Entre dois postes o cabo fica a até ~
 //vão de poste em poste, sem cruzar rio. Poste solto (ou dupla) fora da rua continua de fora: é poste dentro de lote.
 const AUTO_DESIGN_UNMAPPED_SPAN_M = 130;
 const AUTO_DESIGN_UNMAPPED_LINE = 3;
+//Poste a 15–40 m de uma rua do mapa está no quintal/lote (cadastro da BDGD impreciso), mesmo em grupo: uma rua que
+//falta no mapa fica a mais de 40 m da rua conhecida (no mínimo a quadra no meio)
+const AUTO_DESIGN_IN_LOT_M = 40;
+//Balão de casas (número = casas da quadra): as casas são espalhadas pelas ruas em volta dele, a cada ~20 m da quadra
+const AUTO_DESIGN_BLOCK_RAY_M = 150;
+const AUTO_DESIGN_BLOCK_STEP_M = 20;
+const AUTO_DESIGN_BLOCK_INSET_M = 8; //Frente da casa: uns 8 m para dentro do eixo da rua
 const AUTO_DESIGN_STREET_MARGIN_M = 400; //Ruas lidas além do polígono (para o cabo contornar pela quadra vizinha)
 const AUTO_DESIGN_START_REACH_M = 5000;   //POP/CEO de partida até 5 km da área: as ruas até ele também são lidas
 const AUTO_DESIGN_WATER_PENALTY_M = 400; //Atravessar rio/córrego/lago "custa" +400 m: só cruza (por ponte) sem outro caminho
@@ -519,7 +526,29 @@ function buildAutoDesignStreetIndex(lines, proj) {
         }
         return found;
     };
-    return { distToStreet, nearestPoint, segmentOnStreets, distancesFrom, route, alternatives, crossesWater, size: segs.length };
+    //Primeira rua que o trecho reto de a até b cruza: [x, y] ou null
+    const firstHit = (a, b) => {
+        let bestT = Infinity;
+        const seen = new Set();
+        const d1x = b[0] - a[0], d1y = b[1] - a[1];
+        for (let cx = Math.floor(Math.min(a[0], b[0]) / CELL); cx <= Math.floor(Math.max(a[0], b[0]) / CELL); cx++) {
+            for (let cy = Math.floor(Math.min(a[1], b[1]) / CELL); cy <= Math.floor(Math.max(a[1], b[1]) / CELL); cy++) {
+                for (const si of grid.get(cellKey(cx, cy)) || []) {
+                    if (seen.has(si)) continue;
+                    seen.add(si);
+                    const [p, q] = [nodeXY[segs[si][0]], nodeXY[segs[si][1]]];
+                    const d2x = q[0] - p[0], d2y = q[1] - p[1];
+                    const den = d1x * d2y - d1y * d2x;
+                    if (Math.abs(den) < 1e-9) continue;
+                    const t = ((p[0] - a[0]) * d2y - (p[1] - a[1]) * d2x) / den;
+                    const u = ((p[0] - a[0]) * d1y - (p[1] - a[1]) * d1x) / den;
+                    if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && t < bestT) bestT = t;
+                }
+            }
+        }
+        return Number.isFinite(bestT) ? [a[0] + d1x * bestT, a[1] + d1y * bestT] : null;
+    };
+    return { distToStreet, nearestPoint, segmentOnStreets, distancesFrom, route, alternatives, crossesWater, firstHit, size: segs.length };
 }
 
 // ---------------------------------------------------------------
@@ -643,23 +672,66 @@ function buildAutoDesignGrid(polyXY) {
 function classifyAutoDesignPoles(poleSites, streetIndex) {
     const C = AUTO_DESIGN_UNMAPPED_SPAN_M;
     const off = poleSites.filter(p => streetIndex.distToStreet(p.x, p.y) > AUTO_DESIGN_STREET_TOL_M);
+    //Perto de uma rua do mapa (até 40 m) = no lote: nunca vira "rua que falta no mapa", nem em grupo
+    const far = off.filter(p => !streetIndex.nearestPoint(p.x, p.y, AUTO_DESIGN_IN_LOT_M));
     const cells = new Map();
-    off.forEach((p, i) => { const k = `${Math.floor(p.x / C)},${Math.floor(p.y / C)}`; if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); });
-    const parent = off.map((_, i) => i);
+    far.forEach((p, i) => { const k = `${Math.floor(p.x / C)},${Math.floor(p.y / C)}`; if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); });
+    const parent = far.map((_, i) => i);
     const find = (i) => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; };
-    off.forEach((p, i) => {
+    far.forEach((p, i) => {
         const cx = Math.floor(p.x / C), cy = Math.floor(p.y / C);
         for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) {
-            for (const j of cells.get(`${gx},${gy}`) || []) if (j > i && Math.hypot(off[j].x - p.x, off[j].y - p.y) <= C) parent[find(i)] = find(j);
+            for (const j of cells.get(`${gx},${gy}`) || []) if (j > i && Math.hypot(far[j].x - p.x, far[j].y - p.y) <= C) parent[find(i)] = find(j);
         }
     });
     const size = new Map();
-    off.forEach((_, i) => size.set(find(i), (size.get(find(i)) || 0) + 1));
-    const keep = new Set(off.filter((_, i) => size.get(find(i)) >= AUTO_DESIGN_UNMAPPED_LINE));
+    far.forEach((_, i) => size.set(find(i), (size.get(find(i)) || 0) + 1));
+    const keep = new Set(far.filter((_, i) => size.get(find(i)) >= AUTO_DESIGN_UNMAPPED_LINE));
     keep.forEach(p => { p.unmapped = true; });
     const offSet = new Set(off);
     const kept = poleSites.filter(p => !offSet.has(p) || keep.has(p));
     return { kept, dropped: poleSites.length - kept.length, droppedSites: poleSites.filter(p => offSet.has(p) && !keep.has(p)), unmapped: keep.size };
+}
+
+//Balão de casas no meio da quadra: as casas dele ficam nas ruas em volta (a frente das casas), não num ponto só.
+//Raios em volta do balão acham a primeira rua de cada lado; o contorno da quadra é dividido em pontos a cada ~20 m,
+//uns 8 m para dentro da rua, e as casas do balão são repartidas entre eles. Balão na rua (ou sem ruas em volta) fica.
+function spreadAutoDesignHouseBlock(point, streetIndex) {
+    if (!streetIndex?.firstHit || streetIndex.distToStreet(point.x, point.y) <= AUTO_DESIGN_STREET_TOL_M) return [point];
+    const RAYS = 32;
+    const ring = [];
+    for (let k = 0; k < RAYS; k++) {
+        const ang = (k / RAYS) * Math.PI * 2;
+        const hit = streetIndex.firstHit([point.x, point.y], [point.x + Math.cos(ang) * AUTO_DESIGN_BLOCK_RAY_M, point.y + Math.sin(ang) * AUTO_DESIGN_BLOCK_RAY_M]);
+        if (!hit) continue;
+        const d = Math.hypot(hit[0] - point.x, hit[1] - point.y);
+        const inset = Math.min(AUTO_DESIGN_BLOCK_INSET_M, d * 0.5);
+        ring.push({ k, d, p: [hit[0] - Math.cos(ang) * inset, hit[1] - Math.sin(ang) * inset] });
+    }
+    //Raio que passa num cruzamento e vai achar a rua de outra quadra (bem mais longe que a rua mais perto) não conta
+    const nearestHit = Math.min(...ring.map(r => r.d));
+    for (let i = ring.length - 1; i >= 0; i--) if (ring[i].d > Math.max(60, nearestHit * 3)) ring.splice(i, 1);
+    //Rua de um lado só (ou nenhuma): não dá para saber o contorno da quadra
+    if (ring.length < RAYS / 2) return [point];
+    //Contorno entre raios vizinhos que acharam rua (onde um raio não acha, o trecho não atravessa a quadra)
+    const legs = ring.map((a, i) => {
+        const b = ring[(i + 1) % ring.length];
+        const len = Math.hypot(b.p[0] - a.p[0], b.p[1] - a.p[1]);
+        return (a.k + 1) % RAYS === b.k && len <= 50 ? { p: a.p, q: b.p, len } : null;
+    }).filter(Boolean);
+    const perimeter = legs.reduce((sum, l) => sum + l.len, 0);
+    if (!perimeter) return [point];
+    const count = Math.max(4, Math.min(30, Math.round(perimeter / AUTO_DESIGN_BLOCK_STEP_M)));
+    const step = perimeter / count;
+    const out = [];
+    let leg = 0, walked = 0;
+    for (let n = 0; n < count; n++) {
+        const at = n * step + step / 2;
+        while (leg < legs.length - 1 && walked + legs[leg].len < at) walked += legs[leg++].len;
+        const { p, q, len } = legs[leg], t = len ? Math.min(1, (at - walked) / len) : 0;
+        out.push({ x: p[0] + (q[0] - p[0]) * t, y: p[1] + (q[1] - p[1]) * t, w: point.w / count });
+    }
+    return out;
 }
 
 //Cada CTO existente fica com as casas no raio dela, das mais perto para as mais longe, até lotar. Casa (ou ponto de
@@ -701,7 +773,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
     const streetNodes = (streets?.points || []).map(p => ({ ...xyOf(p.lat, p.lng), w: p.w }));
     let demand, demandKind;
     if (params.useHouses && houseMarkers.length >= AUTO_DESIGN_MIN_HOUSE_MARKERS) {
-        demand = houseMarkers.map(m => ({ ...xyOfMarker(m), w: getAutoDesignHouseCount(m) }));
+        demand = houseMarkers.flatMap(m => spreadAutoDesignHouseBlock({ ...xyOfMarker(m), w: getAutoDesignHouseCount(m) }, streetIndex));
         demandKind = 'houses';
     } else if (streetNodes.length) {
         demand = streetNodes;
@@ -1642,8 +1714,22 @@ async function routeAutoDesignCables(plan, isCurrent) {
     const simplify = (path) => (typeof simplifyPathMeters === 'function' ? simplifyPathMeters(path, 2.5) : path);
     const pending = plan.cables.filter(c => !getAutoDesignCachedRoute(plan, c));
     const viaStreets = [];
+    const streetIndexForPoles = plan.model.streetIndex;
     pending.forEach(cable => {
-        const polePath = getAutoDesignPolePath(plan, cable.from, cable.to);
+        let polePath = getAutoDesignPolePath(plan, cable.from, cable.to);
+        //Caminho de poste em poste que sai da rua (vão por cima de quintal): se a rua do mapa liga as duas caixas sem
+        //volta grande, o cabo vai pela rua
+        if (polePath && streetIndexForPoles && cable.from.isNew && cable.to.isNew) {
+            const proj = plan.model.proj;
+            const pts = polePath.map(p => proj.toXY(p.lat(), p.lng()));
+            const offStreet = pts.some((p, i) => i && !streetIndexForPoles.segmentOnStreets(pts[i - 1], p));
+            if (offStreet) {
+                const local = streetIndexForPoles.route([cable.from.x, cable.from.y], [cable.to.x, cable.to.y]);
+                const poleLength = spherical.computeLength(polePath);
+                const streetLength = local ? local.reduce((sum, p, i) => sum + (i ? Math.hypot(p[0] - local[i - 1][0], p[1] - local[i - 1][1]) : 0), 0) : Infinity;
+                if (streetLength <= poleLength * 1.5 + 50) polePath = null;
+            }
+        }
         if (polePath) plan.routes.set(getAutoDesignRouteKey(cable.from, cable.to), { path: polePath, straight: false, poles: true });
         else viaStreets.push(cable);
     });
