@@ -3495,7 +3495,10 @@ function startAutoDesignDrag(box) {
     const s = autoDesign;
     if (!s?.result || s.busy || box?.type !== 'CTO') return;
     endAutoDesignDrag();
-    s.drag = { box, overlays: [], key: '', latLng: null, timer: null };
+    //O destaque do lugar antigo (rua pintada, casas, selo) some: fica só a prévia do lugar novo
+    const hidden = s.ctoOverlays?.get(box) || [];
+    hidden.forEach(o => o.setMap(null));
+    s.drag = { box, overlays: [], hidden, key: '', latLng: null, timer: null };
 }
 
 function dragAutoDesignBox(box, latLng) {
@@ -3511,6 +3514,7 @@ function endAutoDesignDrag() {
     if (!s?.drag) return;
     clearTimeout(s.drag.timer);
     s.drag.overlays.forEach(o => o.setMap(null));
+    s.drag.hidden.forEach(o => o.setMap(map));
     s.drag = null;
 }
 
@@ -3528,12 +3532,14 @@ function drawAutoDesignDragPreview() {
     drag.overlays = [];
     const add = (overlay) => { drag.overlays.push(overlay); return overlay; };
     const toLL = (q) => { const ll = plan.model.proj.toLatLng(Array.isArray(q) ? q : [q.x, q.y]); return new google.maps.LatLng(ll.lat, ll.lng); };
+    //Rua pintada na cor da CTO; o selo (verde: cabe, vermelho: passou das portas) diz se as casas dali cabem nela
     const color = AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(view.sum)];
+    const own = s.ctoColors?.get(drag.box) || AUTO_DESIGN_CTO_PALETTE[0];
     const paint = getAutoDesignCtoStreetPaint(plan, [view.points])[0];
-    paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: color, strokeOpacity: 0.85, strokeWeight: 8 })));
+    paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.85, strokeWeight: 7 })));
     if (!paint.length) {
         const hull = getAutoDesignHull([...view.points, view.xy]);
-        if (hull.length) add(new google.maps.Polygon({ map, paths: hull.map(toLL), clickable: false, zIndex: 46, strokeColor: color, strokeOpacity: 0.8, strokeWeight: 2, fillColor: color, fillOpacity: 0.15 }));
+        if (hull.length) add(new google.maps.Polygon({ map, paths: hull.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.8, strokeWeight: 2, fillColor: own, fillOpacity: 0.15 }));
     }
     const at = toLL(view.xy);
     add(new google.maps.Marker({ map, position: at, clickable: false, zIndex: 74, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: color, fillOpacity: 0.9, strokeColor: '#ffffff', strokeWeight: 2 } }));
@@ -3844,7 +3850,24 @@ function getAutoDesignHull(points) {
     return hull.length >= 3 ? hull : [];
 }
 
-const getAutoDesignCtoColor = (i) => `hsl(${Math.round(i * 137.5) % 360}, 70%, 45%)`;
+//Cores das CTOs na prévia: bem diferentes entre si, sem laranja (cabo da prévia) nem vermelho (alerta). Cada CTO
+//fica com uma cor que nenhuma das vizinhas mais perto usa (quando todas já foram usadas em volta, a da mais longe)
+const AUTO_DESIGN_CTO_PALETTE = ['#2563eb', '#db2777', '#0d9488', '#7c3aed', '#a16207', '#0891b2', '#65a30d', '#c026d3'];
+const AUTO_DESIGN_CTO_COLOR_NEAR = 6;
+function getAutoDesignCtoColors(ctos) {
+    const dist = (a, b) => Math.hypot(ctos[a].x - ctos[b].x, ctos[a].y - ctos[b].y);
+    const links = ctos.map(() => new Set());
+    ctos.forEach((_, i) => ctos.map((__, j) => j).filter(j => j !== i).sort((a, b) => dist(i, a) - dist(i, b))
+        .slice(0, AUTO_DESIGN_CTO_COLOR_NEAR).forEach(j => { links[i].add(j); links[j].add(i); }));
+    const color = ctos.map(() => -1);
+    ctos.forEach((_, i) => {
+        const near = [...links[i]].filter(j => color[j] >= 0);
+        const used = new Set(near.map(j => color[j]));
+        const free = AUTO_DESIGN_CTO_PALETTE.findIndex((__, k) => !used.has(k));
+        color[i] = free >= 0 ? free : color[near.reduce((a, b) => (dist(i, b) > dist(i, a) ? b : a))];
+    });
+    return color.map(k => AUTO_DESIGN_CTO_PALETTE[k]);
+}
 const AUTO_DESIGN_HOUSE_DOTS_MAX = 600;
 const AUTO_DESIGN_PAINT_HALF_M = 11;     //Cada ponto de casa pinta a rua até 11 m para cada lado (os pontos ficam a ~20 m)
 const AUTO_DESIGN_PAINT_SIDE_M = 4;      //Pintura deslocada para o lado da rua onde as casas estão
@@ -3901,9 +3924,10 @@ function getAutoDesignCtoHouseSources(plan) {
     });
 }
 
-//Situação da CTO pelo selo: folga (verde), cheia (amarelo, a partir de 90% do que cabe) ou passou (vermelho)
-const getAutoDesignCtoLevel = (sum) => (sum.over ? 'over' : sum.clients >= sum.usable * 0.9 ? 'full' : 'ok');
-const AUTO_DESIGN_CTO_LEVEL_COLORS = { ok: '#16a34a', full: '#d97706', over: '#dc2626' };
+//Situação da CTO pelo selo: cabe (verde, cheia ou com folga: a quantidade de CTOs segue a penetração, ficar cheia é o
+//esperado) ou passou das portas (vermelho)
+const getAutoDesignCtoLevel = (sum) => (sum.over ? 'over' : 'ok');
+const AUTO_DESIGN_CTO_LEVEL_COLORS = { ok: '#16a34a', over: '#dc2626' };
 
 //Selo "casas/cabe" embaixo da CTO: o mesmo selo da ocupação das CTOs no mapa (js/map/network-overlays.js)
 const getAutoDesignCtoBadgeIcon = (text, color) => getMapBadgeIcon(text, color);
@@ -3921,48 +3945,50 @@ function drawAutoDesignPreview() {
         strokeColor: '#64748b', strokeOpacity: 0.8, strokeWeight: 1, fillColor: '#64748b', fillOpacity: 0.18,
     })));
     if (s.selectedCto && !plan.ctos.includes(s.selectedCto)) s.selectedCto = null;
-    //Casas de cada CTO: o trecho de rua das casas dela pintado com a cor dela (do lado da rua onde elas estão) e,
-    //embaixo da CTO, o selo casas/cabe. A CTO clicada fica em destaque, com as casas uma a uma e uma linha de cada
-    //balão de casas até ela; as outras ficam apagadas. Desligado: círculo verde do raio.
+    //Casas de cada CTO: o trecho de rua das casas dela pintado com a cor dela (do lado da rua onde elas estão, por
+    //baixo dos cabos) e, embaixo da CTO, o selo casas/cabe. A CTO clicada fica em destaque, com as casas uma a uma; as
+    //outras ficam apagadas. Desligado: círculo verde do raio. s.ctoOverlays guarda o que é de cada CTO (some enquanto
+    //ela é arrastada, para não ficar o destaque do lugar antigo junto com a prévia do lugar novo).
+    s.ctoOverlays = new Map();
     if (s.showHouses !== false) {
         const toLL = (q) => { const ll = plan.model.proj.toLatLng(Array.isArray(q) ? q : [q.x, q.y]); return new google.maps.LatLng(ll.lat, ll.lng); };
         const lists = getAutoDesignCtoHousePoints(plan);
         const paint = getAutoDesignCtoStreetPaint(plan, lists);
+        const colors = getAutoDesignCtoColors(plan.ctos);
+        s.ctoColors = new Map(plan.ctos.map((cto, i) => [cto, colors[i]]));
         const picked = plan.ctos.indexOf(s.selectedCto);
         const fade = (i) => picked >= 0 && i !== picked;
-        const sources = picked >= 0 ? getAutoDesignCtoHouseSources(plan) : [];
+        const own = (cto, overlay) => {
+            if (!s.ctoOverlays.has(cto)) s.ctoOverlays.set(cto, []);
+            s.ctoOverlays.get(cto).push(add(overlay));
+        };
         plan.ctos.forEach((cto, i) => {
-            const color = getAutoDesignCtoColor(i);
+            const color = colors[i];
             //Sem ruas para pintar (sem o traçado das ruas): contorno das casas
             if (!paint[i].length) {
                 const hull = getAutoDesignHull([...lists[i], cto]);
-                if (hull.length) add(new google.maps.Polygon({
+                if (hull.length) own(cto, new google.maps.Polygon({
                     map, paths: hull.map(toLL), clickable: false, zIndex: 40,
                     strokeColor: color, strokeOpacity: fade(i) ? 0.2 : 0.7, strokeWeight: i === picked ? 3 : 1.5, fillColor: color, fillOpacity: fade(i) ? 0.03 : 0.12,
                 }));
             }
-            paint[i].forEach(path => add(new google.maps.Polyline({
+            paint[i].forEach(path => own(cto, new google.maps.Polyline({
                 map, path: path.map(toLL), clickable: false, zIndex: i === picked ? 43 : 41,
-                strokeColor: color, strokeOpacity: fade(i) ? 0.15 : 0.75, strokeWeight: i === picked ? 8 : 6,
-            })));
-            //Balão costuma ser dividido entre as CTOs das ruas em volta: as linhas só aparecem para a CTO clicada
-            if (i === picked) sources[i].forEach(({ src }) => add(new google.maps.Polyline({
-                map, path: [plan.model.houseSources[src].position, cto.position], clickable: false, zIndex: 44,
-                strokeColor: color, strokeOpacity: 0.9, strokeWeight: 2.5,
+                strokeColor: color, strokeOpacity: fade(i) ? 0.15 : 0.7, strokeWeight: i === picked ? 7 : 5,
             })));
         });
         //Casas da CTO clicada, uma a uma; as que ficam fora do alcance do drop em vermelho
         if (picked >= 0) lists[picked].slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
             const out = !isAutoDesignCovered(plan.model, q, plan.ctos[picked]);
-            add(new google.maps.Marker({
+            own(plan.ctos[picked], new google.maps.Marker({
                 map, position: toLL(q), clickable: false, zIndex: out ? 67 : 66, title: out ? 'Fora do alcance do drop' : undefined,
-                icon: { path: google.maps.SymbolPath.CIRCLE, scale: out ? 4 : 3, fillColor: out ? AUTO_DESIGN_CTO_LEVEL_COLORS.over : getAutoDesignCtoColor(picked), fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1 },
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: out ? 4 : 3, fillColor: out ? AUTO_DESIGN_CTO_LEVEL_COLORS.over : colors[picked], fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1 },
             }));
         });
         plan.ctos.forEach((cto, i) => {
             const sum = getAutoDesignCtoSummary(plan, cto);
             const text = `${cto.checked ? '✓ ' : ''}${Math.round(sum.houses)}/${Number.isFinite(sum.maxHouses) ? sum.maxHouses : '∞'}`;
-            add(new google.maps.Marker({
+            own(cto, new google.maps.Marker({
                 map, position: cto.position, clickable: false, zIndex: 72, opacity: fade(i) ? 0.45 : 1,
                 icon: getAutoDesignCtoBadgeIcon(text, AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(sum)]),
             }));
@@ -4386,16 +4412,16 @@ function renderAutoDesignCtoHouses(s, plan) {
                 <li><span>Cabe nela (${sum.usable} de ${sum.ports} portas${sum.maxFill < 100 ? `, ${num(sum.maxFill)}% de ocupação` : ''})</span><b>${Number.isFinite(sum.maxHouses) ? `até ≈ ${num(sum.maxHouses)} casas` : '—'}</b></li>
                 <li><span>Drop pela rua (médio · maior)</span><b>${num(Math.round(sum.dropAvg))} · ${num(Math.round(sum.dropMax))} m</b></li>
             </ul>
-            ${sourceText ? `<p class="map-tool-help">${esc(sourceText)}</p>` : ''}
-            <p class="map-tool-help">${cto.pinned ? `Alcance do drop: até ${num(Math.round(sum.reach))} m pela rua.` : `Poste escolhido: o que deixa os drops destas casas mais curtos (alcance de até ${num(Math.round(sum.reach))} m pela rua).`} ${esc(status)}</p>
+            <p class="map-tool-help">Alcance do drop: até ${num(Math.round(sum.reach))} m pela rua. ${esc(status)}</p>
+            ${sourceText ? `<details class="auto-design__sources"><summary>De onde vêm as casas (${num(balloons.length + lots)} ${balloons.length + lots === 1 ? 'balão' : 'balões'})</summary><p class="map-tool-help">${esc(sourceText)}</p></details>` : ''}
             ${tips ? `<ul class="auto-design__tips" aria-label="Sugestões para esta CTO">${tips}</ul>` : ''}
-            ${cto.pinned ? '<p class="map-tool-help auto-design__pin">Fixa: fica onde você pôs e os ajustes automáticos não mexem nela. <button type="button" class="auto-design__link" data-auto-design="cto-unpin">Soltar</button></p>' : ''}
+            ${cto.pinned ? '<p class="map-tool-help auto-design__pin">Fixa: os ajustes automáticos não mexem nela. <button type="button" class="auto-design__link" data-auto-design="cto-unpin">Soltar</button></p>' : ''}
             <div class="auto-design__cto-actions">
                 ${cto.checked
                     ? '<button type="button" class="map-tool-btn" data-auto-design="cto-check">Desmarcar</button><button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="cto-next">Próxima →</button>'
                     : '<button type="button" class="map-tool-btn" data-auto-design="cto-next">Pular</button><button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="cto-check-next">Confere, próxima →</button>'}
             </div>
-            <p class="map-tool-help">Não confere? Arraste a CTO: enquanto arrasta, a rua pintada e o selo mostram as casas que ela pega dali. Ou use + CTO e − CTO: a conta se refaz.</p>
+            <p class="map-tool-help">Não confere? Arraste a CTO (a prévia mostra as casas que ela pega) ou use + CTO e − CTO.</p>
         </div></div>`;
 }
 
@@ -4446,7 +4472,7 @@ function renderAutoDesignPreviewPanel() {
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
         ${fixedCtos && fixedCtos < plan.ctos.length ? `<p class="map-tool-help auto-design__readjust">${fixedCtos === 1 ? '1 CTO fixa' : `${fixedCtos} CTOs fixas`} (movida, incluída ou conferida por você). <button type="button" class="auto-design__link" data-auto-design="readjust"${s.busy ? ' disabled' : ''}>Reajustar as outras em volta</button></p>` : ''}
         ${renderAutoDesignWarnings(warnings)}
-        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Rua pintada = casas de cada CTO, na cor dela; selo = casas dela / quantas cabem (verde: com folga, amarelo: cheia, vermelho: passou das portas)' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
+        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Rua pintada = casas de cada CTO, na cor dela; selo = casas dela / quantas cabem (verde: cabe, vermelho: passou das portas)' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
         <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>

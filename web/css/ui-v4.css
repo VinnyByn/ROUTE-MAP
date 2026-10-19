@@ -2864,6 +2864,9 @@ html[data-theme="dark"] #autoDesignBox .auto-design__cto-ok { color: #86efac; }
 #autoDesignBox .auto-design__tips li span { flex: 1; min-width: 0; }
 #autoDesignBox .auto-design__tips .map-tool-btn { flex: none; width: auto; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
 #autoDesignBox .auto-design__readjust { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+#autoDesignBox .auto-design__sources > summary { cursor: pointer; font-size: 12px; color: var(--color-text-muted); }
+#autoDesignBox .auto-design__sources > summary:hover { color: var(--color-text); }
+#autoDesignBox .auto-design__sources .map-tool-help { margin-top: 4px; }
 /* Barra lateral: olho e três pontinhos só ocupam lugar com o mouse em cima (o nome não fica cortado à toa).
    Olho riscado (item oculto) continua sempre à vista. */
 @media (hover: hover) {

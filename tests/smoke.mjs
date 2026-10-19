@@ -2440,7 +2440,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       const card = document.querySelector('#autoDesignBox .auto-design__cto-card')?.textContent || '';
       const sum = getAutoDesignCtoSummary(plan, cto);
       //Rua pintada (ou, sem o traçado das ruas, contorno das casas) e selo casas/cabe embaixo de cada CTO
-      const areas = autoDesign.overlays.filter(o => o.getPath && (o.get('fillOpacity') !== undefined || o.get('strokeWeight') >= 6)).length;
+      const areas = autoDesign.overlays.filter(o => o.getPath && (o.get('fillOpacity') !== undefined || o.get('strokeWeight') >= 5)).length;
       const badges = autoDesign.overlays.filter(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '') && o.get('zIndex') === 72).length;
       const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /casas × \d+%/.test(card), areas: areas > 0, badges: badges === plan.ctos.length,
         math: sum.houses > 0 && Math.abs(sum.clients - sum.houses * plan.params.occupancy / 100) < 1e-6 && sum.maxHouses === Math.round(sum.usable * 100 / plan.params.occupancy),
@@ -2922,14 +2922,24 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       let plan = autoDesign.result;
       const ll = (x, y) => { const q = plan.model.proj.toLatLng([x, y]); return new google.maps.LatLng(q.lat, q.lng); };
       out.gen = plan?.ctos.length === 2 && plan.model.demand.length === 80 && plan.ctos.every(c => !getAutoDesignCtoMove(plan, c));
+      //Cores: CTO vizinha nunca com a mesma cor; selo verde também para a CTO cheia (só passou das portas é vermelho)
+      const grid = [];
+      for (let gx = 0; gx < 8; gx++) for (let gy = 0; gy < 6; gy++) grid.push({ x: gx * 100 + (gy % 2) * 30, y: gy * 80 });
+      const colors = getAutoDesignCtoColors(grid);
+      out.colors = grid.every((c, i) => { const near = grid.map((o, j) => [Math.hypot(o.x - c.x, o.y - c.y), j]).filter(([, j]) => j !== i).sort((a, b) => a[0] - b[0]); return colors[near[0][1]] !== colors[i] && colors[near[1][1]] !== colors[i]; })
+        && getAutoDesignCtoLevel({ over: false, clients: 8, usable: 8 }) === 'ok' && getAutoDesignCtoLevel({ over: true }) === 'over';
       //Arrastar: prévia (rua pintada + selo) e, ao soltar, as mesmas casas; a CTO fica fixa
       const [a] = [...plan.ctos].sort((p, q) => p.x - q.x);
       const target = [a.x - 100, a.y];
       startAutoDesignDrag(a);
       dragAutoDesignBox(a, ll(...target));
       const view = drawAutoDesignDragPreview();
-      out.drag = { overlays: autoDesign.drag.overlays.length >= 3, badge: autoDesign.drag.overlays.some(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '')), houses: Math.round(view.sum.houses) };
+      out.drag = { overlays: autoDesign.drag.overlays.length >= 3, badge: autoDesign.drag.overlays.some(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '')), houses: Math.round(view.sum.houses),
+        //O destaque do lugar antigo some enquanto arrasta e volta ao terminar
+        oldHidden: autoDesign.drag.hidden.length > 0 && autoDesign.drag.hidden.every(o => !o.get('map')) };
+      const hidden = autoDesign.drag.hidden;
       endAutoDesignDrag();
+      out.drag.restored = hidden.every(o => o.get('map') === map);
       await moveAutoDesignBox(a, ll(...target));
       plan = autoDesign.result;
       out.drag.same = Math.round(a.houses) === out.drag.houses && a.pinned === true && !autoDesign.drag;
@@ -2984,7 +2994,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     }
     return out;
   });
-  check(adjust.gen && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.same && Object.values(adjust.move || {}).every(Boolean)
+  check(adjust.gen && adjust.colors && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.oldHidden && adjust.drag.restored && adjust.drag.same && Object.values(adjust.move || {}).every(Boolean)
     && Object.values(adjust.alone || {}).every(Boolean) && adjust.reach && adjust.split && adjust.readjust,
     `pré-projeto: prévia ao arrastar, poste melhor, dividir CTO, CTO para casas fora do alcance e reajustar em volta das fixas (${JSON.stringify(adjust)})`);
   //Ocupação máxima vale em todas as opções do pré-projeto (só a "com folga" usa menos)
