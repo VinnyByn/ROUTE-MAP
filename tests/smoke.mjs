@@ -2378,6 +2378,25 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         return ok;
       })(),
     };
+    //Casas de cada CTO: área colorida no mapa; clique na CTO mostra casas, clientes pela penetração e quanto cabe nela
+    extras.houses = (() => {
+      const cto = plan.ctos[0];
+      handleAutoDesignBoxClick(cto);
+      const card = document.querySelector('#autoDesignBox .auto-design__cto-card')?.textContent || '';
+      const sum = getAutoDesignCtoSummary(plan, cto);
+      const areas = autoDesign.overlays.filter(o => o.getPath && o.get('fillOpacity') !== undefined).length;
+      const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /de penetração/.test(card), areas: areas > 0,
+        math: sum.houses > 0 && Math.abs(sum.clients - sum.houses * plan.params.occupancy / 100) < 1e-6 && sum.maxHouses === Math.round(sum.usable * 100 / plan.params.occupancy),
+        hull: getAutoDesignHull([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 5, y: 5 }]).length === 4 };
+      const toggle = (on) => { const box = document.getElementById('autoDesignShowHouses'); box.checked = on; box.dispatchEvent(new Event('change', { bubbles: true })); };
+      toggle(false);
+      out.off = autoDesign.overlays.some(o => o.get?.('radius') === plan.model.coverRadius) && !document.querySelector('#autoDesignBox .auto-design__cto-card');
+      toggle(true);
+      handleAutoDesignBoxClick(cto);
+      out.closed = !document.querySelector('#autoDesignBox .auto-design__cto-card');
+      if (!Object.values(out).every(Boolean)) console.log('houses', JSON.stringify(out));
+      return Object.values(out).every(Boolean);
+    })();
     const previewText = document.getElementById('autoDesignBody').textContent;
     //Outra opção e de volta: o mapa mostra a escolhida
     const other = autoDesign.options.find(o => o !== plan);
@@ -2812,11 +2831,15 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
     const owner = assignAutoDesignCtosToCeos(split.slice(1), ctos, 3, dist);
     const fed = split.slice(1).map((_, i) => ctos.filter(c => owner.get(c) === i).length);
+    //Limite cheio: a CTO de fora não vai para a CEO do outro lado; a do meio passa para a CEO vizinha e abre a vaga
+    const A = { x: 0, y: 0 }, B = { x: 100, y: 0 }, t1 = { x: 55, y: 0 }, t2 = { x: 60, y: 0 }, t3 = { x: 150, y: 0 };
+    const fair = assignAutoDesignCtosToCeos([A, B], [t1, t2, t3], 2, dist);
     return { x: Math.round(ceo.x), y: Math.round(ceo.y), mid: ceo.x >= 700 && ceo.x <= 1000, two: two.length === 2 && two.every(c => c.x >= 600),
       notOnCto: ctos.every(c => Math.hypot(c.x - ceo.x, c.y - ceo.y) >= 10), kept: kept.length === 1 && kept[0] === existing,
-      split: split.length === 3 && split[0] === existing && fed.join() === '3,3' };
+      split: split.length === 3 && split[0] === existing && fed.join() === '3,3',
+      fair: [t1, t2, t3].map(t => fair.get(t)).join() === '0,1,1' };
   });
-  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split, `pré-projeto: CEO nova fica no meio das CTOs dela (${JSON.stringify(ceoMid)})`);
+  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split && ceoMid.fair, `pré-projeto: CEO nova fica no meio das CTOs dela (${JSON.stringify(ceoMid)})`);
   //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
   const drops = await sp.evaluate(() => {
     const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);

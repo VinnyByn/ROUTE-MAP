@@ -2842,3 +2842,11 @@ html[data-theme="dark"] #autoDesignBox .auto-design__warn--erro .auto-design__wa
 html[data-theme="dark"] #autoDesignBox .auto-design__warn--erro .auto-design__warn-go { color: #fca5a5; }
 html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__warn-tag { color: #93c5fd; background: rgba(59, 130, 246, 0.22); }
 html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__warn-go { color: #93c5fd; }
+/* Pré-projeto: casas de cada CTO (liga/desliga e cartão da CTO clicada) */
+#autoDesignBox .auto-design__houses { display: flex; flex-direction: column; gap: 6px; }
+#autoDesignBox .auto-design__cto-card { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface-muted); }
+#autoDesignBox .auto-design__cto-card.is-over { border-color: rgba(220, 38, 38, 0.45); background: rgba(220, 38, 38, 0.07); }
+#autoDesignBox .auto-design__cto-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; }
+#autoDesignBox .auto-design__cto-card .auto-design__list { background: var(--color-surface); }
+#autoDesignBox .auto-design__cto-card .auto-design__list b { white-space: nowrap; }
+#autoDesignBox .auto-design__cto-card .map-tool-help { margin: 0; }
