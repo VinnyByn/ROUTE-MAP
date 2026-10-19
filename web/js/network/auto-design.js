@@ -48,7 +48,7 @@ const AUTO_DESIGN_EDGE_TOL_M = 25;   //Rua (ou poste, ou casa) em cima do limite
 const AUTO_DESIGN_TABLE_MAX = 100;   //Caixas na tabela de distâncias pela rua (acima disso, linha reta)
 const AUTO_DESIGN_GRID_M = 15;       //Casas espalhadas pela área: um ponto a cada 15 m
 const AUTO_DESIGN_MAX_POINTS = 6000; //Áreas grandes usam pontos mais espaçados
-const AUTO_DESIGN_COVER_M = 150;     //Raio da CTO (alcance do drop, em linha reta) quando não informado
+const AUTO_DESIGN_COVER_M = 150;     //Raio da CTO (alcance do drop, em linha reta; pela rua até raio × √2) quando não informado
 const AUTO_DESIGN_COVER_MIN = 30, AUTO_DESIGN_COVER_MAX = 1000;
 const AUTO_DESIGN_SNAP_MAX_M = 80;   //Só puxa a caixa para a rua se a rua estiver até 80 m
 const AUTO_DESIGN_EDIT_SNAP_M = 60;  //Caixa arrastada na prévia vai para o poste/rua mais perto até 60 m
@@ -548,7 +548,36 @@ function buildAutoDesignStreetIndex(lines, proj) {
         }
         return Number.isFinite(bestT) ? [a[0] + d1x * bestT, a[1] + d1y * bestT] : null;
     };
-    return { distToStreet, nearestPoint, segmentOnStreets, distancesFrom, route, alternatives, crossesWater, firstHit, size: segs.length };
+    //Ruas ligadas entre si: mesmo número = dá para ir de uma à outra pela rua
+    const comp = new Int32Array(nodeXY.length).fill(-1);
+    nodeXY.forEach((_, s) => {
+        if (comp[s] >= 0) return;
+        comp[s] = s;
+        const stack = [s];
+        while (stack.length) { const u = stack.pop(); for (const [v] of adj[u]) if (comp[v] < 0) { comp[v] = s; stack.push(v); } }
+    });
+    //Ponto a até maxDist da rua: nós do trecho, distância até cada um, quanto está fora do eixo e em qual rede de ruas
+    const snapPoint = (x, y, maxDist) => {
+        const snap = nearest(x, y, maxDist);
+        return snap ? { ...snapAt(snap), seg: snap.seg, comp: comp[segs[snap.seg][0]] } : null;
+    };
+    //Distância pela rua a partir de um ponto encostado (snapPoint) até cada nó, só até limit metros: Map nó → m
+    const fieldFrom = (from, limit) => {
+        const dist = new Map([[from.u, from.du]]);
+        if (from.dv < (dist.get(from.v) ?? Infinity)) dist.set(from.v, from.dv);
+        const heap = makeHeap();
+        dist.forEach((d, u) => heap.push(d, u));
+        while (heap.size()) {
+            const [d, u] = heap.pop();
+            if (d > dist.get(u)) continue;
+            for (const [v, w] of adj[u]) {
+                const nd = d + w;
+                if (nd <= limit && nd < (dist.get(v) ?? Infinity)) { dist.set(v, nd); heap.push(nd, v); }
+            }
+        }
+        return dist;
+    };
+    return { distToStreet, nearestPoint, segmentOnStreets, distancesFrom, route, alternatives, crossesWater, firstHit, snapPoint, fieldFrom, size: segs.length };
 }
 
 // ---------------------------------------------------------------
@@ -736,14 +765,16 @@ function spreadAutoDesignHouseBlock(point, streetIndex) {
 
 //Cada CTO existente fica com as casas no raio dela, das mais perto para as mais longe, até lotar. Casa (ou ponto de
 //rua) atendida em parte fica com o resto para as CTOs novas. Sobra de menos de 1 cliente na área toda = tudo atendido.
-function serveAutoDesignDemandByExisting(demand, existing, radius, clientsPerWeight) {
+function serveAutoDesignDemandByExisting(demand, existing, radius, clientsPerWeight, drop) {
     if (!existing.length || !(clientsPerWeight > 0)) return { demand, existing };
     const left = demand.map(n => n.w * clientsPerWeight);
     const room = existing.map(e => e.usable);
     const pairs = [];
+    //Pelo drop (pela rua): a casa do outro lado da quadra não fica com a CTO só por estar perto em linha reta
     demand.forEach((n, i) => existing.forEach((e, j) => {
-        const d = Math.hypot(n.x - e.x, n.y - e.y);
-        if (d <= radius) pairs.push([d, i, j]);
+        if (Math.hypot(n.x - e.x, n.y - e.y) > radius) return;
+        const d = drop.measure(n, e);
+        if (d <= drop.reach) pairs.push([d, i, j]);
     }));
     pairs.sort((a, b) => a[0] - b[0]);
     pairs.forEach(([, i, j]) => {
@@ -826,17 +857,22 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
     //Com as casas do mapa, a quantidade é a das casas que sobraram (fora dos trechos sem casas)
     const allHouses = demandKind === 'houses' ? totalWeight : Number(params.houses) || 0;
     const housesPerWeight = totalWeight ? allHouses / totalWeight : 0;
+    const clientsPerWeight = housesPerWeight * params.occupancy / 100;
+    const drop = createAutoDesignDropMeter(streetIndex, getAutoDesignCoverRadius(params));
     //CTOs que já existem atendem primeiro: o que sobra é a demanda das CTOs novas
     const served = serveAutoDesignDemandByExisting(demand, getAutoDesignActiveExisting(inputs.existingCtos, params).map(e => ({
         ...xyOfMarker(e.marker), markerInfo: e.marker, distance: e.distance, wired: isAutoDesignCtoWired(e.marker), served: 0,
         ...getAutoDesignExistingCapacity(e.marker, params),
-    })), getAutoDesignCoverRadius(params), housesPerWeight * params.occupancy / 100);
+    })), getAutoDesignCoverRadius(params), clientsPerWeight, drop);
     demand = served.demand;
     const houses = demand.reduce((s, n) => s + n.w, 0) * housesPerWeight;
     return {
         proj, polyXY, demand, sites, demandKind, siteKind, totalWeight, houses, allHouses, housesPerWeight,
         existing: served.existing, existingClients: served.existing.reduce((s, e) => s + e.served, 0),
         coverRadius: getAutoDesignCoverRadius(params),
+        drop,
+        //Peso de casas que cabe numa CTO (portas usáveis)
+        ctoCapacity: clientsPerWeight > 0 ? getAutoDesignUsablePorts(params) / clientsPerWeight : Infinity,
         ctoSpacing: getAutoDesignCtoSpacing(params),
         streetsOk: !!streets,
         streetIndex, polesOffStreet, polesOffStreetSites, polesUnmapped: siteKind === 'poles' ? sites.filter(p => p.unmapped).length : 0, onPolesOffMap,
@@ -1028,22 +1064,13 @@ function placeAutoDesignCtos(model, candidates, k, seed = 0) {
         centers.push(site);
         demand.forEach((n, j) => { minD[j] = Math.min(minD[j], d2(n, site)); });
     }
-    const assign = new Int32Array(demand.length);
-    for (let iter = 0; iter < 30; iter++) {
-        demand.forEach((n, j) => {
-            let best = 0, bestD = Infinity;
-            centers.forEach((c, ci) => { const d = d2(n, c); if (d < bestD) { bestD = d; best = ci; } });
-            assign[j] = best;
-        });
-        const acc = centers.map(() => ({ w: 0, x: 0, y: 0 }));
-        demand.forEach((n, j) => {
-            const a = acc[assign[j]];
-            a.w += n.w; a.x += n.x * n.w; a.y += n.y * n.w;
-        });
+    //Depois, até parar de mudar: as casas vão para a CTO mais perto pela rua (com porta livre) e cada CTO vai para o
+    //poste que deixa os drops das suas casas mais curtos
+    for (let iter = 0; iter < AUTO_DESIGN_PLACE_ITERS; iter++) {
+        const { parts } = evaluateAutoDesignCenters(model, centers.map(c => sites[c]));
         const taken = new Set();
-        const next = acc.map((a, ci) => {
-            let site = a.w ? nearestAutoDesignSite(sites, [a.x / a.w, a.y / a.w], candidates) : centers[ci];
-            if (taken.has(site)) site = centers[ci];
+        const next = centers.map((c, ci) => {
+            const site = pickAutoDesignCtoSite(model, parts[ci], candidates, c, taken);
             taken.add(site);
             return site;
         });
@@ -1055,22 +1082,179 @@ function placeAutoDesignCtos(model, candidates, k, seed = 0) {
     return evaluateAutoDesignCenters(model, centers.map(c => sites[c]), centers);
 }
 
-//Casas (peso) de cada CTO pela caixa mais perto e quanto da área fica no alcance
+//Drop: da CTO até a casa ele corre pela rua (de poste em poste), não atravessa quintal nem quadra. A distância do drop
+//é pela rua; sem o traçado das ruas, ou com a casa/caixa longe de qualquer rua (rua que falta no mapa), vale a linha
+//reta; casa e caixa em ruas que não se ligam no mapa: linha reta × 1,5.
+const AUTO_DESIGN_DROP_SNAP_M = 40;     //Casa até 40 m da rua: o drop chega pela rua
+const AUTO_DESIGN_DROP_BOX_SNAP_M = 30; //Caixa até 30 m da rua (poste na calçada); mais longe é rua que falta no mapa
+const AUTO_DESIGN_DROP_LEGS_M = 20;     //Descida do poste e entrada da casa
+const AUTO_DESIGN_DROP_CHOICES = 6;     //CTOs mais perto (em linha reta) que cada casa confere pela rua
+const AUTO_DESIGN_SITE_CHOICES = 8;     //Postes em volta do meio das casas testados para a CTO
+const AUTO_DESIGN_PLACE_ITERS = 15;
+const AUTO_DESIGN_DROP_CACHE = new WeakMap(); //índice de ruas → pontos encostados e distâncias (vale para todas as opções)
+const AUTO_DESIGN_SITE_GRIDS = new WeakMap(); //locais permitidos → grade para achar os mais perto
+
+//Até onde o drop vai pela rua: casa no raio da CTO, num quarteirão comum, fica a no máximo raio × √2 pela rua
+//(dois lados do quarteirão), mais a descida do poste
+const getAutoDesignDropReach = (radius) => radius * Math.SQRT2 + AUTO_DESIGN_DROP_LEGS_M;
+
+function createAutoDesignDropMeter(streetIndex, radius) {
+    const reach = getAutoDesignDropReach(radius);
+    const limit = reach * 1.5;
+    const straight = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); //Math.hypot é lento nas voltas grandes
+    if (!streetIndex?.fieldFrom) return { reach, limit, measure: straight };
+    let cache = AUTO_DESIGN_DROP_CACHE.get(streetIndex);
+    if (!cache) AUTO_DESIGN_DROP_CACHE.set(streetIndex, cache = { snaps: new Map(), fields: new Map(), byObject: new WeakMap(), fieldByObject: new WeakMap() });
+    //Guardado pelo objeto (casas e locais são os mesmos a cada volta) e pela posição (caixa nova no mesmo poste)
+    const snapOf = (p, maxDist) => {
+        let snaps = cache.byObject.get(p);
+        if (!snaps) cache.byObject.set(p, snaps = {});
+        if (snaps[maxDist] === undefined) {
+            const key = `${Math.round(p.x * 10)},${Math.round(p.y * 10)},${maxDist}`;
+            if (!cache.snaps.has(key)) cache.snaps.set(key, streetIndex.snapPoint(p.x, p.y, maxDist));
+            snaps[maxDist] = cache.snaps.get(key);
+        }
+        return snaps[maxDist];
+    };
+    const fieldOf = (box, snap) => {
+        let field = cache.fieldByObject.get(box);
+        if (!field || field.limit < limit) {
+            const key = `${Math.round(box.x * 10)},${Math.round(box.y * 10)}`;
+            field = cache.fields.get(key);
+            if (!field || field.limit < limit) cache.fields.set(key, field = { limit, dist: streetIndex.fieldFrom(snap, limit) });
+            cache.fieldByObject.set(box, field);
+        }
+        return field.dist;
+    };
+    //house = ponto de casas, box = caixa (ou local de caixa)
+    const measure = (house, box) => {
+        const line = straight(house, box);
+        const b = box.unmapped ? null : snapOf(box, AUTO_DESIGN_DROP_BOX_SNAP_M);
+        const h = b && snapOf(house, AUTO_DESIGN_DROP_SNAP_M);
+        if (!b || !h) return line;
+        if (b.comp !== h.comp) return line * 1.5;
+        const dist = fieldOf(box, b);
+        let d = Math.min((dist.get(h.u) ?? Infinity) + h.du, (dist.get(h.v) ?? Infinity) + h.dv);
+        if (h.seg === b.seg) d = Math.min(d, Math.abs(h.du - b.du));
+        if (!Number.isFinite(d)) return limit + line;
+        return Math.max(line, d + h.off + b.off);
+    };
+    return { reach, limit, measure };
+}
+
+//Casa coberta pela caixa: no raio dela (linha reta) e com o drop pela rua até raio × √2
+function isAutoDesignCovered(model, house, box, line = Math.hypot(house.x - box.x, house.y - box.y)) {
+    return line <= (model.coverRadius || AUTO_DESIGN_COVER_M) && model.drop.measure(house, box) <= model.drop.reach;
+}
+
+//Casas de cada CTO: cada casa vai para a CTO mais perto pelo drop (pela rua) que ainda tem porta livre; a que não
+//cabe em nenhuma das CTOs em volta fica com a mais perto (e ela passa das portas). parts[i] = [[casa, peso], ...]
 function evaluateAutoDesignCenters(model, points, centers = null) {
+    const { demand, drop } = model;
     const load = points.map(() => 0);
-    let covered = 0, total = 0;
-    model.demand.forEach(n => {
-        let best = 0, bestD = Infinity;
-        points.forEach((c, ci) => {
-            const d = (n.x - c.x) ** 2 + (n.y - c.y) ** 2;
-            if (d < bestD) { bestD = d; best = ci; }
-        });
-        if (!points.length) return;
-        load[best] += n.w;
-        total += n.w;
-        if (Math.sqrt(bestD) <= (model.coverRadius || AUTO_DESIGN_COVER_M)) covered += n.w;
+    const parts = points.map(() => []);
+    if (!points.length) return { centers, load, parts, coverage: 1 };
+    const radius = model.coverRadius || AUTO_DESIGN_COVER_M;
+    //Grade das caixas: cada casa só confere as caixas em volta
+    const cell = drop.limit;
+    const cellKey = (gx, gy) => (gx + 50000) * 100000 + gy + 50000;
+    const grid = new Map();
+    points.forEach((c, ci) => {
+        const k = cellKey(Math.floor(c.x / cell), Math.floor(c.y / cell));
+        if (!grid.has(k)) grid.set(k, []);
+        grid.get(k).push(ci);
     });
-    return { centers, load, coverage: total ? covered / total : 1 };
+    const pairs = [];
+    const fallback = demand.map((n, j) => {
+        const cx = Math.floor(n.x / cell), cy = Math.floor(n.y / cell);
+        let near = [];
+        for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) {
+            const list = grid.get(cellKey(gx, gy));
+            if (!list) continue;
+            for (const ci of list) {
+                const line = Math.sqrt((points[ci].x - n.x) ** 2 + (points[ci].y - n.y) ** 2);
+                if (line <= drop.limit) near.push([line, ci]);
+            }
+        }
+        //Nenhuma caixa em volta: a mais perto em linha reta
+        if (!near.length) near = [points.reduce((best, c, ci) => { const line = Math.hypot(c.x - n.x, c.y - n.y); return line < best[0] ? [line, ci] : best; }, [Infinity, 0])];
+        near.sort((a, b) => a[0] - b[0]);
+        const mine = near.slice(0, AUTO_DESIGN_DROP_CHOICES).map(([line, ci]) => [drop.measure(n, points[ci]), j, ci, line]);
+        const best = mine.reduce((a, b) => (b[0] < a[0] ? b : a));
+        //CTO cheia: a casa só passa para outra que também alcança; senão fica com a mais perto (e ela passa das portas)
+        mine.forEach(pair => { if (pair === best || (pair[3] <= radius && pair[0] <= drop.reach)) pairs.push(pair); });
+        return best;
+    });
+    pairs.sort((a, b) => a[0] - b[0]);
+    const room = points.map(() => model.ctoCapacity ?? Infinity);
+    const left = demand.map(n => n.w);
+    let covered = 0, total = 0;
+    const take = ([d, j, ci, line], w) => {
+        load[ci] += w;
+        parts[ci].push([j, w]);
+        total += w;
+        if (line <= radius && d <= drop.reach) covered += w;
+    };
+    pairs.forEach(pair => {
+        const j = pair[1], ci = pair[2];
+        const w = Math.min(left[j], room[ci]);
+        if (!(w > 1e-9)) return;
+        left[j] -= w;
+        room[ci] -= w;
+        take(pair, w);
+    });
+    fallback.forEach((pair, j) => { if (left[j] > 1e-9) take(pair, left[j]); });
+    return { centers, load, parts, coverage: total ? covered / total : 1 };
+}
+
+//Até count locais permitidos mais perto de (x, y)
+function getAutoDesignNearSites(model, candidates, x, y, count) {
+    const CELL = 50;
+    let grid = AUTO_DESIGN_SITE_GRIDS.get(candidates);
+    if (!grid) {
+        grid = new Map();
+        candidates.forEach(i => {
+            const k = `${Math.floor(model.sites[i].x / CELL)},${Math.floor(model.sites[i].y / CELL)}`;
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push(i);
+        });
+        AUTO_DESIGN_SITE_GRIDS.set(candidates, grid);
+    }
+    const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+    const found = [];
+    for (let r = 0; r <= 40; r++) {
+        for (let gx = cx - r; gx <= cx + r; gx++) for (let gy = cy - r; gy <= cy + r; gy++) {
+            if (Math.max(Math.abs(gx - cx), Math.abs(gy - cy)) !== r) continue;
+            for (const i of grid.get(`${gx},${gy}`) || []) found.push([Math.sqrt((model.sites[i].x - x) ** 2 + (model.sites[i].y - y) ** 2), i]);
+        }
+        if (found.length >= count) {
+            found.sort((a, b) => a[0] - b[0]);
+            if (found[count - 1][0] <= r * CELL) break;
+        }
+    }
+    found.sort((a, b) => a[0] - b[0]);
+    return found.slice(0, count).map(([, i]) => i);
+}
+
+//Local da CTO para as casas part: entre o atual e os locais em volta do meio delas, o de menor soma dos drops
+//(pela rua). O meio das casas costuma cair dentro da quadra: o poste mais perto dele pode estar na rua errada.
+function pickAutoDesignCtoSite(model, part, candidates, current, taken) {
+    const { demand, sites, drop } = model;
+    let w = 0, x = 0, y = 0;
+    part.forEach(([j, pw]) => { w += pw; x += demand[j].x * pw; y += demand[j].y * pw; });
+    if (!(w > 0)) return current;
+    const pool = [current, ...getAutoDesignNearSites(model, candidates, x / w, y / w, AUTO_DESIGN_SITE_CHOICES).filter(i => i !== current)];
+    let best = current, bestCost = Infinity;
+    pool.forEach(i => {
+        if (taken.has(i)) return;
+        let cost = 0;
+        for (const [j, pw] of part) {
+            cost += pw * drop.measure(demand[j], sites[i]);
+            if (cost >= bestCost) return;
+        }
+        if (cost < bestCost - 1e-6) { best = i; bestCost = cost; }
+    });
+    return best;
 }
 
 //Raio da CTO: até onde o drop chega (linha reta); define quantas caixas são precisas para cobrir a área
@@ -2566,7 +2750,7 @@ function renderAutoDesign() {
             ${s.poleMarkers.length ? check('autoDesignUsePoles', p.usePoles, `Caixas nos <b>${s.poleMarkers.length}</b> postes da área e cabos de poste em poste`, s.bdgdPoles?.used && s.markedPoles.length ? `${s.markedPoles.length} marcados + ${s.bdgdPoles.used} da BDGD` : '') : ''}`)}
         ${section(4, 'Caixas e cabos', 'Alcance de cada CTO e tipo de cabo', `
             <div class="map-tool-field-row">
-                <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO</label>${unit(`<input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO (em linha reta)">`, 'm')}<small class="auto-design__field-hint">Até onde vai o drop</small></div>
+                <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO</label>${unit(`<input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO, em linha reta (pela rua, até o raio × 1,4)">`, 'm')}<small class="auto-design__field-hint">Até onde vai o drop</small></div>
                 <div class="map-tool-field"><label for="autoDesignSpacing">Entre CTOs</label>${unit(`<input type="number" id="autoDesignSpacing" min="10" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="Pelo raio" value="${esc(getAutoDesignCtoSpacing(p) || '')}" title="Mínimo entre duas CTOs na mesma rua, em linha reta. Em branco: vale só o raio">`, 'm')}<small class="auto-design__field-hint">Mínimo na mesma rua</small></div>
             </div>
             <div class="map-tool-field"><label>Vão do cabo</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>`)}
@@ -3104,8 +3288,8 @@ function getAutoDesignWarnings(plan, params) {
     });
     if (st.uncoveredHouses > 0) {
         const boxes = [...plan.ctos, ...model.existing];
-        const far = model.demand.filter(n => boxes.every(b => Math.hypot(b.x - n.x, b.y - n.y) > model.coverRadius));
-        add(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${model.coverRadius} m de uma CTO (raio da CTO).`, groupAutoDesignTargets(model, far, 'Casas fora do raio'));
+        const far = model.demand.filter(n => boxes.every(b => !isAutoDesignCovered(model, n, b)));
+        add(`≈ ${st.uncoveredHouses} casa(s) ficaram fora do alcance de uma CTO (mais de ${model.coverRadius} m em linha reta ou ${Math.round(model.drop.reach)} m de drop pela rua).`, groupAutoDesignTargets(model, far, 'Casas fora do raio'));
     }
     //CEO tirada à mão: as CTOs dela vão para as outras, que podem passar de "CTOs por CEO"
     const ceoFull = params.ceoMax > 0 ? plan.ceos.filter(c => c.isNew && c.own > params.ceoMax) : [];
