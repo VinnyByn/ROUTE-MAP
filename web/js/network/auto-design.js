@@ -1712,7 +1712,11 @@ function rebuildAutoDesignNetwork(plan) {
     const usable = getAutoDesignUsablePorts(params);
     //Casas de cada CTO (a mais perto) e cobertura
     const evaluation = evaluateAutoDesignCenters(model, ctos);
-    ctos.forEach((cto, i) => { cto.clients = evaluation.load[i] * model.housesPerWeight * params.occupancy / 100; });
+    ctos.forEach((cto, i) => {
+        cto.houses = evaluation.load[i] * model.housesPerWeight;
+        cto.clients = cto.houses * params.occupancy / 100;
+        cto.part = evaluation.parts[i];
+    });
     [plan.start, ...ceos, ...ctos].forEach(box => { if (box) { box.in = null; box.out = []; box.kids = []; } });
     //CTO → CEO: a mais perto que ainda tem vaga (a mesma regra usada ao colocar as CEOs).
     //Caixa que já existe tem uma saída só (o cabo da rota de chegada): com CEOs novas, só elas alimentam CTOs e só a
@@ -3257,8 +3261,58 @@ function handleAutoDesignBoxClick(box) {
     } else if (s.editMode === 'remove-ceo' && box.type === 'CEO') {
         setAutoDesignEditMode(null);
         removeAutoDesignCeo(box);
+    } else if (!s.editMode && box.type === 'CTO') {
+        s.selectedCto = s.selectedCto === box ? null : box;
+        drawAutoDesignPreview();
+        renderAutoDesign();
     }
 }
+
+//Casas de uma CTO da prévia: quantas ficaram com ela, quantos clientes dão pela penetração e quantas casas cabem
+//nas portas que ela pode usar (portas × ocupação máxima ÷ penetração)
+function getAutoDesignCtoSummary(plan, cto) {
+    const p = plan.params;
+    const usable = getAutoDesignUsablePorts(p);
+    const rate = (Number(p.occupancy) || 0) / 100;
+    const clients = cto.clients || 0;
+    return {
+        houses: cto.houses || 0, clients, usable, ports: p.ports, occupancy: p.occupancy, maxFill: Number(p.maxFill) || 100,
+        maxHouses: rate > 0 ? Math.round(usable / rate) : Infinity, over: clients > usable + 0.5,
+    };
+}
+
+//Pontos de casa de cada CTO (ponto dividido entre duas CTOs fica com a que levou a maior parte), na ordem de plan.ctos
+function getAutoDesignCtoHousePoints(plan) {
+    const best = new Map();
+    plan.ctos.forEach((cto, ci) => (cto.part || []).forEach(([j, w]) => {
+        const cur = best.get(j);
+        if (!cur || w > cur[1]) best.set(j, [ci, w]);
+    }));
+    const lists = plan.ctos.map(() => []);
+    best.forEach(([ci], j) => { if (plan.model.demand[j]) lists[ci].push(plan.model.demand[j]); });
+    return lists;
+}
+
+//Contorno convexo de pontos {x, y} (cadeia monótona); menos de 3 pontos distintos → []
+function getAutoDesignHull(points) {
+    const pts = [...new Map(points.map(q => [`${Math.round(q.x * 10)},${Math.round(q.y * 10)}`, q])).values()].sort((a, b) => a.x - b.x || a.y - b.y);
+    if (pts.length < 3) return [];
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const half = (list) => {
+        const out = [];
+        list.forEach(q => {
+            while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+            out.push(q);
+        });
+        out.pop();
+        return out;
+    };
+    const hull = [...half(pts), ...half([...pts].reverse())];
+    return hull.length >= 3 ? hull : [];
+}
+
+const getAutoDesignCtoColor = (i) => `hsl(${Math.round(i * 137.5) % 360}, 70%, 45%)`;
+const AUTO_DESIGN_HOUSE_DOTS_MAX = 600;
 
 function drawAutoDesignPreview() {
     clearAutoDesignPreview();
@@ -3272,10 +3326,33 @@ function drawAutoDesignPreview() {
         map, bounds: { south: r.south, north: r.north, west: r.west, east: r.east }, clickable: false, zIndex: 35,
         strokeColor: '#64748b', strokeOpacity: 0.8, strokeWeight: 1, fillColor: '#64748b', fillOpacity: 0.18,
     })));
-    plan.ctos.forEach(cto => add(new google.maps.Circle({
-        map, center: cto.position, radius: plan.model.coverRadius, clickable: false, zIndex: 40,
-        strokeColor: '#16a34a', strokeOpacity: 0.35, strokeWeight: 1, fillColor: '#16a34a', fillOpacity: 0.06,
-    })));
+    if (s.selectedCto && !plan.ctos.includes(s.selectedCto)) s.selectedCto = null;
+    //Casas de cada CTO: área colorida em volta das casas que ficaram com ela; a CTO clicada mostra as casas uma a uma.
+    //Desligado: círculo verde do raio
+    if (s.showHouses !== false) {
+        const toLL = (q) => { const ll = plan.model.proj.toLatLng([q.x, q.y]); return new google.maps.LatLng(ll.lat, ll.lng); };
+        const lists = getAutoDesignCtoHousePoints(plan);
+        plan.ctos.forEach((cto, i) => {
+            const hull = getAutoDesignHull([...lists[i], cto]);
+            if (!hull.length) return;
+            const color = getAutoDesignCtoSummary(plan, cto).over ? '#dc2626' : getAutoDesignCtoColor(i);
+            const picked = cto === s.selectedCto;
+            add(new google.maps.Polygon({
+                map, paths: hull.map(toLL), clickable: false, zIndex: picked ? 42 : 40,
+                strokeColor: color, strokeOpacity: picked ? 0.95 : 0.6, strokeWeight: picked ? 3 : 1.5, fillColor: color, fillOpacity: picked ? 0.2 : 0.1,
+            }));
+        });
+        const picked = plan.ctos.indexOf(s.selectedCto);
+        if (picked >= 0) lists[picked].slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => add(new google.maps.Marker({
+            map, position: toLL(q), clickable: false, zIndex: 66,
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 3, fillColor: getAutoDesignCtoColor(picked), fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1 },
+        })));
+    } else {
+        plan.ctos.forEach(cto => add(new google.maps.Circle({
+            map, center: cto.position, radius: plan.model.coverRadius, clickable: false, zIndex: 40,
+            strokeColor: '#16a34a', strokeOpacity: 0.35, strokeWeight: 1, fillColor: '#16a34a', fillOpacity: 0.06,
+        })));
+    }
     //CTOs que já existem e entraram na conta: círculo azul
     plan.model.existing.forEach(e => add(new google.maps.Circle({
         map, center: e.markerInfo.marker.getPosition(), radius: plan.model.coverRadius, clickable: false, zIndex: 39,
@@ -3297,14 +3374,16 @@ function drawAutoDesignPreview() {
     (plan.reserves || []).forEach(reserve => add(new google.maps.Marker({
         map, position: reserve.position, title: `${reserve.name} (prévia)`, clickable: false, zIndex: 65, opacity: 0.85, icon: icon('RESERVA', 20),
     })));
+    const fmt = (v) => Math.round(v).toLocaleString('pt-BR');
     getAutoDesignNetworkBoxes(plan).filter(box => box.isNew).forEach(box => {
+        const sum = box.type === 'CTO' ? getAutoDesignCtoSummary(plan, box) : null;
+        const about = sum ? ` · ≈ ${fmt(sum.houses)} casas, ≈ ${fmt(sum.clients)} de ${sum.usable} clientes` : '';
         const marker = add(new google.maps.Marker({
-            map, position: box.position, title: `${box.name} (prévia)${editable ? ' — arraste para mover' : ''}`,
-            clickable: editable, draggable: editable, zIndex: 70, opacity: 0.9, icon: icon(box.type, 26),
+            map, position: box.position, title: `${box.name} (prévia)${about}${editable ? ' — arraste para mover' : ''}`,
+            clickable: editable || box.type === 'CTO', draggable: editable, zIndex: 70, opacity: 0.9, icon: icon(box.type, 26),
         }));
-        if (!editable) return;
-        marker.addListener('dragend', (e) => moveAutoDesignBox(box, e?.latLng || marker.getPosition()));
         marker.addListener('click', () => handleAutoDesignBoxClick(box));
+        if (editable) marker.addListener('dragend', (e) => moveAutoDesignBox(box, e?.latLng || marker.getPosition()));
     });
 }
 
@@ -3606,6 +3685,31 @@ function renderAutoDesignAccessRoutes(s) {
         </div>`;
 }
 
+//Casas por CTO: liga/desliga as áreas no mapa e, com uma CTO clicada, quantas casas e clientes ficam com ela
+function renderAutoDesignCtoHouses(s, plan) {
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    const on = s.showHouses !== false;
+    const num = (v, digits = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: digits });
+    const toggle = `<label class="auto-design__check"><input type="checkbox" id="autoDesignShowHouses"${on ? ' checked' : ''}><span>Mostrar as casas de cada CTO</span></label>`;
+    const cto = on && plan.ctos.includes(s.selectedCto) ? s.selectedCto : null;
+    if (!cto) return `<div class="auto-design__houses">${toggle}${on ? '<p class="map-tool-help">Clique numa CTO para ver as casas dela e quantos clientes ela atende.</p>' : ''}</div>`;
+    const sum = getAutoDesignCtoSummary(plan, cto);
+    const room = sum.usable - sum.clients;
+    const status = sum.over
+        ? `Passa ≈ ${num(-room, 1)} ${-room < 1.5 ? 'cliente' : 'clientes'} do que cabe nela: mova a CTO para perto de menos casas ou ponha outra perto (+ CTO).`
+        : room >= 1 ? `Sobram ≈ ${num(Math.floor(room))} ${Math.floor(room) === 1 ? 'porta' : 'portas'} para crescer.` : 'Ela fica cheia com a penetração prevista.';
+    return `<div class="auto-design__houses">${toggle}
+        <div class="auto-design__cto-card${sum.over ? ' is-over' : ''}">
+            <div class="auto-design__cto-head"><b>${esc(cto.name)}</b><button type="button" class="auto-design__link" data-auto-design="cto-close">Fechar</button></div>
+            <ul class="auto-design__list">
+                <li><span>Casas que ficam com ela</span><b>≈ ${num(sum.houses)}</b></li>
+                <li><span>Clientes (${num(sum.occupancy)}% de penetração)</span><b>≈ ${num(sum.clients, 1)}</b></li>
+                <li><span>Cabe nela (${sum.usable} de ${sum.ports} portas${sum.maxFill < 100 ? `, ${num(sum.maxFill)}% de ocupação` : ''})</span><b>${Number.isFinite(sum.maxHouses) ? `até ≈ ${num(sum.maxHouses)} casas` : '—'}</b></li>
+            </ul>
+            <p class="map-tool-help">${esc(status)}</p>
+        </div></div>`;
+}
+
 function renderAutoDesignPreviewPanel() {
     const s = autoDesign;
     const plan = s.result;
@@ -3644,13 +3748,14 @@ function renderAutoDesignPreviewPanel() {
         ${extra > 0 ? `<p class="map-tool-help">${plan.byPorts} CTOs pela quantidade de clientes + ${extra} para alcançar toda a área sem lotar as caixas.</p>` : ''}
         <ul class="auto-design__list">${rows}</ul>
         ${cost ? `<details class="auto-design__more"><summary>Custo estimado: ${esc(formatAutoDesignMoney(cost.total))}</summary><ul class="auto-design__list">${costRows}</ul><p class="map-tool-help">Materiais pela lista de materiais (preços do catálogo); mão de obra pela tabela padrão da terceirizada.</p></details>` : ''}
+        ${renderAutoDesignCtoHouses(s, plan)}
         <div class="auto-design__tools" role="group" aria-label="Editar a prévia">
             ${tool('mode-add', '+ CTO', mode === 'add')}${tool('mode-remove', '− CTO', mode === 'remove')}${tool('mode-add-ceo', '+ CEO', mode === 'add-ceo')}${tool('mode-remove-ceo', '− CEO', mode === 'remove-ceo')}${tool('mode-exclude', 'Sem casas', mode === 'exclude')}
         </div>
         <p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || 'Arraste as caixas no mapa para mover; a rede, as fibras e o custo se refazem sozinhos.')}</p>
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
         ${renderAutoDesignWarnings(warnings)}
-        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
+        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Área colorida = casas que ficam com cada CTO (vermelha: passa das portas)' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
         <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>
@@ -4016,6 +4121,11 @@ document.addEventListener('click', (e) => {
         else if (action === 'option') selectAutoDesignOption(button.dataset.option);
         else if (action === 'access-route') selectAutoDesignAccessRoute(parseInt(button.dataset.route, 10));
         else if (action === 'clear-poles') clearAutoDesignAccessPoles();
+        else if (action === 'cto-close' && s) {
+            s.selectedCto = null;
+            drawAutoDesignPreview();
+            renderAutoDesign();
+        }
         else if (action === 'back' && s) {
             s.token = {};
             s.phase = s.result ? 'preview' : 'form';
@@ -4096,6 +4206,12 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+    if (e.target.id === 'autoDesignShowHouses' && autoDesign?.result) {
+        autoDesign.showHouses = e.target.checked;
+        drawAutoDesignPreview();
+        renderAutoDesign();
+        return;
+    }
     if (!autoDesign || autoDesign.phase !== 'form' || !e.target.closest?.('#autoDesignBox')) return;
     if (['autoDesignStart', 'autoDesignUseHouses', 'autoDesignUsePoles', 'autoDesignUseExisting'].includes(e.target.id)) {
         readAutoDesignForm();

@@ -2378,6 +2378,25 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         return ok;
       })(),
     };
+    //Casas de cada CTO: área colorida no mapa; clique na CTO mostra casas, clientes pela penetração e quanto cabe nela
+    extras.houses = (() => {
+      const cto = plan.ctos[0];
+      handleAutoDesignBoxClick(cto);
+      const card = document.querySelector('#autoDesignBox .auto-design__cto-card')?.textContent || '';
+      const sum = getAutoDesignCtoSummary(plan, cto);
+      const areas = autoDesign.overlays.filter(o => o.getPath && o.get('fillOpacity') !== undefined).length;
+      const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /de penetração/.test(card), areas: areas > 0,
+        math: sum.houses > 0 && Math.abs(sum.clients - sum.houses * plan.params.occupancy / 100) < 1e-6 && sum.maxHouses === Math.round(sum.usable * 100 / plan.params.occupancy),
+        hull: getAutoDesignHull([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 5, y: 5 }]).length === 4 };
+      const toggle = (on) => { const box = document.getElementById('autoDesignShowHouses'); box.checked = on; box.dispatchEvent(new Event('change', { bubbles: true })); };
+      toggle(false);
+      out.off = autoDesign.overlays.some(o => o.get?.('radius') === plan.model.coverRadius) && !document.querySelector('#autoDesignBox .auto-design__cto-card');
+      toggle(true);
+      handleAutoDesignBoxClick(cto);
+      out.closed = !document.querySelector('#autoDesignBox .auto-design__cto-card');
+      if (!Object.values(out).every(Boolean)) console.log('houses', JSON.stringify(out));
+      return Object.values(out).every(Boolean);
+    })();
     const previewText = document.getElementById('autoDesignBody').textContent;
     //Outra opção e de volta: o mapa mostra a escolhida
     const other = autoDesign.options.find(o => o !== plan);
