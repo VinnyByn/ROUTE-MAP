@@ -2384,8 +2384,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       handleAutoDesignBoxClick(cto);
       const card = document.querySelector('#autoDesignBox .auto-design__cto-card')?.textContent || '';
       const sum = getAutoDesignCtoSummary(plan, cto);
-      const areas = autoDesign.overlays.filter(o => o.getPath && o.get('fillOpacity') !== undefined).length;
-      const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /de penetração/.test(card), areas: areas > 0,
+      //Rua pintada (ou, sem o traçado das ruas, contorno das casas) e selo casas/cabe embaixo de cada CTO
+      const areas = autoDesign.overlays.filter(o => o.getPath && (o.get('fillOpacity') !== undefined || o.get('strokeWeight') >= 6)).length;
+      const badges = autoDesign.overlays.filter(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '') && o.get('zIndex') === 72).length;
+      const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /de penetração/.test(card), areas: areas > 0, badges: badges === plan.ctos.length,
         math: sum.houses > 0 && Math.abs(sum.clients - sum.houses * plan.params.occupancy / 100) < 1e-6 && sum.maxHouses === Math.round(sum.usable * 100 / plan.params.occupancy),
         hull: getAutoDesignHull([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 5, y: 5 }]).length === 4 };
       const toggle = (on) => { const box = document.getElementById('autoDesignShowHouses'); box.checked = on; box.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -2834,12 +2836,23 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     //Limite cheio: a CTO de fora não vai para a CEO do outro lado; a do meio passa para a CEO vizinha e abre a vaga
     const A = { x: 0, y: 0 }, B = { x: 100, y: 0 }, t1 = { x: 55, y: 0 }, t2 = { x: 60, y: 0 }, t3 = { x: 150, y: 0 };
     const fair = assignAutoDesignCtosToCeos([A, B], [t1, t2, t3], 2, dist);
+    //CTOs vizinhas que cabem numa só viram uma; se as casas não cabem numa, as duas ficam
+    const mSites = Array.from({ length: 31 }, (_, i) => ({ x: i * 10, y: 0 }));
+    const mModel = { proj, sites: mSites, demand: [], drop: createAutoDesignDropMeter(null, 150), coverRadius: 150, housesPerWeight: 1, existing: [], ctoSpacing: 0, streetIndex: null, ctoCapacity: 16 };
+    const mParams = { ports: 8, maxFill: 100, occupancy: 50 };
+    const mCands = mSites.map((_, i) => i);
+    const mRun = (each) => {
+      mModel.demand = [...Array.from({ length: each }, (_, i) => ({ x: 95 + i, y: 8, w: 1 })), ...Array.from({ length: each }, (_, i) => ({ x: 125 + i, y: 8, w: 1 }))];
+      const start = evaluateAutoDesignCenters(mModel, [mSites[10], mSites[13]], [10, 13]);
+      return mergeAutoDesignCtos(mModel, start, mCands, mParams).centers.length;
+    };
+    const merge = { few: mRun(5) === 1, many: mRun(12) === 2 };
     return { x: Math.round(ceo.x), y: Math.round(ceo.y), mid: ceo.x >= 700 && ceo.x <= 1000, two: two.length === 2 && two.every(c => c.x >= 600),
       notOnCto: ctos.every(c => Math.hypot(c.x - ceo.x, c.y - ceo.y) >= 10), kept: kept.length === 1 && kept[0] === existing,
       split: split.length === 3 && split[0] === existing && fed.join() === '3,3',
-      fair: [t1, t2, t3].map(t => fair.get(t)).join() === '0,1,1' };
+      fair: [t1, t2, t3].map(t => fair.get(t)).join() === '0,1,1', merge: merge.few && merge.many };
   });
-  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split && ceoMid.fair, `pré-projeto: CEO nova fica no meio das CTOs dela (${JSON.stringify(ceoMid)})`);
+  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split && ceoMid.fair && ceoMid.merge, `pré-projeto: CEO nova fica no meio das CTOs dela e CTOs vizinhas que cabem numa só viram uma (${JSON.stringify(ceoMid)})`);
   //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
   const drops = await sp.evaluate(() => {
     const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
