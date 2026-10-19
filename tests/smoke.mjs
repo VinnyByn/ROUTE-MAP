@@ -2575,6 +2575,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const goBtn = [...document.querySelectorAll('#autoDesignBox [data-auto-design="warn-goto"]')].find(b => /a menos de/.test(b.textContent));
     goBtn?.click();
     out.spacing.goto = !!goBtn && /^CTO-\d+/.test(goBtn.querySelector('.auto-design__warn-go').textContent) && !!autoDesign.flash;
+    //Aviso com nível, título e o que fazer; mais graves primeiro
+    const levels = autoDesign.warnings.map(w => Object.keys(AUTO_DESIGN_WARN_LEVELS).indexOf(w.level));
+    out.spacing.clear = !!goBtn?.querySelector('.auto-design__warn-tag') && /CTOs? perto demais/.test(goBtn.querySelector('.auto-design__warn-title')?.textContent)
+      && /O que fazer:/.test(goBtn.textContent) && levels.every((l, i) => l >= 0 && (!i || l >= levels[i - 1]));
     out.spacing.info = { freeCtos, freeGap: Math.round(freeGap), gap, ctos: autoDesign.result.ctos.length };
     autoDesign.params.ctoSpacing = '';
     storeAutoDesignParams(autoDesign.params);
@@ -2663,7 +2667,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       counted: plan.stats.existingCtos === 2 && plan.stats.existingClients > 0 && plan.stats.existingClients <= 16,
       apart: plan.ctos.every(c => exXY.every(([x, y]) => Math.hypot(c.x - x, c.y - y) > 25)),
       panel: /CTOs existentes/.test(document.getElementById('autoDesignBody').textContent),
-      unwired: getAutoDesignWarnings(plan, plan.params).some(w => /CTO-EX1, CTO-EX2 já estão no mapa sem cabo/.test(w)),
+      unwired: getAutoDesignWarnings(plan, plan.params).some(w => /CTO-EX1, CTO-EX2 sem cabo chegando/.test(w)),
       circles: autoDesign.overlays.filter(o => o.get?.('strokeColor') === '#2563eb').length === 2,
     });
     //Desmarcada: volta a conta sem elas
