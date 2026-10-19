@@ -1318,10 +1318,10 @@ body.sidebar-resizing * {
 #cabos-table td:nth-child(3),
 #cabos-table th:nth-child(5),
 #cabos-table td:nth-child(5),
+#cabos-table th:nth-child(7),
+#cabos-table td:nth-child(7),
 #cabos-table th:nth-child(8),
-#cabos-table td:nth-child(8),
-#cabos-table th:nth-child(9),
-#cabos-table td:nth-child(9) {
+#cabos-table td:nth-child(8) {
   min-width: 88px;
   white-space: nowrap;
 }
@@ -1336,8 +1336,8 @@ body.sidebar-resizing * {
   min-width: 44px;
 }
 
-#cabos-table th:nth-child(7),
-#cabos-table td:nth-child(7) {
+#cabos-table th:nth-child(9),
+#cabos-table td:nth-child(9) {
   min-width: 80px;
 }
 
@@ -1379,17 +1379,17 @@ body.sidebar-resizing * {
 
   #cabos-table th:nth-child(7),
   #cabos-table td:nth-child(7) {
-    width: 9%;
+    width: 14%;
   }
 
   #cabos-table th:nth-child(8),
   #cabos-table td:nth-child(8) {
-    width: 14%;
+    width: 15%;
   }
 
   #cabos-table th:nth-child(9),
   #cabos-table td:nth-child(9) {
-    width: 15%;
+    width: 9%;
   }
 }
 

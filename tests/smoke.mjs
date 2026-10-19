@@ -2287,6 +2287,61 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && suggest.dismissed.points === 2 && suggest.dismissed.hidden && !suggest.dismissed.overlay,
     `sugestão de rota ao ligar A → B: aceitar usa a rota, recusar mantém a reta (${JSON.stringify(suggest)})`);
 
+  //Leitura rápida: resumo do projeto na barra lateral, legenda do mapa, selo de ocupação nas CTOs, busca na lista de
+  //materiais e ícones próprios no menu (desfazer/refazer não usam mais o de "recarregar")
+  const readout = await sp.evaluate(async () => {
+    if (!map) map = new google.maps.Map(document.getElementById('map'), {});
+    rebuildSidebarFromJSON([{ id: 'projOV', name: 'Projeto OV', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
+    setActiveFolder('projOV');
+    rebuildMarker({ uid: 'ov_cto', folderId: 'projOV', type: 'CTO', name: 'CTO-OV', color: '#16a34a', position: { lat: -37, lng: -44 } });
+    rebuildCable({ uid: 'ov_cab', folderId: 'projOV', name: 'FO-12-OV', type: 'Cabo AS 80 FO-12', width: 4, color: '#123456', status: 'Novo', path: [{ lat: -37, lng: -44 }, { lat: -37.01, lng: -44 }], startAnchorUid: null, endAnchorUid: null });
+    const cto = markers.find(m => m.uid === 'ov_cto');
+    const client = { type: 'CLIENTE', name: 'Cliente OV', client: { ctoUid: cto.uid, status: 'ativo' } };
+    markers.push(client);
+    map.setZoom(17);
+    refreshNetworkOverlays();
+    const occ = getCtoOccupancy(cto);
+    const badge = networkOverlays.badges.get(cto);
+    const out = {
+      occ: occ.used === 1 && !occ.capacity && occ.level === 'none',
+      badge: !!badge && decodeURIComponent(badge.marker.get('icon').url).includes('1 cl.'),
+      summary: /1 CTO · .* de cabo/.test(document.querySelector('.folder-title[data-folder-id="projOV"]').dataset.summary || ''),
+    };
+    setupMapLegend();
+    document.querySelector('.map-legend__toggle').click();
+    const legend = document.querySelector('.map-legend__body');
+    out.legend = /FO-12 · Novo/.test(legend.textContent) && /CTO/.test(legend.textContent) && legend.querySelector('.map-legend__line').style.getPropertyValue('--line-color') === '#123456';
+    legend.querySelector('[data-opt="ctoBadges"]').click();
+    out.toggle = networkOverlays.badges.size === 0 && !networkOverlays.enabled;
+    setCtoBadgesVisible(true);
+    calculateBomState();
+    renderBomTable();
+    const search = document.getElementById('materialSearch');
+    const rows = () => [...document.querySelectorAll('#materialModal tbody tr:not(.material-group-header):not(.material-empty-row)')];
+    search.value = 'alça';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    const shown = rows().filter(r => !r.hidden);
+    out.search = shown.length > 0 && shown.every(r => /alça/i.test(r.cells[0].textContent)) && rows().some(r => r.hidden);
+    search.value = 'zzzz';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    out.empty = !document.getElementById('materialSearchEmpty').hidden && rows().every(r => r.hidden);
+    search.value = '';
+    applyMaterialSearch();
+    out.total = document.getElementById('materialSumTotal').textContent === document.getElementById('grand-total-price').textContent;
+    out.actionsLast = [...document.querySelectorAll('#ferragem-list-body tr:not(.material-group-header):not(.material-empty-row)')].every(r => r.lastElementChild.classList.contains('material-col-actions'));
+    out.icons = ['undoButton', 'redoButton', 'exportSpreadsheetButton', 'projectCheckButton', 'exportFusionPlansButton'].map(id => document.querySelector(`#${id} use`)?.getAttribute('href')).join() === '#i-undo,#i-redo,#i-sheet,#i-clipboard-check,#i-file-text';
+    markers.splice(markers.indexOf(client), 1);
+    markers.filter(m => m.folderId === 'projOV').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+    savedCables.filter(c => c.folderId === 'projOV').forEach(c => { c.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(c), 1); });
+    refreshNetworkOverlays();
+    networkOverlays.legend?.remove();
+    networkOverlays.legend = null;
+    map.setZoom(undefined);
+    document.querySelector('.folder-title[data-folder-id="projOV"]').closest('.folder').remove();
+    return out;
+  });
+  check(Object.values(readout).every(Boolean), `leitura rápida: resumo do projeto, legenda, selo de ocupação, busca na lista de materiais e ícones do menu (${JSON.stringify(readout)})`);
+
   //Pré-projeto automático: polígono + casas + penetração + splitagem → CTOs na rua mais perto e cabos pelas ruas (OSRM)
   const autoDesignOut = await sp.evaluate(async () => {
     const sidebar = document.getElementById('sidebar');

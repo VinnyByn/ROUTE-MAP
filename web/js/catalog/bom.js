@@ -314,14 +314,14 @@ function createMaterialRow(bomKey, material) {
       <td><span class="material-category-badge">${escapeHtml(material.category)}</span></td>
       <td class="material-qty">${formattedQuantity}</td>
       <td class="material-unit">${escapeHtml(unit)}</td>
-      <td>
+      <td class="material-price">${formattedUnitPrice}</td>
+      <td class="material-price material-price-total">${formattedTotalPrice}</td>
+      <td class="material-col-actions">
         <div class="material-actions">
           <button type="button" class="edit-qty-btn" data-bom-key="${escapeHtml(bomKey)}" title="Editar quantidade" aria-label="Editar">${uiIcon('edit')}</button>
           <button type="button" class="remove-item-btn" data-bom-key="${escapeHtml(bomKey)}" title="Remover item" aria-label="Remover">${uiIcon('x')}</button>
         </div>
       </td>
-      <td class="material-price">${formattedUnitPrice}</td>
-      <td class="material-price material-price-total">${formattedTotalPrice}</td>
     `;
     return row;
 }
@@ -376,14 +376,14 @@ function renderCabosTable(tbody, projectId) {
       </td>
       <td class="material-qty cable-final-qty">${formatMaterialLengthValue(line.billable)}</td>
       <td class="material-unit">m</td>
-      <td>
+      <td class="material-price">R$ ${unitPrice.toFixed(2).replace('.', ',')}</td>
+      <td class="material-price material-price-total">R$ ${(line.billable * unitPrice).toFixed(2).replace('.', ',')}</td>
+      <td class="material-col-actions">
         <div class="material-actions">
           <button type="button" class="edit-qty-btn" data-bom-key="${safeBomKey}" title="Editar item" aria-label="Editar">${uiIcon('edit')}</button>
           <button type="button" class="remove-item-btn" data-bom-key="${safeBomKey}" title="Remover item" aria-label="Remover">${uiIcon('x')}</button>
         </div>
       </td>
-      <td class="material-price">R$ ${unitPrice.toFixed(2).replace('.', ',')}</td>
-      <td class="material-price material-price-total">R$ ${(line.billable * unitPrice).toFixed(2).replace('.', ',')}</td>
     `;
             tbody.appendChild(row);
         });
@@ -523,6 +523,7 @@ function renderBomTable() {
     });
     updateMaterialTableEmptyStates();
     recalculateGrandTotal();
+    applyMaterialSearch();
 }
 
 function updateMaterialTableEmptyStates() {
@@ -565,7 +566,7 @@ function exportTablesToExcel() {
         if (table) {
             let data;
             if (tableInfo.id === 'cabos-table') {
-                data = [["Item", "Tipo", "Medição (m)", "Acr.%", "Qtd. (m)", "Un.", "Ações", "Preço Unitário (R$)", "Preço Total (R$)"]];
+                data = [["Item", "Tipo", "Medição (m)", "Acr.%", "Qtd. (m)", "Un.", "Preço Unitário (R$)", "Preço Total (R$)"]];
             } else {
                 data = [headers];
             }
@@ -582,9 +583,8 @@ function exportTablesToExcel() {
                         surchargeInput ? surchargeInput.value : '',
                         cells[4].textContent,
                         cells[5].textContent,
-                        '',
-                        cells[7].textContent,
-                        cells[8].textContent
+                        cells[6].textContent,
+                        cells[7].textContent
                     ]);
                 } else {
                     data.push([
@@ -593,8 +593,8 @@ function exportTablesToExcel() {
                         cells[1].textContent,
                         cells[2].textContent,
                         cells[3].textContent,
-                        cells[5].textContent,
-                        cells[6].textContent
+                        cells[4].textContent,
+                        cells[5].textContent
                     ]);
                 }
             });
@@ -714,6 +714,7 @@ function refreshBomAfterProjectChange() {
     projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
     if (typeof scheduleProjectUndoSnapshot === 'function') scheduleProjectUndoSnapshot(projectId);
     if (typeof liveSyncLocalChange === 'function') liveSyncLocalChange(projectId);
+    if (typeof scheduleNetworkOverlaysRefresh === 'function') scheduleNetworkOverlaysRefresh();
     const materialModal = document.getElementById('materialModal');
     if (materialModal && materialModal.style.display === 'flex') {
         renderBomTable();
@@ -1132,7 +1133,40 @@ function recalculateGrandTotal() {
     document.getElementById('fusao-total-price').textContent = money(t.fusaoTotal);
     document.getElementById('datacenter-total-price').textContent = money(t.datacenterTotal);
     document.getElementById('grand-total-price').textContent = money(t.grandTotal);
+    //Resumo do topo: subtotal de cada parte e o total, sem precisar rolar a lista
+    const sums = { materialSumFerragem: t.ferragemTotal, materialSumCabos: t.cabosTotal, materialSumFusao: t.fusaoTotal, materialSumDatacenter: t.datacenterTotal, materialSumTotal: t.grandTotal };
+    Object.entries(sums).forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.textContent = money(value); });
 }
+
+//Busca na lista de materiais: mostra só os itens com o texto no nome (o grupo some se nenhum item dele aparece)
+function applyMaterialSearch() {
+    const input = document.getElementById('materialSearch');
+    const term = (input?.value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let shown = 0;
+    ['ferragem-list-body', 'cabos-list-body', 'fusao-list-body', 'datacenter-list-body'].forEach((id) => {
+        const rows = Array.from(document.getElementById(id)?.children || []);
+        let header = null, headerHits = 0;
+        const closeHeader = () => { if (header) header.hidden = !!term && headerHits === 0; };
+        rows.forEach((row) => {
+            if (row.classList.contains('material-group-header')) { closeHeader(); header = row; headerHits = 0; return; }
+            if (row.classList.contains('material-empty-row')) { row.hidden = !!term; return; }
+            const name = (row.cells[0]?.textContent || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const hit = !term || name.includes(term);
+            row.hidden = !hit;
+            if (hit) { headerHits++; shown++; }
+        });
+        closeHeader();
+    });
+    const empty = document.getElementById('materialSearchEmpty');
+    if (empty) empty.hidden = !term || shown > 0;
+}
+
+document.addEventListener('input', (e) => { if (e.target.id === 'materialSearch') applyMaterialSearch(); });
+document.addEventListener('click', (e) => {
+    const chip = e.target.closest?.('[data-material-jump]');
+    if (!chip) return;
+    document.getElementById(chip.dataset.materialJump)?.closest('.material-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
 //Seção de cada item na lista de materiais (mesma regra da tela, do relatório e do PDF).
 //Retorna null para itens fora da soma (removidos e mão de obra).
