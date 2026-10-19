@@ -2387,7 +2387,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       //Rua pintada (ou, sem o traçado das ruas, contorno das casas) e selo casas/cabe embaixo de cada CTO
       const areas = autoDesign.overlays.filter(o => o.getPath && (o.get('fillOpacity') !== undefined || o.get('strokeWeight') >= 6)).length;
       const badges = autoDesign.overlays.filter(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '') && o.get('zIndex') === 72).length;
-      const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /de penetração/.test(card), areas: areas > 0, badges: badges === plan.ctos.length,
+      const out = { card: card.includes(cto.name) && /Casas que ficam com ela/.test(card) && /casas × \d+%/.test(card), areas: areas > 0, badges: badges === plan.ctos.length,
         math: sum.houses > 0 && Math.abs(sum.clients - sum.houses * plan.params.occupancy / 100) < 1e-6 && sum.maxHouses === Math.round(sum.usable * 100 / plan.params.occupancy),
         hull: getAutoDesignHull([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 5, y: 5 }]).length === 4 };
       const toggle = (on) => { const box = document.getElementById('autoDesignShowHouses'); box.checked = on; box.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -2396,7 +2396,18 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       toggle(true);
       handleAutoDesignBoxClick(cto);
       out.closed = !document.querySelector('#autoDesignBox .auto-design__cto-card');
-      if (!Object.values(out).every(Boolean)) console.log('houses', JSON.stringify(out));
+      //Conta da penetração e drops no cartão; conferir CTO por CTO marca a aberta e vai para a próxima
+      out.math = /casas × \d+%/.test(card) && /Drop pela rua/.test(card);
+      document.querySelector('#autoDesignBox [data-auto-design="cto-next"]').click();
+      const first = autoDesign.selectedCto;
+      document.querySelector('#autoDesignBox [data-auto-design="cto-check-next"]').click();
+      out.check = !!first?.checked && autoDesign.selectedCto !== first && /Conferidas: 1 de/.test(document.getElementById('autoDesignBody').textContent)
+        && autoDesign.overlays.some(o => decodeURIComponent(o.get?.('icon')?.url || '').includes('✓ '));
+      first.checked = false;
+      autoDesign.selectedCto = null;
+      drawAutoDesignPreview();
+      renderAutoDesign();
+      if (!Object.values(out).every(Boolean)) extras.housesDetail = JSON.stringify(out);
       return Object.values(out).every(Boolean);
     })();
     const previewText = document.getElementById('autoDesignBody').textContent;

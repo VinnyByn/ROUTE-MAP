@@ -3200,7 +3200,8 @@ function moveAutoDesignBox(box, latLng) {
     const plan = autoDesign?.result;
     if (!plan || !box?.isNew || !latLng) return null;
     const xy = snapAutoDesignPoint(plan.model, latLng);
-    Object.assign(box, makeAutoDesignBox(plan.model, box.type, xy, { name: box.name }));
+    //Mudou de lugar: as casas dela mudam, precisa conferir de novo
+    Object.assign(box, makeAutoDesignBox(plan.model, box.type, xy, { name: box.name, checked: false }));
     return refreshAutoDesignAfterEdit();
 }
 
@@ -3338,10 +3339,36 @@ function getAutoDesignCtoSummary(plan, cto) {
     const usable = getAutoDesignUsablePorts(p);
     const rate = (Number(p.occupancy) || 0) / 100;
     const clients = cto.clients || 0;
+    //Drops até as casas dela (pela rua): médio pelo peso das casas e o maior
+    const { demand, drop } = plan.model;
+    let w = 0, sum = 0, dropMax = 0;
+    (cto.part || []).forEach(([j, pw]) => {
+        if (!demand[j] || !(pw > 1e-9)) return;
+        const d = drop.measure(demand[j], cto);
+        w += pw; sum += d * pw; dropMax = Math.max(dropMax, d);
+    });
     return {
         houses: cto.houses || 0, clients, usable, ports: p.ports, occupancy: p.occupancy, maxFill: Number(p.maxFill) || 100,
         maxHouses: rate > 0 ? Math.round(usable / rate) : Infinity, over: clients > usable + 0.5,
+        dropAvg: w ? sum / w : 0, dropMax, reach: drop.reach,
     };
+}
+
+//Conferir CTO por CTO: vai para a próxima ainda não conferida (depois da aberta, na ordem dos nomes) e centra o mapa nela
+function focusNextAutoDesignCto() {
+    const s = autoDesign;
+    const plan = s?.result;
+    if (!plan?.ctos.length) return null;
+    const at = plan.ctos.indexOf(s.selectedCto);
+    const order = [...plan.ctos.slice(at + 1), ...plan.ctos.slice(0, at + 1)];
+    const next = order.find(c => !c.checked && c !== s.selectedCto) || order.find(c => !c.checked) || order[0];
+    s.selectedCto = next;
+    s.showHouses = true;
+    if (map?.panTo) map.panTo(next.position);
+    if (typeof map?.getZoom === 'function' && (map.getZoom() || 0) < 17) map.setZoom(18);
+    drawAutoDesignPreview();
+    renderAutoDesign();
+    return next;
 }
 
 //Pontos de casa de cada CTO (ponto dividido entre duas CTOs fica com a que levou a maior parte), na ordem de plan.ctos
@@ -3491,7 +3518,7 @@ function drawAutoDesignPreview() {
         })));
         plan.ctos.forEach((cto, i) => {
             const sum = getAutoDesignCtoSummary(plan, cto);
-            const text = `${Math.round(sum.houses)}/${Number.isFinite(sum.maxHouses) ? sum.maxHouses : '∞'}`;
+            const text = `${cto.checked ? '✓ ' : ''}${Math.round(sum.houses)}/${Number.isFinite(sum.maxHouses) ? sum.maxHouses : '∞'}`;
             add(new google.maps.Marker({
                 map, position: cto.position, clickable: false, zIndex: 72, opacity: fade(i) ? 0.45 : 1,
                 icon: getAutoDesignCtoBadgeIcon(text, AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(sum)]),
@@ -3865,28 +3892,38 @@ function renderAutoDesignCtoHouses(s, plan) {
     const on = s.showHouses !== false;
     const num = (v, digits = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: digits });
     const toggle = `<label class="auto-design__check"><input type="checkbox" id="autoDesignShowHouses"${on ? ' checked' : ''}><span>Mostrar as casas de cada CTO</span></label>`;
+    const checked = plan.ctos.filter(c => c.checked).length;
+    const progress = `<div class="auto-design__check-row"><span>Conferidas: <b>${checked} de ${plan.ctos.length}</b>${checked === plan.ctos.length ? ' ✓' : ''}</span>`
+        + `<button type="button" class="map-tool-btn auto-design__next" data-auto-design="cto-next">${checked ? 'Próxima a conferir →' : 'Conferir CTO por CTO →'}</button></div>`;
     const cto = on && plan.ctos.includes(s.selectedCto) ? s.selectedCto : null;
-    if (!cto) return `<div class="auto-design__houses">${toggle}${on ? '<p class="map-tool-help">Clique numa CTO para ver as casas dela e quantos clientes ela atende.</p>' : ''}</div>`;
+    if (!cto) return `<div class="auto-design__houses">${toggle}${progress}${on ? '<p class="map-tool-help">Clique numa CTO (ou em "Conferir") para ver as casas dela, a conta da penetração e marcar como conferida.</p>' : ''}</div>`;
     const sum = getAutoDesignCtoSummary(plan, cto);
     const { houseSources } = plan.model;
     const balloons = getAutoDesignCtoHouseSources(plan)[plan.ctos.indexOf(cto)].map(({ src, houses }) => {
         const all = houseSources[src].count;
-        return Math.round(houses) >= Math.round(all) ? `${num(all)} (todas)` : `${num(all)} (${num(Math.round(houses))} nesta)`;
+        return Math.round(houses) >= Math.round(all) ? `${num(all)} (todas)` : `${num(Math.round(houses))} de ${num(all)}`;
     });
     const room = sum.usable - sum.clients;
     const status = sum.over
         ? `Passa ≈ ${num(-room, 1)} ${-room < 1.5 ? 'cliente' : 'clientes'} do que cabe nela: mova a CTO para perto de menos casas ou ponha outra perto (+ CTO).`
         : room >= 1 ? `Sobram ≈ ${num(Math.floor(room))} ${Math.floor(room) === 1 ? 'porta' : 'portas'} para crescer.` : 'Ela fica cheia com a penetração prevista.';
-    return `<div class="auto-design__houses">${toggle}
-        <div class="auto-design__cto-card${sum.over ? ' is-over' : ''}">
-            <div class="auto-design__cto-head"><b>${esc(cto.name)}</b><button type="button" class="auto-design__link" data-auto-design="cto-close">Fechar</button></div>
+    return `<div class="auto-design__houses">${toggle}${progress}
+        <div class="auto-design__cto-card${sum.over ? ' is-over' : ''}${cto.checked ? ' is-checked' : ''}">
+            <div class="auto-design__cto-head"><b>${esc(cto.name)}${cto.checked ? ' <span class="auto-design__cto-ok">✓ conferida</span>' : ''}</b><button type="button" class="auto-design__link" data-auto-design="cto-close">Fechar</button></div>
             <ul class="auto-design__list">
                 <li><span>Casas que ficam com ela</span><b>≈ ${num(sum.houses)}</b></li>
-                <li><span>Clientes (${num(sum.occupancy)}% de penetração)</span><b>≈ ${num(sum.clients, 1)}</b></li>
+                <li><span>Clientes: ${num(Math.round(sum.houses))} casas × ${num(sum.occupancy)}%</span><b>≈ ${num(sum.clients, 1)}</b></li>
                 <li><span>Cabe nela (${sum.usable} de ${sum.ports} portas${sum.maxFill < 100 ? `, ${num(sum.maxFill)}% de ocupação` : ''})</span><b>${Number.isFinite(sum.maxHouses) ? `até ≈ ${num(sum.maxHouses)} casas` : '—'}</b></li>
+                <li><span>Drop pela rua (médio · maior)</span><b>${num(Math.round(sum.dropAvg))} · ${num(Math.round(sum.dropMax))} m</b></li>
             </ul>
-            ${balloons.length ? `<p class="map-tool-help">Balões de casas: ${esc(balloons.slice(0, 8).join(' · '))}${balloons.length > 8 ? ` e mais ${balloons.length - 8}` : ''}</p>` : ''}
-            <p class="map-tool-help">${esc(status)}</p>
+            ${balloons.length ? `<p class="map-tool-help">Balões de casas: ${esc(balloons.slice(0, 8).join(' · '))}${balloons.length > 8 ? ` e mais ${balloons.length - 8}` : ''}. O balão é repartido entre as CTOs das ruas em volta da quadra: cada casa fica com a CTO da rua dela.</p>` : ''}
+            <p class="map-tool-help">Poste escolhido: o que deixa os drops destas casas mais curtos (alcance de até ${num(Math.round(sum.reach))} m pela rua). ${esc(status)}</p>
+            <div class="auto-design__cto-actions">
+                ${cto.checked
+                    ? '<button type="button" class="map-tool-btn" data-auto-design="cto-check">Desmarcar</button><button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="cto-next">Próxima →</button>'
+                    : '<button type="button" class="map-tool-btn" data-auto-design="cto-next">Pular</button><button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="cto-check-next">Confere, próxima →</button>'}
+            </div>
+            <p class="map-tool-help">Não confere? Arraste a CTO para outro poste, use + CTO ou − CTO: a conta se refaz.</p>
         </div></div>`;
 }
 
@@ -4301,7 +4338,15 @@ document.addEventListener('click', (e) => {
         else if (action === 'option') selectAutoDesignOption(button.dataset.option);
         else if (action === 'access-route') selectAutoDesignAccessRoute(parseInt(button.dataset.route, 10));
         else if (action === 'clear-poles') clearAutoDesignAccessPoles();
-        else if (action === 'cto-close' && s) {
+        else if (action === 'cto-next' && s?.result) focusNextAutoDesignCto();
+        else if (action === 'cto-check-next' && s?.selectedCto) {
+            s.selectedCto.checked = true;
+            focusNextAutoDesignCto();
+        } else if (action === 'cto-check' && s?.selectedCto) {
+            s.selectedCto.checked = !s.selectedCto.checked;
+            drawAutoDesignPreview();
+            renderAutoDesign();
+        } else if (action === 'cto-close' && s) {
             s.selectedCto = null;
             drawAutoDesignPreview();
             renderAutoDesign();
