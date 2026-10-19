@@ -2820,3 +2820,25 @@ html[data-theme="dark"] .auto-design__kpi:nth-child(2) b { color: #4ade80; }
 /* Edição da prévia: + CTO, − CTO, + CEO, − CEO numa linha e "Sem casas" embaixo */
 .auto-design__tools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .auto-design__tools [data-auto-design="mode-exclude"] { grid-column: 1 / -1; }
+/* Pré-projeto: avisos com nível (corrigir / conferir / informação), título, explicação e o que fazer */
+#autoDesignBox .auto-design__warn-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 6px 0 0; font-size: 12.5px; font-weight: 700; color: var(--color-text); }
+#autoDesignBox .auto-design__warn-head span { font-size: 11.5px; font-weight: 500; color: var(--color-text-muted); }
+#autoDesignBox .auto-design__warn { display: block; padding: 9px 11px; }
+#autoDesignBox .auto-design__warn-tag { display: inline-block; margin-bottom: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #92400e; background: rgba(245, 158, 11, 0.2); }
+#autoDesignBox .auto-design__warn-title { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--color-text); }
+#autoDesignBox .auto-design__warn-text { display: block; margin-top: 3px; color: var(--color-text-muted); }
+#autoDesignBox .auto-design__warn-fix { display: block; margin-top: 5px; color: var(--color-text); }
+#autoDesignBox .auto-design__warn-fix b { font-weight: 700; }
+#autoDesignBox .auto-design__warn.auto-design__warn--erro { background: rgba(220, 38, 38, 0.09); border-color: rgba(220, 38, 38, 0.45); }
+#autoDesignBox button.auto-design__warn--erro:hover, #autoDesignBox button.auto-design__warn--erro:focus-visible { background: rgba(220, 38, 38, 0.16); border-color: rgba(220, 38, 38, 0.75); }
+#autoDesignBox .auto-design__warn--erro .auto-design__warn-tag { color: #991b1b; background: rgba(220, 38, 38, 0.16); }
+#autoDesignBox .auto-design__warn--erro .auto-design__warn-go { color: #b91c1c; }
+#autoDesignBox .auto-design__warn.auto-design__warn--info { background: rgba(59, 130, 246, 0.07); border-color: rgba(59, 130, 246, 0.38); }
+#autoDesignBox button.auto-design__warn--info:hover, #autoDesignBox button.auto-design__warn--info:focus-visible { background: rgba(59, 130, 246, 0.14); border-color: rgba(59, 130, 246, 0.7); }
+#autoDesignBox .auto-design__warn--info .auto-design__warn-tag { color: #1e40af; background: rgba(59, 130, 246, 0.15); }
+#autoDesignBox .auto-design__warn--info .auto-design__warn-go { color: #1d4ed8; }
+html[data-theme="dark"] #autoDesignBox .auto-design__warn-tag { color: #fcd34d; background: rgba(245, 158, 11, 0.22); }
+html[data-theme="dark"] #autoDesignBox .auto-design__warn--erro .auto-design__warn-tag { color: #fca5a5; background: rgba(220, 38, 38, 0.25); }
+html[data-theme="dark"] #autoDesignBox .auto-design__warn--erro .auto-design__warn-go { color: #fca5a5; }
+html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__warn-tag { color: #93c5fd; background: rgba(59, 130, 246, 0.22); }
+html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__warn-go { color: #93c5fd; }
