@@ -51,7 +51,9 @@ const AUTO_DESIGN_MAX_POINTS = 6000; //Áreas grandes usam pontos mais espaçado
 const AUTO_DESIGN_COVER_M = 150;     //Raio da CTO (alcance do drop, em linha reta; pela rua até raio × √2) quando não informado
 const AUTO_DESIGN_COVER_MIN = 30, AUTO_DESIGN_COVER_MAX = 1000;
 const AUTO_DESIGN_SNAP_MAX_M = 80;   //Só puxa a caixa para a rua se a rua estiver até 80 m
-const AUTO_DESIGN_EDIT_SNAP_M = 60;  //Caixa arrastada na prévia vai para o poste/rua mais perto até 60 m
+const AUTO_DESIGN_EDIT_POLE_M = 12;   //Caixa arrastada na prévia: encosta no poste se cair até 12 m dele
+const AUTO_DESIGN_EDIT_STREET_M = 25; //…senão no eixo da rua ali mesmo (até 25 m)
+const AUTO_DESIGN_EDIT_SNAP_M = 30;   //Sem o traçado das ruas: ponto de rua conhecido mais perto até 30 m
 const AUTO_DESIGN_MIN_COVERAGE = 0.95;
 const AUTO_DESIGN_MAX_CTOS = 300;
 const AUTO_DESIGN_MAX_ROUTED = 120;  //Acima disso os cabos ficam em linha reta (não sobrecarrega o OSRM público)
@@ -1582,12 +1584,24 @@ function makeAutoDesignExistingBox(model, markerInfo) {
     return { type: markerInfo.type, name: markerInfo.name, position: pos, x, y, isNew: false, existing: markerInfo, pole: null };
 }
 
-//Ponto clicado/arrastado na prévia → poste ou ponto de rua mais perto (até 60 m); senão fica onde está
+//Ponto clicado/arrastado na prévia: fica onde foi solto. Só encosta num poste se cair em cima dele (até 12 m) ou, fora
+//do poste, no eixo da rua bem ali (até 25 m). Sem o traçado das ruas, o ponto de rua conhecido mais perto (até 30 m).
 function snapAutoDesignPoint(model, latLng) {
     const [x, y] = model.proj.toXY(latLng.lat(), latLng.lng());
-    if (model.siteKind === 'poles' || model.siteKind === 'streets') {
+    const nearSite = (limit) => {
         const site = nearestAutoDesignSite(model.sites, [x, y]);
-        if (site >= 0 && Math.hypot(model.sites[site].x - x, model.sites[site].y - y) <= AUTO_DESIGN_EDIT_SNAP_M) return { x: model.sites[site].x, y: model.sites[site].y };
+        return site >= 0 && Math.hypot(model.sites[site].x - x, model.sites[site].y - y) <= limit ? { x: model.sites[site].x, y: model.sites[site].y } : null;
+    };
+    if (model.siteKind === 'poles') {
+        const pole = nearSite(AUTO_DESIGN_EDIT_POLE_M);
+        if (pole) return pole;
+    }
+    if (model.streetIndex?.nearestPoint) {
+        const onStreet = model.streetIndex.nearestPoint(x, y, AUTO_DESIGN_EDIT_STREET_M);
+        if (onStreet) return { x: onStreet[0], y: onStreet[1] };
+    } else if (model.siteKind === 'streets') {
+        const site = nearSite(AUTO_DESIGN_EDIT_SNAP_M);
+        if (site) return site;
     }
     return { x, y };
 }
