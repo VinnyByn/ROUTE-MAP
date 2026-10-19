@@ -2783,6 +2783,38 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(Object.entries(blocks).every(([k, v]) => (k === 'hit' ? v === '[150,0]' : v === true)),
     `pré-projeto: poste no quintal fica de fora e balão de casas se espalha pelas ruas da quadra (${JSON.stringify(blocks)})`);
+  //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
+  const drops = await sp.evaluate(() => {
+    const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
+    const ll = ([x, y]) => { const q = proj.toLatLng([x, y]); return [q.lat, q.lng]; };
+    //Quadra comprida de 400 × 100 m: ruas em y = 0 e y = 100, ligadas só nas pontas
+    const index = buildAutoDesignStreetIndex([[ll([0, 0]), ll([400, 0])], [ll([0, 100]), ll([400, 100])], [ll([0, 0]), ll([0, 100])], [ll([400, 0]), ll([400, 100])]], proj);
+    const drop = createAutoDesignDropMeter(index, 150);
+    const back = drop.measure({ x: 200, y: 92 }, { x: 200, y: 0 }), front = drop.measure({ x: 200, y: 92 }, { x: 200, y: 100 });
+    const house = { x: 200, y: 70, w: 1 };
+    const model = { demand: [house], drop, coverRadius: 150, ctoCapacity: Infinity };
+    const across = evaluateAutoDesignCenters(model, [{ x: 200, y: 0 }, { x: 330, y: 100 }]);
+    //8 casas perto da CTO A, que só tem 5 portas: 3 vão para a B (no alcance); sem a B, ficam todas na A
+    model.demand = Array.from({ length: 8 }, (_, i) => ({ x: 100 + i * 5, y: 8, w: 1 }));
+    model.ctoCapacity = 5;
+    const full = evaluateAutoDesignCenters(model, [{ x: 100, y: 0 }, { x: 220, y: 0 }]);
+    const farB = evaluateAutoDesignCenters(model, [{ x: 100, y: 0 }, { x: 380, y: 0 }]);
+    //Casas no lado de y = 100: o meio delas fica mais perto de um poste da rua de trás, mas a CTO vai para a rua delas
+    model.demand = Array.from({ length: 11 }, (_, i) => ({ x: 150 + i * 10, y: 92, w: 1 }));
+    model.ctoCapacity = Infinity;
+    model.sites = [];
+    for (let x = 0; x <= 400; x += 40) model.sites.push({ x, y: 0 });
+    model.sites.push({ x: 100, y: 100 }, { x: 300, y: 100 });
+    const candidates = model.sites.map((_, i) => i);
+    const start = model.sites.findIndex(s => s.x === 200 && s.y === 0);
+    const site = model.sites[pickAutoDesignCtoSite(model, model.demand.map((_, j) => [j, 1]), candidates, start, new Set())];
+    return {
+      back: back > 450, front: front < 20, straightOff: createAutoDesignDropMeter(null, 150).measure({ x: 0, y: 3 }, { x: 0, y: 7 }) === 4,
+      across: across.load[1] === 1 && across.coverage === 1,
+      capped: full.load[0] === 5 && full.load[1] === 3, noFarPush: farB.load[0] === 8, sameStreet: site.y === 100,
+    };
+  });
+  check(Object.values(drops).every(Boolean), `pré-projeto: drop medido pela rua, CTO respeita as portas e fica na rua das casas (${JSON.stringify(drops)})`);
   //Pré-projeto num polígono que já existe: Desenhar → Pré-projeto → "Usar existente" → clique no polígono; ele fica e é marcado
   const reuse = await sp.evaluate(async () => {
     rebuildSidebarFromJSON([{ id: 'projRU', name: 'Projeto RU', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
