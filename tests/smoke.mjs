@@ -2807,10 +2807,16 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const two = placeAutoDesignCeos(model, null, ctos, { ceoMax: 3 }, pop);
     const existing = { x: 100, y: 3, isNew: false };
     const kept = placeAutoDesignCeos(model, existing, ctos, { ceoMax: 16 }, null);
+    //CEO que já existe tem uma saída só: com 6 CTOs e 3 por CEO, duas CEOs novas alimentam as CTOs, 3 cada
+    const split = placeAutoDesignCeos(model, existing, ctos, { ceoMax: 3 }, null);
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const owner = assignAutoDesignCtosToCeos(split.slice(1), ctos, 3, dist);
+    const fed = split.slice(1).map((_, i) => ctos.filter(c => owner.get(c) === i).length);
     return { x: Math.round(ceo.x), y: Math.round(ceo.y), mid: ceo.x >= 700 && ceo.x <= 1000, two: two.length === 2 && two.every(c => c.x >= 600),
-      notOnCto: ctos.every(c => Math.hypot(c.x - ceo.x, c.y - ceo.y) >= 10), kept: kept.length === 1 && kept[0] === existing };
+      notOnCto: ctos.every(c => Math.hypot(c.x - ceo.x, c.y - ceo.y) >= 10), kept: kept.length === 1 && kept[0] === existing,
+      split: split.length === 3 && split[0] === existing && fed.join() === '3,3' };
   });
-  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept, `pré-projeto: CEO nova fica no meio das CTOs dela (${JSON.stringify(ceoMid)})`);
+  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split, `pré-projeto: CEO nova fica no meio das CTOs dela (${JSON.stringify(ceoMid)})`);
   //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
   const drops = await sp.evaluate(() => {
     const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
