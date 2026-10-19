@@ -1492,29 +1492,34 @@ async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inpu
     return plan;
 }
 
-//Uma CEO a cada "CTOs por CEO". A CTOs de cada CEO formam um grupo; a CEO nova vai para o meio dele: o poste que deixa
-//o cabo pela rua até as CTOs mais curto (contando também o cabo que chega nela). A raiz é a do grupo mais perto de
-//onde a rede chega (POP); CEO que já existe (root) fica onde está, e as novas ficam no meio dos outros grupos.
+//Uma CEO a cada "CTOs por CEO". A CEO nova vai para o meio das CTOs dela: o poste que deixa o cabo pela rua até
+//elas mais curto (contando também o cabo que chega nela). As CTOs de cada CEO seguem a mesma regra da rede
+//(assignAutoDesignCtosToCeos): grupos de partida pelo k-médias e, a cada volta, CTO na CEO mais perto com vaga e
+//CEO de novo no meio das suas, até parar de mudar. A raiz é a do grupo mais perto de onde a rede chega (POP).
+//CEO que já existe (root) fica onde está: sozinha, alimenta as CTOs; com mais grupos, só as CEOs novas alimentam.
 const AUTO_DESIGN_CEO_CHOICES = 10;      //Postes em volta do meio do grupo testados para a CEO
 const AUTO_DESIGN_CEO_REACH_M = 2500;    //Distâncias pela rua calculadas até 2,5 km (mais longe: linha reta)
+const AUTO_DESIGN_CEO_ITERS = 8;
 function placeAutoDesignCeos(model, root, ctos, params, start = null) {
     const cap = params.ceoMax > 0 ? params.ceoMax : Infinity;
     const groups = Math.max(1, Math.min(ctos.length, Math.ceil(ctos.length / cap)));
+    if (root && groups === 1) return [root];
     const assign = groups > 1 ? clusterAutoDesignPoints(ctos.map(c => [c.x, c.y]), groups) : ctos.map(() => 0);
-    const members = Array.from({ length: groups }, (_, g) => ctos.filter((__, i) => assign[i] === g)).filter(m => m.length);
+    let members = Array.from({ length: groups }, (_, g) => ctos.filter((__, i) => assign[i] === g)).filter(m => m.length);
     const center = (list) => ({ x: list.reduce((s, c) => s + c.x, 0) / list.length, y: list.reduce((s, c) => s + c.y, 0) / list.length });
     if (!members.length) return [root || makeAutoDesignBox(model, 'CEO', model.sites[nearestAutoDesignSite(model.sites, [start?.x ?? 0, start?.y ?? 0])])];
-    //Grupo da raiz: o mais perto de onde a rede chega (CEO que já existe, POP ou, sem eles, o do meio da área)
+    //Grupo da raiz (o primeiro): o mais perto de onde a rede chega (CEO que já existe, POP ou, sem eles, o do meio da área)
     const entry = root || start || center(ctos);
     let rootGroup = 0;
     members.forEach((m, g) => { const c = center(m), r = center(members[rootGroup]); if (Math.hypot(c.x - entry.x, c.y - entry.y) < Math.hypot(r.x - entry.x, r.y - entry.y)) rootGroup = g; });
+    members = [members[rootGroup], ...members.filter((_, g) => g !== rootGroup)];
     const meter = createAutoDesignDropMeter(model.streetIndex, model.coverRadius || AUTO_DESIGN_COVER_M, AUTO_DESIGN_CEO_REACH_M);
+    const dist = (ceo, cto) => meter.measure(cto, ceo);
     if (!model.allSites) model.allSites = model.sites.map((_, i) => i);
-    const taken = [];
-    const place = (list, upstream) => {
+    //Poste para a CEO das CTOs list: em volta do meio delas, sem cair em cima de uma CTO nem de outra CEO
+    const place = (list, upstream, others) => {
         const c = center(list);
-        //Postes em volta do meio do grupo, sem cair em cima de uma CTO nem de outra CEO
-        const free = (i) => [...ctos, ...taken].every(b => Math.hypot(b.x - model.sites[i].x, b.y - model.sites[i].y) >= 10);
+        const free = (i) => [...ctos, ...others].every(b => Math.hypot(b.x - model.sites[i].x, b.y - model.sites[i].y) >= 10);
         let pool = getAutoDesignNearSites(model, model.allSites, c.x, c.y, AUTO_DESIGN_CEO_CHOICES * 3).filter(free).slice(0, AUTO_DESIGN_CEO_CHOICES);
         if (!pool.length) pool = [nearestAutoDesignSite(model.sites, [c.x, c.y])];
         let best = pool[0], bestCost = Infinity;
@@ -1523,13 +1528,48 @@ function placeAutoDesignCeos(model, root, ctos, params, start = null) {
             const cost = list.reduce((sum, cto) => sum + meter.measure(cto, site), 0) + (upstream ? meter.measure(upstream, site) : 0);
             if (cost < bestCost) { best = i; bestCost = cost; }
         });
-        const box = makeAutoDesignBox(model, 'CEO', model.sites[best]);
-        taken.push(box);
-        return box;
+        return makeAutoDesignBox(model, 'CEO', model.sites[best]);
     };
-    const first = root || place(members[rootGroup], start);
-    const others = members.filter((_, g) => g !== rootGroup).map(list => place(list, first));
-    return [first, ...others];
+    //Com CEO que já existe, todas as CEOs novas ligam nela; sem ela, a primeira nova é a raiz e liga no POP
+    const upstreamOf = (ceos, g) => root || (g ? ceos[0] : start);
+    const ceos = [];
+    members.forEach((list, g) => ceos.push(place(list, upstreamOf(ceos, g), ceos)));
+    const total = (list) => list.reduce((sum, ceo, g) => sum + members[g].reduce((s, cto) => s + dist(ceo, cto), 0), 0);
+    let best = { ceos: [...ceos], members, cost: total(ceos) };
+    for (let iter = 0; iter < AUTO_DESIGN_CEO_ITERS; iter++) {
+        const owner = assignAutoDesignCtosToCeos(ceos, ctos, cap, dist);
+        const next = ceos.map((_, g) => ctos.filter(cto => owner.get(cto) === g));
+        if (next.every((list, g) => list.length === members[g].length && list.every(cto => members[g].includes(cto)))) break;
+        members = next;
+        //CEO nova que ficou sem CTO sai (a raiz fica: ela liga as outras)
+        for (let g = ceos.length - 1; g > 0; g--) if (!members[g].length) { ceos.splice(g, 1); members.splice(g, 1); }
+        ceos.forEach((_, g) => { if (members[g].length) ceos[g] = place(members[g], upstreamOf(ceos, g), ceos.filter((__, o) => o !== g)); });
+        const cost = total(ceos);
+        if (cost < best.cost - 1e-6) best = { ceos: [...ceos], members, cost };
+    }
+    return root ? [root, ...best.ceos] : best.ceos;
+}
+
+//CTO → CEO: a mais perto que ainda tem vaga; a que não cabe em nenhuma fica com a mais perto. dist(ceo, cto).
+function assignAutoDesignCtosToCeos(ceos, ctos, cap, dist) {
+    const count = ceos.map(() => 0);
+    const owner = new Map();
+    const pairs = [];
+    ctos.forEach(cto => ceos.forEach((ceo, ei) => pairs.push([dist(ceo, cto), cto, ei])));
+    pairs.sort((a, b) => a[0] - b[0]);
+    pairs.forEach(([, cto, ei]) => {
+        if (owner.has(cto) || count[ei] >= cap) return;
+        owner.set(cto, ei);
+        count[ei]++;
+    });
+    ctos.forEach(cto => {
+        if (owner.has(cto)) return;
+        let best = 0;
+        ceos.forEach((ceo, ei) => { if (dist(ceo, cto) < dist(ceos[best], cto)) best = ei; });
+        owner.set(cto, best);
+        count[best]++;
+    });
+    return owner;
 }
 
 const getAutoDesignNetworkBoxes = (plan) => [...plan.ceos, ...plan.ctos];
@@ -1624,37 +1664,14 @@ function rebuildAutoDesignNetwork(plan) {
     //Casas de cada CTO (a mais perto) e cobertura
     const evaluation = evaluateAutoDesignCenters(model, ctos);
     ctos.forEach((cto, i) => { cto.clients = evaluation.load[i] * model.housesPerWeight * params.occupancy / 100; });
-    //CTO → CEO: a mais perto que ainda tem vaga
-    const cap = params.ceoMax > 0 ? params.ceoMax : Infinity;
-    const count = ceos.map(() => 0);
-    const owner = new Map();
-    const pairs = [];
-    ctos.forEach(cto => ceos.forEach((ceo, ei) => pairs.push([dist(ceo, cto), cto, ei])));
-    pairs.sort((a, b) => a[0] - b[0]);
-    pairs.forEach(([, cto, ei]) => {
-        if (owner.has(cto) || count[ei] >= cap) return;
-        owner.set(cto, ei);
-        count[ei]++;
-    });
-    ctos.forEach(cto => {
-        if (owner.has(cto)) return;
-        let best = 0;
-        ceos.forEach((ceo, ei) => { if (dist(ceo, cto) < dist(ceos[best], cto)) best = ei; });
-        owner.set(cto, best);
-        count[best]++;
-    });
     [plan.start, ...ceos, ...ctos].forEach(box => { if (box) { box.in = null; box.out = []; box.kids = []; } });
-    //Caixa que já existe tem uma saída só (o cabo da rota de chegada): com CEOs novas, as CTOs dela passam para a CEO
-    //nova mais perto e só a primeira CEO nova liga nela; sem CEO nova, só a CTO mais perto liga nela e o resto segue dali
+    //CTO → CEO: a mais perto que ainda tem vaga (a mesma regra usada ao colocar as CEOs).
+    //Caixa que já existe tem uma saída só (o cabo da rota de chegada): com CEOs novas, só elas alimentam CTOs e só a
+    //primeira liga nela; sem CEO nova, só a CTO mais perto liga nela e o resto segue dali
     const singleExit = !ceos[0].isNew;
-    if (singleExit && ceos.length > 1) {
-        ctos.forEach(cto => {
-            if (owner.get(cto) !== 0) return;
-            let best = 1;
-            for (let ei = 2; ei < ceos.length; ei++) if (dist(ceos[ei], cto) < dist(ceos[best], cto)) best = ei;
-            owner.set(cto, best);
-        });
-    }
+    const skip = singleExit && ceos.length > 1 ? 1 : 0;
+    const feeding = assignAutoDesignCtosToCeos(ceos.slice(skip), ctos, params.ceoMax > 0 ? params.ceoMax : Infinity, dist);
+    const owner = new Map([...feeding].map(([cto, ei]) => [cto, ei + skip]));
     //Árvore a partir de uma ponta: com saída única, a raiz liga só no nó mais perto e os outros se penduram nele
     const treeFrom = (root, others) => {
         if (!singleExit || root !== ceos[0] || others.length < 2) {
