@@ -2790,6 +2790,27 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   //Ocupação máxima vale em todas as opções do pré-projeto (só a "com folga" usa menos)
   const fills = await sp.evaluate(() => AUTO_DESIGN_STRATEGIES.map(st => ({ maxFill: 75, ...st.params({ maxFill: 75, coverRadius: 150 }) }).maxFill));
   check(fills[0] === 75 && fills[1] === 75 && fills[2] === 50, `pré-projeto: nenhuma opção passa da ocupação máxima do painel (${JSON.stringify(fills)})`);
+  //CEO nova no meio das CTOs que ela alimenta (não colada no POP); CEO que já existe fica onde está
+  const ceoMid = await sp.evaluate(() => {
+    const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
+    const ll = ([x, y]) => { const q = proj.toLatLng([x, y]); return [q.lat, q.lng]; };
+    const lines = [];
+    for (let y = 0; y <= 200; y += 100) lines.push([ll([0, y]), ll([1200, y])]);
+    for (let x = 0; x <= 1200; x += 200) lines.push([ll([x, 0]), ll([x, 200])]);
+    const index = buildAutoDesignStreetIndex(lines, proj);
+    const sites = [];
+    for (let x = 0; x <= 1200; x += 20) for (let y = 0; y <= 200; y += 100) sites.push({ x, y: y + 3 });
+    const model = { proj, sites, streetIndex: index, coverRadius: 150 };
+    const ctos = [[700, 3], [800, 3], [900, 103], [1000, 103], [800, 203], [1100, 3]].map(([x, y]) => makeAutoDesignBox(model, 'CTO', { x, y }));
+    const pop = { x: 0, y: 3 };
+    const [ceo] = placeAutoDesignCeos(model, null, ctos, { ceoMax: 16 }, pop);
+    const two = placeAutoDesignCeos(model, null, ctos, { ceoMax: 3 }, pop);
+    const existing = { x: 100, y: 3, isNew: false };
+    const kept = placeAutoDesignCeos(model, existing, ctos, { ceoMax: 16 }, null);
+    return { x: Math.round(ceo.x), y: Math.round(ceo.y), mid: ceo.x >= 700 && ceo.x <= 1000, two: two.length === 2 && two.every(c => c.x >= 600),
+      notOnCto: ctos.every(c => Math.hypot(c.x - ceo.x, c.y - ceo.y) >= 10), kept: kept.length === 1 && kept[0] === existing };
+  });
+  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept, `pré-projeto: CEO nova fica no meio das CTOs dela (${JSON.stringify(ceoMid)})`);
   //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
   const drops = await sp.evaluate(() => {
     const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);

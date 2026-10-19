@@ -1099,9 +1099,9 @@ const AUTO_DESIGN_SITE_GRIDS = new WeakMap(); //locais permitidos → grade para
 //(dois lados do quarteirão), mais a descida do poste
 const getAutoDesignDropReach = (radius) => radius * Math.SQRT2 + AUTO_DESIGN_DROP_LEGS_M;
 
-function createAutoDesignDropMeter(streetIndex, radius) {
+//limit: até onde as distâncias pela rua são calculadas (mais longe: limit + linha reta)
+function createAutoDesignDropMeter(streetIndex, radius, limit = getAutoDesignDropReach(radius) * 1.5) {
     const reach = getAutoDesignDropReach(radius);
-    const limit = reach * 1.5;
     const straight = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); //Math.hypot é lento nas voltas grandes
     if (!streetIndex?.fieldFrom) return { reach, limit, measure: straight };
     let cache = AUTO_DESIGN_DROP_CACHE.get(streetIndex);
@@ -1460,30 +1460,23 @@ async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inpu
         return { error: `As ${model.existing.length} CTO(s) que já estão na área dão conta dos ≈ ${clients.toLocaleString('pt-BR')} clientes previstos: não precisa de CTO nova. Aumente a penetração ou desmarque "Considerar as CTOs que já estão no mapa".` };
     }
     if (model.sites.length < 4 || !model.demand.length) return { error: 'A área é pequena demais (ou ficou sem casas) para distribuir caixas. Desenhe um polígono maior.' };
-    const startPos = startMarker?.marker?.getPosition?.();
-    const centroid = model.polyXY.reduce((s, p) => [s[0] + p[0] / model.polyXY.length, s[1] + p[1] / model.polyXY.length], [0, 0]);
-    const rootIsNew = !startMarker || startMarker.type === 'POP';
-    let root;
-    if (rootIsNew) {
-        const rootSite = nearestAutoDesignSite(model.sites, startPos ? model.proj.toXY(startPos.lat(), startPos.lng()) : centroid);
-        root = makeAutoDesignBox(model, 'CEO', model.sites[rootSite]);
-    } else {
-        root = makeAutoDesignExistingBox(model, startMarker);
-    }
-    //CTO grudada na CEO não ajuda: as casas dali ficam com a CTO mais perto
+    //CEO que já existe é a raiz e fica onde está; CEO nova vai para o meio das CTOs dela (placeAutoDesignCeos)
+    const root = startMarker && startMarker.type !== 'POP' ? makeAutoDesignExistingBox(model, startMarker) : null;
+    //CTO grudada na CEO que já existe não ajuda: as casas dali ficam com a CTO mais perto
     //Nem em cima de uma CTO que já existe
-    const candidates = model.sites.map((_, i) => i).filter(i => Math.hypot(model.sites[i].x - root.x, model.sites[i].y - root.y) > 25
+    const candidates = model.sites.map((_, i) => i).filter(i => (!root || Math.hypot(model.sites[i].x - root.x, model.sites[i].y - root.y) > 25)
         && model.existing.every(e => Math.hypot(model.sites[i].x - e.x, model.sites[i].y - e.y) > AUTO_DESIGN_EXISTING_GAP_M
             && !areAutoDesignBoxesTooClose(model, model.sites[i], e)));
     if (!candidates.length) return { error: 'A área é pequena demais para distribuir caixas. Desenhe um polígono maior.' };
     const chosen = chooseAutoDesignCtos(model, candidates, params);
     const ctos = chosen.centers.map(site => makeAutoDesignBox(model, 'CTO', model.sites[site]));
+    const start = startMarker && startMarker.type === 'POP' ? makeAutoDesignExistingBox(model, startMarker) : null;
     const plan = {
         model,
         params: { ...params },
         names,
-        start: startMarker && startMarker.type === 'POP' ? makeAutoDesignExistingBox(model, startMarker) : null,
-        ceos: placeAutoDesignCeos(model, root, ctos, params),
+        start,
+        ceos: placeAutoDesignCeos(model, root, ctos, params, start),
         ctos,
         cables: [],
         roads: roads || new Map(),
@@ -1499,25 +1492,44 @@ async function buildAutoDesignPlan(polygonPath, params, startMarker, names, inpu
     return plan;
 }
 
-//Uma CEO a cada "CTOs por CEO": a primeira (raiz) perto de onde a rede chega; as outras no meio do seu grupo
-function placeAutoDesignCeos(model, root, ctos, params) {
+//Uma CEO a cada "CTOs por CEO". A CTOs de cada CEO formam um grupo; a CEO nova vai para o meio dele: o poste que deixa
+//o cabo pela rua até as CTOs mais curto (contando também o cabo que chega nela). A raiz é a do grupo mais perto de
+//onde a rede chega (POP); CEO que já existe (root) fica onde está, e as novas ficam no meio dos outros grupos.
+const AUTO_DESIGN_CEO_CHOICES = 10;      //Postes em volta do meio do grupo testados para a CEO
+const AUTO_DESIGN_CEO_REACH_M = 2500;    //Distâncias pela rua calculadas até 2,5 km (mais longe: linha reta)
+function placeAutoDesignCeos(model, root, ctos, params, start = null) {
     const cap = params.ceoMax > 0 ? params.ceoMax : Infinity;
-    const groups = Math.max(1, Math.ceil(ctos.length / cap));
-    if (groups === 1) return [root];
-    const assign = clusterAutoDesignPoints(ctos.map(c => [c.x, c.y]), groups);
-    const centers = Array.from({ length: groups }, (_, g) => {
-        const members = ctos.filter((__, i) => assign[i] === g);
-        return members.length ? { x: members.reduce((s, c) => s + c.x, 0) / members.length, y: members.reduce((s, c) => s + c.y, 0) / members.length } : null;
-    }).filter(Boolean);
+    const groups = Math.max(1, Math.min(ctos.length, Math.ceil(ctos.length / cap)));
+    const assign = groups > 1 ? clusterAutoDesignPoints(ctos.map(c => [c.x, c.y]), groups) : ctos.map(() => 0);
+    const members = Array.from({ length: groups }, (_, g) => ctos.filter((__, i) => assign[i] === g)).filter(m => m.length);
+    const center = (list) => ({ x: list.reduce((s, c) => s + c.x, 0) / list.length, y: list.reduce((s, c) => s + c.y, 0) / list.length });
+    if (!members.length) return [root || makeAutoDesignBox(model, 'CEO', model.sites[nearestAutoDesignSite(model.sites, [start?.x ?? 0, start?.y ?? 0])])];
+    //Grupo da raiz: o mais perto de onde a rede chega (CEO que já existe, POP ou, sem eles, o do meio da área)
+    const entry = root || start || center(ctos);
     let rootGroup = 0;
-    centers.forEach((c, g) => { if (Math.hypot(c.x - root.x, c.y - root.y) < Math.hypot(centers[rootGroup].x - root.x, centers[rootGroup].y - root.y)) rootGroup = g; });
-    const others = centers.filter((_, g) => g !== rootGroup).map(c => {
-        //Local mais perto do meio do grupo, sem cair em cima de uma CTO
-        const order = model.sites.map((s, i) => [i, (s.x - c.x) ** 2 + (s.y - c.y) ** 2]).sort((a, b) => a[1] - b[1]);
-        const free = order.find(([i]) => ctos.every(cto => Math.hypot(cto.x - model.sites[i].x, cto.y - model.sites[i].y) >= 10)) || order[0];
-        return makeAutoDesignBox(model, 'CEO', model.sites[free[0]]);
-    });
-    return [root, ...others];
+    members.forEach((m, g) => { const c = center(m), r = center(members[rootGroup]); if (Math.hypot(c.x - entry.x, c.y - entry.y) < Math.hypot(r.x - entry.x, r.y - entry.y)) rootGroup = g; });
+    const meter = createAutoDesignDropMeter(model.streetIndex, model.coverRadius || AUTO_DESIGN_COVER_M, AUTO_DESIGN_CEO_REACH_M);
+    if (!model.allSites) model.allSites = model.sites.map((_, i) => i);
+    const taken = [];
+    const place = (list, upstream) => {
+        const c = center(list);
+        //Postes em volta do meio do grupo, sem cair em cima de uma CTO nem de outra CEO
+        const free = (i) => [...ctos, ...taken].every(b => Math.hypot(b.x - model.sites[i].x, b.y - model.sites[i].y) >= 10);
+        let pool = getAutoDesignNearSites(model, model.allSites, c.x, c.y, AUTO_DESIGN_CEO_CHOICES * 3).filter(free).slice(0, AUTO_DESIGN_CEO_CHOICES);
+        if (!pool.length) pool = [nearestAutoDesignSite(model.sites, [c.x, c.y])];
+        let best = pool[0], bestCost = Infinity;
+        pool.forEach(i => {
+            const site = model.sites[i];
+            const cost = list.reduce((sum, cto) => sum + meter.measure(cto, site), 0) + (upstream ? meter.measure(upstream, site) : 0);
+            if (cost < bestCost) { best = i; bestCost = cost; }
+        });
+        const box = makeAutoDesignBox(model, 'CEO', model.sites[best]);
+        taken.push(box);
+        return box;
+    };
+    const first = root || place(members[rootGroup], start);
+    const others = members.filter((_, g) => g !== rootGroup).map(list => place(list, first));
+    return [first, ...others];
 }
 
 const getAutoDesignNetworkBoxes = (plan) => [...plan.ceos, ...plan.ctos];
