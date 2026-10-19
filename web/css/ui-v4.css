@@ -2850,3 +2850,11 @@ html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__wa
 #autoDesignBox .auto-design__cto-card .auto-design__list { background: var(--color-surface); }
 #autoDesignBox .auto-design__cto-card .auto-design__list b { white-space: nowrap; }
 #autoDesignBox .auto-design__cto-card .map-tool-help { margin: 0; }
+/* Pré-projeto: conferir CTO por CTO */
+#autoDesignBox .auto-design__check-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--color-text-muted); }
+#autoDesignBox .auto-design__check-row b { color: var(--color-text); }
+#autoDesignBox .auto-design__next { width: auto; padding: 5px 10px; font-size: 12px; }
+#autoDesignBox .auto-design__cto-actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 6px; }
+#autoDesignBox .auto-design__cto-ok { margin-left: 6px; font-size: 11px; font-weight: 700; color: #15803d; }
+#autoDesignBox .auto-design__cto-card.is-checked { border-color: rgba(22, 163, 74, 0.45); }
+html[data-theme="dark"] #autoDesignBox .auto-design__cto-ok { color: #86efac; }
