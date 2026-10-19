@@ -1045,9 +1045,10 @@ function getAutoDesignPoleTree(graph, source) {
 // CTOs: k-médias com o centro sempre num local permitido (poste, rua)
 // ---------------------------------------------------------------
 
-function placeAutoDesignCtos(model, candidates, k, seed = 0) {
+function placeAutoDesignCtos(model, candidates, k, seed = 0, initial = null) {
     const { demand, sites } = model;
     k = Math.max(1, Math.min(k, candidates.length));
+    if (initial?.length) return refineAutoDesignCtos(model, candidates, [...new Set(initial)]);
     let sw = 0, sx = 0, sy = 0;
     demand.forEach(n => { sw += n.w; sx += n.x * n.w; sy += n.y * n.w; });
     //Começo: o local do meio (ou, com seed, a casa mais na ponta de uma direção) e depois sempre o mais longe
@@ -1058,7 +1059,7 @@ function placeAutoDesignCtos(model, candidates, k, seed = 0) {
         const edge = demand.reduce((best, n) => (n.x * ux + n.y * uy > best.x * ux + best.y * uy ? n : best), demand[0]);
         start = [edge.x, edge.y];
     }
-    let centers = [nearestAutoDesignSite(sites, start, candidates)];
+    const centers = [nearestAutoDesignSite(sites, start, candidates)];
     const d2 = (n, c) => (n.x - sites[c].x) ** 2 + (n.y - sites[c].y) ** 2;
     const minD = demand.map(n => d2(n, centers[0]));
     while (centers.length < k) {
@@ -1070,6 +1071,11 @@ function placeAutoDesignCtos(model, candidates, k, seed = 0) {
         centers.push(site);
         demand.forEach((n, j) => { minD[j] = Math.min(minD[j], d2(n, site)); });
     }
+    return refineAutoDesignCtos(model, candidates, centers);
+}
+
+function refineAutoDesignCtos(model, candidates, centers) {
+    const { sites } = model;
     //Depois, até parar de mudar: as casas vão para a CTO mais perto pela rua (com porta livre) e cada CTO vai para o
     //poste que deixa os drops das suas casas mais curtos
     //Sem "Entre CTOs" no painel, vale um mínimo pequeno (AUTO_DESIGN_CTO_GAP_M na mesma rua): a CTO só fica colada em
@@ -1082,7 +1088,9 @@ function placeAutoDesignCtos(model, candidates, k, seed = 0) {
             && areAutoDesignBoxesTooClose(model, sites[i], sites[c], gap));
         const taken = { has: (i) => chosen.has(i) || (gap > 0 && tooNear(i)) };
         const next = centers.map((c, ci) => {
-            const site = pickAutoDesignCtoSite(model, parts[ci], candidates, c, taken);
+            let site = pickAutoDesignCtoSite(model, parts[ci], candidates, c, taken);
+            //Duas CTOs no mesmo poste (a outra já foi para o lugar desta): esta vai para o poste livre mais perto
+            if (chosen.has(site)) site = getAutoDesignNearSites(model, candidates, sites[site].x, sites[site].y, 12).find(i => !chosen.has(i)) ?? site;
             chosen.add(site);
             list.push(site);
             return site;
@@ -1104,6 +1112,13 @@ const AUTO_DESIGN_DROP_LEGS_M = 20;     //Descida do poste e entrada da casa
 const AUTO_DESIGN_DROP_CHOICES = 6;     //CTOs mais perto (em linha reta) que cada casa confere pela rua
 const AUTO_DESIGN_SITE_CHOICES = 8;     //Postes em volta do meio das casas testados para a CTO
 const AUTO_DESIGN_PLACE_ITERS = 15;
+//CTO mais perto cheia: a casa passa para outra só se o drop fica até 40 m maior ou, mesmo assim, curto (até 45% do
+//alcance). Senão ela fica com a mais perto, que passa das portas, e entra uma CTO nova ali: a CTO não vai buscar casa
+//em quarteirão longe.
+const AUTO_DESIGN_SPILL_M = 40;
+const AUTO_DESIGN_NEAR_SHARE = 0.45;
+//Distribuição pronta: nenhuma CTO acima de 115% das portas e até 5% delas acima (a conta de clientes é estimativa)
+const AUTO_DESIGN_OVER_MAX = 1.15, AUTO_DESIGN_OVER_SHARE = 0.05;
 const AUTO_DESIGN_CTO_GAP_M = 40;       //Sem "Entre CTOs": mínimo entre CTOs na mesma rua (fica mais perto só se precisar)
 const AUTO_DESIGN_MERGE_M = 150;        //Duplas de CTOs até essa distância que talvez caibam numa só
 const AUTO_DESIGN_MERGE_TRIES = 40;     //Duplas testadas por distribuição
@@ -1198,7 +1213,7 @@ function evaluateAutoDesignCenters(model, points, centers = null) {
         const mine = near.slice(0, AUTO_DESIGN_DROP_CHOICES).map(([line, ci]) => [drop.measure(n, points[ci]), j, ci, line]);
         const best = mine.reduce((a, b) => (b[0] < a[0] ? b : a));
         //CTO cheia: a casa só passa para outra que também alcança; senão fica com a mais perto (e ela passa das portas)
-        mine.forEach(pair => { if (pair === best || (pair[3] <= radius && pair[0] <= drop.reach)) pairs.push(pair); });
+        mine.forEach(pair => { if (pair === best || (pair[3] <= radius && pair[0] <= drop.reach && (pair[0] <= best[0] + AUTO_DESIGN_SPILL_M || pair[0] <= drop.reach * AUTO_DESIGN_NEAR_SHARE))) pairs.push(pair); });
         return best;
     });
     pairs.sort((a, b) => a[0] - b[0]);
@@ -1330,14 +1345,19 @@ function chooseAutoDesignCtos(model, candidates, params) {
     const usable = getAutoDesignUsablePorts(params);
     const byPorts = Math.max(1, Math.ceil(clients / usable));
     const toClients = (w) => w * model.housesPerWeight * params.occupancy / 100;
+    const max = Math.min(candidates.length, AUTO_DESIGN_MAX_CTOS);
     let k = byPorts;
     let placement = null;
     let limitedTries = 0;
     for (let tries = 0; tries < 40; tries++) {
         const previous = placement;
-        placement = placeAutoDesignCtos(model, candidates, k, params.layoutSeed || 0);
+        //Faltou CTO: as novas entram onde faltou (casas que não couberam na CTO delas ou fora do alcance) e as vizinhas
+        //se ajeitam; só se não achar onde, espalha todas de novo
+        const extra = previous ? getAutoDesignExtraCtos(model, previous, candidates, params, k - previous.centers.length) : [];
+        if (extra.length) k = previous.centers.length + extra.length;
+        placement = placeAutoDesignCtos(model, candidates, k, params.layoutSeed || 0, extra.length ? [...previous.centers, ...extra] : null);
         //Distância entre CTOs não deixa caber mais caixas: pedir mais não adianta
-        if (placement.centers.length < k) {
+        if (model.ctoSpacing > 0 && placement.centers.length < k) {
             limitedTries++;
             placement.spacingLimited = true;
             if (previous && placement.coverage <= previous.coverage + 0.001) { placement = previous.coverage >= placement.coverage ? { ...previous, spacingLimited: true } : placement; break; }
@@ -1346,13 +1366,55 @@ function chooseAutoDesignCtos(model, candidates, params) {
         //A conta de clientes por caixa é estimativa: aceita poucas caixas um pouco acima das portas
         const clientsPerCto = placement.load.map(toClients);
         const over = clientsPerCto.filter(c => c > usable + 0.5).length;
-        const fits = Math.max(...clientsPerCto) <= usable * 1.25 && over <= Math.floor(k * 0.15);
+        const fits = Math.max(...clientsPerCto) <= usable * AUTO_DESIGN_OVER_MAX && over <= Math.floor(k * AUTO_DESIGN_OVER_SHARE);
         const done = placement.coverage >= AUTO_DESIGN_MIN_COVERAGE && fits;
-        if (done || k >= Math.min(candidates.length, AUTO_DESIGN_MAX_CTOS)) break;
-        k = Math.min(candidates.length, AUTO_DESIGN_MAX_CTOS, k + Math.max(1, Math.ceil(k * 0.08)));
+        if (done || k >= max) break;
+        k = Math.min(max, k + Math.max(1, Math.ceil(k * 0.08)));
     }
     placement = mergeAutoDesignCtos(model, placement, candidates, params);
     return { ...placement, byPorts, clients };
+}
+
+//Onde pôr até limit CTOs novas: uma para as casas que passaram das portas de cada CTO cheia (as mais longe dela) e uma
+//para as casas fora do alcance de cada CTO, as mais precisadas primeiro. Devolve locais (índices de sites).
+function getAutoDesignExtraCtos(model, placement, candidates, params, limit) {
+    if (!(limit > 0)) return [];
+    const { sites, demand, drop } = model;
+    const usable = getAutoDesignUsablePorts(params);
+    const toClients = (w) => w * model.housesPerWeight * params.occupancy / 100;
+    const spots = []; //[clientes que faltam, x, y]
+    const centroid = (list) => {
+        let w = 0, x = 0, y = 0;
+        list.forEach(([j, pw]) => { w += pw; x += demand[j].x * pw; y += demand[j].y * pw; });
+        return w > 0 ? [x / w, y / w] : null;
+    };
+    placement.centers.forEach((site, ci) => {
+        const box = sites[site], part = placement.parts[ci] || [];
+        const over = toClients(placement.load[ci]) - usable;
+        if (over > 0.5 && Number.isFinite(model.ctoCapacity)) {
+            //As casas mais longe da CTO, até somar o que passou
+            const far = part.map(([j, w]) => [drop.measure(demand[j], box), j, w]).sort((a, b) => b[0] - a[0]);
+            const extraW = placement.load[ci] - model.ctoCapacity, pick = [];
+            let acc = 0;
+            for (const [, j, w] of far) { pick.push([j, w]); acc += w; if (acc >= extraW) break; }
+            const at = centroid(pick);
+            if (at) spots.push([over, ...at]);
+        }
+        const out = part.filter(([j]) => !isAutoDesignCovered(model, demand[j], box));
+        const at = out.length && centroid(out);
+        if (at) spots.push([toClients(out.reduce((sum, [, w]) => sum + w, 0)), ...at]);
+    });
+    spots.sort((a, b) => b[0] - a[0]);
+    const used = new Set(placement.centers);
+    const found = [];
+    for (const [, x, y] of spots) {
+        if (found.length >= limit) break;
+        const site = getAutoDesignNearSites(model, candidates, x, y, 6).find(i => !used.has(i));
+        if (site == null) continue;
+        used.add(site);
+        found.push(site);
+    }
+    return found;
 }
 
 //CTOs vizinhas que cabem numa só: uma sai e a outra vai para o meio das casas das duas, se com isso nenhuma casa fica

@@ -2858,12 +2858,16 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       return mergeAutoDesignCtos(mModel, start, mCands, mParams).centers.length;
     };
     const merge = { few: mRun(5) === 1, many: mRun(12) === 2 };
+    //CTO cheia: a casa passa para a vizinha só se ela está perto; a de longe não vai buscar casa (entra CTO nova ali)
+    const sModel = { demand: Array.from({ length: 8 }, (_, i) => ({ x: 10 + i, y: 0, w: 1 })), drop: createAutoDesignDropMeter(null, 150), coverRadius: 150, ctoCapacity: 5 };
+    const spill = { near: evaluateAutoDesignCenters(sModel, [{ x: 0, y: 0 }, { x: 60, y: 0 }]).load.join() === '5,3',
+      far: evaluateAutoDesignCenters(sModel, [{ x: 0, y: 0 }, { x: 140, y: 0 }]).load.join() === '8,0' };
     return { x: Math.round(ceo.x), y: Math.round(ceo.y), mid: ceo.x >= 700 && ceo.x <= 1000, two: two.length === 2 && two.every(c => c.x >= 600),
       notOnCto: ctos.every(c => Math.hypot(c.x - ceo.x, c.y - ceo.y) >= 10), kept: kept.length === 1 && kept[0] === existing,
       split: split.length === 3 && split[0] === existing && fed.join() === '3,3',
-      fair: [t1, t2, t3].map(t => fair.get(t)).join() === '0,1,1', merge: merge.few && merge.many };
+      fair: [t1, t2, t3].map(t => fair.get(t)).join() === '0,1,1', merge: merge.few && merge.many, spill: spill.near && spill.far };
   });
-  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split && ceoMid.fair && ceoMid.merge, `pré-projeto: CEO nova fica no meio das CTOs dela e CTOs vizinhas que cabem numa só viram uma (${JSON.stringify(ceoMid)})`);
+  check(ceoMid.mid && ceoMid.two && ceoMid.notOnCto && ceoMid.kept && ceoMid.split && ceoMid.fair && ceoMid.merge && ceoMid.spill, `pré-projeto: CEO nova fica no meio das CTOs dela, CTOs vizinhas que cabem numa só viram uma e CTO cheia não busca casa longe (${JSON.stringify(ceoMid)})`);
   //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
   const drops = await sp.evaluate(() => {
     const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
