@@ -2864,7 +2864,22 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const sorted = classifyAutoDesignPoles(poles, index);
     const block = spreadAutoDesignHouseBlock({ x: 150, y: 35, w: 28 }, index);
     const onStreet = spreadAutoDesignHouseBlock({ x: 150, y: 2, w: 5 }, index);
+    //Dois balões na mesma quadra, um de cada lado: cada um fica com as casas da rua dele. Lote (1–2 casas) fica onde
+    //está, sem ser espalhado. Balão sozinho na quadra continua pelas ruas em volta.
+    const pair = spreadAutoDesignHouses([{ x: 150, y: 22, w: 10, src: 0 }, { x: 150, y: 50, w: 8, src: 1 }, { x: 60, y: 25, w: 1, src: 2 }, { x: 150, y: 105, w: 12, src: 3 }], index);
+    const share = (src, near) => { const mine = pair.filter(p => p.src === src); return mine.filter(near).reduce((a, p) => a + p.w, 0) / mine.reduce((a, p) => a + p.w, 0); };
+    //Caixa arrastada (o mesmo objeto em outro lugar): o drop é medido do lugar novo
+    const meter = createAutoDesignDropMeter(index, 150);
+    const house = { x: 250, y: 8 }, box = { x: 40, y: 3 };
+    const far = meter.measure(house, box);
+    box.x = 245;
+    const nearNow = meter.measure(house, box);
     return {
+      sides: share(0, p => p.y < 30) >= 0.9 && share(1, p => p.y > 40) >= 0.9,
+      totals: [0, 1, 3].every(src => Math.abs(pair.filter(p => p.src === src).reduce((a, p) => a + p.w, 0) - [10, 8, 0, 12][src]) < 1e-6),
+      lot: pair.filter(p => p.src === 2).length === 1 && pair.find(p => p.src === 2).y === 25,
+      alone: pair.some(p => p.src === 3 && p.y < 90) && pair.some(p => p.src === 3 && p.y > 120),
+      moved: far > 150 && nearNow < 20,
       street: sorted.kept.filter(p => p.y === 0).length === 7, inLot: !sorted.kept.some(p => p.y === 25),
       farRow: sorted.kept.filter(p => p.y === 310 && p.unmapped).length === 7,
       spread: block.length >= 10, total: Math.abs(block.reduce((sum, p) => sum + p.w, 0) - 28) < 1e-6,
@@ -2875,6 +2890,103 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(Object.entries(blocks).every(([k, v]) => (k === 'hit' ? v === '[150,0]' : v === true)),
     `pré-projeto: poste no quintal fica de fora e balão de casas se espalha pelas ruas da quadra (${JSON.stringify(blocks)})`);
+  //Ajuste fino da prévia numa rua reta de 600 m com 80 lotes (20% → 2 CTOs de 8, raio de 200 m): ao arrastar, a prévia mostra as
+  //casas que a CTO pega dali (as mesmas de quando solta); o cartão sugere o poste melhor, dividir a CTO que passou das
+  //portas e CTO nova para as casas fora do alcance; CTO movida fica fixa e "Reajustar" mexe só nas outras
+  const adjust = await sp.evaluate(async () => {
+    if (!map) map = new google.maps.Map(document.getElementById('map'), {});
+    const LAT0 = -39, LNG0 = -45;
+    const mLat = 1 / 110540, mLng = 1 / (111320 * Math.cos(LAT0 * Math.PI / 180));
+    const LL = (x, y) => ({ lat: LAT0 - y * mLat, lng: LNG0 + x * mLng });
+    const toLL = (x, y) => { const q = LL(x, y); return [q.lat, q.lng]; };
+    const realLines = window.getStreetLinesInBounds, realPoles = window.getPolesInBounds, realFetch = window.fetch;
+    const lines = [[toLL(-40, 0), toLL(640, 0)]];
+    lines.water = [];
+    window.getStreetLinesInBounds = async () => lines;
+    const poles = [];
+    for (let x = 0; x <= 600; x += 35) poles.push(toLL(x, 4));
+    window.getPolesInBounds = async () => ({ points: poles, manifest: { version: 'adj' } });
+    window.fetch = async (url, opts) => (/\/(table|nearest|route)\/v1\//.test(String(url)) ? new Response('down', { status: 503 }) : realFetch(url, opts));
+    const out = {};
+    try {
+      rebuildSidebarFromJSON([{ id: 'projADJ', name: 'Projeto ADJ', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
+      setActiveFolder('projADJ');
+      let n = 0;
+      for (let x = 10; x <= 595; x += 15) for (const y of [-20, 20]) rebuildMarker({ uid: `adjc${n++}`, folderId: 'projADJ', type: 'CASA', name: '1', color: '#fff', position: LL(x, y) });
+      rebuildPolygon({ uid: 'pg_adj', folderId: 'projADJ', name: 'Rua ADJ', color: '#2dd4bf', opacity: 0.2, path: [LL(-20, -60), LL(620, -60), LL(620, 60), LL(-20, 60)] });
+      openAutoDesign(savedPolygons.find(p => p.uid === 'pg_adj'));
+      await autoDesign.polesPromise;
+      Object.assign(autoDesign.params, { occupancy: 20, ports: 8, maxFill: 100, coverRadius: 200, levels: 1, useHouses: true, usePoles: true, ctoSpacing: '' });
+      renderAutoDesign();
+      await generateAutoDesign();
+      let plan = autoDesign.result;
+      const ll = (x, y) => { const q = plan.model.proj.toLatLng([x, y]); return new google.maps.LatLng(q.lat, q.lng); };
+      out.gen = plan?.ctos.length === 2 && plan.model.demand.length === 80 && plan.ctos.every(c => !getAutoDesignCtoMove(plan, c));
+      //Arrastar: prévia (rua pintada + selo) e, ao soltar, as mesmas casas; a CTO fica fixa
+      const [a] = [...plan.ctos].sort((p, q) => p.x - q.x);
+      const target = [a.x - 100, a.y];
+      startAutoDesignDrag(a);
+      dragAutoDesignBox(a, ll(...target));
+      const view = drawAutoDesignDragPreview();
+      out.drag = { overlays: autoDesign.drag.overlays.length >= 3, badge: autoDesign.drag.overlays.some(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '')), houses: Math.round(view.sum.houses) };
+      endAutoDesignDrag();
+      await moveAutoDesignBox(a, ll(...target));
+      plan = autoDesign.result;
+      out.drag.same = Math.round(a.houses) === out.drag.houses && a.pinned === true && !autoDesign.drag;
+      //Poste melhor: volta para o meio das casas dela
+      autoDesign.selectedCto = a;
+      renderAutoDesign();
+      const move = getAutoDesignCtoMove(plan, a);
+      const tips = document.querySelector('#autoDesignBox .auto-design__tips')?.textContent || '';
+      out.move = { found: !!move && move.dist >= 40 && move.after.dropAvg < move.before.dropAvg - 8, card: /Mover para lá/.test(tips) && /drops mais curtos/.test(tips),
+        readjustLine: /1 CTO fixa/.test(document.querySelector('#autoDesignBox .auto-design__readjust')?.textContent || '') };
+      const avg0 = getAutoDesignCtoSummary(plan, a).dropAvg;
+      document.querySelector('#autoDesignBox [data-auto-design="cto-move"]').click();
+      await new Promise(r => { const t = setInterval(() => { if (!autoDesign.busy && !a.pinned) { clearInterval(t); r(); } }, 20); setTimeout(r, 5000); });
+      out.move.applied = !a.pinned && getAutoDesignCtoSummary(autoDesign.result, a).dropAvg < avg0 - 8;
+      //Sem a vizinha: a CTO passa das portas e não alcança as casas da outra ponta (em vermelho no mapa)
+      plan = autoDesign.result;
+      await removeAutoDesignCto(plan.ctos.find(c => c !== a));
+      plan = autoDesign.result;
+      autoDesign.selectedCto = a;
+      drawAutoDesignPreview();
+      renderAutoDesign();
+      const sum = getAutoDesignCtoSummary(plan, a);
+      const card = document.querySelector('#autoDesignBox .auto-design__tips')?.textContent || '';
+      out.alone = { over: sum.over, out: sum.outHouses >= 1, split: /Dividir em duas/.test(card), reach: /fora do alcance/.test(card) && /\+ CTO para elas/.test(card),
+        red: autoDesign.overlays.some(o => o.get?.('icon')?.fillColor === '#dc2626') };
+      await reachAutoDesignOutHouses(a);
+      plan = autoDesign.result;
+      out.reach = plan.ctos.length === 2 && plan.stats.coverage > 0.99;
+      //Dividir: a CTO cheia fica com metade das casas
+      await removeAutoDesignCto(plan.ctos.find(c => c !== a));
+      plan = autoDesign.result;
+      const clients0 = a.clients;
+      await splitAutoDesignCto(a);
+      plan = autoDesign.result;
+      out.split = plan.ctos.length === 2 && a.clients < clients0 - 2 && plan.ctos.every(c => c.clients <= getAutoDesignUsablePorts(plan.params) + 0.5);
+      //Reajustar: a fixa fica, a solta se ajeita em volta dela
+      const [p0, p1] = plan.ctos;
+      p0.pinned = true;
+      const fixedAt = [p0.x, p0.y];
+      Object.assign(p1, makeAutoDesignBox(plan.model, 'CTO', plan.model.sites[0], { name: p1.name }));
+      await readjustAutoDesignAll();
+      plan = autoDesign.result;
+      out.readjust = p0.x === fixedAt[0] && p0.y === fixedAt[1] && Math.hypot(p1.x - plan.model.sites[0].x, p1.y - plan.model.sites[0].y) > 30 && plan.stats.coverage > 0.99;
+    } finally {
+      closeAutoDesign();
+      window.getStreetLinesInBounds = realLines;
+      window.getPolesInBounds = realPoles;
+      window.fetch = realFetch;
+      markers.filter(m => m.folderId === 'projADJ').forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
+      savedPolygons.filter(p => p.uid === 'pg_adj').forEach(p => { p.polygonObject?.setMap(null); savedPolygons.splice(savedPolygons.indexOf(p), 1); });
+      document.querySelector('.folder-title[data-folder-id="projADJ"]')?.closest('.folder')?.remove();
+    }
+    return out;
+  });
+  check(adjust.gen && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.same && Object.values(adjust.move || {}).every(Boolean)
+    && Object.values(adjust.alone || {}).every(Boolean) && adjust.reach && adjust.split && adjust.readjust,
+    `pré-projeto: prévia ao arrastar, poste melhor, dividir CTO, CTO para casas fora do alcance e reajustar em volta das fixas (${JSON.stringify(adjust)})`);
   //Ocupação máxima vale em todas as opções do pré-projeto (só a "com folga" usa menos)
   const fills = await sp.evaluate(() => AUTO_DESIGN_STRATEGIES.map(st => ({ maxFill: 75, ...st.params({ maxFill: 75, coverRadius: 150 }) }).maxFill));
   check(fills[0] === 75 && fills[1] === 75 && fills[2] === 50, `pré-projeto: nenhuma opção passa da ocupação máxima do painel (${JSON.stringify(fills)})`);

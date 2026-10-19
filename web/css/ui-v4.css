@@ -2858,6 +2858,12 @@ html[data-theme="dark"] #autoDesignBox .auto-design__warn--info .auto-design__wa
 #autoDesignBox .auto-design__cto-ok { margin-left: 6px; font-size: 11px; font-weight: 700; color: #15803d; }
 #autoDesignBox .auto-design__cto-card.is-checked { border-color: rgba(22, 163, 74, 0.45); }
 html[data-theme="dark"] #autoDesignBox .auto-design__cto-ok { color: #86efac; }
+/* Pré-projeto: sugestões no cartão da CTO (poste melhor, dividir, CTO para as casas fora do alcance) */
+#autoDesignBox .auto-design__tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+#autoDesignBox .auto-design__tips li { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 10px; font-size: 12px; line-height: 1.4; color: var(--color-text); border: 1px solid rgba(59, 130, 246, 0.38); border-left-width: 3px; border-radius: 8px; background: rgba(59, 130, 246, 0.07); }
+#autoDesignBox .auto-design__tips li span { flex: 1; min-width: 0; }
+#autoDesignBox .auto-design__tips .map-tool-btn { flex: none; width: auto; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
+#autoDesignBox .auto-design__readjust { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
 /* Barra lateral: olho e três pontinhos só ocupam lugar com o mouse em cima (o nome não fica cortado à toa).
    Olho riscado (item oculto) continua sempre à vista. */
 @media (hover: hover) {
