@@ -2518,6 +2518,20 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     plan = autoDesign.result;
     out.edit = { added: added === n + 1, removed: plan.ctos.length === n, partial, snapped: onRow(target.position),
       names: plan.ctos.every((c, i) => c.name === `CTO-${String(i + 1).padStart(2, '0')}`), fed: plan.ctos.every(c => c.in && plan.cables.includes(c.in)) };
+    //+ CEO / − CEO: a CEO nova recebe as CTOs mais perto (cabo entre CEOs); ao tirar, elas voltam para a outra
+    const ceos0 = plan.ceos.length;
+    const far = [...plan.ctos].sort((p, q) => q.position.lng() - p.position.lng())[0];
+    await addAutoDesignCeo(LL(far.position.lat(), far.position.lng() - 0.0004));
+    plan = autoDesign.result;
+    const ceoNew = plan.ceos[plan.ceos.length - 1];
+    out.ceoEdit = { added: plan.ceos.length === ceos0 + 1 && ceoNew.isNew, feeds: plan.ctos.some(c => c.in?.from === ceoNew || c.in?.from?.in?.from === ceoNew),
+      trunk: plan.cables.some(c => c.role === 'trunk' && c.to === ceoNew), named: /^CEO-\d+$/.test(ceoNew.name),
+      button: !!document.querySelector('[data-auto-design="mode-add-ceo"]') && !!document.querySelector('[data-auto-design="mode-remove-ceo"]') };
+    await removeAutoDesignCeo(ceoNew);
+    plan = autoDesign.result;
+    out.ceoEdit.removed = plan.ceos.length === ceos0 && plan.ctos.every(c => c.in && plan.cables.includes(c.in));
+    //A única CEO não sai
+    if (plan.ceos.length === 1) { removeAutoDesignCeo(plan.ceos[0]); out.ceoEdit.keepsLast = autoDesign.result.ceos.length === 1; }
     //Trecho sem casas: nenhuma caixa dentro dele
     const a = LL(LAT0 - ROW * 1.5, LNG0 - 0.0001), b = LL(LAT0 - H - 0.0001, LNG0 + W * 0.3);
     await addAutoDesignExclusion(a, b);
@@ -2678,6 +2692,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(autoDesign2.compare.rows === 2 && autoDesign2.compare.current === 8 && autoDesign2.compare.fewer && autoDesign2.compare.table && autoDesign2.compare.used === 16,
     `pré-projeto: comparar 1:8 × 1:16 e usar o outro cenário (${JSON.stringify(autoDesign2.compare)})`);
   check(Object.values(autoDesign2.edit).every(Boolean), `pré-projeto: incluir, tirar e arrastar CTO na prévia refaz a rede (${JSON.stringify(autoDesign2.edit)})`);
+  check(Object.values(autoDesign2.ceoEdit).every(Boolean), `pré-projeto: + CEO recebe as CTOs mais perto e − CEO devolve; a única CEO não sai (${JSON.stringify(autoDesign2.ceoEdit)})`);
   check(Object.values(autoDesign2.radius).every(Boolean), `pré-projeto: raio da CTO no painel muda a quantidade de caixas e os círculos (${JSON.stringify(autoDesign2.radius)})`);
   check(Object.entries(autoDesign2.spacing).every(([k, v]) => k === 'info' || v === true), `pré-projeto: distância entre CTOs na mesma rua (${JSON.stringify(autoDesign2.spacing)})`);
   check(Object.values(autoDesign2.existing).every(v => v !== false && v !== undefined), `pré-projeto: CTOs que já estão no mapa entram na conta antes das novas (${JSON.stringify(autoDesign2.existing)})`);
