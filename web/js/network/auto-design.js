@@ -71,7 +71,8 @@ const AUTO_DESIGN_GENERATED_NOTE = 'Gerado pelo pré-projeto automático';
 //distribuições diferentes, ficam 3 (a do painel, a de menor custo e a com mais portas livres)
 const AUTO_DESIGN_STRATEGIES = [
     { id: 'panel', params: () => ({}) },
-    { id: 'wide', params: (p) => ({ maxFill: 100, coverRadius: getAutoDesignCoverRadius(p) * 1.3 }) },
+    //Raio maior, mas sem passar da ocupação máxima do painel (a folga pedida vale em todas as opções)
+    { id: 'wide', params: (p) => ({ coverRadius: getAutoDesignCoverRadius(p) * 1.3 }) },
     { id: 'spare', params: (p) => ({ maxFill: Math.max(25, Math.min(100, Number(p.maxFill) || 100) - 25), coverRadius: getAutoDesignCoverRadius(p) * 0.8 }) },
 ];
 const AUTO_DESIGN_LAYOUT_SEEDS = 3;  //Pontos de partida por estratégia (com o traçado das ruas; sem ele, 1)

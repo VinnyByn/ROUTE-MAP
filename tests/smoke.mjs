@@ -2787,6 +2787,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(Object.entries(blocks).every(([k, v]) => (k === 'hit' ? v === '[150,0]' : v === true)),
     `pré-projeto: poste no quintal fica de fora e balão de casas se espalha pelas ruas da quadra (${JSON.stringify(blocks)})`);
+  //Ocupação máxima vale em todas as opções do pré-projeto (só a "com folga" usa menos)
+  const fills = await sp.evaluate(() => AUTO_DESIGN_STRATEGIES.map(st => ({ maxFill: 75, ...st.params({ maxFill: 75, coverRadius: 150 }) }).maxFill));
+  check(fills[0] === 75 && fills[1] === 75 && fills[2] === 50, `pré-projeto: nenhuma opção passa da ocupação máxima do painel (${JSON.stringify(fills)})`);
   //Drop pela rua: casa do outro lado da quadra não fica com a CTO de trás; CTO não passa das portas; poste na rua certa
   const drops = await sp.evaluate(() => {
     const proj = createAutoDesignProjection([{ lat: -38, lng: -44 }, { lat: -38.01, lng: -43.99 }]);
