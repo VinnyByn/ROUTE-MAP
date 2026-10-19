@@ -2810,6 +2810,36 @@ function removeAutoDesignCto(cto) {
     return refreshAutoDesignAfterEdit();
 }
 
+//CEO a mais (o projetista escolhe onde): as CTOs mais perto dela passam a sair dela, respeitando "CTOs por CEO"
+function addAutoDesignCeo(latLng) {
+    const plan = autoDesign?.result;
+    if (!plan || !latLng) return null;
+    const xy = snapAutoDesignPoint(plan.model, latLng);
+    if (getAutoDesignNetworkBoxes(plan).some(box => Math.hypot(box.x - xy.x, box.y - xy.y) < 10)) {
+        showToast('Pré-projeto', 'Já tem uma caixa nesse ponto. Clique num lugar livre da rua.', 'progress');
+        return null;
+    }
+    plan.ceos.push(makeAutoDesignBox(plan.model, 'CEO', xy));
+    return refreshAutoDesignAfterEdit();
+}
+
+//Tirar uma CEO nova: as CTOs dela passam para a CEO mais perto. A caixa de onde a rede sai (já existente) fica.
+function removeAutoDesignCeo(ceo) {
+    const plan = autoDesign?.result;
+    if (!plan || !plan.ceos.includes(ceo)) return null;
+    if (!ceo.isNew) {
+        showToast('Pré-projeto', `A rede sai de ${ceo.name}, que já existe: ela não sai do pré-projeto.`, 'progress');
+        return null;
+    }
+    if (plan.ceos.length <= 1) {
+        showToast('Pré-projeto', 'O pré-projeto precisa de pelo menos uma CEO: as CTOs saem dela. Para mudar de lugar, arraste a CEO.', 'progress');
+        return null;
+    }
+    plan.ceos.splice(plan.ceos.indexOf(ceo), 1);
+    plan.root = plan.ceos[0];
+    return refreshAutoDesignAfterEdit();
+}
+
 //Trecho sem casas (lote vazio, praça): sai da conta e as caixas são redistribuídas
 function addAutoDesignExclusion(a, b) {
     const s = autoDesign;
@@ -2830,6 +2860,8 @@ function clearAutoDesignExclusions() {
 const AUTO_DESIGN_EDIT_HINTS = {
     add: 'Clique no mapa onde vai a nova CTO.',
     remove: 'Clique na CTO que vai sair.',
+    'add-ceo': 'Clique no mapa onde vai a nova CEO: as CTOs mais perto passam a sair dela.',
+    'remove-ceo': 'Clique na CEO que vai sair: as CTOs dela passam para a CEO mais perto.',
     exclude: 'Clique em dois cantos do trecho sem casas.',
     poles: 'Clique nos postes por onde o cabo deve passar (clique de novo para tirar). Esc termina.',
 };
@@ -2841,7 +2873,7 @@ function setAutoDesignEditMode(mode) {
     s.excludeFirst = null;
     s.excludeMarker?.setMap(null);
     s.excludeMarker = null;
-    if (typeof setMapCursor === 'function') setMapCursor(['add', 'exclude', 'poles'].includes(s.editMode) ? 'crosshair' : '');
+    if (typeof setMapCursor === 'function') setMapCursor(['add', 'add-ceo', 'exclude', 'poles'].includes(s.editMode) ? 'crosshair' : '');
 }
 
 function handleAutoDesignMapClick(latLng) {
@@ -2850,6 +2882,9 @@ function handleAutoDesignMapClick(latLng) {
     if (s.editMode === 'add') {
         setAutoDesignEditMode(null);
         addAutoDesignCto(latLng);
+    } else if (s.editMode === 'add-ceo') {
+        setAutoDesignEditMode(null);
+        addAutoDesignCeo(latLng);
     } else if (s.editMode === 'poles') {
         toggleAutoDesignAccessPole(latLng);
     } else if (s.editMode === 'exclude') {
@@ -2870,6 +2905,9 @@ function handleAutoDesignBoxClick(box) {
     if (s.editMode === 'remove' && box.type === 'CTO') {
         setAutoDesignEditMode(null);
         removeAutoDesignCto(box);
+    } else if (s.editMode === 'remove-ceo' && box.type === 'CEO') {
+        setAutoDesignEditMode(null);
+        removeAutoDesignCeo(box);
     }
 }
 
@@ -2983,6 +3021,10 @@ function getAutoDesignWarnings(plan, params) {
         const far = model.demand.filter(n => boxes.every(b => Math.hypot(b.x - n.x, b.y - n.y) > model.coverRadius));
         add(`≈ ${st.uncoveredHouses} casa(s) ficaram a mais de ${model.coverRadius} m de uma CTO (raio da CTO).`, groupAutoDesignTargets(model, far, 'Casas fora do raio'));
     }
+    //CEO tirada à mão: as CTOs dela vão para as outras, que podem passar de "CTOs por CEO"
+    const ceoFull = params.ceoMax > 0 ? plan.ceos.filter(c => c.isNew && c.own > params.ceoMax) : [];
+    if (ceoFull.length) add(`${listAutoDesignNames(ceoFull)} ${ceoFull.length > 1 ? 'ficaram' : 'ficou'} com mais de ${params.ceoMax} CTOs (CTOs por CEO). Use "+ CEO" para dividir.`,
+        ceoFull.map(c => boxTarget(c, `${c.name} · ${c.own} CTOs`)));
     if (st.overloaded > 0) {
         const full = plan.ctos.filter(c => c.clients > st.usablePorts + 0.5);
         add(`${full.length} CTO(s) podem precisar de mais de ${st.usablePorts} portas${st.usablePorts < params.ports ? ' (ocupação máxima)' : ''}: ${listAutoDesignNames(full)}.`,
@@ -3163,7 +3205,7 @@ function renderAutoDesignPreviewPanel() {
         <ul class="auto-design__list">${rows}</ul>
         ${cost ? `<details class="auto-design__more"><summary>Custo estimado: ${esc(formatAutoDesignMoney(cost.total))}</summary><ul class="auto-design__list">${costRows}</ul><p class="map-tool-help">Materiais pela lista de materiais (preços do catálogo); mão de obra pela tabela padrão da terceirizada.</p></details>` : ''}
         <div class="auto-design__tools" role="group" aria-label="Editar a prévia">
-            ${tool('mode-add', '+ CTO', mode === 'add')}${tool('mode-remove', '− CTO', mode === 'remove')}${tool('mode-exclude', 'Sem casas', mode === 'exclude')}
+            ${tool('mode-add', '+ CTO', mode === 'add')}${tool('mode-remove', '− CTO', mode === 'remove')}${tool('mode-add-ceo', '+ CEO', mode === 'add-ceo')}${tool('mode-remove-ceo', '− CEO', mode === 'remove-ceo')}${tool('mode-exclude', 'Sem casas', mode === 'exclude')}
         </div>
         <p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || 'Arraste as caixas no mapa para mover; a rede, as fibras e o custo se refazem sozinhos.')}</p>
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}

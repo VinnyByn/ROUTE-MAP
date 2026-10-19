@@ -2817,3 +2817,6 @@ html[data-theme="dark"] .auto-design__kpi:nth-child(2) b { color: #4ade80; }
 #accountModal #teamMembersList > li > .account-badge { margin-left: auto; }
 /* Pré-projeto: nada no painel encolhe (lista de cabos com overflow era espremida até sumir); o painel rola */
 #autoDesignBox .map-tool-box__body > * { flex-shrink: 0; }
+/* Edição da prévia: + CTO, − CTO, + CEO, − CEO numa linha e "Sem casas" embaixo */
+.auto-design__tools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.auto-design__tools [data-auto-design="mode-exclude"] { grid-column: 1 / -1; }
