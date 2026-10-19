@@ -2614,10 +2614,11 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     out.spacing.info = { freeCtos, freeGap: Math.round(freeGap), gap, ctos: autoDesign.result.ctos.length };
     autoDesign.params.ctoSpacing = '';
     storeAutoDesignParams(autoDesign.params);
-    //2 níveis (CEO 1:8 + CTO 1:8), até 8 CTOs por CEO e reserva técnica a cada 300 m
+    //2 níveis (CEO 1:8 + CTO 1:8), até 8 CTOs por CEO e reserva técnica a cada 300 m; 400 casas a 30% = 15 CTOs, 2 CEOs
     document.querySelector('[data-auto-design="adjust"]').click();
     Object.assign(autoDesign.params, { ports: 8, levels: 2, primary: 8, ceoMax: 8, reserveEvery: 300 });
     renderAutoDesign();
+    document.getElementById('autoDesignHouses').value = '400';
     const form2 = !!document.getElementById('autoDesignPrimary') && !!document.getElementById('autoDesignCeoMax') && !!document.getElementById('autoDesignReserve');
     await generateAutoDesign();
     plan = autoDesign.result;
