@@ -3234,6 +3234,71 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   check(Object.entries(drawing).every(([k, v]) => (k === 'housesBefore' || k === 'housesUndo' ? v === 6 : k === 'housesAfter' ? v === 12 : v === true)),
     `desenho de polígono: encosta no vizinho, fecha perto do 1º ponto ou com dois cliques, ajuste com clique direito e Ctrl+Z, mão livre e área do pré-projeto ajustável (${JSON.stringify(drawing)})`);
 
+  //Atualizar da planilha: código "?" (ou repetido) não casa linhas diferentes com o mesmo material, duas linhas não
+  //disputam o mesmo material e, depois de aplicar, nada fica "para atualizar" de novo. Preço salvo noutra aba depois
+  //do login: o catálogo relê o salvo antes de editar ou comparar
+  const priceSync = await sp.evaluate(async () => {
+    const saved = materialCatalog.materials;
+    const realPersist = persistMaterialCatalog, realAlert = showAlert;
+    persistMaterialCatalog = () => Promise.resolve(true);
+    showAlert = () => {};
+    const out = {};
+    try {
+      materialCatalog.materials = [
+        { id: 'ps-a', name: 'FITA ISOLANTE TESTE', category: 'Ferragem', unit: 'un', price: 5, code: '' },
+        { id: 'ps-b', name: 'ABRACADEIRA TESTE BAP', category: 'Ferragem', unit: 'un', price: 3, code: '' },
+        { id: 'ps-c', name: 'CONECTOR TESTE PRE POLIDO', category: 'Fusão', unit: 'un', price: 2, code: '?' },
+        { id: 'ps-d', name: 'PARAFUSO TESTE M10', category: 'Ferragem', unit: 'un', price: 1, code: '777' },
+        { id: 'ps-e', name: 'PARAFUSO TESTE M12', category: 'Ferragem', unit: 'un', price: 1.5, code: '777' },
+        { id: 'ps-f', name: 'CORDAO TESTE OPTICO SC APC 2M', category: 'Fusão', unit: 'un', price: 8, code: '' },
+      ];
+      const rows = [
+        { name: 'FITA ISOLANTE TESTE', code: '?', unit: 'un', price: 7, block: 0 },
+        { name: 'ABRACADEIRA TESTE BAP', code: '?', unit: 'un', price: 4, block: 0 },
+        { name: 'CONECTOR TESTE PRE POLIDO', code: '?', unit: 'un', price: 2.5, block: 0 },
+        { name: 'PARAFUSO TESTE M10', code: '777', unit: 'un', price: 1.1, block: 0 },
+        { name: 'PARAFUSO TESTE M12', code: '777', unit: 'un', price: 1.6, block: 0 },
+        { name: 'CORDAO TESTE OPTICO SC APC 2M', code: '', unit: 'un', price: 9, block: 0 },
+        { name: 'CORDAO TESTE OPTICO SC APC 3M', code: '', unit: 'un', price: 11, block: 0 },
+      ];
+      const preview = () => {
+        currentImportPreview = buildImportPreview(rows);
+        renderImportPreview();
+        return [...document.querySelectorAll('#importPreviewBody tr[data-idx]')].filter(tr => tr.querySelector('.import-badge.update')).length;
+      };
+      out.firstPending = preview();
+      applyMaterialImportHandler();
+      out.secondPending = preview();
+      const price = (id) => materialCatalog.materials.find(m => m.id === id)?.price;
+      out.prices = ['ps-a', 'ps-b', 'ps-c', 'ps-d', 'ps-e', 'ps-f'].map(price).join(',');
+      out.noQuestionCode = !materialCatalog.materials.some(m => m.code === '?');
+      out.refresh = await (async () => {
+        const mine = materialCatalog;
+        const server = JSON.parse(JSON.stringify(mine));
+        server.materials.find(m => m.id === 'ps-a').price = 7.7;
+        const realSettings = window.__fakeDb.settings;
+        window.__fakeDb.settings = { ...(realSettings || {}), material_catalog: server };
+        try {
+          const changed = await refreshMaterialCatalogFromServer();
+          return changed && materialCatalog.materials.find(m => m.id === 'ps-a')?.price === 7.7 && MATERIAL_PRICES['FITA ISOLANTE TESTE']?.price === 7.7;
+        } finally {
+          window.__fakeDb.settings = realSettings;
+          materialCatalog = mine;
+          companyMaterialAliases = mine.aliases || {};
+        }
+      })();
+      out.loadCleans = (() => { const before = materialCatalog; loadMaterialCatalog({ materials: [{ id: 'x', name: 'ITEM COM INTERROGACAO', price: 1, code: '?' }] }); const ok = materialCatalog.materials.find(m => m.id === 'x')?.code === ''; materialCatalog = before; return ok; })();
+    } finally {
+      materialCatalog.materials = saved;
+      persistMaterialCatalog = realPersist;
+      showAlert = realAlert;
+      document.getElementById('materialImportModal').style.display = 'none';
+    }
+    return out;
+  });
+  check(priceSync.firstPending === 6 && priceSync.secondPending === 0 && priceSync.prices === '7,4,2.5,1.1,1.6,9' && priceSync.noQuestionCode && priceSync.refresh && priceSync.loadCleans,
+    `atualizar da planilha: código "?" ou repetido não troca o material e o preço aplicado não volta a pedir atualização (${JSON.stringify(priceSync)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');
