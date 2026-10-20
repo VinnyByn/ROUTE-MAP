@@ -4,8 +4,14 @@
   class LatLng { constructor(lat, lng) { if (typeof lat === 'object') { lng = lat.lng; lat = lat.lat; } this._a = +lat; this._o = +lng; }
     lat() { return this._a; } lng() { return this._o; } equals(o) { return o && o.lat() === this._a && o.lng() === this._o; } toJSON() { return { lat: this._a, lng: this._o }; } }
   const toLL = (p) => (p instanceof LatLng ? p : new LatLng(p));
-  class MVCArray { constructor(a = []) { this.a = (a instanceof MVCArray ? a.getArray() : a).map(toLL); } getArray() { return this.a; } getLength() { return this.a.length; } getAt(i) { return this.a[i]; }
-    forEach(f) { this.a.forEach(f); } push(p) { this.a.push(toLL(p)); } setAt(i, p) { this.a[i] = toLL(p); } insertAt(i, p) { this.a.splice(i, 0, toLL(p)); } removeAt(i) { this.a.splice(i, 1); } clear() { this.a = []; } }
+  //Ouvintes guardados: google.maps.event.__fire(objeto, 'evento', ...args) dispara nos testes (o trigger segue sem efeito)
+  const listen = (store, name, fn) => { (store[name] ||= []).push(fn); return { remove() { store[name] = (store[name] || []).filter(f => f !== fn); } }; };
+  const fire = (store, name, ...args) => (store?.[name] || []).slice().forEach(f => f(...args));
+  class MVCArray { constructor(a = []) { this.a = (a instanceof MVCArray ? a.getArray() : a).map(toLL); this.ls = {}; } getArray() { return this.a; } getLength() { return this.a.length; } getAt(i) { return this.a[i]; }
+    addListener(name, fn) { return listen(this.ls, name, fn); }
+    forEach(f) { this.a.forEach(f); } push(p) { this.a.push(toLL(p)); fire(this.ls, 'insert_at', this.a.length - 1); } setAt(i, p) { const old = this.a[i]; this.a[i] = toLL(p); fire(this.ls, 'set_at', i, old); }
+    insertAt(i, p) { this.a.splice(i, 0, toLL(p)); fire(this.ls, 'insert_at', i); } removeAt(i) { const [old] = this.a.splice(i, 1); fire(this.ls, 'remove_at', i, old); }
+    clear() { while (this.a.length) this.removeAt(this.a.length - 1); } }
   const generic = (extra = {}) => function (opts = {}) {
     const self = { o: { ...opts }, ...extra };
     const proxy = new Proxy(self, { get(t, k) {
@@ -16,7 +22,8 @@
     } });
     self.get = (k) => self.o[k]; self.set = (k, v) => { self.o[k] = v; };
     self.setOptions = (o) => Object.assign(self.o, o);
-    self.addListener = () => ({ remove() {} });
+    self.ls = {};
+    self.addListener = (name, fn) => listen(self.ls, name, fn);
     self.bindTo = () => {};
     return proxy;
   };
@@ -31,7 +38,8 @@
     LatLng, MVCArray, LatLngBounds, Marker, Polyline: Poly, Polygon: Poly, Rectangle: generic(), Circle: generic(), InfoWindow: generic(), Map: generic(),
     Size: function (w, h) { this.width = w; this.height = h; }, Point: function (x, y) { this.x = x; this.y = y; },
     SymbolPath: { CIRCLE: 0, FORWARD_CLOSED_ARROW: 1 }, Animation: { DROP: 1, BOUNCE: 2 }, ControlPosition: { TOP_LEFT: 1 },
-    event: { addListener: () => ({ remove() {} }), addListenerOnce: () => ({ remove() {} }), removeListener() {}, clearInstanceListeners() {}, clearListeners() {}, trigger() {} },
+    event: { addListener: () => ({ remove() {} }), addListenerOnce: () => ({ remove() {} }), removeListener(l) { l?.remove?.(); }, clearInstanceListeners() {}, clearListeners() {}, trigger() {},
+      __fire: (obj, name, ...args) => fire(obj?.ls, name, ...args) },
     geometry: { spherical: {
       computeDistanceBetween: (a, b) => dist(toLL(a), toLL(b)),
       computeLength: (path) => { const a = path.getArray ? path.getArray() : path; let s = 0; for (let i = 1; i < a.length; i++) s += dist(toLL(a[i - 1]), toLL(a[i])); return s; },

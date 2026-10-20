@@ -1244,6 +1244,13 @@ html[data-theme="dark"] .ms-size__stage {
 
 .pg-opacity input[type="range"] { flex: 1; accent-color: var(--track-color, var(--action)); }
 
+/* Polígono: jeito de desenhar, campos de estilo (somem na área do pré-projeto) e aviso de bordas cruzadas */
+.pg-style-fields { display: flex; flex-direction: column; gap: 12px; }
+.floating-box.map-tool-box .pg-draw-mode { display: grid; grid-template-columns: 1fr 1fr; }
+.floating-box.map-tool-box .pg-warn { margin: 0; padding: 7px 10px; border-radius: 8px; color: var(--color-text); background: rgba(245, 158, 11, 0.13); border: 1px solid rgba(245, 158, 11, 0.42); }
+/* Mão livre: o arrasto desenha (o mapa não anda) e o toque não rola a página */
+#map.is-sketch-freehand { touch-action: none; }
+
 /* Neutraliza o visual antigo dos itens (caixa com borda e fundo cinza nos filhos) */
 .sidebar-column .subfolders > li:not(.folder-wrapper) {
   border: 0;
@@ -2751,6 +2758,7 @@ html[data-theme="dark"] .tour-parts .ui-icon { color: #7dd3fc; }
 .auto-design__area-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .auto-design__area-text b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-text); }
 .auto-design__area-text small { font-size: 12px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+#autoDesignBox .auto-design__area-hint .auto-design__link { font-size: 12px; font-weight: 600; }
 .auto-design__step { display: flex; flex-direction: column; gap: 10px; padding: 11px 12px 12px; border-radius: 10px; border: 1px solid var(--color-border-light); background: var(--color-surface); }
 .auto-design__step-head { display: flex; align-items: flex-start; gap: 9px; }
 .auto-design__step-num { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, transparent); }

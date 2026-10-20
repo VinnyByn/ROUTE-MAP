@@ -3114,6 +3114,126 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   });
   check(Object.values(reuse).every(Boolean), `pré-projeto: usa polígono existente e mantém ele marcado como usado (${JSON.stringify(reuse)})`);
 
+  //Desenho de polígono: clique encosta no canto/borda do polígono vizinho e perto do 1º ponto fecha; na forma fechada,
+  //canto arrastado encosta, clique direito tira canto e Ctrl+Z desfaz; aviso de bordas cruzadas; mão livre que passa
+  //do ponto de partida fica só com o laço maior. Área do pré-projeto: sem nome/cor, dois cliques fecham e já abre o
+  //pré-projeto com a área ajustável (relê as casas, Ctrl+Z desfaz, fechar sem gerar volta como estava)
+  const drawing = await sp.evaluate(async () => {
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    const out = {};
+    rebuildSidebarFromJSON([{ id: 'projDW', name: 'Projeto DW', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
+    setActiveFolder('projDW');
+    map.setZoom(18); //≈ 0,45 m por pixel: encosta a até ≈ 4,5 m do canto, fecha a até ≈ 6 m do 1º ponto
+    const LAT0 = -41, LNG0 = -44;
+    const mLat = 1 / 110540, mLng = 1 / (111320 * Math.cos(LAT0 * Math.PI / 180));
+    const P = (x, y) => new google.maps.LatLng(LAT0 - y * mLat, LNG0 + x * mLng);
+    const X = (p) => (p.lng() - LNG0) / mLng, Y = (p) => (LAT0 - p.lat()) / mLat;
+    const near = (p, x, y, tol = 0.1) => Math.hypot(X(p) - x, Y(p) - y) < tol;
+    rebuildPolygon({ uid: 'pg_dw', folderId: 'projDW', name: 'Vizinho', color: '#2dd4bf', opacity: 0.2, path: [P(0, 0), P(100, 0), P(100, 100), P(0, 100)].map(p => p.toJSON()) });
+    const neighbor = savedPolygons.find(p => p.uid === 'pg_dw');
+    const box = document.getElementById('polygonDrawingBox');
+    //O atalho do app é ligado com o Google Maps (initMap); o Ctrl+Z do projeto (js/core/undo.js) não pode agir junto
+    const realStep = stepProjectHistory;
+    let projectSteps = 0;
+    stepProjectHistory = () => { projectSteps++; };
+    const ctrlZ = () => {
+      const e = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+      handleSketchKeyboard(e);
+      document.dispatchEvent(e);
+    };
+    try {
+      setPolygonDrawMode('click');
+      startPolygonTool();
+      out.modeShown = !document.getElementById('polygonDrawMode').classList.contains('hidden') && !document.getElementById('polygonStyleFields').classList.contains('hidden');
+      handleSketchMapClick(P(102, 1));    //≈ 2 m do canto (100, 0)
+      handleSketchMapClick(P(101.5, 50)); //1,5 m da borda x = 100
+      handleSketchMapClick(P(200, 50));
+      handleSketchMapClick(P(200, 0));
+      const pts = getSketchPath();
+      out.snapVertex = pts[0].equals(neighbor.polygonObject.getPath().getAt(1));
+      out.snapEdge = near(pts[1], 100, 50);
+      out.free = near(pts[2], 200, 50, 0.01);
+      handleSketchMapClick(P(103, 3)); //≈ 4 m do 1º ponto: fecha
+      out.closedByClick = !!tempPolygon && box.dataset.phase === 'editing' && !sketchSession && tempPolygon.getPath().getLength() === 4;
+      const path = tempPolygon.getPath();
+      path.setAt(1, P(101.5, 99)); //canto arrastado para perto do canto (100, 100) do vizinho
+      out.dragSnap = path.getAt(1).equals(neighbor.polygonObject.getPath().getAt(2));
+      google.maps.event.__fire(tempPolygon, 'rightclick', { vertex: 3 });
+      out.rightRemoved = path.getLength() === 3;
+      google.maps.event.__fire(tempPolygon, 'rightclick', { vertex: 0 });
+      out.keepsThree = path.getLength() === 3;
+      ctrlZ();
+      out.undoRemove = path.getLength() === 4;
+      ctrlZ();
+      out.undoDrag = near(path.getAt(1), 100, 50);
+      out.stillOpen = !box.classList.contains('hidden') && box.dataset.phase === 'editing';
+      resetPolygonEdit([P(100, 0), P(100, 100), P(200, 0), P(200, 50)]);
+      out.crossWarn = !document.getElementById('polygonWarn').classList.contains('hidden');
+      ctrlZ();
+      out.crossCleared = document.getElementById('polygonWarn').classList.contains('hidden');
+      cancelPolygonDrawing();
+
+      //Mão livre: contorna um quadrado e termina passando por cima da 1ª borda; fica o quadrado (laço maior), já fechado
+      setPolygonDrawMode('free');
+      startPolygonTool();
+      const stroke = [];
+      const line = (x0, y0, x1, y1) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 2); for (let k = 0; k < n; k++) stroke.push(P(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n)); };
+      line(310, 250, 400, 250); line(400, 250, 400, 350); line(400, 350, 320, 350); line(320, 350, 320, 230);
+      stroke.push(P(320, 230));
+      addSketchStroke(stroke);
+      const lasso = tempPolygon?.getPath().getArray() || [];
+      out.lasso = lasso.length === 4 && !hasSketchCrossing(lasso)
+        && [[320, 250], [400, 250], [400, 350], [320, 350]].every(([x, y]) => lasso.some(p => near(p, x, y, 1.5)));
+      cancelPolygonDrawing();
+      setPolygonDrawMode('click');
+
+      //Área do pré-projeto: 6 casas dentro do quadrado (500..600) e 6 logo à direita (600..700)
+      let n = 0;
+      for (const x0 of [520, 640]) for (let k = 0; k < 6; k++) rebuildMarker({ uid: `dwc${n++}`, folderId: 'projDW', type: 'CASA', name: '1', color: '#fff', position: P(x0 + (k % 3) * 25, 30 + Math.floor(k / 3) * 40).toJSON() });
+      document.getElementById('autoDesignMenuButton').click();
+      await wait(50);
+      [...document.querySelectorAll('#choiceModalButtons button')].find(b => /Desenhar nova/.test(b.textContent))?.click();
+      await wait(50);
+      out.areaBox = box.querySelector('#polygonBoxTitle').textContent === 'Área do pré-projeto' && document.getElementById('polygonStyleFields').classList.contains('hidden')
+        && document.getElementById('savePolygonButton').textContent === 'Continuar' && document.getElementById('polygonFinishButton').classList.contains('hidden');
+      [P(500, 0), P(600, 0), P(600, 100), P(500, 100)].forEach(p => handleSketchMapClick(p));
+      google.maps.event.__fire(map, 'dblclick');
+      await wait(50);
+      const s = autoDesign;
+      const area = s?.polygon?.polygonObject;
+      out.opened = !!s && s.phase === 'form' && box.classList.contains('hidden') && s.polygon.name === 'Área do pré-projeto';
+      out.editable = area?.getEditable() === true && isPolygonEditActive() && /Arraste os cantos/.test(document.getElementById('autoDesignBody').textContent);
+      out.housesBefore = s?.houseMarkers.length;
+      area.getPath().setAt(1, P(720, 0));
+      area.getPath().setAt(2, P(720, 100));
+      await wait(350);
+      out.housesAfter = autoDesign?.houseMarkers.length;
+      out.resetShown = !!document.querySelector('[data-auto-design="area-reset"]');
+      ctrlZ(); ctrlZ();
+      await wait(350);
+      out.housesUndo = autoDesign?.houseMarkers.length;
+      area.getPath().setAt(1, P(720, 0));
+      area.getPath().setAt(2, P(720, 100));
+      await wait(350);
+      closeAutoDesign();
+      out.reverted = near(area.getPath().getAt(1), 600, 0, 0.01) && near(area.getPath().getAt(2), 600, 100, 0.01) && area.getEditable() === false && !isPolygonEditActive();
+      out.noProjectUndo = projectSteps === 0;
+    } finally {
+      stepProjectHistory = realStep;
+      closeAutoDesign();
+      cancelPolygonDrawing();
+      setPolygonDrawMode('click');
+      savedPolygons.filter(p => p.folderId === 'projDW').forEach(p => p.polygonObject.setMap(null));
+      savedPolygons = savedPolygons.filter(p => p.folderId !== 'projDW');
+      markers.filter(m => m.folderId === 'projDW').forEach(m => m.marker?.setMap?.(null));
+      markers = markers.filter(m => m.folderId !== 'projDW');
+      document.querySelector('.folder-title[data-folder-id="projDW"]').closest('.folder').remove();
+    }
+    return out;
+  });
+  check(Object.entries(drawing).every(([k, v]) => (k === 'housesBefore' || k === 'housesUndo' ? v === 6 : k === 'housesAfter' ? v === 12 : v === true)),
+    `desenho de polígono: encosta no vizinho, fecha perto do 1º ponto ou com dois cliques, ajuste com clique direito e Ctrl+Z, mão livre e área do pré-projeto ajustável (${JSON.stringify(drawing)})`);
+
   //Edição do cabo: ponto-fantasma no meio de cada trecho e clique no meio do cabo (distância em pixels)
   const midEdit = await sp.evaluate(() => {
     const sidebar = document.getElementById('sidebar');

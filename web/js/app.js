@@ -681,7 +681,8 @@ function disableMapRightDoubleClickZoomOut(mapInstance, mapElement) {
     const restoreDoubleClickZoom = () => {
         clearTimeout(restoreDoubleClickZoomTimer);
         restoreDoubleClickZoomTimer = null;
-        mapInstance.setOptions({ disableDoubleClickZoom: false });
+        //Desenhando uma área, dois cliques fecham a forma (js/map/sketch.js): o duplo clique continua sem zoom
+        mapInstance.setOptions({ disableDoubleClickZoom: typeof isSketchClosingByDoubleClick === 'function' && isSketchClosingByDoubleClick() });
     };
 
     mapInstance.addListener('rightclick', () => {

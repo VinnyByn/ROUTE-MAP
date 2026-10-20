@@ -131,6 +131,7 @@ document.addEventListener('keydown', (e) => {
     if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return; //Desfazer do próprio campo
     if (isDrawingCable && isUndo) return; //No desenho do cabo o sistema já trata pontos
     if (typeof isSketchToolActive === 'function' && isSketchToolActive()) return; //A régua desfaz os próprios pontos
+    if (typeof isPolygonEditActive === 'function' && isPolygonEditActive()) return; //Forma em ajuste: desfaz o último ajuste
     e.preventDefault();
     stepProjectHistory(isUndo ? -1 : 1);
 });

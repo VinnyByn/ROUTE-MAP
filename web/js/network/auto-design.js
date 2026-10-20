@@ -2868,6 +2868,7 @@ function openAutoDesign(polygon, { drawn = false } = {}) {
         exclusions: [], cache: null, editMode: null, mapListener: null, compare: null, created: null,
         options: [], optionKey: AUTO_DESIGN_PANEL_OPTION,
         polygonDrawn: drawn, polygonWasVisible: polygon.polygonObject.getVisible?.() !== false,
+        areaOriginal: path, areaSignature: JSON.stringify(path), areaEditing: false, areaTimer: null,
     };
     if (autoDesign.houseMarkers.length && params.useHouses) params.houses = getAutoDesignMarkedHouses();
     autoDesign.polesPromise = loadAutoDesignBdgdPoles(autoDesign);
@@ -2882,12 +2883,68 @@ const getAutoDesignMarkedHouses = () => (autoDesign?.houseMarkers || []).reduce(
 function closeAutoDesign() {
     //Fechou sem criar: o polígono da área volta para o mapa
     if (autoDesign && autoDesign.phase !== 'done') showAutoDesignPolygon(autoDesign, true);
+    if (autoDesign) {
+        const s = autoDesign;
+        setAutoDesignAreaEditable(s, false);
+        clearTimeout(s.areaTimer);
+        //Área ajustada e não gerada: volta como estava (a do último "Gerar")
+        if (s.polygon?.polygonObject && JSON.stringify(getAutoDesignPolygonPath(s.polygon)) !== JSON.stringify(s.areaOriginal)) {
+            s.polygon.polygonObject.setPath(s.areaOriginal.map(p => new google.maps.LatLng(p.lat, p.lng)));
+        }
+    }
     clearAutoDesignPreview();
     setAutoDesignEditMode(null);
     autoDesign?.mapListener?.remove?.();
     autoDesign = null;
     const box = document.getElementById('autoDesignBox');
     if (box) box.classList.add('hidden');
+}
+
+//Área no formulário: os cantos do polígono ficam arrastáveis no mapa (js/map/sketch.js: encostam em polígono vizinho,
+//clique direito tira um canto, Ctrl+Z desfaz). Casas, postes, CTOs e caixas de partida são relidos da área nova.
+//A área só fica de vez ao gerar; fechar antes volta como estava.
+function setAutoDesignAreaEditable(s, on) {
+    const polygon = s?.polygon?.polygonObject;
+    if (!polygon || typeof watchPolygonPath !== 'function') return;
+    on = !!on && AppSession.canEdit !== false;
+    if (on === !!s.areaEditing) return;
+    s.areaEditing = on;
+    polygon.setEditable(on);
+    if (on) watchPolygonPath(polygon, () => queueAutoDesignAreaRefresh(s));
+    else if (polygonEdit?.polygon === polygon) clearPolygonEditListeners();
+}
+
+function queueAutoDesignAreaRefresh(s) {
+    clearTimeout(s.areaTimer);
+    s.areaTimer = setTimeout(() => refreshAutoDesignArea(s), 250);
+}
+
+function refreshAutoDesignArea(s) {
+    clearTimeout(s.areaTimer);
+    if (autoDesign !== s || s.phase !== 'form') return;
+    const path = getAutoDesignPolygonPath(s.polygon);
+    const signature = JSON.stringify(path);
+    if (signature === s.areaSignature) return;
+    s.areaSignature = signature;
+    readAutoDesignForm();
+    const projectId = getAutoDesignProjectId(s.polygon);
+    const houseMarkers = findAutoDesignMarkersInArea(path, projectId, 'CASA');
+    s.houseMarkers = houseMarkers.length >= AUTO_DESIGN_MIN_HOUSE_MARKERS ? houseMarkers : [];
+    s.markedPoles = findAutoDesignMarkersInArea(path, projectId, 'POSTE');
+    s.existingCtos = findAutoDesignExistingCtos(path, projectId);
+    s.starts = getAutoDesignStartOptions(s.polygon);
+    if (!s.starts.some(({ marker }) => marker.uid === s.params.startUid) && s.params.startUid) s.params.startUid = s.starts[0]?.marker.uid || '';
+    if (s.houseMarkers.length && s.params.useHouses) s.params.houses = getAutoDesignMarkedHouses();
+    s.polesPromise = loadAutoDesignBdgdPoles(s);
+    renderAutoDesign();
+}
+
+//Gerar com a área ajustada: ela passa a ser a área do polígono
+function commitAutoDesignArea(s) {
+    refreshAutoDesignArea(s);
+    const path = getAutoDesignPolygonPath(s.polygon);
+    s.areaOriginal = path;
+    s.polygon.path = path;
 }
 
 //O polígono só marca a área: some do mapa a partir da prévia e volta se a prévia for descartada
@@ -2996,6 +3053,7 @@ function renderAutoDesign() {
     if (!s) return;
     document.getElementById('autoDesignBox').dataset.phase = s.phase;
     if (s.phase === 'form') showAutoDesignPolygon(s, true);
+    setAutoDesignAreaEditable(s, s.phase === 'form');
     const title = document.getElementById('autoDesignTitle');
     const body = document.getElementById('autoDesignBody');
     const actions = document.getElementById('autoDesignActions');
@@ -3029,12 +3087,16 @@ function renderAutoDesign() {
     const unit = (input, u) => `<div class="auto-design__unit">${input}<span aria-hidden="true">${u}</span></div>`;
     const check = (id, checked, text, sub = '') => `<label class="auto-design__check"><input type="checkbox" id="${id}"${checked ? ' checked' : ''}><span>${text}${sub ? `<small>${sub}</small>` : ''}</span></label>`;
     const startName = start ? `${esc(start.name)} (${esc(start.type)})` : 'uma CEO nova no meio da área';
+    const areaChanged = JSON.stringify(getAutoDesignPolygonPath(s.polygon)) !== JSON.stringify(s.areaOriginal);
+    const areaCrossed = typeof hasSketchCrossing === 'function' && hasSketchCrossing(s.polygon.polygonObject.getPath());
     body.innerHTML = `
         ${s.error ? `<div class="auto-design__warn auto-design__warn--error" role="alert">${esc(s.error)}</div>` : ''}
         <div class="auto-design__area">
             <span class="auto-design__area-icon">${icon('i-polygon')}</span>
-            <div class="auto-design__area-text"><b title="${esc(s.polygon.name || 'Polígono')}">${esc(s.polygon.name || 'Polígono')}</b><small>${esc(formatArea(area))} · sai de ${startName}</small></div>
+            <div class="auto-design__area-text"><b title="${esc(s.polygon.name || 'Polígono')}">${esc(s.polygon.name || 'Polígono')}</b><small>${esc(formatArea(area))} · sai de ${startName}</small>
+                ${s.areaEditing || areaChanged ? `<small class="auto-design__area-hint">${s.areaEditing ? 'Arraste os cantos no mapa para ajustar a área.' : ''}${areaChanged ? ` <button type="button" class="auto-design__link" data-auto-design="area-reset">Voltar como estava</button>` : ''}</small>` : ''}</div>
         </div>
+        ${areaCrossed ? '<div class="auto-design__warn" role="alert">As bordas da área se cruzam (forma em "8"): a parte cruzada fica de fora. Arraste um canto para desfazer o cruzamento.</div>' : ''}
         ${section(1, 'Clientes', 'Quantas casas e quantas devem assinar', `
             <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignHouses">Casas na área</label>${unit(`<input type="number" id="autoDesignHouses" min="1" step="1" inputmode="numeric" value="${esc(p.houses)}" placeholder="Ex.: 320"${usingHouses ? ' disabled title="Usando as casas marcadas no mapa"' : ''}>`, 'casas')}</div>
@@ -3173,7 +3235,10 @@ async function generateAutoDesign({ keepOption = false } = {}) {
     const s = autoDesign;
     if (!s) return;
     if (!keepOption) s.optionKey = AUTO_DESIGN_PANEL_OPTION;
-    if (s.phase === 'form') readAutoDesignForm();
+    if (s.phase === 'form') {
+        readAutoDesignForm();
+        commitAutoDesignArea(s);
+    }
     const houses = parseInt(s.params.houses, 10);
     if (!houses || houses < 1) {
         s.phase = 'form';
@@ -4838,6 +4903,13 @@ document.addEventListener('click', (e) => {
         else if (action === 'option') selectAutoDesignOption(button.dataset.option);
         else if (action === 'access-route') selectAutoDesignAccessRoute(parseInt(button.dataset.route, 10));
         else if (action === 'clear-poles') clearAutoDesignAccessPoles();
+        else if (action === 'area-reset' && s) {
+            const original = s.areaOriginal.map(p => new google.maps.LatLng(p.lat, p.lng));
+            if (polygonEdit?.polygon !== s.polygon.polygonObject || !resetPolygonEdit(original)) {
+                s.polygon.polygonObject.setPath(original);
+                refreshAutoDesignArea(s);
+            }
+        }
         else if (action === 'cto-next' && s?.result) focusNextAutoDesignCto();
         else if (action === 'cto-check-next' && s?.selectedCto) {
             s.selectedCto.checked = true;
@@ -4910,12 +4982,9 @@ async function handleAutoDesignMenu(e) {
                 return;
             }
         }
-        startPolygonTool();
+        startPolygonTool(undefined, { forAutoDesign: true });
         if (!isDrawingPolygon) return;
-        autoDesignAfterPolygon = true;
-        const nameInput = document.getElementById('polygonName');
-        if (nameInput) nameInput.value = 'Área do pré-projeto';
-        showToast('Pré-projeto automático', 'Desenhe a área no mapa e salve o polígono. Depois é só dizer quantas casas tem.');
+        showToast('Pré-projeto automático', 'Contorne a área no mapa (clicando os cantos ou à mão livre). Ao fechar, é só dizer quantas casas tem.');
     }
 }
 
