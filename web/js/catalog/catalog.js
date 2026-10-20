@@ -757,13 +757,13 @@ async function addMissingSheetMaterials() {
     const data = await loadCompanyPriceSheetItems();
     if (!data) return; //Sem planilha da empresa (ou fora do ar): fica como está
     const known = new Set(materialCatalog.materials.map(m => normalizeMaterialName(m.name)));
-    const knownCodes = new Set(materialCatalog.materials.map(m => String(m.code || '').trim()).filter(c => c && c !== '?'));
+    const knownCodes = new Set(materialCatalog.materials.map(m => cleanMaterialCode(m.code)).filter(Boolean));
     let added = 0;
     let sectionsChanged = false;
     (data?.itens || []).forEach(item => {
         const name = String(item.descricao || '').trim();
         const price = Number(item.valor_unitario);
-        const code = String(item.codigo || '').trim();
+        const code = cleanMaterialCode(item.codigo);
         if (!name || !Number.isFinite(price)) return;
         const norm = normalizeMaterialName(name);
         const aliasTarget = SHEET_MATERIAL_ALIASES[norm];
@@ -776,7 +776,7 @@ async function addMissingSheetMaterials() {
             return;
         }
         if (known.has(norm)) return;
-        if (code && code !== '?' && knownCodes.has(code) && materialCatalog.materials.some(m => m.code === code && normalizeMaterialName(m.name) === norm)) return;
+        if (code && knownCodes.has(code) && materialCatalog.materials.some(m => m.code === code && normalizeMaterialName(m.name) === norm)) return;
         materialCatalog.materials.push({
             id: generateCatalogId('mat'),
             name,
@@ -784,7 +784,7 @@ async function addMissingSheetMaterials() {
             unit: normalizeImportUnit(item.unidade),
             price,
             supplier: '',
-            code: code === '?' ? '' : code,
+            code,
             notes: 'Da planilha de preços',
             section,
         });
@@ -974,7 +974,7 @@ function loadMaterialCatalog(stored, { blank = false } = {}) {
         unit: m.unit || 'un',
         price: Number(m.price) || 0,
         supplier: m.supplier || '',
-        code: m.code || '',
+        code: cleanMaterialCode(m.code),
         notes: m.notes || '',
         section: m.section || ''
     })).filter((m, i, all) => m.name && all.findIndex(o => o.name === m.name) === i) //Nome antigo e novo viram um só
@@ -1167,6 +1167,30 @@ function openMaterialCatalogModal() {
     updateCatalogStats();
     setCatalogTab(catalogActiveTab);
     modal.style.display = 'flex';
+    refreshMaterialCatalogFromServer().then(changed => {
+        if (!changed || modal.style.display !== 'flex') return;
+        populateCatalogCategoryFilters();
+        updateCatalogStats();
+        if (catalogActiveTab !== 'config') renderCatalog();
+    });
+}
+
+//Catálogo salvo noutra aba ou computador depois do login: o administrador edita (e compara com a planilha) a partir
+//da versão mais nova; senão, o próximo salvamento daqui gravaria por cima os preços antigos desta tela
+async function refreshMaterialCatalogFromServer() {
+    if (!AppSession.isAdmin || !AppSession.company?.id) return false;
+    await companySettingsSaveChain; //O que esta tela acabou de salvar entra antes da leitura
+    const { data, error } = await supabaseClient
+        .from('company_settings')
+        .select('material_catalog')
+        .eq('company_id', AppSession.company.id)
+        .maybeSingle();
+    if (error || !Array.isArray(data?.material_catalog?.materials)) return false;
+    if (JSON.stringify(data.material_catalog) === JSON.stringify(materialCatalog)) return false;
+    loadMaterialCatalog(data.material_catalog);
+    applyCatalogToMaterialPrices();
+    try { syncCatalogPricesIntoBoms(); } catch (e) { /* sem listas calculadas ainda */ }
+    return true;
 }
 
 function setCatalogTab(tab) {
@@ -1992,6 +2016,12 @@ const SHEET_MATERIAL_ALIASES = {
     'AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO': 'AR CONDICIONADO SPLIT HI WALL LG DUAL INVERTER 12000 BTUS FRIO 220V',
 };
 
+//Código que não identifica o item ("?", "-", "0", "S/C"…): não serve para casar a planilha com o catálogo
+function cleanMaterialCode(code) {
+    const text = String(code ?? '').trim();
+    return /[0-9a-z]/i.test(text) && !/^(0+|n\/?a|s\/c|sem\s*c[oó]d(igo)?\.?)$/i.test(text) ? text : '';
+}
+
 //Encontra o melhor material correspondente para um nome da planilha
 function findCatalogMatch(sheetName, code = '') {
     //Equivalência conhecida entre a planilha e o sistema
@@ -2001,9 +2031,10 @@ function findCatalogMatch(sheetName, code = '') {
         const byAlias = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === aliasTarget);
         if (byAlias) return { material: byAlias, score: 1 };
     }
-    //Código igual ao do catálogo tem prioridade sobre o nome
-    const byCode = code && materialCatalog.materials.find(m => m.code && String(m.code).trim().toLowerCase() === String(code).trim().toLowerCase());
-    if (byCode) return { material: byCode, score: 1 };
+    //Código igual ao do catálogo tem prioridade sobre o nome (só se um material do catálogo tiver esse código)
+    const codeKey = cleanMaterialCode(code).toLowerCase();
+    const byCode = codeKey ? materialCatalog.materials.filter(m => cleanMaterialCode(m.code).toLowerCase() === codeKey) : [];
+    if (byCode.length === 1) return { material: byCode[0], score: 1 };
     const target = normalizeMaterialName(sheetName);
     let exact = null;
     let best = null;
@@ -2021,19 +2052,44 @@ function findCatalogMatch(sheetName, code = '') {
 
 //Constrói a prévia da importação
 function buildImportPreview(rows) {
+    //Código repetido na planilha não identifica o item (ex.: vários "?"): casa pelo nome
+    const codeCount = {};
+    rows.forEach(row => {
+        const key = cleanMaterialCode(row.code).toLowerCase();
+        if (key) codeCount[key] = (codeCount[key] || 0) + 1;
+    });
     const entries = rows.map((row, idx) => {
-        const match = findCatalogMatch(row.name, row.code);
+        const cleaned = cleanMaterialCode(row.code);
+        const code = codeCount[cleaned.toLowerCase()] === 1 ? cleaned : '';
+        const match = findCatalogMatch(row.name, code);
         return {
             idx,
-            code: row.code || '',
+            code,
             sheetName: row.name,
             unit: row.unit,
             price: row.price,
             block: row.block || 0,
             matchId: match.material ? match.material.id : null,
             matchCategory: match.material ? (match.material.category || 'Outros') : null,
-            score: match.score
+            score: match.score,
+            exact: !!match.material && normalizeMaterialName(match.material.name) === normalizeMaterialName(row.name),
+            conflict: ''
         };
+    });
+    //Duas linhas no mesmo material: um preço apagaria o outro (e a outra linha pediria atualização de novo).
+    //Fica a que casa melhor (nome igual, depois código/equivalência, depois a mais parecida); a outra fica sem material.
+    const rank = (e) => (e.exact ? 3 : e.score >= 1 ? 2 : e.score);
+    const owner = new Map();
+    entries.forEach(e => {
+        if (!e.matchId) return;
+        const current = owner.get(e.matchId);
+        if (!current || rank(e) > rank(current)) owner.set(e.matchId, e);
+    });
+    entries.forEach(e => {
+        if (!e.matchId || owner.get(e.matchId) === e) return;
+        e.conflict = materialCatalog.materials.find(m => m.id === e.matchId)?.name || '';
+        e.matchId = null;
+        e.matchCategory = null;
     });
     //Categoria dominante de cada bloco (com base nos itens que casaram)
     const blockCategoryVotes = {};
@@ -2093,7 +2149,7 @@ function buildImportRowHtml(entry) {
     const disabled = (st.status === 'invalid' || st.status === 'ignore') ? 'disabled' : '';
     return `<tr data-idx="${entry.idx}">
         <td class="import-col-check"><input type="checkbox" class="import-row-check" data-idx="${entry.idx}" ${st.checked ? 'checked' : ''} ${disabled} /></td>
-        <td><span class="import-sheet-name">${escapeHtml(entry.sheetName)}</span><small class="import-sheet-meta">${escapeHtml(entry.unit)}</small></td>
+        <td><span class="import-sheet-name">${escapeHtml(entry.sheetName)}</span><small class="import-sheet-meta">${escapeHtml(entry.unit)}${entry.conflict ? ` · outra linha da planilha já atualiza "${escapeHtml(entry.conflict)}"` : ''}</small></td>
         <td>${buildImportMatchSelect(entry)}</td>
         <td class="import-price import-current-price">${st.currentPrice != null ? 'R$ ' + formatCatalogPrice(st.currentPrice) : '—'}</td>
         <td class="import-price">R$ ${formatCatalogPrice(entry.price)}</td>
@@ -2278,6 +2334,8 @@ async function syncCatalogFromApi() {
     if (button) button.disabled = true;
     showToast('Buscando preços', 'Lendo a planilha de materiais…', 'progress');
     try {
+        //Compara com os preços salvos agora (outra aba pode ter atualizado), não com os desta tela
+        if (await refreshMaterialCatalogFromServer() && document.getElementById('materialCatalogModal')?.style.display === 'flex') renderCatalog();
         const { data, source } = await fetchMaterialsData();
         const rows = (data.itens || [])
             .filter(item => item.descricao && Number.isFinite(Number(item.valor_unitario)))
@@ -2309,7 +2367,13 @@ async function syncCatalogFromApi() {
 }
 
 function applyMaterialImportHandler() {
-    let updated = 0, created = 0;
+    //Quem não é administrador não grava o catálogo: os preços voltariam ao recarregar
+    if (!AppSession.isAdmin) {
+        showAlert('Somente o administrador', 'Só o administrador da empresa pode mudar os preços do catálogo.');
+        return;
+    }
+    let updated = 0, created = 0, repeated = 0;
+    const applied = new Set(); //Material escolhido em duas linhas: vale a primeira
     document.querySelectorAll('#importPreviewBody tr').forEach(tr => {
         const checkbox = tr.querySelector('.import-row-check');
         if (!checkbox || !checkbox.checked || checkbox.disabled) return;
@@ -2320,7 +2384,10 @@ function applyMaterialImportHandler() {
         const value = select.value;
         if (value === '__new__') {
             const dup = materialCatalog.materials.find(m => normalizeMaterialName(m.name) === normalizeMaterialName(entry.sheetName));
-            if (dup) {
+            if (dup && applied.has(dup.id)) {
+                repeated++;
+            } else if (dup) {
+                applied.add(dup.id);
                 dup.price = entry.price;
                 updated++;
             } else {
@@ -2334,13 +2401,17 @@ function applyMaterialImportHandler() {
                     code: entry.code || '',
                     notes: 'Importado de planilha'
                 });
+                applied.add(materialCatalog.materials[materialCatalog.materials.length - 1].id);
                 created++;
             }
         } else if (value !== '__ignore__') {
             const material = materialCatalog.materials.find(m => m.id === value);
-            if (material) {
+            if (material && applied.has(material.id)) {
+                repeated++;
+            } else if (material) {
+                applied.add(material.id);
                 material.price = entry.price;
-                if (entry.code && !material.code) material.code = entry.code;
+                material.code = cleanMaterialCode(material.code) || entry.code;
                 updated++;
             }
         }
@@ -2355,7 +2426,8 @@ function applyMaterialImportHandler() {
     populateCatalogCategoryFilters();
     renderCatalog();
     document.getElementById('materialImportModal').style.display = 'none';
-    showAlert('Importação concluída', `${updated} preço(s) atualizado(s) e ${created} material(is) adicionado(s). As listas de materiais já refletem os novos valores.`);
+    showAlert('Importação concluída', `${updated} preço(s) atualizado(s) e ${created} material(is) adicionado(s). As listas de materiais já refletem os novos valores.`
+        + (repeated ? ` ${repeated} linha(s) ficaram de fora: o mesmo material estava escolhido em mais de uma linha.` : ''));
 }
 
 //Conecta todos os eventos da interface do catálogo

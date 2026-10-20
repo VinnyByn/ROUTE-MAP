@@ -6571,6 +6571,7 @@ html[data-theme="dark"] .section-buttons {
 
 /* Catálogo somente leitura (membros que não são administradores) */
 .catalog-readonly #catalogImportButton,
+.catalog-readonly #catalogApiSyncButton,
 .catalog-readonly #catalogAddButton,
 .catalog-readonly #saveLancamentoConfig,
 .catalog-readonly .catalog-icon-btn,
