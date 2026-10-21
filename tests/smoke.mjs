@@ -3707,8 +3707,11 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       const before = window.__fakeDb.projects[netId].data.markers.length;
       await persistProject(document.getElementById(netId).closest('.folder'));
       const untouched = window.__fakeDb.projects[netId].data.markers.length === before;
+      //Casa que um projeto concluído na versão antiga mandou: sai ao abrir a cidade e a rede é salva sem ela
+      window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_old_casa', folderId: 'projNA', type: 'CASA', name: '8', asBuilt: { projectId: 'antigo' }, position: { lat: -21.24, lng: -45 } });
       document.querySelector(`#sidebar .folder-title[data-folder-id="${netId}"] .toggle-icon`).click();
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 80));
+      out.cleaned = !markers.some(m => m.type === 'CASA') && !window.__fakeDb.projects[netId].data.markers.some(m => m.type === 'CASA');
       const loaded = document.getElementById(netId).closest('.folder');
       out.lazy = pending === 'Rede · Lavras|Rede · Perdões' && markers.length === 0 + markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length && untouched
         && !loaded.querySelector(':scope > .folder-title').dataset.networkPending && markers.filter(m => m.type === 'CTO').length === 2
