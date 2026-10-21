@@ -3717,7 +3717,15 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.merge = (() => {
         const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
           markers: [{ uid: 'a', folderId: 'f', type: 'CTO', ctoStatus: 'Troca' }], cables: [], polygons: [] }, { projectId: 'p', projectName: 'P', at: 'now', folderName: 'P · ok' });
-        return m.markers[0].ctoStatus === 'Existente' && m.sidebar.children[0].children[0].id === 'f' && m.sidebar.children[0].name === 'P · ok';
+        const n = m.network;
+        //Pasta escolhida na rede: as pastas do projeto entram dentro dela; casa e pasta sem caixa nem cabo ficam de fora
+        const into = mergeProjectIntoNetwork(n, { sidebar: { id: 'q', name: 'Q', isProject: true, children: [{ id: 'g', name: 'G', children: [] }, { id: 'h', name: 'Só casas', children: [] }] },
+          markers: [{ uid: 'b', folderId: 'g', type: 'CEO', ceoStatus: 'Nova', fusionPlan: '{}' }, { uid: 'z', folderId: 'h', type: 'CASA' }, { uid: 'y', folderId: 'q', type: 'CTO', ctoStatus: 'Nova' }], cables: [], polygons: [] },
+          { projectId: 'q', projectName: 'Q', at: 'now', targetFolderId: 'p' });
+        const p = into.network.sidebar.children.find(c => c.id === 'p');
+        return n.markers[0].ctoStatus === 'Existente' && n.sidebar.children[0].children[0].id === 'f' && n.sidebar.children[0].name === 'P · ok'
+          && into.boxes === 2 && into.plans === 1 && p.children.map(c => c.id).join() === 'f,g' && !into.network.markers.some(x => x.type === 'CASA')
+          && into.network.markers.find(x => x.uid === 'y').folderId === 'p' && into.network.sidebar.children.length === 1;
       })();
     } finally {
       showChoice = realChoice;

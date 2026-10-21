@@ -70,16 +70,53 @@ function scheduleSidebarCounts() {
     sidebarCountsTimer = setTimeout(updateSidebarCounts, 60);
 }
 
+//O que tem na pasta (com as subpastas), na ordem em que mais interessa: "2 CTO · 1 CEO · 3 cabos"
+const SIDEBAR_COUNT_LABELS = [['CTO', 'CTO', 'CTO'], ['CEO', 'CEO', 'CEO'], ['POP', 'POP', 'POP'], ['cabo', 'cabo', 'cabos'],
+    ['CLIENTE', 'cliente', 'clientes'], ['RESERVA', 'reserva', 'reservas'], ['POSTE', 'poste', 'postes'], ['CASA', 'casa', 'casas'], ['polígono', 'polígono', 'polígonos']];
+
+function describeSidebarFolderCounts(counts, limit = Infinity) {
+    const parts = SIDEBAR_COUNT_LABELS.filter(([key]) => counts[key]).map(([key, one, many]) => `${counts[key]} ${counts[key] === 1 ? one : many}`);
+    const known = new Set(SIDEBAR_COUNT_LABELS.map(([key]) => key));
+    const others = Object.entries(counts).filter(([key]) => !known.has(key)).reduce((sum, [, n]) => sum + n, 0);
+    if (others) parts.push(`${others} ${others === 1 ? 'outro' : 'outros'}`);
+    return parts.length > limit ? `${parts.slice(0, limit).join(' · ')} · …` : parts.join(' · ');
+}
+
 function updateSidebarCounts() {
+    //Itens de cada pasta (direto nela), contados uma vez só
+    const direct = new Map();
+    const bump = (folderId, key) => {
+        if (!direct.has(folderId)) direct.set(folderId, {});
+        const c = direct.get(folderId);
+        c[key] = (c[key] || 0) + 1;
+    };
+    markers.forEach(m => bump(m.folderId, m.type));
+    savedCables.forEach(c => bump(c.folderId, 'cabo'));
+    savedPolygons.forEach(p => bump(p.folderId, 'polígono'));
     document.querySelectorAll('#sidebar .folder-title').forEach(title => {
         const ul = title.nextElementSibling;
         const count = ul ? ul.querySelectorAll('.ge-pro-item').length : 0;
         const badge = title.querySelector(':scope > .folder-count');
+        const counts = {};
+        if (ul) [ul, ...ul.querySelectorAll('ul.subfolders')].forEach(sub => Object.entries(direct.get(sub.id) || {}).forEach(([k, n]) => { counts[k] = (counts[k] || 0) + n; }));
+        const detail = describeSidebarFolderCounts(counts);
         //Só mexe no texto quando muda (o observador da sidebar reage a qualquer troca de texto)
         const text = count ? String(count) : '';
-        if (badge && badge.textContent !== text) {
-            badge.textContent = text;
-            badge.title = `${count} ${count === 1 ? 'item' : 'itens'} no mapa`;
+        if (badge && badge.textContent !== text) badge.textContent = text;
+        const tip = count ? `${count} ${count === 1 ? 'item' : 'itens'}: ${detail}` : '';
+        if (badge && badge.title !== tip) badge.title = tip;
+        //Pasta (não o projeto): o resumo ao lado do nome, ou "vazia"
+        if (title.dataset.isProject !== 'true') {
+            let meta = title.querySelector(':scope > .folder-meta');
+            if (!meta) {
+                meta = document.createElement('span');
+                meta.className = 'folder-meta';
+                meta.setAttribute('aria-hidden', 'true');
+                title.querySelector(':scope > .folder-name-text')?.after(meta);
+            }
+            const short = count ? describeSidebarFolderCounts(counts, 3) : 'vazia';
+            if (meta.textContent !== short) meta.textContent = short;
+            meta.classList.toggle('is-empty', !count);
         }
         title.classList.toggle('is-empty-folder', !ul || !ul.querySelector('.folder-wrapper, .ge-pro-item'));
         if (title.dataset.isProject === 'true') {
