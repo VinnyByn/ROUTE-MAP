@@ -37,7 +37,11 @@ function buildMarkerHoverHtml(markerInfo) {
     const s = summarizeFusionPlan(markerInfo);
     const icon = getMarkerIconDataUrl(markerInfo.type, markerInfo.color || '#f59e0b');
     const head = `<header class="mh-card__head"><img src="${icon}" alt=""><div><strong>${escapeHtml(markerInfo.name || '')}</strong><span>${markerInfo.type}</span></div></header>`;
-    if (!s) return `${head}<p class="mh-card__empty">Sem plano de fusão</p>`;
+    if (!s) {
+        //CTO sem plano: pelo menos quantos clientes estão ligados nela
+        const clients = markerInfo.type === 'CTO' && typeof getCtoClients === 'function' ? getCtoClients(markerInfo).length : 0;
+        return `${head}<p class="mh-card__empty">Sem plano de fusão${clients ? ` · ${clients} cliente${clients === 1 ? '' : 's'}` : ''}</p>`;
+    }
     const row = (label, value, cls = '') => `<div class="mh-row ${cls}"><span>${label}</span><b>${value}</b></div>`;
     let body = `<section><h5>Fibras</h5>${row('Em uso', `${s.usedFibers} / ${s.fibers}`)}${row('Livres', s.fibers - s.usedFibers, 'is-free')}${row('Cabos', s.cables)}</section>`;
     body += `<section><h5>Splitters</h5>${row('Quantidade', s.splitters)}${s.ratios ? `<p class="mh-card__note">${escapeHtml(s.ratios)}</p>` : ''}</section>`;
