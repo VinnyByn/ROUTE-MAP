@@ -8,6 +8,7 @@
 const NETWORK_PROJECT_TYPE = 'Rede';
 const NETWORK_COLOR = '#15803d';
 let appMode = 'projeto';
+let appModeStartup = Promise.resolve(); //Entrada no modo Rede ao abrir o sistema (js/network/field-docs.js espera)
 let projectConclusions = {}; //Id do projeto → { at, by, byName, networkId, networkName }
 
 const appModeStorageKey = () => `routeMapMode:${AppSession.userId}`;
@@ -127,8 +128,19 @@ function getSavedAppMode() {
     try { return JSON.parse(localStorage.getItem(appModeStorageKey()) || 'null')?.mode || 'projeto'; } catch (e) { return 'projeto'; }
 }
 
-//Modo ao entrar: o das preferências (Projeto ou Rede) ou, em "Último usado", o da última vez
+//Link do QR code de uma caixa (?rede=…&caixa=…); guardado durante o login (js/app.js) para abrir depois de entrar
+function getPendingFieldLink() {
+    let query = location.search;
+    try { if (!/[?&]caixa=/.test(query)) query = sessionStorage.getItem('routeMapDeepLink') || ''; } catch (e) { query = ''; }
+    const params = new URLSearchParams(query);
+    const rede = params.get('rede');
+    const caixa = params.get('caixa');
+    return rede && caixa && isNetworkProjectId(rede) ? { rede, caixa } : null;
+}
+
+//Modo ao entrar: o das preferências (Projeto ou Rede) ou, em "Último usado", o da última vez. Link de caixa: Rede.
 function getStartupAppMode() {
+    if (getPendingFieldLink()) return 'rede';
     const pref = AppSession.profile?.preferences?.startMode;
     return pref === 'projeto' || pref === 'rede' ? pref : getSavedAppMode();
 }
@@ -673,5 +685,5 @@ appReady.then(() => {
     wirePendingNetworkClicks();
     applyAppModeUi();
     //Entrar no modo Rede (preferência ou última vez): quando o mapa estiver pronto
-    if (getStartupAppMode() === 'rede') mapReady.then(() => setAppMode('rede', { startup: true }));
+    if (getStartupAppMode() === 'rede') appModeStartup = mapReady.then(() => setAppMode('rede', { startup: true }));
 });

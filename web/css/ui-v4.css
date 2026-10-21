@@ -3276,3 +3276,20 @@ html[data-theme="dark"] .viability-verdict.is-warn { color: #fcd34d; }
 #networkPanelBox .pon-row__ctos button { display: flex; justify-content: space-between; width: 100%; padding: 5px 6px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 12.5px; color: var(--color-text); cursor: pointer; }
 #networkPanelBox .pon-row__ctos button:hover { background: var(--color-surface-hover); }
 .pon-row__ctos b { font-variant-numeric: tabular-nums; }
+
+/* Uso em campo (js/network/field-docs.js): QR da caixa, "Perto de mim" e ações no painel da caixa */
+.marker-doc__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.marker-doc__actions .btn { min-height: 30px; padding: 4px 10px; font-size: 12.5px; text-decoration: none; }
+.field-qr-modal { max-width: 460px; }
+.field-qr { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.field-qr__code { flex: none; padding: 8px; border-radius: 12px; background: #fff; border: 1px solid var(--color-border-light); line-height: 0; }
+.field-qr__code svg { width: 180px; height: 180px; }
+.field-qr__text { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.field-qr__text b { font-size: 20px; color: var(--color-text); overflow-wrap: anywhere; }
+.field-qr__text span { font-size: 13px; color: var(--color-text-muted); }
+.field-qr__text small { font-size: 12px; line-height: 1.45; color: var(--color-text-muted); }
+#nearbyBox.map-tool-box { width: min(340px, calc(100vw - 28px)); }
+#nearbyBox .map-tool-box__body { overflow-y: auto; gap: 10px; }
+#nearbyBox a.viability-row__add { display: inline-flex; align-items: center; text-decoration: none; }
+#fieldQrModal { z-index: 1200; } /* acima do painel da caixa, de onde abre */
+.field-qr__link { width: 100%; margin-top: 12px; font-size: 12px; }

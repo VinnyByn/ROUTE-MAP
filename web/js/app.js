@@ -3,6 +3,8 @@
 const appReady = (async () => {
     const { data } = await supabaseClient.auth.getSession();
     if (!data.session) {
+        //Link do QR code de uma caixa: abre depois do login (js/network/field-docs.js)
+        try { if (/[?&]caixa=/.test(location.search)) sessionStorage.setItem('routeMapDeepLink', location.search); } catch (e) { /* ignora */ }
         window.location.replace('login.html');
         return new Promise(() => {});
     }

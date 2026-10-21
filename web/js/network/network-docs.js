@@ -174,6 +174,11 @@ function renderMarkerDocPanel(markerInfo) {
         <p class="marker-doc__origin">${origin
             ? `Construído pelo projeto <b>${esc(origin.projectName)}</b>${origin.at ? ` em ${esc(new Date(origin.at).toLocaleDateString('pt-BR'))}` : ''}${origin.by ? ` · ${esc(origin.by)}` : ''}`
             : 'Incluído direto na rede'}</p>
+        ${['CTO', 'CEO', 'POP', 'RESERVA'].includes(markerInfo.type) ? `<div class="marker-doc__actions">
+            <button type="button" class="btn btn-secondary" data-field="qr">QR code / etiqueta</button>
+            ${markerInfo.marker?.getPosition?.() ? `<a class="btn btn-secondary" href="https://www.google.com/maps/dir/?api=1&destination=${markerInfo.marker.getPosition().lat().toFixed(6)},${markerInfo.marker.getPosition().lng().toFixed(6)}" target="_blank" rel="noopener">Como chegar</a>` : ''}
+            <button type="button" class="btn btn-secondary" data-field="link">Copiar link</button>
+        </div>` : ''}
         ${log.length ? `<ul class="marker-doc__log">${log.map(e => `<li><small>${esc(formatDocDate(e.at))}</small> ${esc(e.by)} ${esc(e.action)}${e.detail ? ` ${esc(e.detail)}` : ''}</li>`).join('')}</ul>` : ''}`;
     panel.classList.remove('hidden');
 }

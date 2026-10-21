@@ -128,6 +128,7 @@ if (process.env.CI) {
     jspdf: typeof window.jspdf?.jsPDF === 'function',
     autotable: typeof window.jspdf?.jsPDF?.API?.autoTable === 'function',
     docx: typeof htmlDocx === 'object',
+    qrcode: typeof qrcode === 'function',
   }));
   const missing = Object.entries(libs).filter(([, ok]) => !ok).map(([name]) => name);
   check(!missing.length, `bibliotecas externas carregadas com verificação de integridade${missing.length ? ' (falharam: ' + missing.join(', ') + ')' : ''}`);
@@ -3683,6 +3684,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   await np.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
   await np.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
   if (process.env.SMOKE_LIBS) {
+    const lib = (url, file) => np.route(url, r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, file), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+    await lib('**/qrcode-generator@1.4.4/qrcode.js', 'qrcode-generator-1.4.4/qrcode.js');
+    await lib('**/jspdf@2.5.1/dist/jspdf.umd.min.js', 'jspdf-2.5.1/dist/jspdf.umd.min.js');
     await np.route('**/xlsx@0.18.5/dist/xlsx.full.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'xlsx-0.18.5/dist/xlsx.full.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
   }
   await np.goto(baseUrl + '/index.html');
@@ -3848,6 +3852,27 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         savedNet.changeLog.filter(e => e.action === 'importou').length, savedNet.changeLog.some(e => e.type === 'CLIENTE' && e.action !== 'importou' && /Ana|Davi/.test(e.name || '')),
         document.getElementById('clientImportModal').style.display].join(';');
       out.importClients = out.importDetail === 'novo,erro,erro,novo,true,true,true,true,true,true,true,true,true;1;Ana Maria;cancelado;1;2;false;none';
+      //Campo: o link do QR da caixa abre a caixa no modo Rede (também guardado no login); etiquetas em PDF; "Perto de mim"
+      const boxA = ctoA;
+      const link = getFieldBoxLink(boxA);
+      const pdf = buildFieldLabelsPdf([boxA, ...markers.filter(m => m.type === 'CEO')]);
+      sessionStorage.setItem('routeMapDeepLink', new URL(link).search);
+      const pendingLink = getPendingFieldLink();
+      sessionStorage.removeItem('routeMapDeepLink');
+      resetMarkerModal();
+      const opened = await openFieldLinkBox(pendingLink);
+      const editorOpen = editingMarkerInfo === boxA;
+      openFieldQr(boxA);
+      const qrModal = document.getElementById('fieldQrModal');
+      const qrShown = qrModal.style.display === 'flex' && !!qrModal.querySelector('svg path') && /CTO/.test(qrModal.textContent);
+      qrModal.querySelector('[data-field-qr="close"]').click();
+      resetMarkerModal();
+      await runFieldNearby({ lat: -21.2411, lng: -45.0011, accuracy: 15 });
+      const nearbyText = document.getElementById('nearbyBody').textContent;
+      out.fieldDetail = [/\?rede=rede_[^&]+&caixa=mk_/.test(link), !!buildQrMatrix(link), pdf?.getNumberOfPages(), pendingLink?.caixa === boxA.uid, opened === boxA, editorOpen, qrShown,
+        field.results[0]?.box.type, field.results[0]?.distance < 60, /Você está aqui/.test(nearbyText), /google\.com\/maps\/dir/.test(document.getElementById('nearbyBody').innerHTML), field.overlays.length].join();
+      stopFieldNearby();
+      out.field = out.fieldDetail === 'true,true,1,true,true,true,true,CTO,true,true,true,2' && document.getElementById('nearbyBox').classList.contains('hidden');
       await setAppMode('projeto');
       //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
       window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',
