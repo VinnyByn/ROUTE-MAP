@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261081a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261082a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -118,6 +118,10 @@
         <button id="networkNearbyButton" class="top-bar-button" type="button" title="Perto de mim: as caixas mais próximas de onde você está (GPS) e como chegar">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg>
           <span class="top-bar-button__label">Perto de mim</span>
+        </button>
+        <button id="networkFilterButton" class="top-bar-button" type="button" title="Filtro do mapa: destaca CTOs lotadas, com porta livre, sem sinal, com ocorrência, clientes por situação">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg>
+          <span class="top-bar-button__label">Filtro</span>
         </button>
         <button id="networkPanelButton" class="top-bar-button" type="button" title="Painel da rede: caixas, cabos, portas, clientes e o que precisa de atenção">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-report"></use></svg>
@@ -2177,6 +2181,19 @@
       <div class="map-tool-box__body" id="networkPanelBody"></div>
     </div>
 
+    <div id="networkFilterBox" class="floating-box map-tool-box hidden" role="dialog" aria-labelledby="networkFilterTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="networkFilterTitle">Filtro do mapa</h3>
+          <span class="map-tool-box__subtitle">Destaca só o que interessa</span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeNetworkFilterBox" title="Fechar (Esc)" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body" id="networkFilterBody"></div>
+    </div>
     <div id="nearbyBox" class="floating-box map-tool-box viability-box hidden" role="dialog" aria-labelledby="nearbyTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg></span>
@@ -3374,6 +3391,8 @@
   <script src="js/network/field-docs.js?v=20261076a" defer></script>
   <script src="js/network/network-occurrences.js?v=20261076a" defer></script>
   <script src="js/network/network-photos.js?v=20261076a" defer></script>
+  <script src="js/network/network-filters.js?v=20261076a" defer></script>
+  <script src="js/network/network-timeline.js?v=20261076a" defer></script>
   <script src="js/network/auto-design.js?v=20261070a" defer></script>
   <script src="js/map/marker-hover.js?v=20261010e" defer></script>
   <script src="js/map/network-overlays.js?v=20261057a" defer></script>

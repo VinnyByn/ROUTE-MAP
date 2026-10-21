@@ -3918,6 +3918,37 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.photosDetail = [sent, stored.length, stored.every(k => k.startsWith(`rede-fotos/${AppSession.company.id}/${netId}/${boxA.uid}/`)), stored.some(k => /\/thumb\//.test(k)),
         photos.length, bitmap?.width, /^blob:/.test(docImg), viewerOk, (await listNetworkPhotos(boxA)).length].join();
       out.photos = out.photosDetail === '1,2,true,true,1,1600,true,true,0';
+      //Filtro do mapa: destaca os clientes "A instalar" e apaga o resto; fechar devolve tudo como estava
+      await openNetworkFilter();
+      setNetworkFilter('cli_a_instalar');
+      const netFolders = new Set(getAllDescendantFolderIds(netId));
+      const expectedMatches = markers.filter(m => m.type === 'CLIENTE' && netFolders.has(m.folderId) && m.client.status === 'a_instalar').length;
+      const filterMatches = networkFilter.matches.length;
+      const ctoDimmed = boxA.marker.getOpacity();
+      const filterText = document.getElementById('networkFilterBody').textContent;
+      nextNetworkFilterMatch();
+      const cursorOk = networkFilter.cursor === 0;
+      closeNetworkFilter();
+      out.filterDetail = [filterMatches > 0 && filterMatches === expectedMatches, ctoDimmed, /Próximo/.test(filterText) && /A instalar/.test(filterText), cursorOk,
+        boxA.marker.getOpacity(), document.getElementById('networkFilterBox').classList.contains('hidden')].join();
+      out.filter = out.filterDetail === 'true,0.15,true,true,1,true';
+      //A rede numa data: lista as versões salvas, mostra a mais antiga no mapa (a de hoje some) e volta sem restaurar
+      openNetworkPanel('historico');
+      await new Promise(r => setTimeout(r, 20));
+      document.querySelector('#networkPanelBody [data-net-panel="tl-load"]').click();
+      await new Promise(r => setTimeout(r, 80));
+      const versionRows = document.querySelectorAll('#networkPanelBody .net-timeline__item').length;
+      const revisionBefore = window.__fakeDb.projects[netId].revision;
+      await viewNetworkVersion(networkTimeline.versions[networkTimeline.versions.length - 1]);
+      const hiddenToday = boxA.marker.getVisible() === false;
+      const bannerText = document.getElementById('networkTimelineBanner')?.textContent || '';
+      const drawn = networkTimeline.overlays.length;
+      document.querySelector('#networkTimelineBanner [data-tl="exit"]').click();
+      out.timelineDetail = [versionRows > 1, hiddenToday, /em \d{2}\/\d{2}\/\d{2}/.test(bannerText) && /De lá para hoje|Igual/.test(bannerText), drawn > 0,
+        boxA.marker.getVisible() !== false, !document.getElementById('networkTimelineBanner'), window.__fakeDb.projects[netId].revision === revisionBefore].join();
+      out.timeline = out.timelineDetail === 'true,true,true,true,true,true,true';
+      networkDocs.panelTab = 'resumo';
+      document.getElementById('networkPanelBox').classList.add('hidden');
       //Técnico de campo: no modo Rede edita clientes e grava a rede; caixas e cabos não; no modo Projeto só consulta
       const realRole = AppSession.company.role;
       AppSession.company.role = 'tecnico';

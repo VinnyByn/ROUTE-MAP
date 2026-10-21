@@ -278,7 +278,8 @@ function renderNetworkPanel() {
         body.innerHTML = `${picker}${tabs}
             ${log.length ? `<ul class="network-log">${log.map((e, i) => `<li><button type="button" class="network-log__item" data-net-panel="log" data-i="${i}"${e.uid ? '' : ' disabled'}>
                 <small>${esc(formatDocDate(e.at))} · ${esc(e.by || '')}</small><span>${esc(describeNetworkLogEntry(e))}</span></button></li>`).join('')}</ul>`
-                : '<p class="map-tool-help">Ainda não há alterações registradas. A partir de agora, cada vez que a rede é salva, o que foi incluído, alterado ou excluído aparece aqui, com quem e quando.</p>'}`;
+                : '<p class="map-tool-help">Ainda não há alterações registradas. A partir de agora, cada vez que a rede é salva, o que foi incluído, alterado ou excluído aparece aqui, com quem e quando.</p>'}
+            ${typeof renderNetworkVersionsHtml === 'function' ? renderNetworkVersionsHtml() : ''}`;
         networkDocs.renderedLog = log;
         return;
     }
@@ -345,6 +346,7 @@ function handleNetworkPanelClick(e) {
     }
     if (kind.startsWith('pon') && typeof handlePonPanelClick === 'function') { handlePonPanelClick(el); return; }
     if (kind.startsWith('occ') && typeof handleOccurrencePanelClick === 'function') { handleOccurrencePanelClick(el); return; }
+    if (kind.startsWith('tl-') && typeof handleTimelinePanelClick === 'function') { handleTimelinePanelClick(el); return; }
     if (kind === 'xlsx') { exportProjectSpreadsheet(); return; }
     if (kind === 'impact') { openNetworkImpact(); return; }
     if (kind === 'log') {

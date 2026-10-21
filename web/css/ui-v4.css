@@ -3356,3 +3356,34 @@ html[data-theme="dark"] .account-badge--tecnico { color: #5eead4; }
 .net-photo-viewer .modal-footer { align-items: center; flex-wrap: wrap; }
 .net-photo-viewer .modal-footer small { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-muted); }
 .net-photo-viewer .modal-footer a.btn { text-decoration: none; }
+
+/* Filtro do mapa (js/network/network-filters.js) e a rede numa data (js/network/network-timeline.js) */
+#networkFilterBox.map-tool-box { width: min(340px, calc(100vw - 28px)); }
+#networkFilterBox .map-tool-box__body { overflow-y: auto; gap: 12px; }
+.net-filter__group header { margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+.net-filter__chips { display: flex; flex-wrap: wrap; gap: 5px; }
+#networkFilterBox .net-filter__chip { display: inline-flex; align-items: center; gap: 5px; width: auto; min-height: 30px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-border-light); background: var(--color-surface); font: inherit; font-size: 12.5px; color: var(--color-text); cursor: pointer; box-shadow: none; }
+#networkFilterBox .net-filter__chip:hover { background: var(--color-surface-hover); }
+#networkFilterBox .net-filter__chip[data-empty="true"] { opacity: .55; }
+#networkFilterBox .net-filter__chip.is-active { border-color: var(--brand-600, #1d7290); background: color-mix(in srgb, var(--brand-600, #1d7290) 12%, var(--color-surface)); font-weight: 700; opacity: 1; }
+.net-filter__chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--chip); }
+.net-filter__chip b { font-variant-numeric: tabular-nums; color: var(--color-text-muted); }
+.net-filter__result { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--color-surface-muted); border: 1px solid var(--color-border-light); }
+.net-filter__result > span { flex: 1 1 140px; font-size: 12.5px; }
+.net-filter__result .map-tool-btn { width: auto; }
+.net-timeline { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-border-light); }
+.net-timeline header { font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+.net-timeline header small { font-weight: 500; }
+.net-timeline ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+#networkPanelBox .net-timeline__item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-surface); font: inherit; text-align: left; color: var(--color-text); cursor: pointer; }
+#networkPanelBox .net-timeline__item:hover { background: var(--color-surface-hover); }
+.net-timeline__item > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.net-timeline__item b { font-size: 12.5px; }
+.net-timeline__item small { font-size: 11.5px; color: var(--color-text-muted); }
+.net-timeline__item > em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--brand-600, #1d7290); }
+.net-timeline-banner { position: fixed; left: 50%; top: 66px; transform: translateX(-50%); z-index: 1005; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 10px 12px 10px 16px; border-radius: 14px; background: #1e293b; color: #f8fafc; box-shadow: 0 14px 36px rgba(15, 23, 42, .35); }
+.net-timeline-banner > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.net-timeline-banner b { font-size: 13.5px; }
+.net-timeline-banner small { font-size: 12px; color: #cbd5e1; }
+.net-timeline-banner .btn { flex: none; min-height: 34px; padding: 6px 14px; }
+@media (max-width: 560px) { .net-timeline-banner { top: auto; bottom: 16px; flex-wrap: wrap; } }
