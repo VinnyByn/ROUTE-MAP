@@ -3623,23 +3623,6 @@ function getAutoDesignReachPaths(plan, xy) {
     const from = streetIndex?.reachPaths && streetIndex.snapPoint(xy.x, xy.y, AUTO_DESIGN_DROP_BOX_SNAP_M);
     return from ? streetIndex.reachPaths(from, Math.max(0, drop.reach - AUTO_DESIGN_DROP_LEGS_M)) : [];
 }
-const drawAutoDesignReach = (plan, xy, color, add, toLL) => getAutoDesignReachPaths(plan, xy).forEach(path => add(new google.maps.Polyline({
-    map, path: path.map(toLL), clickable: false, zIndex: 39, strokeColor: color, strokeOpacity: 0.35, strokeWeight: 2,
-})));
-
-const AUTO_DESIGN_LINK_MIN_M = 25;       //Trecho de rua a mais de 25 m da CTO ganha um traço fino até ela
-
-//Traços finos da CTO até cada trecho de rua dela que fica longe (até o ponto mais perto do trecho): [[xy, xy], ...]
-function getAutoDesignCtoLinks(cto, paths) {
-    return paths.map(path => {
-        const [a, b] = path;
-        const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
-        const t = len2 > 0 ? Math.max(0, Math.min(1, ((cto.x - a[0]) * dx + (cto.y - a[1]) * dy) / len2)) : 0;
-        const q = [a[0] + dx * t, a[1] + dy * t];
-        return Math.hypot(q[0] - cto.x, q[1] - cto.y) > AUTO_DESIGN_LINK_MIN_M ? [[cto.x, cto.y], q] : null;
-    }).filter(Boolean);
-}
-const getAutoDesignLinkIcons = (color, opacity = 0.8) => [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: opacity, strokeColor: color, strokeWeight: 2, scale: 2 }, offset: '0', repeat: '8px' }];
 
 function startAutoDesignDrag(box) {
     const s = autoDesign;
@@ -3685,10 +3668,8 @@ function drawAutoDesignDragPreview() {
     //Rua pintada na cor da CTO; o selo (verde: cabe, vermelho: passou das portas) diz se as casas dali cabem nela
     const color = AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(view.sum)];
     const own = s.ctoColors?.get(drag.box) || AUTO_DESIGN_CTO_PALETTE[0];
-    const paint = getAutoDesignCtoStreetPaint(plan, [view.points])[0];
-    drawAutoDesignReach(plan, view.xy, own, add, toLL);
-    paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.85, strokeWeight: 7 })));
-    getAutoDesignCtoLinks(view.xy, paint).forEach(link => add(new google.maps.Polyline({ map, path: link.map(toLL), clickable: false, zIndex: 45, strokeOpacity: 0, icons: getAutoDesignLinkIcons(own) })));
+    const paint = getAutoDesignReachPaths(plan, view.xy);
+    paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.85, strokeWeight: 6 })));
     view.changes.forEach(({ cto, delta }) => add(new google.maps.Marker({ map, position: cto.position, clickable: false, zIndex: 76, icon: getAutoDesignDeltaBadgeIcon(delta) })));
     if (!paint.length) {
         const hull = getAutoDesignHull([...view.points, view.xy]);
@@ -4029,47 +4010,6 @@ function getAutoDesignCtoColors(ctos) {
     return color.map(k => AUTO_DESIGN_CTO_PALETTE[k]);
 }
 const AUTO_DESIGN_HOUSE_DOTS_MAX = 600;
-const AUTO_DESIGN_PAINT_HALF_M = 11;     //Cada ponto de casa pinta a rua até 11 m para cada lado (os pontos ficam a ~20 m)
-const AUTO_DESIGN_PAINT_SIDE_M = 4;      //Pintura deslocada para o lado da rua onde as casas estão
-
-//Trechos de rua de cada CTO, do lado das casas dela: [[[x, y], ...], ...] por CTO (ordem de plan.ctos). Sem o traçado
-//das ruas (ou casa longe de rua), o ponto não pinta nada.
-function getAutoDesignCtoStreetPaint(plan, lists = getAutoDesignCtoHousePoints(plan)) {
-    const streets = plan.model.streetIndex;
-    if (!streets?.segmentEnds) return lists.map(() => []);
-    return lists.map(points => {
-        const pieces = new Map(); //"trecho|lado" → [[de, até], ...] em metros a partir da ponta a
-        points.forEach(q => {
-            const snap = streets.snapPoint(q.x, q.y, AUTO_DESIGN_DROP_SNAP_M);
-            if (!snap) return;
-            const [a, b] = streets.segmentEnds(snap.seg);
-            const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
-            if (!(len > 0)) return;
-            const at = Math.max(0, Math.min(len, ((q.x - a[0]) * dx + (q.y - a[1]) * dy) / len));
-            const side = dx * (q.y - a[1]) - dy * (q.x - a[0]) >= 0 ? 1 : -1;
-            const key = `${snap.seg}|${side}`;
-            if (!pieces.has(key)) pieces.set(key, []);
-            pieces.get(key).push([Math.max(0, at - AUTO_DESIGN_PAINT_HALF_M), Math.min(len, at + AUTO_DESIGN_PAINT_HALF_M)]);
-        });
-        const paths = [];
-        pieces.forEach((list, key) => {
-            const [seg, side] = key.split('|').map(Number);
-            const [a, b] = streets.segmentEnds(seg);
-            const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
-            const nx = -dy / len * side * AUTO_DESIGN_PAINT_SIDE_M, ny = dx / len * side * AUTO_DESIGN_PAINT_SIDE_M;
-            const at = (m) => [a[0] + dx * m / len + nx, a[1] + dy * m / len + ny];
-            list.sort((p, q) => p[0] - q[0]);
-            let [from, to] = list[0];
-            const flush = () => paths.push([at(from), at(to)]);
-            list.slice(1).forEach(([f, t]) => {
-                if (f <= to + 2) to = Math.max(to, t);
-                else { flush(); [from, to] = [f, t]; }
-            });
-            flush();
-        });
-        return paths;
-    });
-}
 
 //Balões de casas de cada CTO: [{ src, houses }] por CTO (casas do balão que ficaram com ela)
 function getAutoDesignCtoHouseSources(plan) {
@@ -4123,7 +4063,8 @@ function drawAutoDesignPreview() {
     if (s.showHouses !== false) {
         const toLL = (q) => { const ll = plan.model.proj.toLatLng(Array.isArray(q) ? q : [q.x, q.y]); return new google.maps.LatLng(ll.lat, ll.lng); };
         const lists = getAutoDesignCtoHousePoints(plan);
-        const paint = getAutoDesignCtoStreetPaint(plan, lists);
+        //Trajeto do drop de cada CTO: pelas ruas, saindo da caixa em todas as direções, até a metragem do cabo
+        const paint = plan.ctos.map(cto => getAutoDesignReachPaths(plan, cto));
         const colors = getAutoDesignCtoColors(plan.ctos);
         s.ctoColors = new Map(plan.ctos.map((cto, i) => [cto, colors[i]]));
         const picked = plan.ctos.indexOf(s.selectedCto);
@@ -4147,21 +4088,14 @@ function drawAutoDesignPreview() {
             }
             paint[i].forEach(path => own(cto, new google.maps.Polyline({
                 map, path: path.map(toLL), clickable: false, zIndex: i === picked ? 43 : 41,
-                strokeColor: color, strokeOpacity: fade(i) ? 0.15 : 0.7, strokeWeight: i === picked ? 7 : 5,
-            }), { strokeOpacity: fade(i) ? 0.15 : 0.7 }, { strokeOpacity: 0.15 }));
-            getAutoDesignCtoLinks(cto, paint[i]).forEach(link => {
-                const look = (o) => ({ icons: getAutoDesignLinkIcons(color, o) });
-                own(cto, new google.maps.Polyline({ map, path: link.map(toLL), clickable: false, zIndex: 40, strokeOpacity: 0, ...look(fade(i) ? 0.15 : 0.6) }),
-                    look(fade(i) ? 0.15 : 0.6), look(0.15));
-            });
+                strokeColor: color, strokeOpacity: fade(i) ? 0.12 : 0.75, strokeWeight: i === picked ? 6 : 4,
+            }), { strokeOpacity: fade(i) ? 0.12 : 0.75 }, { strokeOpacity: 0.12 }));
             //Anel na cor da CTO em volta da caixa: liga a caixa à cor das ruas que ela atende
             own(cto, new google.maps.Marker({
                 map, position: cto.position, clickable: false, zIndex: 69, opacity: fade(i) ? 0.35 : 1,
                 icon: { path: google.maps.SymbolPath.CIRCLE, scale: i === picked ? 19 : 16, fillColor: color, fillOpacity: 0.3, strokeColor: color, strokeOpacity: 1, strokeWeight: 3 },
             }), { opacity: fade(i) ? 0.35 : 1 }, { opacity: 0.35 });
         });
-        //Ruas até onde o drop da CTO clicada chega (linha fina)
-        if (picked >= 0) drawAutoDesignReach(plan, plan.ctos[picked], colors[picked], (o) => own(plan.ctos[picked], o), toLL);
         //Casas da CTO clicada, uma a uma; as que ficam fora do alcance do drop em vermelho
         if (picked >= 0) lists[picked].slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
             const out = !isAutoDesignCovered(plan.model, q, plan.ctos[picked]);
@@ -4659,7 +4593,7 @@ function renderAutoDesignPreviewPanel() {
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
         ${fixedCtos && fixedCtos < plan.ctos.length ? `<p class="map-tool-help auto-design__readjust">${fixedCtos === 1 ? '1 CTO fixa' : `${fixedCtos} CTOs fixas`} (movida, incluída ou conferida por você). <button type="button" class="auto-design__link" data-auto-design="readjust"${s.busy ? ' disabled' : ''}>Reajustar as outras em volta</button></p>` : ''}
         ${renderAutoDesignWarnings(warnings)}
-        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Rua pintada = casas de cada CTO, na cor dela; selo = casas dela / quantas cabem (verde: cabe, vermelho: passou das portas); linha fina = até onde o drop chega pela rua (CTO clicada ou arrastada)' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
+        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Linhas na cor da CTO = trajeto do drop pelas ruas, da caixa até a metragem do cabo; selo = casas dela / quantas cabem (verde: cabe, vermelho: passou das portas); ' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
         <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>
