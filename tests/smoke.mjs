@@ -3758,6 +3758,27 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await new Promise(r => setTimeout(r, 20));
       out.viabilityClosed = !viability.active && !viability.overlays.length;
       await setAppMode('projeto');
+      //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
+      window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',
+        asBuilt: { projectId: 'antigo', projectName: 'Antigo' }, position: { lat: -21.25, lng: -45.01 } });
+      networkLayer.cache.clear();
+      rebuildSidebarFromJSON([{ id: 'projNC', name: 'Bairro C', city: 'Lavras', type: 'TCR', isProject: true, children: [] }], sidebar);
+      setActiveFolder('projNC');
+      await refreshNetworkLayer();
+      const layerTitles = networkLayer.overlays.filter(o => o.getTitle).map(o => o.getTitle());
+      const item = window.__fakeDb.projects[netId].data.markers.find(m => m.uid === 'mk_net_only');
+      const used = useNetworkBoxInProject(item, 'Lavras', { quiet: true });
+      await refreshNetworkLayer();
+      const after = networkLayer.overlays.filter(o => o.getTitle).length;
+      await persistProject(document.getElementById('projNC').closest('.folder'));
+      await concludeProject('projNC');
+      const finalMarkers = window.__fakeDb.projects[netId].data.markers;
+      out.layer = layerTitles.length === 1 && /CTO-REDE · já existe na Rede/.test(layerTitles[0]) && used?.uid === 'mk_net_only' && used.folderId === 'projNC'
+        && used.ctoStatus === 'Existente' && after === 0 && finalMarkers.filter(m => m.uid === 'mk_net_only').length === 1
+        && finalMarkers.find(m => m.uid === 'mk_net_only').asBuilt.projectId === 'antigo' && finalMarkers.find(m => m.uid === 'mk_net_only').folderId === netId;
+      setNetworkLayerEnabled(false);
+      out.layerOff = !networkLayer.overlays.length && document.getElementById('networkLayerToggle').getAttribute('aria-checked') === 'false';
+      setNetworkLayerEnabled(true);
       out.merge = (() => {
         const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
           markers: [{ uid: 'a', folderId: 'f', type: 'CTO', ctoStatus: 'Troca' }], cables: [], polygons: [] }, { projectId: 'p', projectName: 'P', at: 'now', folderName: 'P · ok' });

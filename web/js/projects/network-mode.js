@@ -644,6 +644,7 @@ async function concludeProject(projectId, { targetFolderId = null, folderName = 
             await persistProject(root, { allowConcluded: true, force: true });
         }
         applyProjectConclusionUi(projectId);
+        if (typeof networkLayer !== 'undefined') { networkLayer.cache.delete(city); scheduleNetworkLayerRefresh(0); }
         return projectConclusions[projectId];
     }
     throw new Error('A rede foi alterada por outra pessoa várias vezes seguidas. Tente de novo.');
