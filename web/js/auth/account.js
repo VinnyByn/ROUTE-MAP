@@ -616,6 +616,7 @@ function lastProjectStorageKey() {
 }
 
 function rememberLastProject(projectId) {
+    if (/^rede_/.test(projectId || '')) return; //A rede volta pelo modo Rede (js/projects/network-mode.js)
     try { localStorage.setItem(lastProjectStorageKey(), projectId); } catch (e) { /* ignora */ }
 }
 
@@ -642,6 +643,7 @@ function applyStartupPreferences() {
     if (prefs.mapType && map) map.setMapTypeId(prefs.mapType);
     applyMarkerScale(prefs.markerScale);
     if (!prefs.reopenLastProject) return;
+    if (typeof getSavedAppMode === 'function' && getSavedAppMode() === 'rede') return;
     let lastId = null;
     try { lastId = localStorage.getItem(lastProjectStorageKey()); } catch (e) { /* ignora */ }
     if (lastId && !document.getElementById(lastId)) openProjectFromDatabase(lastId);

@@ -13,6 +13,7 @@ const PROJECT_PAGE_SIZE = 20;
 const PROJECT_PICKER_PREFS_KEY = 'routeMapProjectPicker';
 
 function getProjectTypeMeta(value) {
+    if (value === 'Rede') return { value, label: 'Rede', color: '#15803d', hint: 'Rede construída da cidade' };
     return PROJECT_TYPES.find(t => t.value === value) || { value: value || '', label: value || '—', color: '#64748b' };
 }
 
@@ -143,7 +144,7 @@ function renderProjectTypeChips() {
         .concat(PROJECT_TYPES.map(t => ({ ...t, count: projectPicker.facets ? (counts.get(t.value) || 0) : undefined })));
     //Tipos antigos/personalizados que existam no banco também aparecem
     counts.forEach((count, value) => {
-        if (!PROJECT_TYPES.some(t => t.value === value)) chips.push({ ...getProjectTypeMeta(value), count });
+        if (value !== 'Rede' && !PROJECT_TYPES.some(t => t.value === value)) chips.push({ ...getProjectTypeMeta(value), count });
     });
     wrap.innerHTML = '';
     chips.forEach(chip => {
@@ -246,8 +247,11 @@ async function fetchProjectPickerPage() {
         return;
     }
     projectPicker.total = total;
+    //A rede de cada cidade abre pelo modo Rede, não pela lista de projetos
+    const pageRows = rows.length;
+    rows = rows.filter(project => project.project_type !== 'Rede');
     projectPicker.items.push(...rows);
-    projectPicker.done = projectPicker.items.length >= total || rows.length < PROJECT_PAGE_SIZE;
+    projectPicker.done = projectPicker.items.length >= total || pageRows < PROJECT_PAGE_SIZE;
     rows.forEach(project => list.appendChild(buildProjectPickerItem(project)));
     updateProjectPickerCount(total);
     if (!projectPicker.items.length) {

@@ -40,7 +40,9 @@ function buildProjectRecord(projectRootElement) {
             polygons: savedPolygons.filter(p => allFolderIds.includes(p.folderId)).map(serializePolygon),
             bom: projectBoms[projectId] || null,
             observations: projectObservations[projectId] || null,
-            objective: projectObjectives[projectId] || null
+            objective: projectObjectives[projectId] || null,
+            //Concluído e enviado para a rede da cidade (js/projects/network-mode.js)
+            ...(typeof projectConclusions !== 'undefined' && projectConclusions[projectId] ? { concluded: projectConclusions[projectId] } : {})
         }
     };
 }
@@ -82,9 +84,13 @@ async function fetchProjectSaveInfo(projectId) {
 
 //Grava (cria ou atualiza) o projeto no banco. Com a revisão conhecida, só grava se ninguém salvou
 //depois que o projeto foi aberto aqui; senão lança ProjectConflictError (force: true grava mesmo assim).
-async function persistProject(projectRootElement, { force = false } = {}) {
+async function persistProject(projectRootElement, { force = false, allowConcluded = false } = {}) {
     await appReady;
     if (!AppSession.canEdit) throw new Error('Seu cargo é somente de visualização.');
+    const rootId = projectRootElement?.querySelector('.folder-title')?.dataset.folderId;
+    if (!allowConcluded && typeof isProjectConcluded === 'function' && isProjectConcluded(rootId)) {
+        throw new Error('Este projeto já foi concluído e enviado para a rede: está só para consulta.');
+    }
     const record = buildProjectRecord(projectRootElement);
     const revision = getProjectRevision(projectRootElement);
     if (projectRevisionsSupported !== false && revision !== null) {
@@ -212,7 +218,7 @@ function formatRelativeDate(isoDate) {
 //A janela "Abrir projeto" (busca, filtros e páginas) fica em js/projects/projects.js
 
 //Busca os dados completos do projeto e monta na sidebar/mapa
-async function openProjectFromDatabase(projectId, button) {
+async function openProjectFromDatabase(projectId, button, { silent = false } = {}) {
     if (document.getElementById(projectId)) {
         document.getElementById('loadProjectModal').style.display = 'none';
         return;
@@ -236,7 +242,7 @@ async function openProjectFromDatabase(projectId, button) {
         return;
     }
     document.getElementById('loadProjectModal').style.display = 'none';
-    loadAndDisplayProject(data.id, { ...(data.data || {}), projectName: data.name });
+    loadAndDisplayProject(data.id, { ...(data.data || {}), projectName: data.name }, { silent });
     if (data.revision != null) {
         projectRevisionsSupported = true;
         setProjectRevision(document.getElementById(data.id)?.closest('.folder'), data.revision);
@@ -313,6 +319,11 @@ function loadAndDisplayProject(projectId, projectData, { silent = false } = {}) 
     if (projectData.objective) {
         projectObjectives[projectId] = projectData.objective;
     }
+    if (typeof projectConclusions !== 'undefined') {
+        if (projectData.concluded) projectConclusions[projectId] = projectData.concluded;
+        else delete projectConclusions[projectId];
+        applyProjectConclusionUi(projectId);
+    }
     if (!silent) showAlert("Sucesso", `Projeto "${projectData.projectName}" carregado!`);
     if (typeof resetProjectUndo === 'function') resetProjectUndo(projectId);
 }
@@ -348,6 +359,7 @@ function serializeMarker(markerInfo) {
         client: markerInfo.type === 'CLIENTE' ? (markerInfo.client || {}) : undefined,
         popEquipment: markerInfo.type === 'POP' && markerInfo.popEquipment ? markerInfo.popEquipment : undefined,
         pole: markerInfo.type === 'POSTE' && markerInfo.pole ? markerInfo.pole : undefined,
+        asBuilt: markerInfo.asBuilt || undefined, //Na rede: de qual projeto veio e quando (js/projects/network-mode.js)
         position: { lat: position.lat(), lng: position.lng() }
     };
 }
@@ -394,7 +406,8 @@ function serializeCable(cableInfo) {
         startAnchorMarkerName: cableInfo.startAnchorMarkerName || null,
         endAnchorMarkerName: cableInfo.endAnchorMarkerName || null,
         startAnchorMarkerFolderId: cableInfo.startAnchorMarkerFolderId || null,
-        endAnchorMarkerFolderId: cableInfo.endAnchorMarkerFolderId || null
+        endAnchorMarkerFolderId: cableInfo.endAnchorMarkerFolderId || null,
+        asBuilt: cableInfo.asBuilt || undefined
     };
 }
 
@@ -411,6 +424,7 @@ function serializePolygon(polygonInfo) {
         color: polygonInfo.color,
         opacity: polygonInfo.opacity ?? 0.5,
         ...(polygonInfo.preProjeto ? { preProjeto: polygonInfo.preProjeto } : {}),
+        ...(polygonInfo.asBuilt ? { asBuilt: polygonInfo.asBuilt } : {}),
         path: currentPath.map(p => ({ lat: p.lat(), lng: p.lng() }))
     };
 }

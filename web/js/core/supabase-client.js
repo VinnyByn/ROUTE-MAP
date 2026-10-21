@@ -36,6 +36,12 @@ supabaseClient.auth.onAuthStateChange((_event, session) => { AppSession.accessTo
 
 //Barreira de segurança no navegador (o banco também bloqueia por RLS). Retorna false e avisa se o cargo não permite.
 function requireEdit(actionLabel = 'fazer alterações') {
+    //Projeto concluído e enviado para a rede: só consulta (js/projects/network-mode.js)
+    const blocked = AppSession.canEdit && typeof getEditBlockReason === 'function' ? getEditBlockReason() : '';
+    if (blocked) {
+        if (typeof showToast === 'function') showToast('Projeto concluído', blocked, 'progress');
+        return false;
+    }
     if (AppSession.canEdit) return true;
     const message = `Seu cargo (${AppSession.roleLabel || 'Membro'}) é somente de visualização. Peça a um administrador para ${actionLabel}.`;
     if (typeof showToast === 'function') showToast('Somente visualização', message, 'progress');

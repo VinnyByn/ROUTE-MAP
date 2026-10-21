@@ -3057,3 +3057,33 @@ html[data-theme="dark"] #autoDesignBox p.auto-design__ok { color: #4ade80; }
 #autoDesignBox[data-phase="preview"] .map-tool-box__actions { flex-wrap: nowrap; }
 #autoDesignBox[data-phase="preview"] .map-tool-box__actions .map-tool-btn { flex: 1 1 0; }
 #autoDesignBox[data-phase="preview"] .map-tool-box__actions .map-tool-btn--primary { flex: 1.5 1 0; margin-left: 0; }
+
+/* Modo Projeto × Modo Rede (js/projects/network-mode.js) */
+.mode-switch { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: 0 6px 0 10px; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .14); }
+.top-bar .mode-switch .mode-switch__btn { min-height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: inherit; font-size: 13px; font-weight: 700; opacity: .75; }
+.top-bar .mode-switch .mode-switch__btn:hover { opacity: 1; background: rgba(255, 255, 255, .12); }
+.top-bar .mode-switch .mode-switch__btn.is-active { opacity: 1; color: #fff; background: var(--brand-600, #1d7290); }
+.top-bar .mode-switch .mode-switch__btn[data-app-mode="rede"].is-active { background: #15803d; }
+html:not([data-theme="dark"]) .mode-switch { background: var(--color-surface-muted); border-color: var(--color-border); }
+html:not([data-theme="dark"]) .top-bar .mode-switch .mode-switch__btn { color: var(--color-text); }
+html:not([data-theme="dark"]) .top-bar .mode-switch .mode-switch__btn.is-active { color: #fff; }
+.top-bar .network-city-chip { margin-right: 4px; border-color: rgba(21, 128, 61, .5) !important; }
+.top-bar .network-city-chip[hidden] { display: none; }
+body.mode-rede .top-bar { box-shadow: inset 0 -3px 0 #15803d, 0 6px 18px rgba(10, 30, 40, 0.18); }
+@media (max-width: 860px) { .mode-switch { margin: 0 4px; } .top-bar .mode-switch .mode-switch__btn { padding: 0 8px; } }
+
+.net-city-modal { max-width: 460px; }
+.net-city-modal__hint { margin: 0 0 10px; font-size: 13px; font-weight: 400; color: var(--color-text-muted); }
+.net-city-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; max-height: 240px; overflow-y: auto; }
+.net-city-list .net-city { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.net-city-list .net-city:hover, .net-city-list .net-city[aria-current="true"] { border-color: #15803d; background: color-mix(in srgb, #15803d 10%, var(--color-surface)); }
+.net-city-modal__other { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
+.net-city-modal input { width: 100%; }
+
+/* Projeto concluído (só consulta) e rede na barra lateral */
+#sidebar .folder-title[data-concluded="true"] .folder-name-text { opacity: .75; }
+#sidebar .folder-title[data-concluded="true"] .project-type-tag { background: color-mix(in srgb, #15803d 16%, transparent); color: #15803d; }
+html[data-theme="dark"] #sidebar .folder-title[data-concluded="true"] .project-type-tag { color: #4ade80; }
+/* A chave de modo ocupa espaço na barra: o nome ao lado do logo sai antes, e no modo Rede (com a cidade) também os textos de Relatório e Localizar */
+@media (max-width: 1440px) { .top-bar-brand-text { display: none; } .top-bar-brand { padding: 0 12px; } }
+@media (max-width: 1366px) { body.mode-rede #projectReportButton .top-bar-button__label, body.mode-rede #openSearchModalButton .top-bar-button__label { display: none; } }
