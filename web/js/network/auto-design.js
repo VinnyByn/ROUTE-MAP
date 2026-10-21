@@ -585,28 +585,37 @@ function buildAutoDesignStreetIndex(lines, proj) {
     //Pontas de um trecho de rua (seg de snapPoint): [[x, y], [x, y]]
     const segmentEnds = (seg) => [nodeXY[segs[seg][0]], nodeXY[segs[seg][1]]];
     //Trechos de rua a até limit metros (pela rua) de um ponto encostado: [[[x, y], [x, y]], ...] ("cabos saindo da
-    //caixa em todas as direções")
-    const reachPaths = (from, limit) => {
+    //caixa em todas as direções"). rivals: pontos encostados das caixas vizinhas; a rua é dividida entre elas e cada
+    //caixa fica só com o pedaço em que ela é a mais perto pela rua (na divisa, a rua para no meio do caminho)
+    const reachPaths = (from, limit, rivals = []) => {
         const dist = fieldFrom(from, limit);
+        const others = rivals.map(r => ({ snap: r, dist: fieldFrom(r, limit) }));
+        //Distância pela rua do ponto encostado até o ponto a m metros de a no trecho seg (a → b, len)
+        const along = (snap, field, seg, a, b, len, m) => {
+            let d = Math.min((field.get(a) ?? Infinity) + m, (field.get(b) ?? Infinity) + len - m);
+            if (snap.seg === seg) d = Math.min(d, Math.abs((snap.u === a ? snap.du : len - snap.du) - m));
+            return d;
+        };
         const out = [];
         segs.forEach(([a, b], seg) => {
+            if (seg !== from.seg && !dist.has(a) && !dist.has(b)) return;
             const A = nodeXY[a], B = nodeXY[b];
             const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
             if (!(len > 0)) return;
             const at = (m) => [A[0] + (B[0] - A[0]) * m / len, A[1] + (B[1] - A[1]) * m / len];
-            if (seg === from.seg) {
-                const t = from.u === a ? from.du : len - from.du;
-                out.push([at(Math.max(0, t - limit)), at(Math.min(len, t + limit))]);
-                return;
+            const mine = (m) => {
+                const d = along(from, dist, seg, a, b, len, m);
+                return d <= limit && others.every(o => d <= along(o.snap, o.dist, seg, a, b, len, m));
+            };
+            //Amostra o trecho a cada ~1 m e junta os pedaços seguidos que são desta caixa
+            const steps = Math.max(1, Math.ceil(len));
+            let run = null;
+            for (let k = 0; k <= steps; k++) {
+                const m = len * k / steps;
+                if (mine(m)) run = run ? [run[0], m] : [m, m];
+                else if (run) { if (run[1] > run[0]) out.push([at(run[0]), at(run[1])]); run = null; }
             }
-            const da = dist.get(a), db = dist.get(b);
-            const fromA = da !== undefined ? Math.min(len, limit - da) : 0;
-            const fromB = db !== undefined ? Math.min(len, limit - db) : 0;
-            if (fromA + fromB >= len) out.push([A, B]);
-            else {
-                if (fromA > 0) out.push([A, at(fromA)]);
-                if (fromB > 0) out.push([at(len - fromB), B]);
-            }
+            if (run && run[1] > run[0]) out.push([at(run[0]), at(run[1])]);
         });
         return out;
     };
@@ -3715,10 +3724,15 @@ function getAutoDesignDeltaBadgeIcon(delta) {
 }
 
 //Ruas que o drop alcança a partir de xy (até o alcance pela rua, dentro do raio): [[xy, xy], ...]; sem ruas, []
-function getAutoDesignReachPaths(plan, xy) {
+//others: as outras CTOs; a rua entre duas caixas é dividida (cada uma pinta só o lado mais perto dela)
+function getAutoDesignReachPaths(plan, xy, others = []) {
     const { streetIndex, drop } = plan.model;
     const from = streetIndex?.reachPaths && streetIndex.snapPoint(xy.x, xy.y, AUTO_DESIGN_DROP_BOX_SNAP_M);
-    return from ? streetIndex.reachPaths(from, Math.max(0, drop.reach - AUTO_DESIGN_DROP_LEGS_M)) : [];
+    if (!from) return [];
+    const limit = Math.max(0, drop.reach - AUTO_DESIGN_DROP_LEGS_M);
+    const rivals = others.filter(c => c !== xy && Math.abs(c.x - xy.x) <= limit * 2 && Math.abs(c.y - xy.y) <= limit * 2)
+        .map(c => streetIndex.snapPoint(c.x, c.y, AUTO_DESIGN_DROP_BOX_SNAP_M)).filter(Boolean);
+    return streetIndex.reachPaths(from, limit, rivals);
 }
 
 function startAutoDesignDrag(box) {
@@ -3765,7 +3779,7 @@ function drawAutoDesignDragPreview() {
     //Rua pintada na cor da CTO; o selo (verde: cabe, vermelho: passou das portas) diz se as casas dali cabem nela
     const color = AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(view.sum)];
     const own = s.ctoColors?.get(drag.box) || AUTO_DESIGN_CTO_PALETTE[0];
-    const paint = getAutoDesignReachPaths(plan, view.xy);
+    const paint = getAutoDesignReachPaths(plan, view.xy, plan.ctos.filter(c => c !== drag.box));
     paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.85, strokeWeight: 6 })));
     view.changes.forEach(({ cto, delta }) => add(new google.maps.Marker({ map, position: cto.position, clickable: false, zIndex: 76, icon: getAutoDesignDeltaBadgeIcon(delta) })));
     if (!paint.length) {
@@ -4156,7 +4170,7 @@ function drawAutoDesignPreview() {
         const toLL = (q) => { const ll = plan.model.proj.toLatLng(Array.isArray(q) ? q : [q.x, q.y]); return new google.maps.LatLng(ll.lat, ll.lng); };
         const lists = getAutoDesignCtoHousePoints(plan);
         //Trajeto do drop de cada CTO: pelas ruas, saindo da caixa em todas as direções, até a metragem do cabo
-        const paint = plan.ctos.map(cto => (stage === 'ctos' ? getAutoDesignReachPaths(plan, cto) : []));
+        const paint = plan.ctos.map(cto => (stage === 'ctos' ? getAutoDesignReachPaths(plan, cto, plan.ctos) : []));
         const colors = getAutoDesignCtoColors(plan.ctos);
         s.ctoColors = new Map(plan.ctos.map((cto, i) => [cto, colors[i]]));
         const picked = plan.ctos.indexOf(s.selectedCto);
