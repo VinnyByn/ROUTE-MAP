@@ -944,8 +944,8 @@ function renderTeamHero(members) {
         details.textContent = `${members.length} ${members.length === 1 ? 'pessoa' : 'pessoas'} com acesso`
             + (AppSession.isAdmin ? ` · ${online} online agora` : '');
     }
-    const counts = Object.fromEntries(['admin', 'projetista', 'member'].map(role => [role, members.filter(m => m.role === role).length]));
-    const plural = { admin: ['administrador', 'administradores'], projetista: ['projetista', 'projetistas'], member: ['membro', 'membros'] };
+    const counts = Object.fromEntries(['admin', 'projetista', 'tecnico', 'member'].map(role => [role, members.filter(m => m.role === role).length]));
+    const plural = { admin: ['administrador', 'administradores'], projetista: ['projetista', 'projetistas'], tecnico: ['técnico de campo', 'técnicos de campo'], member: ['membro', 'membros'] };
     const chips = document.getElementById('teamHeroChips');
     if (chips) {
         chips.innerHTML = Object.entries(counts).filter(([, n]) => n > 0)
@@ -954,7 +954,7 @@ function renderTeamHero(members) {
     const filter = document.getElementById('teamRoleFilter');
     if (filter) {
         if (teamRoleFilter && !counts[teamRoleFilter]) teamRoleFilter = '';
-        const options = [['', 'Todos', members.length], ...['admin', 'projetista', 'member'].map(role => [role, ROLE_LABELS[role], counts[role]])];
+        const options = [['', 'Todos', members.length], ...['admin', 'projetista', 'tecnico', 'member'].map(role => [role, ROLE_LABELS[role], counts[role]])];
         filter.innerHTML = options.filter(([role, , n]) => !role || n > 0)
             .map(([role, label, n]) => `<button type="button" class="team-filter__chip${role === teamRoleFilter ? ' is-active' : ''}" data-role="${role}" aria-pressed="${role === teamRoleFilter}">${escapeHtml(label)} <b>${n}</b></button>`).join('');
     }
@@ -992,7 +992,7 @@ function renderMembers(members) {
         li.dataset.search = foldText([member.full_name, member.email, member.job_title].filter(Boolean).join(' '));
         const canManage = AppSession.isAdmin && !isSelf;
         const presence = AppSession.isAdmin ? describePresence(member, isSelf) : null;
-        const roleOptions = ['admin', 'projetista', 'member']
+        const roleOptions = ['admin', 'projetista', 'tecnico', 'member']
             .map(role => `<option value="${role}" ${member.role === role ? 'selected' : ''}>${ROLE_LABELS[role]}</option>`).join('');
         li.innerHTML = `
             <span class="user-avatar${presence ? ' user-avatar--presence' : ''}${presence?.online ? ' is-online' : ''}">${escapeHtml(getInitials(member.full_name || member.email))}</span>

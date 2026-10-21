@@ -1169,6 +1169,7 @@ function collectClientEquipments() {
 
 function openClientModal(clientInfo, presetKind) {
     editingClient = clientInfo || null;
+    if (AppSession.canDocument) unlockFormsForViewer('clientModal');
     closeClientDcPicker();
     const data = normalizeClientData(clientInfo?.client || (presetKind ? { kind: presetKind } : {}));
     const b2b = data.b2b || {};
@@ -1220,13 +1221,17 @@ function openClientModal(clientInfo, presetKind) {
     updateClientDropSummary();
     document.getElementById('deleteClientButton').hidden = !clientInfo;
     document.getElementById('moveClientButton').hidden = !clientInfo;
+    const traceButton = document.getElementById('traceClientButton');
+    if (traceButton) traceButton.hidden = !clientInfo || !clientInfo.client?.ctoUid;
     document.getElementById('clientContinuousGroup').classList.toggle('hidden', !!clientInfo);
     document.getElementById('clientContinuousCheckbox').checked = !clientInfo && readContinuousMarkerPreference('CLIENTE');
     document.getElementById('saveClientButton').textContent = clientInfo ? 'Salvar' : 'Posicionar no mapa';
-    if (AppSession.isViewer) document.getElementById('clientModalTitle').textContent = 'Cliente';
-    lockFormsForViewer('clientModal');
+    if (!AppSession.canDocument) {
+        document.getElementById('clientModalTitle').textContent = 'Cliente';
+        lockFormsForViewer('clientModal');
+    }
     document.getElementById('clientModal').style.display = 'flex';
-    if (!AppSession.isViewer) setTimeout(() => document.getElementById('clientName').focus(), 40);
+    if (AppSession.canDocument) setTimeout(() => document.getElementById('clientName').focus(), 40);
 }
 
 function closeClientModal() {
@@ -1331,6 +1336,7 @@ function saveClient(event) {
         };
         updateMarkerAppearance(editingClient);
         refreshBomAfterProjectChange();
+        autosaveClientNetwork(editingClient);
         closeClientModal();
         return;
     }
@@ -1361,7 +1367,22 @@ function deleteClient() {
         markers = markers.filter(m => m !== clientInfo);
         closeClientModal();
         refreshBomAfterProjectChange();
+        autosaveClientNetwork(clientInfo);
     });
+}
+
+//Técnico de campo (modo Rede) não tem o botão Salvar: o cliente da rede é gravado logo depois da alteração
+const clientAutosaveTimers = new Map();
+function autosaveClientNetwork(clientInfo) {
+    if (AppSession.canEdit || !AppSession.canDocument || typeof getNetworkRootOf !== 'function') return;
+    const root = getNetworkRootOf(clientInfo);
+    if (!root) return;
+    const id = getRootId(root);
+    clearTimeout(clientAutosaveTimers.get(id));
+    clientAutosaveTimers.set(id, setTimeout(async () => {
+        clientAutosaveTimers.delete(id);
+        if (await saveNetworkRoot(root)) showToast('Rede salva', `${clientInfo.name}: alteração gravada.`);
+    }, 1500));
 }
 
 //Arrasta o cliente no mapa; ao soltar, o drop é refeito e a janela reabre
@@ -1381,6 +1402,7 @@ function moveClient() {
         fillClientAddressFromMap(clientInfo); //Atualiza só se o endereço foi preenchido automaticamente
         refreshClientDrops();
         refreshBomAfterProjectChange();
+        autosaveClientNetwork(clientInfo);
         openClientModal(clientInfo);
     });
     showToast('Mover cliente', 'Arraste o marcador do cliente até a nova posição.', 'progress');

@@ -20,12 +20,16 @@ window.supabase = { createClient() {
         if (st.op === 'upsert') { db.settings = { ...(db.settings || {}), ...st.payload }; return { data: null, error: null }; }
         return { data: st.single ? db.settings : [db.settings].filter(Boolean), error: null };
       }
+      if (table === 'project_versions') {
+        const found = db.versions.filter(v => st.filters.every(([col, val]) => v[col] === val));
+        return { data: st.single ? (found[0] || null) : found, error: null };
+      }
       if (table !== 'projects') return { data: st.single ? null : [], error: null };
       const rows = Object.values(db.projects).filter(r => st.filters.every(([col, val]) => r[col] === val));
       if (st.op === 'update') {
         rows.forEach(r => {
           const contentChanged = 'data' in st.payload || 'name' in st.payload;
-          if (contentChanged) db.versions.push({ project_id: r.id, revision: r.revision, data: r.data });
+          if (contentChanged) db.versions.push({ id: db.versions.length + 1, project_id: r.id, revision: r.revision, data: r.data, name: r.name, saved_at: r.updated_at || '2026-10-05T10:00:00Z' });
           Object.assign(r, st.payload, { revision: r.revision + (contentChanged ? 1 : 0), updated_by: 'u1', updated_at: new Date().toISOString() });
         });
         return { data: rows.map(r => ({ ...r })), error: null };
@@ -76,7 +80,7 @@ window.supabase = { createClient() {
              company: { id: 'c1', name: 'Empresa Teste', role: 'admin', blocked: !!window.__fakeBlocked, blocked_reason: window.__fakeBlocked || null } })
       : name === 'list_company_members' ? ok(window.__fakeMembers || [])
       : name === 'list_project_versions' ? ok(db.versions.filter(v => v.project_id === args.p_project).reverse()
-          .map((v, i) => ({ id: i + 1, revision: v.revision, name: 'v', saved_at: '2026-10-05T10:00:00Z', saved_by_name: 'Bia', markers: 0, cables: 0 })))
+          .map(v => ({ id: v.id, revision: v.revision, name: 'v', saved_at: v.saved_at || '2026-10-05T10:00:00Z', saved_by_name: 'Bia', markers: (v.data?.markers || []).length, cables: (v.data?.cables || []).length })))
       : name === 'list_trash' ? ok(Object.values(db.projects).filter(p => p.deleted_at)
           .map(p => ({ id: p.id, name: p.name, city: null, project_type: null, deleted_at: p.deleted_at, deleted_by_name: 'Teste', can_manage: true })))
       : name === 'project_facets' ? ok({ total: 0, trash: Object.values(db.projects).filter(p => p.deleted_at).length, types: [], cities: [] })
@@ -128,5 +132,40 @@ window.supabase = { createClient() {
       return ch;
     },
     removeChannel(ch) { ch?._close?.(); },
+    //Storage em memória (window.__fakeStorage: caminho → { blob, contentType, at })
+    storage: {
+      from(bucket) {
+        const files = (window.__fakeStorage ||= new Map());
+        const key = (p) => `${bucket}/${p}`;
+        return {
+          upload(path, blob, opts = {}) {
+            if (files.has(key(path)) && !opts.upsert) return Promise.resolve({ data: null, error: { message: 'The resource already exists' } });
+            files.set(key(path), { blob, contentType: opts.contentType || blob?.type || '', at: new Date().toISOString() });
+            return Promise.resolve({ data: { path }, error: null });
+          },
+          list(prefix = '', opts = {}) {
+            const base = `${bucket}/${prefix ? prefix.replace(/\/$/, '') + '/' : ''}`;
+            const names = new Map();
+            files.forEach((f, k) => {
+              if (!k.startsWith(base)) return;
+              const rest = k.slice(base.length);
+              const [first, ...more] = rest.split('/');
+              if (more.length) names.set(first, { name: first, id: null, metadata: null });
+              else names.set(first, { name: first, id: k, created_at: f.at, metadata: { size: f.blob?.size || 0, mimetype: f.contentType } });
+            });
+            const data = [...names.values()].sort((x, y) => x.name.localeCompare(y.name)).slice(0, opts.limit || 100);
+            return Promise.resolve({ data, error: null });
+          },
+          download(path) {
+            const f = files.get(key(path));
+            return Promise.resolve(f ? { data: f.blob, error: null } : { data: null, error: { message: 'Object not found' } });
+          },
+          remove(paths) {
+            paths.forEach(p => files.delete(key(p)));
+            return Promise.resolve({ data: paths.map(name => ({ name })), error: null });
+          },
+        };
+      },
+    },
   };
 } };

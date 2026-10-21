@@ -21,3 +21,15 @@ grant usage on schema realtime to authenticated;
 grant select, insert on realtime.messages to authenticated;
 grant usage on sequence realtime.messages_id_seq to authenticated;
 grant execute on function realtime.topic() to authenticated;
+-- Storage: buckets, arquivos e a pasta de cada arquivo (como storage.foldername do Supabase)
+create schema if not exists storage;
+create table storage.buckets (id text primary key, name text not null, public boolean default false, file_size_limit bigint, allowed_mime_types text[]);
+create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets (id), name text not null, owner uuid default auth.uid(), created_at timestamptz default now());
+alter table storage.objects enable row level security;
+create function storage.foldername(name text) returns text[] language sql immutable as $$
+  select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1]
+$$;
+grant usage on schema storage to authenticated;
+grant select, insert, delete on storage.objects to authenticated;
+grant select on storage.buckets to authenticated;
+grant execute on function storage.foldername(text) to authenticated;

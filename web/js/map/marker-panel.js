@@ -15,6 +15,7 @@ const MARKER_TYPE_META = {
 const MARKER_STYLE_STORAGE_PREFIX = 'routeMapMarkerStyle_';
 
 let markerPanelMode = 'create'; //'create' | 'edit'
+let pendingMarkerPosition = null; //Ponto já escolhido (viabilidade, js/network/network-docs.js): o próximo marcador vai direto para ele
 
 function getMarkerTypeMeta(type) {
     return MARKER_TYPE_META[type] || { name: 'Marcador', article: 'Novo', noun: 'marcador', prefix: 'MK', statuses: null, color: '#f59e0b' };
@@ -110,6 +111,7 @@ function toggleMarkerPanelGroup(id, visible) {
 
 function configureMarkerPanel(type, mode) {
     markerPanelMode = mode;
+    if (mode !== 'edit') document.getElementById('markerDocPanel')?.classList.add('hidden');
     const meta = getMarkerTypeMeta(type);
     const isCasa = type === 'CASA';
     const isEdit = mode === 'edit';
@@ -441,6 +443,7 @@ function openMarkerEditor(markerInfo) {
     setMarkerEditorCoordinatesText(markerInfo.type, position.lat().toFixed(6), position.lng().toFixed(6));
     configureMarkerPanel(markerInfo.type, 'edit');
     if (markerInfo.type === 'CTO') renderCtoClientsPanel(markerInfo);
+    if (typeof renderMarkerDocPanel === 'function') renderMarkerDocPanel(markerInfo);
     if (typeof updatePopEquipmentPanelSummary === 'function') updatePopEquipmentPanelSummary(markerInfo);
     highlightMapMarker(markerInfo, { persistent: true });
     if (AppSession.isViewer) {
@@ -580,6 +583,13 @@ function startPlacingMarker({ continuous = false } = {}) {
         adjustingKmlMarkerInfo = null;
         resetMarkerModal();
         showToast('Marcador convertido', `"${original.name}" agora é ${getMarkerTypeMeta(markers[markers.length - 1]?.type).noun}.`);
+        return;
+    }
+    if (pendingMarkerPosition) {
+        const at = pendingMarkerPosition;
+        pendingMarkerPosition = null;
+        addCustomMarker(at);
+        resetMarkerModal();
         return;
     }
     setMapCursor('crosshair');

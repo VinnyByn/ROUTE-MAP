@@ -128,6 +128,7 @@ if (process.env.CI) {
     jspdf: typeof window.jspdf?.jsPDF === 'function',
     autotable: typeof window.jspdf?.jsPDF?.API?.autoTable === 'function',
     docx: typeof htmlDocx === 'object',
+    qrcode: typeof qrcode === 'function',
   }));
   const missing = Object.entries(libs).filter(([, ok]) => !ok).map(([name]) => name);
   check(!missing.length, `bibliotecas externas carregadas com verificação de integridade${missing.length ? ' (falharam: ' + missing.join(', ') + ')' : ''}`);
@@ -880,6 +881,53 @@ const optical = await page.evaluate(() => {
 check(Math.abs(optical.port + 17.55) < 0.001 && optical.status === 'ok' && !optical.noSource,
   `orçamento óptico soma as perdas do caminho (porta da CTO: ${optical.port?.toFixed(2)} dBm)`);
 check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows === 'O-CTO2:sem,O-CTO:-17.55', `orçamento óptico classifica erro/margem e aponta CTO sem OLT (${optical.rows})`);
+
+//Rastreio do sinal: cliente na porta 3 da CTO → splitter → fibra 1 do cabo → CEO com o splitter ligado na OLT-1/placa 1/PON 1;
+//porta inexistente e CTO sem sinal explicam o motivo; clientes por PON
+const trace = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projTR" data-folder-name="Projeto TR"></div><ul id="projTR" class="subfolders"></ul></li>');
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const mk = (cards, links) => { const b = document.createElement('div'); b.append(...cards); return JSON.stringify({ version: 2, elements: b.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }); };
+  const s8 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Fusão', olt: { olt: 'OLT-1', placa: '1', pon: '1' } });
+  const bOut = buildFusionCableCard({ name: 'TR-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const ceo = { folderId: 'projTR', type: 'CEO', name: 'TR-CEO', uid: 'tr-ceo', fusionPlan: mk([s8, bOut], [['splitter-1-output-1', fiber(bOut, 1)]]) };
+  const bIn = buildFusionCableCard({ name: 'TR-B', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const cto = { folderId: 'projTR', type: 'CTO', name: 'TR-CTO', uid: 'tr-cto', fusionPlan: mk([bIn, at], [[fiber(bIn, 1), 'splitter-1-input-port']]) };
+  const orphan = buildFusionCableCard({ name: 'TR-SOLTO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at2 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:16', outputs: 16, type: 'Atendimento' });
+  const cto2 = { folderId: 'projTR', type: 'CTO', name: 'TR-CTO2', uid: 'tr-cto2', fusionPlan: mk([orphan, at2], [[fiber(orphan, 1), 'splitter-1-input-port']]) };
+  const client = { folderId: 'projTR', type: 'CLIENTE', name: 'TR-Cliente', client: { kind: 'residencial', status: 'instalado', ctoUid: 'tr-cto', ctoPort: 3 } };
+  const cable = { folderId: 'projTR', name: 'TR-B', totalLength: 1000 };
+  const realDrop = window.getClientDropInfo;
+  window.getClientDropInfo = () => ({ length: 100 });
+  markers.push(ceo, cto, cto2, client); savedCables.push(cable);
+  try {
+    const r = traceClientSignal(client);
+    const bad = traceCtoPort(cto, 9);
+    const none = traceCtoPort(cto2, 1);
+    const { pons, noSignal } = getPonSummary(document.getElementById('projTR').closest('.folder'));
+    openSignalTrace(client);
+    const text = document.getElementById('signalTraceBody').textContent;
+    const open = !document.getElementById('signalTraceBox').classList.contains('hidden');
+    closeSignalTrace();
+    return {
+      path: [getPonLabel(r.source), ...r.steps.map(s => s.kind === 'cable' ? `${s.name}#${s.fiber}:${s.meters}` : `${s.box?.name}[${s.splitters.join('+')}]`)].join(' > '),
+      port: r.portDbm?.toFixed(2), client: r.clientDbm?.toFixed(3), status: r.status,
+      bad: /não tem a porta 9/.test(bad.error || ''), none: /Sem sinal/.test(none.error || ''),
+      pons: pons.map(p => `${p.label}:${p.ctos.map(c => c.cto.name).join('+')}:${p.clients}/${p.ports}`).join(), noSignal: noSignal.map(c => c.name).join(),
+      ui: open && /OLT-1 · placa 1 · PON 1/.test(text) && /TR-B · fibra 1/.test(text) && /TR-CTO · porta 3/.test(text) && /-18,1 dBm no cliente/.test(text),
+      closed: document.getElementById('signalTraceBox').classList.contains('hidden'),
+    };
+  } finally {
+    markers.splice(markers.indexOf(ceo), 4); savedCables.splice(savedCables.indexOf(cable), 1);
+    window.getClientDropInfo = realDrop;
+    document.querySelector('[data-folder-id="projTR"]').closest('.folder').remove();
+  }
+});
+check(trace.path === 'OLT-1 · placa 1 · PON 1 > TR-CEO[1:8] > TR-B#1:1000 > TR-CTO[1:8 APC]' && trace.port === '-17.55' && trace.client === '-18.085' && trace.status === 'ok'
+  && trace.bad && trace.none && trace.pons === 'OLT-1 · placa 1 · PON 1:TR-CTO:1/8' && trace.noSignal === 'TR-CTO2' && trace.ui && trace.closed,
+  `rastreio do sinal: cliente → CTO → cabo/fibra → CEO → OLT/placa/PON, com a potência, e clientes por PON (${JSON.stringify(trace)})`);
 
 //Sinal na caixa: cartão do mapa mostra a pior porta e a entrada do splitter (−17,05 antes do conector da porta)
 check(Math.abs(optical.sigPort + 17.55) < 0.001 && Math.abs(optical.sigIn + 6.55) < 0.001 && optical.sigNone === false && optical.hoverSig,
@@ -3635,6 +3683,12 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   await np.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
   await np.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
   await np.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
+  if (process.env.SMOKE_LIBS) {
+    const lib = (url, file) => np.route(url, r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, file), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+    await lib('**/qrcode-generator@1.4.4/qrcode.js', 'qrcode-generator-1.4.4/qrcode.js');
+    await lib('**/jspdf@2.5.1/dist/jspdf.umd.min.js', 'jspdf-2.5.1/dist/jspdf.umd.min.js');
+    await np.route('**/xlsx@0.18.5/dist/xlsx.full.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'xlsx-0.18.5/dist/xlsx.full.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+  }
   await np.goto(baseUrl + '/index.html');
   await np.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
   await np.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
@@ -3716,7 +3770,232 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.lazy = pending === 'Rede · Lavras|Rede · Perdões' && markers.length === 0 + markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length && untouched
         && !loaded.querySelector(':scope > .folder-title').dataset.networkPending && markers.filter(m => m.type === 'CTO').length === 2
         && markers.every(m => m.marker.getVisible() === false) && !document.getElementById(netId).classList.contains('hidden');
+      //Painel da rede: números da cidade e o que precisa de atenção
+      setActiveFolder(netId);
+      await openNetworkPanel();
+      const panelText = document.getElementById('networkPanelBody').textContent;
+      out.panel = !document.getElementById('networkPanelBox').classList.contains('hidden') && /2\s*CTOs/.test(panelText) && /Clientes/.test(panelText)
+        && /CTOs sem splitter/.test(panelText);
+      //Histórico: a conclusão dos projetos e a alteração salva na rede (quem, o quê)
+      const cto = markers.find(m => m.type === 'CTO');
+      const oldName = cto.name;
+      cto.name = 'CTO-RENOMEADA';
+      await persistProject(document.getElementById(netId).closest('.folder'));
+      const log = window.__fakeDb.projects[netId].data.changeLog || [];
+      out.history = log.some(e => e.action === 'projeto' && e.name === 'Bairro A') && log.some(e => e.action === 'alterou' && e.name === 'CTO-RENOMEADA' && /nome/.test(e.detail) && e.by);
+      await persistProject(document.getElementById(netId).closest('.folder'));
+      out.historyOnce = (window.__fakeDb.projects[netId].data.changeLog || []).filter(e => e.action === 'alterou').length === 1;
+      openNetworkPanel('historico');
+      await new Promise(r => setTimeout(r, 20));
+      out.historyTab = /alterou a CTO CTO-RENOMEADA/.test(document.getElementById('networkPanelBody').textContent);
+      openNetworkPanel('pons');
+      await new Promise(r => setTimeout(r, 20));
+      out.ponTab = /Nenhuma CTO desta cidade recebe sinal/.test(document.getElementById('networkPanelBody').textContent)
+        && !!document.querySelector('#networkPanelBody [data-tab="pons"].is-active');
+      networkDocs.panelTab = 'resumo';
+      //Caixa da rede: de qual projeto veio e as últimas mudanças
+      renderMarkerDocPanel(cto);
+      const doc = document.getElementById('markerDocPanel');
+      out.doc = !doc.classList.contains('hidden') && /Construído pelo projeto/.test(doc.textContent) && /alterou/.test(doc.textContent);
+      cto.name = oldName;
+      //Viabilidade: ponto perto da CTO → viável; "+ Cliente" cadastra no ponto, ligado nessa CTO
+      await startViability();
+      const here = new google.maps.LatLng(-21.2412, -45.0012);
+      runViability(here);
+      const verdict = document.querySelector('#viabilityBody .viability-verdict')?.textContent || '';
+      const r0 = viability.results[0];
+      out.viability = /Viável/.test(verdict) && r0?.cto.type === 'CTO' && r0.street < 200 && !!document.querySelector('#viabilityBody [data-viab="client"]');
+      const clientsBefore = markers.filter(m => m.type === 'CLIENTE').length;
+      document.querySelector('#viabilityBody [data-viab="client"]').click();
+      document.getElementById('clientName').value = 'Cliente Viável';
+      document.getElementById('saveClientButton').click();
+      const created = markers.filter(m => m.type === 'CLIENTE');
+      const client = created[created.length - 1];
+      out.viabilityClient = created.length === clientsBefore + 1 && client.client.ctoUid === r0.cto.uid && !!client.client.ctoPort
+        && Math.abs(client.marker.getPosition().lat() - here.lat()) < 1e-9 && client.folderId === r0.cto.folderId;
+      document.getElementById('closeViabilityBox').click();
+      await new Promise(r => setTimeout(r, 20));
+      out.viabilityClosed = !viability.active && !viability.overlays.length;
+      //Importar clientes: CTO pelo nome, porta conferida, sem coordenadas fica ao lado da CTO, atualiza pelo código e
+      //entra um registro só no histórico
+      const netRoot = document.getElementById(netId).closest('.folder');
+      const ctoA = markers.find(m => m.type === 'CTO' && getAllDescendantFolderIds(netId).includes(m.folderId));
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+        ['Relatório de clientes'],
+        ['Nome do cliente', 'Código', 'Caixa', 'Porta', 'Status', 'Coordenadas', 'Telefone'],
+        ['Ana', '501', ctoA.name.toLowerCase(), 5, 'Ativo', '-21,2413, -45,0013', '3599'],
+        ['Bruno', '502', ctoA.name, 5, 'Ativo', '', ''],
+        ['Carla', '503', 'CTO-XX', '', '', '', ''],
+        ['Davi', '504', ctoA.name, '', 'a instalar', '', ''],
+      ]), 'Clientes');
+      setActiveFolder(netId);
+      await openClientImport();
+      const parsed = readClientSheetRows(book);
+      clientImport.fileName = 'clientes.xlsx';
+      clientImport.rows = validateClientImport(parsed.rows, netRoot);
+      renderClientImport();
+      const acts = clientImport.rows.map(r => r.action).join();
+      const preview = document.querySelectorAll('#clientImportModal tbody tr').length === 4 && /2\s*novos/.test(document.getElementById('clientImportModal').textContent)
+        && /já é de Ana/.test(document.getElementById('clientImportModal').textContent) && !document.querySelector('[data-import="run"]').disabled;
+      await runClientImport();
+      const doneText = document.getElementById('clientImportBody').textContent;
+      const ana = markers.find(m => m.type === 'CLIENTE' && m.client.code === '501');
+      const davi = markers.find(m => m.type === 'CLIENTE' && m.client.code === '504');
+      const first = [acts, preview, ana?.client.ctoUid === ctoA.uid, ana?.client.ctoPort === 5, Math.abs(ana?.marker.getPosition().lat() + 21.2413) < 1e-9, ana?.client.status === 'instalado',
+        ana?.client.phone === '3599', !!davi?.client.ctoPort && davi.client.ctoPort !== 5, davi?.client.status === 'a_instalar', /2 clientes/.test(doneText)].join();
+      clientImport.rows = validateClientImport([{ line: 2, name: 'Ana Maria', code: '501', cto: ctoA.name, port: 5, status: 'cancelado' }], netRoot);
+      await runClientImport();
+      document.querySelector('#clientImportModal [data-import="close"]').click();
+      const savedNet = window.__fakeDb.projects[netId].data;
+      out.importDetail = [first, markers.filter(m => m.client?.code === '501').length, ana.name, ana.client.status, savedNet.markers.filter(m => m.client?.code === '501').length,
+        savedNet.changeLog.filter(e => e.action === 'importou').length, savedNet.changeLog.some(e => e.type === 'CLIENTE' && e.action !== 'importou' && /Ana|Davi/.test(e.name || '')),
+        document.getElementById('clientImportModal').style.display].join(';');
+      out.importClients = out.importDetail === 'novo,erro,erro,novo,true,true,true,true,true,true,true,true,true;1;Ana Maria;cancelado;1;2;false;none';
+      //Campo: o link do QR da caixa abre a caixa no modo Rede (também guardado no login); etiquetas em PDF; "Perto de mim"
+      const boxA = ctoA;
+      const link = getFieldBoxLink(boxA);
+      const pdf = buildFieldLabelsPdf([boxA, ...markers.filter(m => m.type === 'CEO')]);
+      sessionStorage.setItem('routeMapDeepLink', new URL(link).search);
+      const pendingLink = getPendingFieldLink();
+      sessionStorage.removeItem('routeMapDeepLink');
+      resetMarkerModal();
+      const opened = await openFieldLinkBox(pendingLink);
+      const editorOpen = editingMarkerInfo === boxA;
+      openFieldQr(boxA);
+      const qrModal = document.getElementById('fieldQrModal');
+      const qrShown = qrModal.style.display === 'flex' && !!qrModal.querySelector('svg path') && /CTO/.test(qrModal.textContent);
+      qrModal.querySelector('[data-field-qr="close"]').click();
+      resetMarkerModal();
+      await runFieldNearby({ lat: -21.2411, lng: -45.0011, accuracy: 15 });
+      const nearbyText = document.getElementById('nearbyBody').textContent;
+      out.fieldDetail = [/\?rede=rede_[^&]+&caixa=mk_/.test(link), !!buildQrMatrix(link), pdf?.getNumberOfPages(), pendingLink?.caixa === boxA.uid, opened === boxA, editorOpen, qrShown,
+        field.results[0]?.box.type, field.results[0]?.distance < 60, /Você está aqui/.test(nearbyText), /google\.com\/maps\/dir/.test(document.getElementById('nearbyBody').innerHTML), field.overlays.length].join();
+      stopFieldNearby();
+      out.field = out.fieldDetail === 'true,true,1,true,true,true,true,CTO,true,true,true,2' && document.getElementById('nearbyBox').classList.contains('hidden');
+      //Ocorrências: abre na caixa (anel no mapa, aba no painel), resolver anota no histórico; tudo salvo na rede
+      await openOccurrenceModal({ item: boxA });
+      document.getElementById('occurrenceKind').value = 'rompimento';
+      document.getElementById('occurrenceText').value = 'Cabo rompido no poste';
+      await saveOccurrenceFromModal();
+      const occSaved = window.__fakeDb.projects[netId].data.occurrences || [];
+      refreshOccurrenceOverlays();
+      const rings = occurrences.overlays.length;
+      openNetworkPanel('ocorrencias');
+      await new Promise(r => setTimeout(r, 20));
+      const occTab = document.getElementById('networkPanelBody').textContent;
+      await openOccurrenceModal({ occurrence: getNetworkOccurrences(netId)[0] });
+      setOccurrenceStatusUi('resolvida');
+      document.getElementById('occurrenceText').value = 'Emenda refeita';
+      await saveOccurrenceFromModal();
+      const occFinal = window.__fakeDb.projects[netId].data.occurrences || [];
+      const occLog = (window.__fakeDb.projects[netId].data.changeLog || []).filter(e => e.action === 'ocorrencia').map(e => describeNetworkLogEntry(e)).join('|');
+      networkDocs.panelTab = 'resumo';
+      document.getElementById('networkPanelBox').classList.add('hidden');
+      out.occDetail = [occSaved.length, occSaved[0]?.kind, occSaved[0]?.uid === boxA.uid, rings, /Rompimento de fibra/.test(occTab) && /Cabo rompido/.test(occTab),
+        occFinal[0]?.status, occFinal[0]?.updates.length, !!occFinal[0]?.resolvedBy, /abriu ocorrência "Rompimento de fibra" na CTO/.test(occLog) && /resolveu ocorrência/.test(occLog), occurrences.overlays.length].join();
+      out.occurrences = out.occDetail === '1,rompimento,true,1,true,resolvida,1,true,true,0';
+      //Fotos: reduzidas no navegador, com miniatura, na pasta da empresa; aparecem no painel da caixa e somem ao apagar
+      const canvas = document.createElement('canvas');
+      canvas.width = 2400; canvas.height = 1200;
+      const g = canvas.getContext('2d'); g.fillStyle = '#16a34a'; g.fillRect(0, 0, 2400, 1200);
+      const pngBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const photoFile = new File([pngBlob], 'caixa.png', { type: 'image/png' });
+      const sent = await uploadNetworkPhotos(boxA, [photoFile]);
+      const stored = [...(window.__fakeStorage || new Map()).keys()];
+      const photos = await listNetworkPhotos(boxA);
+      const full = window.__fakeStorage.get(`rede-fotos/${photos[0]?.path}`)?.blob;
+      const bitmap = full ? await createImageBitmap(full) : null;
+      openMarkerEditor(boxA);
+      await new Promise(r => setTimeout(r, 120));
+      const docImg = document.querySelector('#markerDocPanel .net-photo img')?.getAttribute('src') || '';
+      await openNetworkPhoto(boxA, photos[0]);
+      const viewerOk = document.getElementById('networkPhotoModal').style.display === 'flex' && /^blob:/.test(document.getElementById('networkPhotoImg').src);
+      await window.__fakeStorage.delete(`rede-fotos/${photos[0].path}`);
+      window.__fakeStorage.delete(`rede-fotos/${photos[0].thumb}`);
+      document.querySelector('#networkPhotoModal [data-photo="close"]').click();
+      resetMarkerModal();
+      out.photosDetail = [sent, stored.length, stored.every(k => k.startsWith(`rede-fotos/${AppSession.company.id}/${netId}/${boxA.uid}/`)), stored.some(k => /\/thumb\//.test(k)),
+        photos.length, bitmap?.width, /^blob:/.test(docImg), viewerOk, (await listNetworkPhotos(boxA)).length].join();
+      out.photos = out.photosDetail === '1,2,true,true,1,1600,true,true,0';
+      //Filtro do mapa: destaca os clientes "A instalar" e apaga o resto; fechar devolve tudo como estava
+      await openNetworkFilter();
+      setNetworkFilter('cli_a_instalar');
+      const netFolders = new Set(getAllDescendantFolderIds(netId));
+      const expectedMatches = markers.filter(m => m.type === 'CLIENTE' && netFolders.has(m.folderId) && m.client.status === 'a_instalar').length;
+      const filterMatches = networkFilter.matches.length;
+      const ctoDimmed = boxA.marker.getOpacity();
+      const filterText = document.getElementById('networkFilterBody').textContent;
+      nextNetworkFilterMatch();
+      const cursorOk = networkFilter.cursor === 0;
+      closeNetworkFilter();
+      out.filterDetail = [filterMatches > 0 && filterMatches === expectedMatches, ctoDimmed, /Próximo/.test(filterText) && /A instalar/.test(filterText), cursorOk,
+        boxA.marker.getOpacity(), document.getElementById('networkFilterBox').classList.contains('hidden')].join();
+      out.filter = out.filterDetail === 'true,0.15,true,true,1,true';
+      //A rede numa data: lista as versões salvas, mostra a mais antiga no mapa (a de hoje some) e volta sem restaurar
+      openNetworkPanel('historico');
+      await new Promise(r => setTimeout(r, 20));
+      document.querySelector('#networkPanelBody [data-net-panel="tl-load"]').click();
+      await new Promise(r => setTimeout(r, 80));
+      const versionRows = document.querySelectorAll('#networkPanelBody .net-timeline__item').length;
+      const revisionBefore = window.__fakeDb.projects[netId].revision;
+      await viewNetworkVersion(networkTimeline.versions[networkTimeline.versions.length - 1]);
+      const hiddenToday = boxA.marker.getVisible() === false;
+      const bannerText = document.getElementById('networkTimelineBanner')?.textContent || '';
+      const drawn = networkTimeline.overlays.length;
+      document.querySelector('#networkTimelineBanner [data-tl="exit"]').click();
+      out.timelineDetail = [versionRows > 1, hiddenToday, /em \d{2}\/\d{2}\/\d{2}/.test(bannerText) && /De lá para hoje|Igual/.test(bannerText), drawn > 0,
+        boxA.marker.getVisible() !== false, !document.getElementById('networkTimelineBanner'), window.__fakeDb.projects[netId].revision === revisionBefore].join();
+      out.timeline = out.timelineDetail === 'true,true,true,true,true,true,true';
+      networkDocs.panelTab = 'resumo';
+      document.getElementById('networkPanelBox').classList.add('hidden');
+      //Técnico de campo: no modo Rede edita clientes e grava a rede; caixas e cabos não; no modo Projeto só consulta
+      const realRole = AppSession.company.role;
+      AppSession.company.role = 'tecnico';
+      applyRoleToUi();
+      try {
+        const cli = markers.find(m => m.type === 'CLIENTE' && getAllDescendantFolderIds(netId).includes(m.folderId));
+        openClientModal(cli);
+        const clientEditable = !document.getElementById('clientModal').classList.contains('is-readonly') && !document.getElementById('clientName').disabled;
+        closeClientModal();
+        //Mesma conta do banco (network_infrastructure): o técnico salvando não pode mudar caixas e cabos
+        const infra = (d) => JSON.stringify({
+          m: (d.markers || []).filter(x => ['CTO', 'CEO', 'POP', 'RESERVA'].includes(x.type)).map(x => [x.uid, x.type, x.name, x.folderId, x.position, x.fusionPlan, x.ctoStatus, x.ceoStatus, x.reservaStatus, x.popEquipment]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+          c: (d.cables || []).map(x => [x.uid, x.name, x.type, x.folderId, x.path, x.status, x.startAnchorUid, x.endAnchorUid, x.totalLength]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+        });
+        const infraBefore = infra(window.__fakeDb.projects[netId].data);
+        const savedAsTec = await persistProject(netRoot).then(() => true, () => false);
+        out.tecnicoInfra = infra(window.__fakeDb.projects[netId].data) === infraBefore;
+        const vis = (id) => getComputedStyle(document.getElementById(id)).display !== 'none';
+        out.tecnicoDetail = [AppSession.canEdit, AppSession.canDocument, requireEdit('mexer'), requireDocument('cadastrar'), clientEditable, savedAsTec,
+          vis('networkAddClientButton'), vis('networkOccurrenceButton'), vis('networkAddMarkerButton')].join();
+        out.tecnico = out.tecnicoDetail === 'false,true,false,true,true,true,true,true,false';
+      } finally {
+        AppSession.company.role = realRole;
+        applyRoleToUi();
+      }
       await setAppMode('projeto');
+      //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
+      window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',
+        asBuilt: { projectId: 'antigo', projectName: 'Antigo' }, position: { lat: -21.25, lng: -45.01 } });
+      networkLayer.cache.clear();
+      rebuildSidebarFromJSON([{ id: 'projNC', name: 'Bairro C', city: 'Lavras', type: 'TCR', isProject: true, children: [] }], sidebar);
+      setActiveFolder('projNC');
+      await refreshNetworkLayer();
+      const layerTitles = networkLayer.overlays.filter(o => o.getTitle).map(o => o.getTitle());
+      const item = window.__fakeDb.projects[netId].data.markers.find(m => m.uid === 'mk_net_only');
+      const used = useNetworkBoxInProject(item, 'Lavras', { quiet: true });
+      await refreshNetworkLayer();
+      const after = networkLayer.overlays.filter(o => o.getTitle).length;
+      await persistProject(document.getElementById('projNC').closest('.folder'));
+      await concludeProject('projNC');
+      const finalMarkers = window.__fakeDb.projects[netId].data.markers;
+      out.layer = layerTitles.length === 1 && /CTO-REDE · já existe na Rede/.test(layerTitles[0]) && used?.uid === 'mk_net_only' && used.folderId === 'projNC'
+        && used.ctoStatus === 'Existente' && after === 0 && finalMarkers.filter(m => m.uid === 'mk_net_only').length === 1
+        && finalMarkers.find(m => m.uid === 'mk_net_only').asBuilt.projectId === 'antigo' && finalMarkers.find(m => m.uid === 'mk_net_only').folderId === netId;
+      setNetworkLayerEnabled(false);
+      out.layerOff = !networkLayer.overlays.length && document.getElementById('networkLayerToggle').getAttribute('aria-checked') === 'false';
+      setNetworkLayerEnabled(true);
       out.merge = (() => {
         const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
           markers: [{ uid: 'a', folderId: 'f', type: 'CTO', ctoStatus: 'Troca' }], cables: [], polygons: [] }, { projectId: 'p', projectName: 'P', at: 'now', folderName: 'P · ok' });
@@ -3735,7 +4014,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     }
     return out;
   });
-  check(Object.entries(net).every(([k, v]) => (k === 'redeDetail' ? true : v === true)) && !netErrors.length,
+  check(Object.entries(net).every(([k, v]) => (/Detail$/.test(k) ? true : v === true)) && !netErrors.length,
     `modo rede: concluir manda para a rede da cidade como Existente, projeto só consulta, sem duplicar, e a troca de modo guarda os projetos (${JSON.stringify({ ...net, errors: netErrors })})`);
   await ctx.close();
 }
