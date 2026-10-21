@@ -128,5 +128,40 @@ window.supabase = { createClient() {
       return ch;
     },
     removeChannel(ch) { ch?._close?.(); },
+    //Storage em memória (window.__fakeStorage: caminho → { blob, contentType, at })
+    storage: {
+      from(bucket) {
+        const files = (window.__fakeStorage ||= new Map());
+        const key = (p) => `${bucket}/${p}`;
+        return {
+          upload(path, blob, opts = {}) {
+            if (files.has(key(path)) && !opts.upsert) return Promise.resolve({ data: null, error: { message: 'The resource already exists' } });
+            files.set(key(path), { blob, contentType: opts.contentType || blob?.type || '', at: new Date().toISOString() });
+            return Promise.resolve({ data: { path }, error: null });
+          },
+          list(prefix = '', opts = {}) {
+            const base = `${bucket}/${prefix ? prefix.replace(/\/$/, '') + '/' : ''}`;
+            const names = new Map();
+            files.forEach((f, k) => {
+              if (!k.startsWith(base)) return;
+              const rest = k.slice(base.length);
+              const [first, ...more] = rest.split('/');
+              if (more.length) names.set(first, { name: first, id: null, metadata: null });
+              else names.set(first, { name: first, id: k, created_at: f.at, metadata: { size: f.blob?.size || 0, mimetype: f.contentType } });
+            });
+            const data = [...names.values()].sort((x, y) => x.name.localeCompare(y.name)).slice(0, opts.limit || 100);
+            return Promise.resolve({ data, error: null });
+          },
+          download(path) {
+            const f = files.get(key(path));
+            return Promise.resolve(f ? { data: f.blob, error: null } : { data: null, error: { message: 'Object not found' } });
+          },
+          remove(paths) {
+            paths.forEach(p => files.delete(key(p)));
+            return Promise.resolve({ data: paths.map(name => ({ name })), error: null });
+          },
+        };
+      },
+    },
   };
 } };

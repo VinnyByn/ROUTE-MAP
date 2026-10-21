@@ -200,8 +200,10 @@ function renderMarkerDocPanel(markerInfo) {
             <button type="button" class="btn btn-secondary" data-field="link">Copiar link</button>
         </div>` : ''}
         ${typeof renderItemOccurrencesHtml === 'function' && ['CTO', 'CEO', 'POP', 'RESERVA'].includes(markerInfo.type) ? renderItemOccurrencesHtml(markerInfo) : ''}
-        ${log.length ? `<ul class="marker-doc__log">${log.map(e => `<li><small>${esc(formatDocDate(e.at))}</small> ${esc(e.by)} ${esc(e.action)}${e.detail ? ` ${esc(e.detail)}` : ''}</li>`).join('')}</ul>` : ''}`;
+        ${typeof renderDocPhotosHtml === 'function' && ['CTO', 'CEO', 'POP', 'RESERVA'].includes(markerInfo.type) ? renderDocPhotosHtml() : ''}
+        ${log.length ? `<ul class="marker-doc__log">${log.map(e => `<li><small>${esc(formatDocDate(e.at))}</small> ${esc(e.by)} ${esc(e.action === 'ocorrencia' ? e.detail : `${e.action}${e.detail ? ` ${e.detail}` : ''}`)}</li>`).join('')}</ul>` : ''}`;
     panel.classList.remove('hidden');
+    if (typeof fillDocPhotos === 'function') fillDocPhotos(panel, markerInfo);
 }
 
 // ---------------------------------------------------------------

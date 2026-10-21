@@ -3895,6 +3895,29 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.occDetail = [occSaved.length, occSaved[0]?.kind, occSaved[0]?.uid === boxA.uid, rings, /Rompimento de fibra/.test(occTab) && /Cabo rompido/.test(occTab),
         occFinal[0]?.status, occFinal[0]?.updates.length, !!occFinal[0]?.resolvedBy, /abriu ocorrência "Rompimento de fibra" na CTO/.test(occLog) && /resolveu ocorrência/.test(occLog), occurrences.overlays.length].join();
       out.occurrences = out.occDetail === '1,rompimento,true,1,true,resolvida,1,true,true,0';
+      //Fotos: reduzidas no navegador, com miniatura, na pasta da empresa; aparecem no painel da caixa e somem ao apagar
+      const canvas = document.createElement('canvas');
+      canvas.width = 2400; canvas.height = 1200;
+      const g = canvas.getContext('2d'); g.fillStyle = '#16a34a'; g.fillRect(0, 0, 2400, 1200);
+      const pngBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const photoFile = new File([pngBlob], 'caixa.png', { type: 'image/png' });
+      const sent = await uploadNetworkPhotos(boxA, [photoFile]);
+      const stored = [...(window.__fakeStorage || new Map()).keys()];
+      const photos = await listNetworkPhotos(boxA);
+      const full = window.__fakeStorage.get(`rede-fotos/${photos[0]?.path}`)?.blob;
+      const bitmap = full ? await createImageBitmap(full) : null;
+      openMarkerEditor(boxA);
+      await new Promise(r => setTimeout(r, 120));
+      const docImg = document.querySelector('#markerDocPanel .net-photo img')?.getAttribute('src') || '';
+      await openNetworkPhoto(boxA, photos[0]);
+      const viewerOk = document.getElementById('networkPhotoModal').style.display === 'flex' && /^blob:/.test(document.getElementById('networkPhotoImg').src);
+      await window.__fakeStorage.delete(`rede-fotos/${photos[0].path}`);
+      window.__fakeStorage.delete(`rede-fotos/${photos[0].thumb}`);
+      document.querySelector('#networkPhotoModal [data-photo="close"]').click();
+      resetMarkerModal();
+      out.photosDetail = [sent, stored.length, stored.every(k => k.startsWith(`rede-fotos/${AppSession.company.id}/${netId}/${boxA.uid}/`)), stored.some(k => /\/thumb\//.test(k)),
+        photos.length, bitmap?.width, /^blob:/.test(docImg), viewerOk, (await listNetworkPhotos(boxA)).length].join();
+      out.photos = out.photosDetail === '1,2,true,true,1,1600,true,true,0';
       //Técnico de campo: no modo Rede edita clientes e grava a rede; caixas e cabos não; no modo Projeto só consulta
       const realRole = AppSession.company.role;
       AppSession.company.role = 'tecnico';

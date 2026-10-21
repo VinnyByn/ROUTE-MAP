@@ -203,6 +203,7 @@ async function saveOccurrenceFromModal() {
     closeOccurrenceModal();
     const saved = await saveOccurrenceChange(root);
     if (saved) showToast('Ocorrência salva', entry.detail.charAt(0).toUpperCase() + entry.detail.slice(1));
+    if (saved && typeof flushOccurrencePhotos === 'function') await flushOccurrencePhotos(occurrences.lastSaved);
     if (typeof editingMarkerInfo !== 'undefined' && editingMarkerInfo && typeof renderMarkerDocPanel === 'function') renderMarkerDocPanel(editingMarkerInfo);
 }
 

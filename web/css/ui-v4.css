@@ -3333,3 +3333,26 @@ html[data-theme="dark"] .occurrence-row.is-resolvida > em { color: #86efac; }
 .marker-doc__occ-empty { font-size: 12px; color: var(--color-text-dim); }
 .account-badge--tecnico { background: color-mix(in srgb, #0d9488 12%, transparent); color: #0f766e; border-color: color-mix(in srgb, #0d9488 40%, transparent); }
 html[data-theme="dark"] .account-badge--tecnico { color: #5eead4; }
+
+/* Fotos da rede (js/network/network-photos.js) e janelas abertas a partir do painel da caixa */
+#confirmModal, #choiceModal, #alertModal { z-index: 1300; } /* avisos sempre por cima das outras janelas */
+#occurrenceModal { z-index: 1150; }
+#networkPhotoModal { z-index: 1210; }
+.marker-doc__photos { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.marker-doc__photos header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+.marker-doc__photos header .btn-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 700; color: var(--brand-600, #1d7290); cursor: pointer; }
+.net-photo-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.net-photo-grid > small { grid-column: 1 / -1; }
+#markerDocPanel .net-photo, #occurrenceModal .net-photo { display: block; width: 100%; height: auto; min-width: 0; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+.net-photo { position: relative; aspect-ratio: 1; padding: 0; border: 1px solid var(--color-border-light); border-radius: 8px; overflow: hidden; background: var(--color-surface-muted); cursor: zoom-in; }
+.net-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.net-photo__ph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--color-text-dim); font-size: 12px; }
+.occurrence-photos { display: flex; flex-direction: column; gap: 6px; }
+.occurrence-photos__add { align-self: flex-start; min-height: 30px; padding: 4px 12px; font-size: 12.5px; }
+.occurrence-photos__pending { font-size: 12px; color: var(--color-text-muted); }
+.net-photo-viewer { width: min(920px, calc(100vw - 24px)); max-width: none; }
+.net-photo-viewer__img { display: grid; place-items: center; min-height: 200px; max-height: calc(100vh - 160px); padding: 12px; background: #0f172a; border-radius: 12px 12px 0 0; }
+.net-photo-viewer__img img { max-width: 100%; max-height: calc(100vh - 184px); object-fit: contain; }
+.net-photo-viewer .modal-footer { align-items: center; flex-wrap: wrap; }
+.net-photo-viewer .modal-footer small { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-muted); }
+.net-photo-viewer .modal-footer a.btn { text-decoration: none; }
