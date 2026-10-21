@@ -2934,7 +2934,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       startAutoDesignDrag(a);
       dragAutoDesignBox(a, ll(...target));
       const view = drawAutoDesignDragPreview();
-      out.drag = { overlays: autoDesign.drag.overlays.length >= 3, badge: autoDesign.drag.overlays.some(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '')), houses: Math.round(view.sum.houses),
+      out.drag = { overlays: autoDesign.drag.overlays.length >= 3, badge: autoDesign.drag.overlays.some(o => /^data:image\/svg/.test(o.get?.('icon')?.url || '')), houses: Math.round(view.sum.houses), changes: Array.isArray(view.changes) && view.changes.every(c => plan.ctos.includes(c.cto) && c.cto !== a && Number.isInteger(c.delta) && c.delta !== 0),
         //O destaque do lugar antigo some enquanto arrasta e volta ao terminar
         oldHidden: autoDesign.drag.hidden.length > 0 && autoDesign.drag.hidden.every(o => !o.get('map')) };
       const hidden = autoDesign.drag.hidden;
@@ -2994,7 +2994,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     }
     return out;
   });
-  check(adjust.gen && adjust.colors && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.oldHidden && adjust.drag.restored && adjust.drag.same && Object.values(adjust.move || {}).every(Boolean)
+  check(adjust.gen && adjust.colors && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.oldHidden && adjust.drag.restored && adjust.drag.same && adjust.drag.changes && Object.values(adjust.move || {}).every(Boolean)
     && Object.values(adjust.alone || {}).every(Boolean) && adjust.reach && adjust.split && adjust.readjust,
     `pré-projeto: prévia ao arrastar, poste melhor, dividir CTO, CTO para casas fora do alcance e reajustar em volta das fixas (${JSON.stringify(adjust)})`);
   //Ocupação máxima vale em todas as opções do pré-projeto (só a "com folga" usa menos)
