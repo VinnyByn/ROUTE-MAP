@@ -203,13 +203,21 @@ function loadNetworkRoot(id, { visible = false } = {}) {
         }
         const next = placeholder.nextElementSibling;
         placeholder.remove();
-        loadAndDisplayProject(id, { ...(data.data || {}), projectName: data.name }, { silent: true });
+        const { content, removed } = cleanNetworkData(data.data || {});
+        loadAndDisplayProject(id, { ...content, projectName: data.name }, { silent: true });
         const root = document.getElementById(id)?.closest('.folder');
         if (!root) return null;
         if (next && next.parentElement) next.parentElement.insertBefore(root, next);
         if (data.revision != null) setProjectRevision(root, data.revision);
         if (!visible) handleVisibilityToggle(root.querySelector(':scope > .folder-title .visibility-toggle-btn'), false);
         if (typeof liveSyncJoin === 'function') liveSyncJoin(id);
+        //Sobras de projetos concluídos antes (casas, postes, polígonos): saem e a rede é salva limpa
+        if (removed && AppSession.canEdit) {
+            try {
+                await persistProject(root);
+                showToast(data.name, `${removed} ${removed === 1 ? 'item que não é da rede saiu' : 'itens que não são da rede saíram'} (casas, postes ou polígonos vindos de projetos).`, 'progress');
+            } catch (error) { console.error('Erro ao limpar a rede:', error); }
+        }
         return root;
     })().finally(() => networkLoads.delete(id));
     networkLoads.set(id, job);
@@ -387,6 +395,18 @@ function findNetworkFolder(sidebar, id) {
     let found = null;
     walkFolders(sidebar, (node) => { if (!found && node.id === id) found = node; });
     return found;
+}
+
+//Tira da rede o que veio de projeto e não é da rede (casas, postes, polígonos: projetos concluídos antes desta regra).
+//O que foi incluído direto na rede (clientes, marcadores sem origem em projeto) fica.
+function cleanNetworkData(data) {
+    const fromProject = (item) => !!item.asBuilt?.projectId;
+    const markersIn = data.markers || [];
+    const polygonsIn = data.polygons || [];
+    const markersOut = markersIn.filter(m => !fromProject(m) || goesToNetwork(m));
+    const polygonsOut = polygonsIn.filter(p => !fromProject(p));
+    const removed = (markersIn.length - markersOut.length) + (polygonsIn.length - polygonsOut.length);
+    return { content: removed ? { ...data, markers: markersOut, polygons: polygonsOut } : data, removed };
 }
 
 //Pastas da rede para escolher o destino: [{ id, name, depth }] (a cidade é a primeira, profundidade 0)
