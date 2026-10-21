@@ -48,6 +48,8 @@ insert into r select 'técnico não renomeia o cabo', not pg_temp.tenta($q$
   update public.projects set data = jsonb_set(data, '{cables,0,name}', '"FO-X"') where id = 'rede_campo' $q$);
 insert into r select 'técnico não cria caixa', not pg_temp.tenta($q$
   update public.projects set data = jsonb_set(data, '{markers}', (data->'markers') || '[{"uid":"ceo9","type":"CEO","name":"CEO-9"}]') where id = 'rede_campo' $q$);
+insert into r select 'técnico salva com a sobra antiga (casa) já limpa', pg_temp.tenta($q$
+  update public.projects set data = jsonb_set(data, '{markers}', (data->'markers') || '[{"uid":"casa1","type":"CASA","name":"8"}]') where id = 'rede_campo' $q$);
 insert into r select 'técnico não renomeia a rede nem manda para a lixeira', not pg_temp.tenta($q$ update public.projects set name = 'X' where id = 'rede_campo' $q$)
   and not pg_temp.tenta($q$ update public.projects set deleted_at = now() where id = 'rede_campo' $q$);
 with u as (update public.projects set data = '{"markers":[]}' where id = 'proj_campo' returning 1)

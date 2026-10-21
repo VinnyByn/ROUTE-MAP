@@ -3960,7 +3960,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         closeClientModal();
         //Mesma conta do banco (network_infrastructure): o técnico salvando não pode mudar caixas e cabos
         const infra = (d) => JSON.stringify({
-          m: (d.markers || []).filter(x => x.type !== 'CLIENTE').map(x => [x.uid, x.type, x.name, x.folderId, x.position, x.fusionPlan, x.ctoStatus, x.ceoStatus, x.reservaStatus, x.popEquipment]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+          m: (d.markers || []).filter(x => ['CTO', 'CEO', 'POP', 'RESERVA'].includes(x.type)).map(x => [x.uid, x.type, x.name, x.folderId, x.position, x.fusionPlan, x.ctoStatus, x.ceoStatus, x.reservaStatus, x.popEquipment]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
           c: (d.cables || []).map(x => [x.uid, x.name, x.type, x.folderId, x.path, x.status, x.startAnchorUid, x.endAnchorUid, x.totalLength]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
         });
         const infraBefore = infra(window.__fakeDb.projects[netId].data);

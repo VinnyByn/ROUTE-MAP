@@ -135,3 +135,20 @@ Exportar PDF:
 - Sem observações registradas, o PDF imprime linhas em branco para anotar à mão.
 - O documento sai sempre com o visual claro, mesmo com o sistema no tema escuro.
 - "Restaurar original" descarta as edições e volta aos valores calculados.
+--------------------------------------------------------------------------------------------------------------------------------------------
+6. Modo Rede (documentação da rede construída)
+A chave "Projeto | Rede" no topo troca o modo. No Projeto você planeja como sempre; no Rede fica a rede que já existe, uma por cidade.
+Enviar para a rede: no menu do projeto, "Concluir e enviar para a rede". Caixas, cabos e planos de fusão entram na rede da cidade como Existente; o projeto fica só para consulta.
+Rede por baixo do projeto: no modo Projeto, as caixas e cabos já construídos na cidade aparecem apagados. Clique numa caixa da rede (ou nela, desenhando um cabo) para trazê-la ao projeto como Existente; ao concluir, ela é atualizada na rede, sem duplicar. Liga/desliga em Projeto → "Rede da cidade por baixo".
+Menu "Rede":
+- + Cidade, + Marcador, Novo cliente, Importar clientes (planilha .xlsx ou .csv; baixe o modelo; a CTO e a porta são conferidas e o mesmo código atualiza o cliente), Nova ocorrência, Verificar a rede, Rompimento, Histórico, Exportar planilha e plano de fusão, Etiquetas QR das caixas.
+Viabilidade: clique no endereço e veja as CTOs com porta livre por perto; "+ Cliente" já cadastra ligado na CTO.
+Perto de mim: pelo GPS do celular, as caixas mais próximas, com as portas livres e o botão "Ir" (Google Maps).
+Filtro: destaca no mapa CTOs lotadas, quase lotadas, com porta livre, sem splitter ou sem sinal, caixas com ocorrência e clientes por situação; "Próximo ›" passa por cada um.
+Painel da rede: Resumo (números da cidade e o que precisa de atenção), PONs (clientes e CTOs de cada OLT/placa/PON), Ocorrências (abertas e resolvidas) e Histórico (quem incluiu, alterou ou excluiu o quê). No Histórico, "Ver a rede numa data" mostra no mapa como a rede estava numa versão salva, sem restaurar nada ("Voltar para hoje" ou Esc).
+Painel da caixa (clique na caixa): de qual projeto veio, QR code / etiqueta, Como chegar, Copiar link, ocorrências, fotos e as últimas mudanças.
+QR code: imprima as etiquetas (Rede → Etiquetas QR das caixas, da cidade ou da pasta selecionada) e cole nas caixas. Quem escanear com o celular abre a caixa já no sistema (depois de entrar com a conta da empresa).
+Rastrear sinal: na janela do cliente, mostra o caminho até a OLT/placa/PON (caixas, cabos, fibras e splitters) com a potência estimada em cada ponto, e destaca o caminho no mapa.
+Ocorrências: rompimento, sinal baixo, caixa danificada, poste, vandalismo, preventiva. Cada uma tem situação (aberta, em andamento, resolvida), anotações de quem atendeu e fotos. As abertas aparecem com um anel no mapa.
+Fotos: no painel da caixa ("+ Foto") ou na ocorrência. No celular abre a câmera; a foto é reduzida antes de enviar.
+Cargo Técnico de campo: no modo Rede cadastra e liga clientes, registra ocorrências e fotos, e tudo é salvo na hora. Não altera caixas, cabos nem projetos (no modo Projeto só consulta).

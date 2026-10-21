@@ -1,7 +1,7 @@
 -- ROUTE MAP — rede em campo: cargo Técnico de campo e fotos das caixas
 --
 -- Técnico de campo (tecnico): no modo Rede cadastra e liga clientes, registra ocorrências e fotos.
---   Não cria, não exclui nem altera projetos, e na rede não mexe em caixas, cabos e polígonos:
+--   Não cria, não exclui nem altera projetos, e na rede não mexe em caixas e cabos:
 --   o banco confere isso a cada gravação (projects_field_tech_guard).
 -- Fotos: bucket privado "rede-fotos", uma pasta por empresa: <empresa>/<rede>/<caixa ou cabo>/<arquivo>.
 --   Só a própria empresa vê; administrador, projetista e técnico enviam e apagam.
@@ -64,19 +64,17 @@ create policy "técnicos documentam a rede" on public.projects
   using (company_id = public.my_company_id() and project_type = 'Rede' and public.can_document_network(company_id))
   with check (company_id = public.my_company_id() and project_type = 'Rede' and public.can_document_network(company_id));
 
---O que é infraestrutura na rede (caixas, cabos e polígonos), no que importa: o resto (clientes, pastas,
---ocorrências, histórico, ordem na lista) o técnico pode mudar
+--O que é infraestrutura na rede (caixas e cabos, com o plano de fusão), no que importa: o resto (clientes, pastas,
+--ocorrências, histórico, ordem na lista e sobras de projetos antigos, como casas, que o sistema limpa) o técnico pode mudar
 create or replace function public.network_infrastructure(p_data jsonb)
 returns jsonb
 language sql immutable set search_path = ''
 as $$
   with m as (
     select x from jsonb_array_elements(case when jsonb_typeof(p_data->'markers') = 'array' then p_data->'markers' else '[]'::jsonb end) x
-    where x->>'type' is distinct from 'CLIENTE'
+    where x->>'type' in ('CTO', 'CEO', 'POP', 'RESERVA')
   ), c as (
     select x from jsonb_array_elements(case when jsonb_typeof(p_data->'cables') = 'array' then p_data->'cables' else '[]'::jsonb end) x
-  ), p as (
-    select x from jsonb_array_elements(case when jsonb_typeof(p_data->'polygons') = 'array' then p_data->'polygons' else '[]'::jsonb end) x
   )
   select jsonb_build_object(
     'markers', coalesce((select jsonb_agg(jsonb_build_object(
@@ -87,8 +85,7 @@ as $$
     'cables', coalesce((select jsonb_agg(jsonb_build_object(
         'uid', x->'uid', 'name', x->'name', 'type', x->'type', 'folderId', x->'folderId', 'path', x->'path', 'status', x->'status',
         'startAnchorUid', x->'startAnchorUid', 'endAnchorUid', x->'endAnchorUid', 'totalLength', x->'totalLength')
-      order by x->>'uid', x::text) from c), '[]'::jsonb),
-    'polygons', coalesce((select jsonb_agg(jsonb_build_object('uid', x->'uid', 'path', x->'path') order by x->>'uid', x::text) from p), '[]'::jsonb)
+      order by x->>'uid', x::text) from c), '[]'::jsonb)
   );
 $$;
 
@@ -106,7 +103,7 @@ begin
     raise exception 'O técnico de campo só documenta a rede (clientes, ocorrências e fotos).' using errcode = '42501';
   end if;
   if public.network_infrastructure(new.data) is distinct from public.network_infrastructure(old.data) then
-    raise exception 'O técnico de campo não altera caixas, cabos nem polígonos da rede.' using errcode = '42501';
+    raise exception 'O técnico de campo não altera caixas nem cabos da rede.' using errcode = '42501';
   end if;
   return new;
 end;
