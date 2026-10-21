@@ -2387,8 +2387,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const opened = !document.getElementById('autoDesignBox').classList.contains('hidden') && document.getElementById('autoDesignStart').value === 'mk_ad_pop';
     const labels = document.getElementById('autoDesignBody').textContent;
     const form = /Penetração/.test(labels) && /Splitagem/.test(labels) && /Na CTO/.test(labels) && /1:8/.test(labels) && /1:16/.test(labels)
-      //Formulário em 4 etapas, com o resumo fixo em cima dos botões
-      && document.querySelectorAll('#autoDesignBody .auto-design__step').length === 4 && !!document.querySelector('#autoDesignActions #autoDesignCalc')
+      //Dados: clientes aberto e os outros 4 blocos fechados com o resumo, barra das etapas no topo e o resumo fixo em cima dos botões
+      && document.querySelectorAll('#autoDesignBody .auto-design__step').length === 1 && document.querySelectorAll('#autoDesignBody .auto-design__fold:not([open])').length === 4
+      && /1 nível · 1:8/.test(document.querySelector('[data-fold-summary="split"]')?.textContent || '')
+      && document.querySelectorAll('#autoDesignFlow .auto-design__flow li').length === 4 && !!document.querySelector('#autoDesignFlow li.is-current') && !!document.querySelector('#autoDesignActions #autoDesignCalc')
       && /Digite quantas casas/.test(document.getElementById('autoDesignCalc').textContent);
     const houses = document.getElementById('autoDesignHouses');
     houses.value = '200';
@@ -2419,10 +2421,13 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
     };
-    //Até 3 opções (a do painel aberta), polígono fora do mapa durante a prévia e CEO 1:8 com CTO 1:16
+    //Até 3 opções (a do painel aberta; escolhidas na etapa 1), polígono fora do mapa durante a prévia e CEO 1:8 com CTO 1:16
     const split = { ports: 16, primary: 8 };
+    setAutoDesignStage('ctos');
+    const optionButtons = document.querySelectorAll('[data-auto-design="option"]').length;
+    setAutoDesignStage('cables');
     const extras = {
-      options: autoDesign.options.length >= 2 && autoDesign.options.length <= 3 && plan.option.panel && document.querySelectorAll('[data-auto-design="option"]').length === autoDesign.options.length,
+      options: autoDesign.options.length >= 2 && autoDesign.options.length <= 3 && plan.option.panel && optionButtons === autoDesign.options.length,
       polygonHidden: polygon.polygonObject.get('clickable') === false,
       split128: clampAutoDesignPrimary(split).includes(8) && split.primary === 8,
       //Painel baixo: nada é espremido (a lista de cabos sumia); quem rola é o painel
@@ -2436,6 +2441,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     };
     //Casas de cada CTO: área colorida no mapa; clique na CTO mostra casas, clientes pela penetração e quanto cabe nela
     extras.houses = (() => {
+      setAutoDesignStage('ctos');
       const cto = plan.ctos[0];
       handleAutoDesignBoxClick(cto);
       const card = document.querySelector('#autoDesignBox .auto-design__cto-card')?.textContent || '';
@@ -2461,8 +2467,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         && autoDesign.overlays.some(o => decodeURIComponent(o.get?.('icon')?.url || '').includes('✓ '));
       first.checked = false;
       autoDesign.selectedCto = null;
-      drawAutoDesignPreview();
-      renderAutoDesign();
+      setAutoDesignStage('cables');
       if (!Object.values(out).every(Boolean)) extras.housesDetail = JSON.stringify(out);
       return Object.values(out).every(Boolean);
     })();
@@ -2612,9 +2617,14 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     await addAutoDesignCeo(LL(far.position.lat(), far.position.lng() - 0.0004));
     plan = autoDesign.result;
     const ceoNew = plan.ceos[plan.ceos.length - 1];
+    //Os botões de + CEO e − CEO ficam na etapa das emendas
+    setAutoDesignStage('ceos');
+    const ceoButtons = !!document.querySelector('[data-auto-design="mode-add-ceo"]') && !!document.querySelector('[data-auto-design="mode-remove-ceo"]')
+      && /CEO-\d+/.test(document.querySelector('#autoDesignBody .auto-design__ceos')?.textContent || '');
+    setAutoDesignStage('cables');
     out.ceoEdit = { added: plan.ceos.length === ceos0 + 1 && ceoNew.isNew, feeds: plan.ctos.some(c => c.in?.from === ceoNew || c.in?.from?.in?.from === ceoNew),
       trunk: plan.cables.some(c => c.role === 'trunk' && c.to === ceoNew), named: /^CEO-\d+$/.test(ceoNew.name),
-      button: !!document.querySelector('[data-auto-design="mode-add-ceo"]') && !!document.querySelector('[data-auto-design="mode-remove-ceo"]') };
+      button: ceoButtons };
     await removeAutoDesignCeo(ceoNew);
     plan = autoDesign.result;
     out.ceoEdit.removed = plan.ceos.length === ceos0 && plan.ctos.every(c => c.in && plan.cables.includes(c.in));
@@ -2624,7 +2634,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const a = LL(LAT0 - ROW * 1.5, LNG0 - 0.0001), b = LL(LAT0 - H - 0.0001, LNG0 + W * 0.3);
     await addAutoDesignExclusion(a, b);
     plan = autoDesign.result;
+    setAutoDesignStage('ctos');
     out.exclude = { phase: autoDesign.phase, none: plan.ctos.every(c => !(c.position.lat() < a.lat() && c.position.lng() < b.lng())), listed: /trecho\(s\) sem casas/.test(document.getElementById('autoDesignBody').textContent) };
+    setAutoDesignStage('cables');
     await clearAutoDesignExclusions();
     //Raio da CTO menor → mais caixas para cobrir a mesma área, e os círculos da prévia com o raio novo
     const before150 = autoDesign.result.ctos.length;
@@ -2652,9 +2664,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     Object.assign(out.spacing, {
       off: autoDesign.result !== null && freeGap < gap, model: autoDesign.result.model.ctoSpacing === gap,
       apart: autoDesign.options.every(o => closest(o) >= gap), fewer: autoDesign.result.ctos.length <= freeCtos,
-      detail: autoDesign.options.length < 2 || new RegExp(`CTOs a ${gap} m ou mais`).test(document.getElementById('autoDesignBody').textContent),
+      detail: autoDesign.options.length < 2 || (setAutoDesignStage('ctos'), new RegExp(`CTOs a ${gap} m ou mais`).test(document.getElementById('autoDesignBody').textContent)),
       kept: loadAutoDesignParams().ctoSpacing === gap,
     });
+    setAutoDesignStage('cables');
     //Arrastar uma CTO para perto de outra: aviso
     const [c0, c1] = autoDesign.result.ctos;
     await moveAutoDesignBox(c1, LL(c0.position.lat(), c0.position.lng() + 0.0002));
@@ -2925,15 +2938,24 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       {
         //Etapas: 1) só CTOs, sem cabos nem CEO; 2) CEOs com a linha fina da árvore; 3) cabos traçados de novo se mexeu
         const cableLines = () => autoDesign.overlays.filter(o => o.get?.('icons')?.[0]?.repeat === '13px').length;
-        const st = { first: autoDesign.stage === 'ctos', noCables: cableLines() === 0, stepper: document.querySelectorAll('#autoDesignBody .auto-design__stages li').length === 3,
-          noAccept: !document.querySelector('#autoDesignActions [data-auto-design="accept"]'), next: /emendas/.test(document.getElementById('autoDesignActions').textContent) };
+        const flow = () => [...document.querySelectorAll('#autoDesignFlow .auto-design__flow li')].map(li => (li.classList.contains('is-done') ? 'd' : li.classList.contains('is-current') ? 'c' : '-')).join('');
+        const st = { first: autoDesign.stage === 'ctos', noCables: cableLines() === 0, stepper: flow() === 'dc--',
+          //Na etapa 1 os cabos ainda não foram traçados (nem nas outras opções): o custo é estimado
+          deferred: autoDesign.options.every(o => o.cablesStale === true) && autoDesign.result.cost?.total > 0,
+          hero: /Etapa 1 de 3/.test(document.getElementById('autoDesignBody').textContent) && !!document.querySelector('#autoDesignBody .auto-design__todo'),
+          noAccept: !document.querySelector('#autoDesignActions [data-auto-design="accept"]'), next: /emendas/.test(document.getElementById('autoDesignActions').textContent)
+            && /Dados/.test(document.querySelector('#autoDesignActions [data-auto-design="adjust"]')?.textContent || '') };
         document.querySelector('#autoDesignActions [data-auto-design="stage"][data-stage="ceos"]').click();
         await new Promise(r => setTimeout(r, 0));
-        st.ceos = autoDesign.stage === 'ceos' && cableLines() === 0 && autoDesign.overlays.some(o => o.getPath?.()?.getArray?.().length === 2 && o.get?.('strokeColor') === '#64748b');
-        autoDesign.cablesStale = true;
+        st.ceos = autoDesign.stage === 'ceos' && flow() === 'ddc-' && cableLines() === 0 && autoDesign.overlays.some(o => o.getPath?.()?.getArray?.().length === 2 && o.get?.('strokeColor') === '#64748b')
+          && document.querySelectorAll('#autoDesignBody .auto-design__ceo').length === autoDesign.result.ceos.length;
         const before = autoDesign.result.cables.length;
         await setAutoDesignStage('cables');
-        st.cables = autoDesign.stage === 'cables' && !autoDesign.cablesStale && cableLines() === before && before > 0 && !!document.querySelector('#autoDesignActions [data-auto-design="accept"]');
+        st.cables = autoDesign.stage === 'cables' && flow() === 'dddc' && !autoDesign.result.cablesStale && autoDesign.result.routed && cableLines() === before && before > 0
+          && !!document.querySelector('#autoDesignActions [data-auto-design="accept"]') && !!document.querySelector('#autoDesignBody .auto-design__cost-card');
+        //Clicar numa etapa feita volta para ela
+        document.querySelector('#autoDesignFlow [data-stage="ctos"]').click();
+        st.backByFlow = autoDesign.stage === 'ctos';
         //Opacidade da área: muda o polígono e, na prévia, a área aparece sem pegar os cliques (0 = some)
         const po = autoDesign.polygon.polygonObject;
         setAutoDesignAreaOpacity(autoDesign, 50);
@@ -2942,6 +2964,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         st.hidden = !po.getVisible();
         setAutoDesignAreaOpacity(autoDesign, 20);
         out.stages = st;
+        //O resto (arrastar, conferir CTO por CTO) é da etapa 1
+        await setAutoDesignStage('ctos');
       }
       let plan = autoDesign.result;
       const ll = (x, y) => { const q = plan.model.proj.toLatLng([x, y]); return new google.maps.LatLng(q.lat, q.lng); };

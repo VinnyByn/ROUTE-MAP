@@ -2323,6 +2323,7 @@ async function routeAutoDesignCables(plan, isCurrent) {
     plan.stats.polesUnmapped = plan.model.polesUnmapped || 0;
     plan.stats.wetCables = countAutoDesignCablesOverWater(plan);
     plan.routed = true;
+    plan.cablesStale = false;
     placeAutoDesignReserves(plan);
     plan.cost = estimateAutoDesignCost(plan);
 }
@@ -3051,7 +3052,30 @@ function getAutoDesignStartMarker() {
 
 const formatAutoDesignMeters = (m) => `${Math.round(m).toLocaleString('pt-BR')} m`;
 
+//Resumo de cada bloco fechado dos dados (o que está valendo)
+function getAutoDesignFoldSummaries(s) {
+    const p = s.params;
+    const value = (id) => document.getElementById(id)?.value;
+    const startUid = value('autoDesignStart') ?? p.startUid;
+    const start = s.starts.find(x => x.marker.uid === startUid)?.marker;
+    const radius = parseInt(value('autoDesignRadius') ?? p.coverRadius, 10) || getAutoDesignCoverRadius(p);
+    const drop = getAutoDesignDropMax({ dropMax: value('autoDesignDropMax') ?? p.dropMax }) || Math.round(getAutoDesignDropReach(getAutoDesignCoverRadius({ coverRadius: radius })));
+    return {
+        split: p.levels === 2 ? `2 níveis · 1:${p.primary} × 1:${p.ports}` : `1 nível · 1:${p.ports}`,
+        start: `${start ? start.name : 'CEO nova'} · ${value('autoDesignDistribution') || p.distributionFiber}`,
+        reach: `raio ${radius} m · cabo ${drop} m`,
+        more: 'reserva, ocupação e CEOs',
+    };
+}
+function updateAutoDesignFoldSummaries() {
+    const s = autoDesign;
+    if (!s || s.phase !== 'form') return;
+    const sums = getAutoDesignFoldSummaries(s);
+    document.querySelectorAll('#autoDesignBox [data-fold-summary]').forEach(el => { el.textContent = sums[el.dataset.foldSummary] || ''; });
+}
+
 function renderAutoDesignCalc() {
+    updateAutoDesignFoldSummaries();
     const el = document.getElementById('autoDesignCalc');
     if (!el) return;
     const p = autoDesign.params;
@@ -3112,9 +3136,13 @@ function renderAutoDesign() {
     const body = document.getElementById('autoDesignBody');
     const actions = document.getElementById('autoDesignActions');
     const esc = (v) => escapeHtml(String(v ?? ''));
+    const flow = document.getElementById('autoDesignFlow');
+    if (flow) flow.innerHTML = renderAutoDesignFlow(s);
     if (s.phase === 'loading') {
-        title.textContent = 'Gerar pré-projeto';
-        body.innerHTML = `<p class="auto-design__loading"><span class="route-suggest__spinner" aria-hidden="true"></span>${esc(s.loadingText || 'Distribuindo as caixas…')}</p>`;
+        title.textContent = 'Pré-projeto';
+        const all = getAutoDesignStage(s) === 'cables';
+        body.innerHTML = `${renderAutoDesignHero(all ? 'Gerando tudo' : 'Etapa 1 de 3', all ? 'CTOs, emendas e cabos' : 'Onde ficam as CTOs', 'Leva alguns segundos.')}
+            <p class="auto-design__loading"><span class="route-suggest__spinner" aria-hidden="true"></span>${esc(s.loadingText || 'Distribuindo as caixas…')}</p>`;
         actions.innerHTML = '<button type="button" class="map-tool-btn" data-auto-design="cancel">Cancelar</button>';
         return;
     }
@@ -3130,13 +3158,22 @@ function renderAutoDesign() {
     const options = (list, selected, label) => list.map(v => `<option value="${v}"${String(v) === String(selected) ? ' selected' : ''}>${esc(label(v))}</option>`).join('');
     const start = getAutoDesignStartMarker();
     const usingHouses = s.houseMarkers.length && p.useHouses;
-    title.textContent = 'Gerar pré-projeto';
+    title.textContent = 'Pré-projeto';
     const icon = (id) => `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"></use></svg>`;
-    const section = (n, name, hint, content) => `
+    const section = (name, hint, content) => `
         <section class="auto-design__step" aria-label="${esc(name)}">
-            <header class="auto-design__step-head"><span class="auto-design__step-num">${n}</span><div><h4>${esc(name)}</h4><p>${hint}</p></div></header>
+            <header class="auto-design__step-head"><span class="auto-design__step-num">${icon('i-users')}</span><div><h4>${esc(name)}</h4><p>${hint}</p></div></header>
             ${content}
         </section>`;
+    //Blocos que já vêm preenchidos: fechados, com o resumo do que está valendo; abre só quem quiser mudar
+    s.folds = s.folds || new Set();
+    const summaries = getAutoDesignFoldSummaries(s);
+    const okIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const fold = (id, name, content, mark = okIcon) => `
+        <details class="auto-design__fold" data-fold="${id}"${s.folds.has(id) ? ' open' : ''}>
+            <summary><span class="auto-design__fold-ok">${mark}</span><span class="auto-design__fold-name">${esc(name)}</span><em data-fold-summary="${id}">${esc(summaries[id])}</em></summary>
+            <div class="auto-design__fold-body">${content}</div>
+        </details>`;
     //Campo numérico com a unidade dentro da caixa (%, m)
     const unit = (input, u) => `<div class="auto-design__unit">${input}<span aria-hidden="true">${u}</span></div>`;
     const check = (id, checked, text, sub = '') => `<label class="auto-design__check"><input type="checkbox" id="${id}"${checked ? ' checked' : ''}><span>${text}${sub ? `<small>${sub}</small>` : ''}</span></label>`;
@@ -3144,6 +3181,7 @@ function renderAutoDesign() {
     const areaChanged = JSON.stringify(getAutoDesignPolygonPath(s.polygon)) !== JSON.stringify(s.areaOriginal);
     const areaCrossed = typeof hasSketchCrossing === 'function' && hasSketchCrossing(s.polygon.polygonObject.getPath());
     body.innerHTML = `
+        ${renderAutoDesignHero('Antes de começar', 'Dados da área', 'Diga quantas casas tem e quantas devem assinar. O resto já vem preenchido: abra só o que quiser mudar.')}
         ${s.error ? `<div class="auto-design__warn auto-design__warn--error" role="alert">${esc(s.error)}</div>` : ''}
         <div class="auto-design__area">
             <span class="auto-design__area-icon">${icon('i-polygon')}</span>
@@ -3152,20 +3190,20 @@ function renderAutoDesign() {
         </div>
         ${renderAutoDesignAreaOpacity(s)}
         ${areaCrossed ? '<div class="auto-design__warn" role="alert">As bordas da área se cruzam (forma em "8"): a parte cruzada fica de fora. Arraste um canto para desfazer o cruzamento.</div>' : ''}
-        ${section(1, 'Clientes', 'Quantas casas e quantas devem assinar', `
+        ${section('Clientes', 'Quantas casas e quantas devem assinar', `
             <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignHouses">Casas na área</label>${unit(`<input type="number" id="autoDesignHouses" min="1" step="1" inputmode="numeric" value="${esc(p.houses)}" placeholder="Ex.: 320"${usingHouses ? ' disabled title="Usando as casas marcadas no mapa"' : ''}>`, 'casas')}</div>
                 <div class="map-tool-field"><label for="autoDesignOccupancy" title="Taxa de penetração: quantas casas devem virar clientes">Penetração</label>${unit(`<input type="number" id="autoDesignOccupancy" min="1" max="100" step="1" inputmode="numeric" value="${esc(p.occupancy)}">`, '%')}</div>
             </div>
             ${s.houseMarkers.length ? check('autoDesignUseHouses', p.useHouses, `Usar as <b>${s.houseMarkers.length}</b> casas marcadas no mapa`, `${getAutoDesignMarkedHouses().toLocaleString('pt-BR')} casas, na posição real`) : ''}
             ${s.existingCtos.length ? `<label class="auto-design__check"><input type="checkbox" id="autoDesignUseExisting"${p.useExisting !== false ? ' checked' : ''}><span id="autoDesignExistingText"></span></label>` : ''}`)}
-        ${section(2, 'Splitagem', 'Como o sinal se divide até o cliente', `
+        ${fold('split', 'Splitagem', `
             <div class="map-tool-field"><label>Níveis</label><div class="map-tool-segmented" id="autoDesignLevels" role="radiogroup" aria-label="Níveis de splitagem"></div></div>
             <div class="map-tool-field-row">
                 ${p.levels === 2 ? '<div class="map-tool-field"><label>Na CEO</label><div class="map-tool-segmented" id="autoDesignPrimary" role="radiogroup" aria-label="Splitter da CEO (1º nível)"></div></div>' : ''}
                 <div class="map-tool-field"><label>Na CTO</label><div class="map-tool-segmented" id="autoDesignPorts" role="radiogroup" aria-label="Splitter de atendimento da CTO"></div></div>
             </div>`)}
-        ${section(3, 'Saída da rede', 'De onde a fibra chega e os cabos mínimos', `
+        ${fold('start', 'Saída da rede', `
             <div class="map-tool-field"><label for="autoDesignStart">Partir de</label>
                 <select id="autoDesignStart">
                     ${s.starts.map(({ marker, distance }) => `<option value="${esc(marker.uid)}"${marker.uid === p.startUid ? ' selected' : ''}>${esc(marker.name)} · ${esc(marker.type)} · ${esc(formatDistance(distance))}</option>`).join('')}
@@ -3177,7 +3215,7 @@ function renderAutoDesign() {
                 <div class="map-tool-field"><label for="autoDesignDistribution" title="Cabos entre as caixas">Distribuição</label><select id="autoDesignDistribution">${fiberOptions(p.distributionFiber)}</select></div>
             </div>
             ${s.poleMarkers.length ? check('autoDesignUsePoles', p.usePoles, `Caixas nos <b>${s.poleMarkers.length}</b> postes da área e cabos de poste em poste`, s.bdgdPoles?.used && s.markedPoles.length ? `${s.markedPoles.length} marcados + ${s.bdgdPoles.used} da BDGD` : '') : ''}`)}
-        ${section(4, 'Caixas e cabos', 'Alcance de cada CTO e tipo de cabo', `
+        ${fold('reach', 'Alcance e cabos', `
             <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO</label>${unit(`<input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO, em linha reta (pela rua, até o raio × 1,4)">`, 'm')}<small class="auto-design__field-hint">Em linha reta</small></div>
                 <div class="map-tool-field"><label for="autoDesignDropMax">Cabo até o cliente</label>${unit(`<input type="number" id="autoDesignDropMax" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="${Math.round(getAutoDesignDropReach(getAutoDesignCoverRadius(p)))}" value="${esc(getAutoDesignDropMax(p) || '')}" title="Metragem máxima do drop, da CTO até a casa, seguindo a rua (como se saíssem cabos da caixa em todas as direções). Em branco: raio × 1,4 + 20 m">`, 'm')}<small class="auto-design__field-hint">Máximo pela rua</small></div>
@@ -3186,8 +3224,7 @@ function renderAutoDesign() {
                 <div class="map-tool-field"><label for="autoDesignSpacing">Entre CTOs</label>${unit(`<input type="number" id="autoDesignSpacing" min="10" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="Pelo raio" value="${esc(getAutoDesignCtoSpacing(p) || '')}" title="Mínimo entre duas CTOs na mesma rua, em linha reta. Em branco: vale só o raio">`, 'm')}<small class="auto-design__field-hint">Mínimo na mesma rua</small></div>
             </div>
             <div class="map-tool-field"><label>Vão do cabo</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>`)}
-        <details class="auto-design__more" id="autoDesignMore"${s.moreOpen ? ' open' : ''}>
-            <summary>${icon('i-settings')}<span>Mais opções</span><small>reserva, ocupação e CEOs</small></summary>
+        ${fold('more', 'Mais opções', `
             <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignSpare">Fibras de reserva</label>${unit(`<input type="number" id="autoDesignSpare" min="0" max="200" step="5" inputmode="numeric" value="${esc(p.fiberSpare)}">`, '%')}</div>
                 <div class="map-tool-field"><label for="autoDesignFill" title="Ocupação máxima da CTO">Ocupação máx.</label>${unit(`<input type="number" id="autoDesignFill" min="25" max="100" step="5" inputmode="numeric" value="${esc(p.maxFill)}">`, '%')}</div>
@@ -3196,9 +3233,8 @@ function renderAutoDesign() {
                 <div class="map-tool-field"><label for="autoDesignReserve">Reserva técnica</label><select id="autoDesignReserve">${options(AUTO_DESIGN_RESERVE_STEPS, p.reserveEvery, v => (v ? `A cada ${v} m de cabo` : 'Não colocar'))}</select></div>
                 <div class="map-tool-field"><label for="autoDesignCeoMax">CTOs por CEO</label><select id="autoDesignCeoMax" title="Quantas CTOs cada CEO alimenta. Passou disso, o pré-projeto coloca outra CEO no meio do próximo grupo de CTOs.">${options(AUTO_DESIGN_CEO_LIMITS, p.ceoMax, v => (v ? `Até ${v}` : 'Sem limite'))}</select></div>
             </div>
-            <p class="map-tool-help"><b>CTOs por CEO:</b> quantas CTOs saem de cada CEO. Passou disso, entra outra CEO no meio do próximo grupo de CTOs, para os cabos não ficarem longos nem a CEO lotada.</p>
-        </details>
-        <p class="map-tool-help auto-design__about">${icon('i-route')}<span>Saem até 3 opções para comparar (a do painel, a mais barata e a com mais folga). Caixas só nas ruas e cabos pelas ruas (OpenStreetMap). Nada é salvo até você aceitar.</span></p>`;
+            <p class="map-tool-help"><b>CTOs por CEO:</b> quantas CTOs saem de cada CEO. Passou disso, entra outra CEO no meio do próximo grupo de CTOs, para os cabos não ficarem longos nem a CEO lotada.</p>`, icon('i-settings'))}
+        <p class="map-tool-help auto-design__about">${icon('i-route')}<span>Na etapa 1 saem até 3 opções para comparar (a do painel, a mais barata e a com mais folga). Caixas só nas ruas e cabos pelas ruas (OpenStreetMap). Nada é salvo até você criar o projeto.</span></p>`;
     clampAutoDesignPrimary(p);
     renderSegmentedOptions('autoDesignLevels', [{ value: '1', label: '1 nível (só CTO)' }, { value: '2', label: '2 níveis (CEO + CTO)' }], String(p.levels));
     renderSegmentedOptions('autoDesignPorts', AUTO_DESIGN_SPLITTERS.map(n => ({ value: String(n), label: `1:${n}` })), String(p.ports));
@@ -3209,12 +3245,15 @@ function renderAutoDesign() {
     onSegment('autoDesignPorts', (v) => { readAutoDesignForm(); p.ports = parseInt(v, 10); renderAutoDesignCalc(); });
     onSegment('autoDesignPrimary', (v) => { p.primary = parseInt(v, 10); renderAutoDesignCalc(); });
     onSegment('autoDesignSpan', (v) => { p.span = v; });
-    document.getElementById('autoDesignMore')?.addEventListener('toggle', (e) => { s.moreOpen = e.target.open; });
+    body.querySelectorAll('.auto-design__fold[data-fold]').forEach(d => d.addEventListener('toggle', () => {
+        if (d.open) s.folds.add(d.dataset.fold);
+        else s.folds.delete(d.dataset.fold);
+    }));
     //O resumo fica fixo em cima dos botões: muda na hora conforme os campos
     actions.innerHTML = `
         <div class="auto-design__calc" id="autoDesignCalc" aria-live="polite"></div>
-        <button type="button" class="map-tool-btn" data-auto-design="cancel">Cancelar</button>
-        <button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="generate">Gerar opções</button>`;
+        <button type="button" class="map-tool-btn auto-design__skip" data-auto-design="generate-all" title="Gera as CTOs, as emendas e os cabos de uma vez, sem parar nas etapas">Gerar tudo direto</button>
+        <button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="generate">Ir para a etapa 1 →</button>`;
     renderAutoDesignCalc();
 }
 
@@ -3295,6 +3334,10 @@ async function generateAutoDesign({ keepOption = false } = {}) {
     const s = autoDesign;
     if (!s) return;
     if (!keepOption) s.optionKey = AUTO_DESIGN_PANEL_OPTION;
+    //Etapa em que a prévia abre: a 1 (só as CTOs; os cabos são traçados na 3) ou direto nos cabos ("Gerar tudo direto").
+    //Refeita por um ajuste da prévia (trecho sem casas), fica na mesma etapa
+    if (!keepOption || !s.stage) s.stage = s.directAll ? 'cables' : AUTO_DESIGN_FIRST_STAGE;
+    s.directAll = false;
     if (s.phase === 'form') {
         readAutoDesignForm();
         commitAutoDesignArea(s);
@@ -3343,14 +3386,19 @@ async function generateAutoDesign({ keepOption = false } = {}) {
         return;
     }
     const options = pickAutoDesignOptions(candidates);
+    const routeNow = getAutoDesignStage(s) === 'cables';
     for (let i = 0; i < options.length; i++) {
         const plan = options[i];
-        step(`${plan.onPoles ? 'Traçando os cabos de poste em poste' : 'Traçando os cabos pelas ruas'} (opção ${i + 1} de ${options.length})…`);
         if (!plan.onStreets) {
+            step(`Encostando as caixas nas ruas (opção ${i + 1} de ${options.length})…`);
             await snapAutoDesignLooseBoxes(plan, isCurrent);
             if (!isCurrent()) return;
             rebuildAutoDesignNetwork(plan);
         }
+        //Antes da etapa dos cabos, o custo das opções é estimado pela distância das caixas pela rua
+        plan.cablesStale = !routeNow;
+        if (!routeNow) continue;
+        step(`${plan.onPoles ? 'Traçando os cabos de poste em poste' : 'Traçando os cabos pelas ruas'} (opção ${i + 1} de ${options.length})…`);
         await routeAutoDesignCables(plan, isCurrent);
         if (!isCurrent()) return;
     }
@@ -3360,9 +3408,6 @@ async function generateAutoDesign({ keepOption = false } = {}) {
     s.optionKey = s.result.option.key;
     s.compare = null;
     s.phase = 'preview';
-    s.stage = s.directAll ? 'cables' : AUTO_DESIGN_FIRST_STAGE;
-    s.directAll = false;
-    s.cablesStale = false;
     showAutoDesignPolygon(s, false);
     drawAutoDesignPreview();
     renderAutoDesign();
@@ -3458,6 +3503,7 @@ async function selectAutoDesignOption(key) {
     s.result = plan;
     s.optionKey = key;
     s.compare = null;
+    if (getAutoDesignStage(s) === 'cables' && plan.cablesStale) return setAutoDesignStage('cables');
     drawAutoDesignPreview();
     renderAutoDesign();
 }
@@ -3485,7 +3531,13 @@ async function refreshAutoDesignAfterEdit() {
     rebuildAutoDesignNetwork(plan);
     //Antes da etapa dos cabos, só a posição das caixas importa: os cabos são traçados ao chegar nela
     if (getAutoDesignStage(s) === 'cables') await routeAutoDesignCables(plan, isCurrent);
-    else s.cablesStale = true;
+    else {
+        //Custo estimado pela distância das caixas pela rua, até os cabos serem traçados de novo
+        plan.cablesStale = true;
+        plan.routed = false;
+        placeAutoDesignReserves(plan);
+        plan.cost = estimateAutoDesignCost(plan);
+    }
     if (!isCurrent()) return;
     s.busy = false;
     s.compare = null;
@@ -3496,11 +3548,13 @@ async function refreshAutoDesignAfterEdit() {
 let AUTO_DESIGN_FIRST_STAGE = 'ctos';  //Etapa em que a prévia abre (os testes antigos abrem direto nos cabos)
 //Etapas da prévia: 1) onde ficam as CTOs, 2) as CEOs e quais CTOs cada uma alimenta, 3) os cabos
 const AUTO_DESIGN_STAGES = [
-    { id: 'ctos', label: 'CTOs', next: 'OK, próximo: emendas', hint: 'Arraste, inclua ou tire CTOs até a cobertura ficar boa. Os cabos são traçados na etapa 3.' },
-    { id: 'ceos', label: 'Emendas', next: 'OK, próximo: cabos', hint: 'Arraste, inclua ou tire CEOs. A linha fina liga cada caixa à que a alimenta; os cabos são traçados na etapa 3.' },
-    { id: 'cables', label: 'Cabos', hint: '' },
+    { id: 'ctos', label: 'CTOs', next: 'Ir para as emendas', hint: 'Arraste a CTO no mapa para mudar de lugar.' },
+    { id: 'ceos', label: 'Emendas', next: 'Traçar os cabos', hint: 'Arraste a CEO no mapa para mudar de lugar. As CTOs ficam onde você deixou.' },
+    { id: 'cables', label: 'Cabos', hint: 'Arraste as caixas no mapa para mover; os cabos e o custo se refazem sozinhos.' },
 ];
 const getAutoDesignStage = (s) => (AUTO_DESIGN_STAGES.some(st => st.id === s?.stage) ? s.stage : 'cables');
+//Fluxo inteiro, na barra do topo: Dados (formulário) → 1 CTOs → 2 Emendas → 3 Cabos
+const AUTO_DESIGN_FLOW = [{ id: 'form', label: 'Dados' }, ...AUTO_DESIGN_STAGES];
 
 async function setAutoDesignStage(stage) {
     const s = autoDesign;
@@ -3508,7 +3562,7 @@ async function setAutoDesignStage(stage) {
     if (!plan || s.busy || !AUTO_DESIGN_STAGES.some(st => st.id === stage)) return;
     s.stage = stage;
     setAutoDesignEditMode(null);
-    if (stage === 'cables' && s.cablesStale) {
+    if (stage === 'cables' && plan.cablesStale) {
         const token = {};
         s.token = token;
         const isCurrent = () => autoDesign === s && s.token === token;
@@ -3517,7 +3571,6 @@ async function setAutoDesignStage(stage) {
         renderAutoDesign();
         await routeAutoDesignCables(plan, isCurrent);
         if (!isCurrent()) return;
-        s.cablesStale = false;
         s.busy = false;
     }
     drawAutoDesignPreview();
@@ -4111,12 +4164,14 @@ function drawAutoDesignPreview() {
     //baixo dos cabos) e, embaixo da CTO, o selo casas/cabe. A CTO clicada fica em destaque, com as casas uma a uma; as
     //outras ficam apagadas. Desligado: círculo verde do raio. s.ctoOverlays guarda o que é de cada CTO (some enquanto
     //ela é arrastada, para não ficar o destaque do lugar antigo junto com a prévia do lugar novo).
+    //Por etapa: CTOs = tudo isso; emendas = só o anel na cor de cada CTO; cabos = nada (só caixas e cabos)
+    const stage = getAutoDesignStage(s);
     s.ctoOverlays = new Map();
-    if (s.showHouses !== false) {
+    if (stage !== 'cables' && s.showHouses !== false) {
         const toLL = (q) => { const ll = plan.model.proj.toLatLng(Array.isArray(q) ? q : [q.x, q.y]); return new google.maps.LatLng(ll.lat, ll.lng); };
         const lists = getAutoDesignCtoHousePoints(plan);
         //Trajeto do drop de cada CTO: pelas ruas, saindo da caixa em todas as direções, até a metragem do cabo
-        const paint = plan.ctos.map(cto => getAutoDesignReachPaths(plan, cto));
+        const paint = plan.ctos.map(cto => (stage === 'ctos' ? getAutoDesignReachPaths(plan, cto) : []));
         const colors = getAutoDesignCtoColors(plan.ctos);
         s.ctoColors = new Map(plan.ctos.map((cto, i) => [cto, colors[i]]));
         const picked = plan.ctos.indexOf(s.selectedCto);
@@ -4130,7 +4185,7 @@ function drawAutoDesignPreview() {
         plan.ctos.forEach((cto, i) => {
             const color = colors[i];
             //Sem ruas para pintar (sem o traçado das ruas): contorno das casas
-            if (!paint[i].length) {
+            if (stage === 'ctos' && !paint[i].length) {
                 const hull = getAutoDesignHull([...lists[i], cto]);
                 const base = { strokeOpacity: fade(i) ? 0.2 : 0.7, fillOpacity: fade(i) ? 0.03 : 0.12 };
                 if (hull.length) own(cto, new google.maps.Polygon({
@@ -4148,7 +4203,7 @@ function drawAutoDesignPreview() {
                 icon: { path: google.maps.SymbolPath.CIRCLE, scale: i === picked ? 19 : 16, fillColor: color, fillOpacity: 0.3, strokeColor: color, strokeOpacity: 1, strokeWeight: 3 },
             }), { opacity: fade(i) ? 0.35 : 1 }, { opacity: 0.35 });
         });
-        plan.ctos.forEach((cto, i) => {
+        if (stage === 'ctos') plan.ctos.forEach((cto, i) => {
             const sum = getAutoDesignCtoSummary(plan, cto);
             const text = `${cto.checked ? '✓ ' : ''}${Math.round(sum.houses)}/${Number.isFinite(sum.maxHouses) ? sum.maxHouses : '∞'}`;
             own(cto, new google.maps.Marker({
@@ -4156,7 +4211,7 @@ function drawAutoDesignPreview() {
                 icon: getAutoDesignCtoBadgeIcon(text, AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(sum)]),
             }), { opacity: fade(i) ? 0.45 : 1 }, { opacity: 0.45 });
         });
-    } else {
+    } else if (stage === 'ctos') {
         plan.ctos.forEach(cto => add(new google.maps.Circle({
             map, center: cto.position, radius: plan.model.coverRadius, clickable: false, zIndex: 40,
             strokeColor: '#16a34a', strokeOpacity: 0.35, strokeWeight: 1, fillColor: '#16a34a', fillOpacity: 0.06,
@@ -4167,7 +4222,6 @@ function drawAutoDesignPreview() {
         map, center: e.markerInfo.marker.getPosition(), radius: plan.model.coverRadius, clickable: false, zIndex: 39,
         strokeColor: '#2563eb', strokeOpacity: 0.5, strokeWeight: 1, fillColor: '#2563eb', fillOpacity: 0.06,
     })));
-    const stage = getAutoDesignStage(s);
     //Etapa das CEOs: linha fina reta de cada caixa até as que ela alimenta (a árvore da rede, sem os cabos)
     if (stage === 'ceos') [plan.start, ...plan.ceos, ...plan.ctos].forEach(box => [...(box?.kids || []), ...(box?.ceoKids || [])].forEach(kid => add(new google.maps.Polyline({
         map, path: [box.position, kid.position], clickable: false, zIndex: 58, strokeColor: kid.type === 'CEO' ? '#334155' : '#64748b', strokeOpacity: 0.8, strokeWeight: kid.type === 'CEO' ? 3 : 1.5,
@@ -4264,7 +4318,9 @@ function getAutoDesignWarnings(plan, params) {
     const st = plan.stats;
     const model = plan.model;
     const warnings = [];
-    const add = (warning, targets) => warnings.push(makeAutoDesignWarning(warning, targets));
+    //Cada aviso aparece na etapa em que se resolve: CTOs, emendas (CEOs) ou cabos
+    let stage = 'ctos';
+    const add = (warning, targets) => warnings.push(Object.assign(makeAutoDesignWarning(warning, targets), { stage }));
     const boxTarget = (box, label = box.name) => ({ position: box.position, label });
     const cableTarget = (cable, at) => ({
         position: at ? autoDesignLatLng(model, at) : google.maps.geometry.spherical.interpolate(cable.from.position, cable.to.position, 0.5),
@@ -4281,12 +4337,14 @@ function getAutoDesignWarnings(plan, params) {
         }, groupAutoDesignTargets(model, far, 'Casas sem CTO'));
     }
     //CEO tirada à mão: as CTOs dela vão para as outras, que podem passar de "CTOs por CEO"
+    stage = 'ceos';
     const ceoFull = params.ceoMax > 0 ? plan.ceos.filter(c => c.isNew && c.own > params.ceoMax) : [];
     if (ceoFull.length) add({
         title: ceoFull.length === 1 ? `${ceoFull[0].name} tem ${ceoFull[0].own} CTOs (limite: ${params.ceoMax})` : `${ceoFull.length} CEOs passaram do limite de ${params.ceoMax} CTOs`,
         text: ceoFull.length === 1 ? `${ceoFull[0].own - params.ceoMax} ${pluralAutoDesign(ceoFull[0].own - params.ceoMax, 'CTO a mais', 'CTOs a mais')} do que o limite de CTOs por CEO.` : `${ceoFull.map(c => `${c.name}: ${c.own} CTOs`).join(' · ')}.`,
         fix: 'Use "+ CEO" perto das CTOs mais distantes para dividir o grupo, ou aumente "CTOs por CEO" em Ajustar.',
     }, ceoFull.map(c => boxTarget(c, `${c.name} · ${c.own} CTOs`)));
+    stage = 'ctos';
     if (st.overloaded > 0) {
         const full = plan.ctos.filter(c => c.clients > st.usablePorts + 0.5).sort((a, b) => b.clients - a.clients);
         const listed = full.slice(0, 4).map(c => `${c.name} (≈ ${Math.round(c.clients)})`).join(', ') + (full.length > 4 ? ` e mais ${full.length - 4}` : '');
@@ -4338,6 +4396,7 @@ function getAutoDesignWarnings(plan, params) {
         text: 'As caixas foram espalhadas pela área toda, sem seguir as ruas.',
         fix: 'Confira as que caíram em mato ou pasto, ou gere de novo mais tarde.',
     });
+    stage = 'cables';
     const straight = plan.cables.filter(c => !getAutoDesignCachedRoute(plan, c)).map(c => cableTarget(c));
     if (st.tooMany) add({
         title: `${n(st.straight)} ${pluralAutoDesign(st.straight, 'cabo ficou', 'cabos ficaram')} em linha reta`,
@@ -4390,6 +4449,7 @@ function getAutoDesignWarnings(plan, params) {
         text: `O sinal estimado funciona, mas sobra menos de ${tight[0].cfg.margin} dB de margem para emendas e conectores: ${dbmText(tight)}.`,
         fix: 'Se puder, encurte o cabo ou use splitagem menor.',
     }, tight.map(signalTarget));
+    stage = 'ctos';
     if (st.polesUnmapped > 0) add({
         level: 'info',
         title: `${st.polesUnmapped} ${pluralAutoDesign(st.polesUnmapped, 'poste está', 'postes estão')} em ruas que faltam no mapa`,
@@ -4411,6 +4471,7 @@ function getAutoDesignWarnings(plan, params) {
             fix: `Ligue ${pluralAutoDesign(loose.length, 'essa CTO', 'essas CTOs')} à rede.`,
         }, loose.map(e => ({ position: e.markerInfo.marker?.getPosition?.(), label: e.markerInfo.name })));
     }
+    stage = 'cables';
     if (!plan.ceos[0].isNew) {
         const splitters = st.existingRootSplitters > 0 ? ` e coloque ${st.existingRootSplitters} splitter(s) 1:${params.primary}` : '';
         add({
@@ -4595,6 +4656,67 @@ function renderAutoDesignCtoHouses(s, plan) {
         </div></div>`;
 }
 
+//Barra das etapas no topo do painel: feitas (✓, clique volta para ela), a atual e as próximas
+function getAutoDesignFlowIndex(s) {
+    if (s.phase === 'done') return AUTO_DESIGN_FLOW.length;
+    if (s.phase === 'form') return 0;
+    return Math.max(1, AUTO_DESIGN_FLOW.findIndex(f => f.id === getAutoDesignStage(s)));
+}
+function renderAutoDesignFlow(s) {
+    const at = getAutoDesignFlowIndex(s);
+    const locked = s.busy || s.phase === 'loading' || s.phase === 'done';
+    const check = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    return `<ol class="auto-design__flow" aria-label="Etapas do pré-projeto">${AUTO_DESIGN_FLOW.map((f, i) => {
+        const go = i < at && !locked ? (f.id === 'form' ? ' data-auto-design="adjust"' : ` data-auto-design="stage" data-stage="${f.id}"`) : ' disabled';
+        return `<li class="${i < at ? 'is-done' : i === at ? 'is-current' : ''}"><button type="button"${go}${i === at ? ' aria-current="step"' : ''} title="${i < at && !locked ? `Voltar para ${f.label}` : f.label}">`
+            + `<span class="auto-design__flow-dot">${i < at ? check : i || '•'}</span><span class="auto-design__flow-label">${f.label}</span></button></li>`;
+    }).join('')}</ol>`;
+}
+const renderAutoDesignHero = (eyebrow, title, text) => `<div class="auto-design__hero"><small>${eyebrow}</small><h4>${title}</h4><p>${text}</p></div>`;
+const renderAutoDesignTodo = (items) => `<div class="auto-design__todo"><b>O que fazer</b><ol>${items.map((t, i) => `<li><span>${i + 1}</span><div>${t}</div></li>`).join('')}</ol></div>`;
+const renderAutoDesignKpi = (label, value, hint = '', good = false) => `<div class="auto-design__kpi${good ? ' is-good' : ''}"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
+
+//CTOs que cada CEO alimenta (ela e as que saem das CTOs dela), na ordem do caminho
+function getAutoDesignCeoCtos(ceo) {
+    const out = [];
+    const walk = (box) => (box.kids || []).forEach(kid => { if (kid.type === 'CTO' && !out.includes(kid)) { out.push(kid); walk(kid); } });
+    walk(ceo);
+    return out;
+}
+
+function renderAutoDesignCeoCards(s, plan) {
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    const colors = s.ctoColors || new Map(plan.ctos.map((cto, i, all) => [cto, getAutoDesignCtoColors(all)[i]]));
+    const parentOf = new Map();
+    plan.ceos.forEach(ceo => (ceo.ceoKids || []).forEach(kid => parentOf.set(kid, ceo)));
+    return `<div class="auto-design__ceos">${plan.ceos.map((ceo, i) => {
+        const ctos = getAutoDesignCeoCtos(ceo);
+        const parent = parentOf.get(ceo);
+        const from = parent ? `sai da ${parent.name}` : plan.start ? `sai do ${plan.start.name}` : ceo.isNew ? 'começo da rede' : 'já existe';
+        return `<button type="button" class="auto-design__ceo" data-auto-design="ceo-focus" data-ceo="${i}" title="Ver no mapa">
+            <span class="auto-design__ceo-head"><i aria-hidden="true"></i><b>${esc(ceo.name)}</b><small>${esc(from)}</small><em>${ctos.length} ${ctos.length === 1 ? 'CTO' : 'CTOs'}</em></span>
+            ${ctos.length ? `<span class="auto-design__chips">${ctos.map(cto => `<span class="auto-design__chip"><i style="background:${esc(colors.get(cto) || AUTO_DESIGN_CTO_PALETTE[0])}"></i>${esc(cto.name)}</span>`).join('')}</span>` : ''}
+        </button>`;
+    }).join('')}</div>`;
+}
+
+//Custo da etapa dos cabos: total, por porta e por cliente e a parte de cada coisa
+function renderAutoDesignCostCard(cost) {
+    if (!cost) return '';
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    const parts = [
+        ['Cabos', cost.sections.cables, '#fbbf24'], ['Ferragens', cost.sections.hardware, '#a7f3d0'], ['Caixas', cost.sections.boxes, '#93c5fd'],
+        ['Fusão', cost.sections.fusion, '#f9a8d4'], ['Mão de obra', cost.labor, '#e2e8f0'],
+    ].filter(([, value]) => value > 0);
+    const sum = parts.reduce((a, [, v]) => a + v, 0) || 1;
+    return `<div class="auto-design__cost-card">
+        <small>Custo estimado</small><b>${esc(formatAutoDesignMoney(cost.total))}</b>
+        <p>${esc(formatAutoDesignMoney(cost.perPort))} por porta · ${esc(formatAutoDesignMoney(cost.perClient))} por cliente</p>
+        <span class="auto-design__cost-bar" aria-hidden="true">${parts.map(([, v, c]) => `<i style="width:${(v / sum * 100).toFixed(1)}%;background:${c}"></i>`).join('')}</span>
+        <span class="auto-design__cost-legend">${parts.map(([label, v, c]) => `<span title="${esc(formatAutoDesignMoney(v))}"><i style="background:${c}"></i>${label}</span>`).join('')}</span>
+    </div>`;
+}
+
 function renderAutoDesignPreviewPanel() {
     const s = autoDesign;
     const plan = s.result;
@@ -4602,73 +4724,116 @@ function renderAutoDesignPreviewPanel() {
     const p = plan.params;
     const cost = plan.cost;
     const esc = (v) => escapeHtml(String(v ?? ''));
-    document.getElementById('autoDesignTitle').textContent = s.options?.length > 1 ? 'Escolha a opção' : 'Prévia do pré-projeto';
-    const extra = plan.ctos.length - plan.byPorts;
-    const fixedCtos = plan.ctos.filter(isAutoDesignCtoFixed).length;
-    const rows = summarizeAutoDesignCables(plan).map(r => `
-        <li><span><i style="background:${esc(getCableColor(r.fiber))}"></i>${AUTO_DESIGN_ROLE_LABELS[r.role]} ${esc(r.fiber)}${r.count > 1 ? ` <small>· ${r.count} cabos</small>` : ''}</span><b>${esc(formatAutoDesignMeters(r.length))}</b></li>`).join('');
-    const warnings = getAutoDesignWarnings(plan, p);
-    s.warnings = warnings;
-    const ports = plan.ctos.length * p.ports;
-    const ceoText = st.ceos > 1 ? `${st.ceos} CEOs novas` : plan.root.isNew ? plan.root.name : `Sai de ${plan.root.name}`;
-    const split = p.levels === 2 ? `1:${p.primary} × 1:${p.ports}` : `1:${p.ports}`;
-    const mode = s.editMode;
+    const fmt = (v) => Math.round(v).toLocaleString('pt-BR');
+    document.getElementById('autoDesignTitle').textContent = 'Pré-projeto';
     const stage = getAutoDesignStage(s);
-    const stageAt = AUTO_DESIGN_STAGES.findIndex(st => st.id === stage);
+    const stageAt = AUTO_DESIGN_STAGES.findIndex(x => x.id === stage);
     const stageInfo = AUTO_DESIGN_STAGES[stageAt];
-    const stepper = `<ol class="auto-design__stages" aria-label="Etapas">${AUTO_DESIGN_STAGES.map((st, i) => `<li class="${i === stageAt ? 'is-current' : i < stageAt ? 'is-done' : ''}"><button type="button" data-auto-design="stage" data-stage="${st.id}"${s.busy || i > stageAt ? ' disabled' : ''}${i === stageAt ? ' aria-current="step"' : ''}><b>${i + 1}</b> ${st.label}</button></li>`).join('')}</ol>`;
-    const stale = stage !== 'cables' && s.cablesStale;
+    const mode = s.editMode;
+    const split = p.levels === 2 ? `1:${p.primary} × 1:${p.ports}` : `1:${p.ports}`;
+    const ports = plan.ctos.length * p.ports;
     const tool = (action, label, active) => `<button type="button" class="map-tool-btn auto-design__tool${active ? ' is-active' : ''}" data-auto-design="${action}" aria-pressed="${active ? 'true' : 'false'}">${label}</button>`;
-    const costRows = cost ? [
-        ['Cabos', cost.sections.cables], ['Ferragens (≈ ' + cost.poles.toLocaleString('pt-BR') + ' postes)', cost.sections.hardware],
-        ['Caixas e reservas', cost.sections.boxes], [`Fusão (${cost.fusions} fusões)`, cost.sections.fusion], ['Mão de obra (ref. terceirizada)', cost.labor],
-    ].map(([label, value]) => `<li><span>${esc(label)}</span><b>${esc(formatAutoDesignMoney(value))}</b></li>`).join('') : '';
-    document.getElementById('autoDesignBody').innerHTML = `
-        ${stepper}
-        ${renderAutoDesignOptions(s)}
-        ${renderAutoDesignAreaOpacity(s)}
-        ${stage === 'cables' ? renderAutoDesignAccessRoutes(s) : ''}
-        <dl class="map-tool-stats">
-            <div><dt>CTOs</dt><dd>${plan.ctos.length} · ${esc(split)}</dd></div>
-            <div><dt>${plan.root.isNew || st.ceos > 1 ? 'CEO' : 'Origem'}</dt><dd>${esc(ceoText)}</dd></div>
-            <div><dt>Cobertura</dt><dd>${Math.round(st.coverage * 100)}% das casas</dd></div>
-            <div><dt>Clientes / portas</dt><dd>${st.clients.toLocaleString('pt-BR')} / ${ports.toLocaleString('pt-BR')}</dd></div>
-            ${st.existingCtos ? `<div><dt>CTOs existentes</dt><dd title="Já estão no mapa e entraram na conta">${st.existingCtos} · ≈ ${st.existingClients.toLocaleString('pt-BR')} clientes</dd></div>` : ''}
-            <div><dt>PONs</dt><dd>${st.pons.toLocaleString('pt-BR')}</dd></div>
-            ${cost ? `<div><dt>Custo estimado${stale ? ' ≈' : ''}</dt><dd title="${esc(formatAutoDesignMoney(cost.total))}${stale ? ' (antes de mexer nas caixas; o valor certo sai na etapa dos cabos)' : ''}">${esc(formatAutoDesignMoneyShort(cost.total))}</dd></div>` : ''}
-        </dl>
-        ${cost ? `<p class="auto-design__cost">${esc(formatAutoDesignMoney(cost.perPort))} por porta · ${esc(formatAutoDesignMoney(cost.perClient))} por cliente</p>` : ''}
-        ${extra > 0 ? `<p class="map-tool-help">${plan.byPorts} CTOs pela penetração + ${extra} onde foi preciso (casas que nenhuma delas alcança ou CTO que passaria muito das portas).</p>` : extra < 0 ? `<p class="map-tool-help">${plan.byPorts} CTOs pela penetração; ${-extra} ${-extra === 1 ? 'saiu' : 'saíram'} porque cabiam junto com a vizinha.</p>` : ''}
-        ${stage === 'cables' ? `<ul class="auto-design__list">${rows}</ul>` : ''}
-        ${cost && stage === 'cables' ? `<details class="auto-design__more"><summary>Custo estimado: ${esc(formatAutoDesignMoney(cost.total))}</summary><ul class="auto-design__list">${costRows}</ul><p class="map-tool-help">Materiais pela lista de materiais (preços do catálogo); mão de obra pela tabela padrão da terceirizada.</p></details>` : ''}
-        ${renderAutoDesignCtoHouses(s, plan)}
-        <div class="auto-design__tools" role="group" aria-label="Editar a prévia">
-            ${stage !== 'ceos' ? `${tool('mode-add', '+ CTO', mode === 'add')}${tool('mode-remove', '− CTO', mode === 'remove')}` : ''}${stage !== 'ctos' ? `${tool('mode-add-ceo', '+ CEO', mode === 'add-ceo')}${tool('mode-remove-ceo', '− CEO', mode === 'remove-ceo')}` : ''}${stage === 'ctos' ? tool('mode-exclude', 'Sem casas', mode === 'exclude') : ''}
-        </div>
-        <p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || stageInfo.hint || 'Arraste as caixas no mapa para mover; a rede, as fibras e o custo se refazem sozinhos.')}</p>
-        ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
-        ${fixedCtos && fixedCtos < plan.ctos.length ? `<p class="map-tool-help auto-design__readjust">${fixedCtos === 1 ? '1 CTO fixa' : `${fixedCtos} CTOs fixas`} (movida, incluída ou conferida por você). <button type="button" class="auto-design__link" data-auto-design="readjust"${s.busy ? ' disabled' : ''}>Reajustar as outras em volta</button></p>` : ''}
-        ${renderAutoDesignWarnings(warnings)}
-        ${stage !== 'cables' ? '' : `<p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Linhas na cor da CTO = trajeto do drop pelas ruas, da caixa até a metragem do cabo; selo = casas dela / quantas cabem (verde: cabe, vermelho: passou das portas); ' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`}`;
-    const back = stageAt > 0 ? `<button type="button" class="map-tool-btn" data-auto-design="stage" data-stage="${AUTO_DESIGN_STAGES[stageAt - 1].id}"${s.busy ? ' disabled' : ''}>Voltar</button>` : '';
-    if (stage !== 'cables') {
-        document.getElementById('autoDesignActions').innerHTML = `
-        ${back || '<button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>'}
-        ${stage === 'ctos' ? `<button type="button" class="map-tool-btn" data-auto-design="stage" data-stage="cables" title="Pula para os cabos, com as emendas como o sistema escolheu"${s.busy ? ' disabled' : ''}>Gerar tudo direto</button>` : ''}
-        <button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="stage" data-stage="${AUTO_DESIGN_STAGES[stageAt + 1].id}"${s.busy ? ' disabled' : ''}>${esc(stageInfo.next)}</button>`;
-        return;
+    const hint = `<p class="map-tool-help auto-design__hint">${s.busy ? '<span class="route-suggest__spinner" aria-hidden="true"></span> Atualizando a rede…' : esc(AUTO_DESIGN_EDIT_HINTS[mode] || stageInfo.hint)}</p>`;
+    //Avisos: cada etapa mostra os seus; a dos cabos, todos
+    const warnings = getAutoDesignWarnings(plan, p).filter(w => stage === 'cables' || w.stage === stage);
+    s.warnings = warnings;
+    const problems = warnings.filter(w => w.level !== 'info').length;
+    const warnBlock = warnings.length ? renderAutoDesignWarnings(warnings)
+        : `<p class="auto-design__ok">✓ ${stage === 'ctos' ? 'Nenhum problema nas CTOs' : stage === 'ceos' ? 'Nenhum problema nas emendas' : 'Nenhum aviso'}</p>`;
+    const back = stageAt > 0
+        ? `<button type="button" class="map-tool-btn auto-design__back" data-auto-design="stage" data-stage="${AUTO_DESIGN_STAGES[stageAt - 1].id}"${s.busy ? ' disabled' : ''}>← ${AUTO_DESIGN_STAGES[stageAt - 1].label}</button>`
+        : `<button type="button" class="map-tool-btn auto-design__back" data-auto-design="adjust"${s.busy ? ' disabled' : ''}>← Dados</button>`;
+    const next = stageInfo.next
+        ? `<button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="stage" data-stage="${AUTO_DESIGN_STAGES[stageAt + 1].id}"${s.busy ? ' disabled' : ''}>${esc(stageInfo.next)} →</button>`
+        : '';
+    let body = '';
+    if (stage === 'ctos') {
+        const extra = plan.ctos.length - plan.byPorts;
+        const fixedCtos = plan.ctos.filter(isAutoDesignCtoFixed).length;
+        const coverage = Math.round(st.coverage * 100);
+        body = `
+            ${renderAutoDesignHero('Etapa 1 de 3', 'Onde ficam as CTOs', 'Cada cor é uma CTO. A linha mostra até onde o cabo dela chega pelas ruas.')}
+            ${renderAutoDesignOptions(s)}
+            <div class="auto-design__kpis">
+                ${renderAutoDesignKpi('CTOs', plan.ctos.length, split)}
+                ${renderAutoDesignKpi('Cobertura', `${coverage}%`, 'das casas', coverage >= 95)}
+                ${renderAutoDesignKpi('Clientes', fmt(st.clients), `de ${fmt(ports)} portas`)}
+            </div>
+            ${st.existingCtos ? `<p class="map-tool-help">${st.existingCtos} CTO(s) que já existem entraram na conta (atendem ≈ ${st.existingClients.toLocaleString('pt-BR')} clientes; azul no mapa).</p>` : ''}
+            ${extra > 0 ? `<p class="map-tool-help">${plan.byPorts} CTOs pela penetração + ${extra} onde foi preciso (casas que nenhuma delas alcança ou CTO que passaria muito das portas).</p>` : extra < 0 ? `<p class="map-tool-help">${plan.byPorts} CTOs pela penetração; ${-extra} ${-extra === 1 ? 'saiu' : 'saíram'} porque cabiam junto com a vizinha.</p>` : ''}
+            ${renderAutoDesignTodo([
+                'Veja se as linhas coloridas cobrem todas as ruas com casas.',
+                'Arraste uma CTO para mudar de lugar: as vizinhas mostram quantas casas ganham (+) ou perdem (−).',
+                problems ? 'Resolva o que estiver em <b>Avisos</b>, logo abaixo.' : 'Use <b>+ CTO</b> e <b>− CTO</b> se faltar ou sobrar caixa.',
+            ])}
+            ${warnBlock}
+            <div class="auto-design__tools" role="group" aria-label="Mexer nas CTOs">
+                ${tool('mode-add', '+ CTO', mode === 'add')}${tool('mode-remove', '− CTO', mode === 'remove')}${tool('mode-exclude', 'Sem casas', mode === 'exclude')}
+            </div>
+            ${hint}
+            ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
+            ${fixedCtos && fixedCtos < plan.ctos.length ? `<p class="map-tool-help auto-design__readjust">${fixedCtos === 1 ? '1 CTO fixa' : `${fixedCtos} CTOs fixas`} (movida, incluída ou conferida por você). <button type="button" class="auto-design__link" data-auto-design="readjust"${s.busy ? ' disabled' : ''}>Reajustar as outras em volta</button></p>` : ''}
+            ${renderAutoDesignCtoHouses(s, plan)}
+            ${renderAutoDesignAreaOpacity(s)}`;
+    } else if (stage === 'ceos') {
+        const newCeos = plan.ceos.filter(c => c.isNew).length;
+        body = `
+            ${renderAutoDesignHero('Etapa 2 de 3', 'Caixas de emenda', 'As CEOs recebem a fibra e alimentam as CTOs. A linha fina mostra quem alimenta quem.')}
+            <div class="auto-design__kpis">
+                ${renderAutoDesignKpi('CEOs', newCeos || plan.ceos.length, newCeos ? (newCeos === 1 ? 'nova' : 'novas') : 'já existe')}
+                ${renderAutoDesignKpi('CTOs', plan.ctos.length, p.ceoMax > 0 ? `até ${p.ceoMax} por CEO` : 'sem limite por CEO')}
+                ${renderAutoDesignKpi('Splitter', split, p.levels === 2 ? 'CEO × CTO' : 'na CTO')}
+            </div>
+            ${renderAutoDesignCeoCards(s, plan)}
+            ${renderAutoDesignTodo([
+                'Confira, pelas linhas finas, qual CEO alimenta cada CTO.',
+                'Arraste a CEO para o poste que preferir.',
+                'Se um grupo de CTOs ficou longe, use <b>+ CEO</b> perto dele: as CTOs mais perto passam para ela.',
+            ])}
+            ${warnBlock}
+            <div class="auto-design__tools" role="group" aria-label="Mexer nas CEOs">
+                ${tool('mode-add-ceo', '+ CEO', mode === 'add-ceo')}${tool('mode-remove-ceo', '− CEO', mode === 'remove-ceo')}
+            </div>
+            ${hint}
+            ${renderAutoDesignAreaOpacity(s)}`;
+    } else if (plan.cablesStale) {
+        body = `
+            ${renderAutoDesignHero('Etapa 3 de 3', 'Cabos e custo', 'Os cabos seguem pelas ruas, de poste em poste.')}
+            <p class="auto-design__loading"><span class="route-suggest__spinner" aria-hidden="true"></span>${plan.onPoles ? 'Traçando os cabos de poste em poste…' : 'Traçando os cabos pelas ruas…'}</p>`;
+    } else {
+        const rows = summarizeAutoDesignCables(plan).map(r => `
+            <li><span><i style="background:${esc(getCableColor(r.fiber))}"></i>${AUTO_DESIGN_ROLE_LABELS[r.role]} ${esc(r.fiber)}${r.count > 1 ? ` <small>· ${r.count} cabos</small>` : ''}</span><b>${esc(formatAutoDesignMeters(r.length))}</b></li>`).join('');
+        const reserves = plan.reserves?.length || 0;
+        const costRows = cost ? [
+            ['Cabos', cost.sections.cables], ['Ferragens (≈ ' + cost.poles.toLocaleString('pt-BR') + ' postes)', cost.sections.hardware],
+            ['Caixas e reservas', cost.sections.boxes], [`Fusão (${cost.fusions} fusões)`, cost.sections.fusion], ['Mão de obra (ref. terceirizada)', cost.labor],
+        ].map(([label, value]) => `<li><span>${esc(label)}</span><b>${esc(formatAutoDesignMoney(value))}</b></li>`).join('') : '';
+        body = `
+            ${renderAutoDesignHero('Etapa 3 de 3', 'Cabos e custo', 'Os cabos seguem pelas ruas, de poste em poste. Confira o caminho e crie o projeto.')}
+            ${renderAutoDesignCostCard(cost)}
+            <dl class="map-tool-stats">
+                <div><dt>CTOs</dt><dd>${plan.ctos.length} · ${esc(split)}</dd></div>
+                <div><dt>Cobertura</dt><dd>${Math.round(st.coverage * 100)}% das casas</dd></div>
+                <div><dt>Clientes / portas</dt><dd>${st.clients.toLocaleString('pt-BR')} / ${ports.toLocaleString('pt-BR')}</dd></div>
+                <div><dt>PONs</dt><dd>${st.pons.toLocaleString('pt-BR')}</dd></div>
+                ${st.existingCtos ? `<div><dt>CTOs existentes</dt><dd title="Já estão no mapa e entraram na conta">${st.existingCtos} · ≈ ${st.existingClients.toLocaleString('pt-BR')} clientes</dd></div>` : ''}
+            </dl>
+            <ul class="auto-design__list">${rows}${reserves ? `<li><span><i style="background:#94a3b8"></i>Reservas técnicas</span><b>${reserves}</b></li>` : ''}</ul>
+            ${costRows ? `<details class="auto-design__more"><summary>Custo por parte</summary><ul class="auto-design__list">${costRows}</ul><p class="map-tool-help">Materiais pela lista de materiais (preços do catálogo); mão de obra pela tabela padrão da terceirizada.</p></details>` : ''}
+            ${renderAutoDesignAccessRoutes(s)}
+            ${warnBlock}
+            ${hint}
+            <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao criar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${reserves ? `${reserves} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria.</p>
+            ${renderAutoDesignAreaOpacity(s)}`;
     }
-    document.getElementById('autoDesignActions').innerHTML = `
-        ${back}
-        <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
-        <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>
-        <button type="button" class="map-tool-btn" data-auto-design="compare" title="Comparar CTO 1:8 × 1:16 (custo, portas, cobertura)">Comparar</button>
-        <button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="accept"${s.busy ? ' disabled' : ''}>${s.options?.length > 1 ? `Criar ${esc(plan.option.label.toLowerCase())}` : 'Aceitar e criar'}</button>`;
+    document.getElementById('autoDesignBody').innerHTML = body;
+    const actions = stage === 'cables'
+        ? `${back}
+           <button type="button" class="map-tool-btn auto-design__compare" data-auto-design="compare" title="Comparar CTO 1:8 × 1:16 (custo, portas, cobertura)"${s.busy || plan.cablesStale ? ' disabled' : ''}>Comparar</button>
+           <button type="button" class="map-tool-btn map-tool-btn--primary" data-auto-design="accept"${s.busy || plan.cablesStale ? ' disabled' : ''}>✓ Criar projeto</button>`
+        : `${back}${next}`;
+    document.getElementById('autoDesignActions').innerHTML = actions;
 }
-
-// ---------------------------------------------------------------
-// Comparar 1:8 × 1:16 (mesma área, mesmas opções)
-// ---------------------------------------------------------------
 
 async function compareAutoDesign() {
     const s = autoDesign;
@@ -4960,6 +5125,8 @@ function renderAutoDesignDonePanel() {
     const c = s.created;
     const esc = (v) => escapeHtml(String(v ?? ''));
     document.getElementById('autoDesignTitle').textContent = 'Pré-projeto criado';
+    const flow = document.getElementById('autoDesignFlow');
+    if (flow) flow.innerHTML = renderAutoDesignFlow(s);
     document.getElementById('autoDesignBody').innerHTML = `
         <dl class="map-tool-stats">
             <div><dt>Pasta</dt><dd>${esc(c.folderName)}</dd></div>
@@ -5016,6 +5183,11 @@ document.addEventListener('click', (e) => {
         const s = autoDesign;
         if (action === 'cancel') closeAutoDesign();
         else if (action === 'generate') generateAutoDesign();
+        else if (action === 'generate-all' && s) { s.directAll = true; generateAutoDesign(); }
+        else if (action === 'ceo-focus' && s?.result) {
+            const ceo = s.result.ceos[parseInt(button.dataset.ceo, 10)];
+            if (ceo?.position && typeof map !== 'undefined' && map) { map.panTo(ceo.position); flashAutoDesignTarget(ceo.position); }
+        }
         else if (action === 'accept') { if (getAutoDesignStage(s) === 'cables' && !s?.busy) acceptAutoDesign(); }
         else if (action === 'stage') setAutoDesignStage(button.dataset.stage);
         else if (action === 'compare') compareAutoDesign();
@@ -5059,6 +5231,8 @@ document.addEventListener('click', (e) => {
         } else if (action === 'use-ports' && s) {
             s.params.ports = parseInt(button.dataset.ports, 10) || s.params.ports;
             clampAutoDesignPrimary(s.params);
+            //Veio da comparação, na etapa dos cabos: a nova sai já com os cabos
+            s.directAll = true;
             generateAutoDesign();
         } else if (action.startsWith('mode-') && s) {
             setAutoDesignEditMode(action.slice(5));
@@ -5145,6 +5319,7 @@ document.addEventListener('change', (e) => {
         return;
     }
     if (!autoDesign || autoDesign.phase !== 'form' || !e.target.closest?.('#autoDesignBox')) return;
+    updateAutoDesignFoldSummaries();
     if (['autoDesignStart', 'autoDesignUseHouses', 'autoDesignUsePoles', 'autoDesignUseExisting'].includes(e.target.id)) {
         readAutoDesignForm();
         renderAutoDesign();
