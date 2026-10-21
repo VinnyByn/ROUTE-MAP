@@ -2335,8 +2335,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && suggest.dismissed.points === 2 && suggest.dismissed.hidden && !suggest.dismissed.overlay,
     `sugestão de rota ao ligar A → B: aceitar usa a rota, recusar mantém a reta (${JSON.stringify(suggest)})`);
 
-  //Leitura rápida: resumo do projeto na barra lateral, legenda do mapa, selo de ocupação nas CTOs, busca na lista de
-  //materiais e ícones próprios no menu (desfazer/refazer não usam mais o de "recarregar")
+  //Leitura rápida: resumo do projeto na barra lateral, legenda do mapa, sem selo de vagas no mapa (as vagas ficam no
+  //cartão ao passar o mouse), busca na lista de materiais e ícones próprios no menu (desfazer/refazer não usam mais o de "recarregar")
   const readout = await sp.evaluate(async () => {
     if (!map) map = new google.maps.Map(document.getElementById('map'), {});
     rebuildSidebarFromJSON([{ id: 'projOV', name: 'Projeto OV', isProject: true, type: 'TCR', children: [] }], document.getElementById('sidebar'));
@@ -2349,19 +2349,17 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     map.setZoom(17);
     refreshNetworkOverlays();
     const occ = getCtoOccupancy(cto);
-    const badge = networkOverlays.badges.get(cto);
     const out = {
       occ: occ.used === 1 && !occ.capacity && occ.level === 'none',
-      badge: !!badge && decodeURIComponent(badge.marker.get('icon').url).includes('1 cl.'),
+      noBadge: typeof refreshCtoBadges === 'undefined' && !document.querySelector('[data-opt="ctoBadges"]'),
+      hoverVagas: /Vagas de atendimento|cliente/i.test(buildMarkerHoverHtml(cto)),
       summary: /1 CTO · .* de cabo/.test(document.querySelector('.folder-title[data-folder-id="projOV"]').dataset.summary || ''),
     };
     setupMapLegend();
     document.querySelector('.map-legend__toggle').click();
     const legend = document.querySelector('.map-legend__body');
     out.legend = /FO-12 · Novo/.test(legend.textContent) && /CTO/.test(legend.textContent) && legend.querySelector('.map-legend__line').style.getPropertyValue('--line-color') === '#123456';
-    legend.querySelector('[data-opt="ctoBadges"]').click();
-    out.toggle = networkOverlays.badges.size === 0 && !networkOverlays.enabled;
-    setCtoBadgesVisible(true);
+    out.legendHint = /passe o mouse na caixa/.test(legend.textContent) && !legend.querySelector('[data-opt="ctoBadges"]');
     calculateBomState();
     renderBomTable();
     const search = document.getElementById('materialSearch');
@@ -2388,7 +2386,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     document.querySelector('.folder-title[data-folder-id="projOV"]').closest('.folder').remove();
     return out;
   });
-  check(Object.values(readout).every(Boolean), `leitura rápida: resumo do projeto, legenda, selo de ocupação, busca na lista de materiais e ícones do menu (${JSON.stringify(readout)})`);
+  check(Object.values(readout).every(Boolean), `leitura rápida: resumo do projeto, legenda sem selo de vagas, busca na lista de materiais e ícones do menu (${JSON.stringify(readout)})`);
 
   //Pré-projeto automático: polígono + casas + penetração + splitagem → CTOs na rua mais perto e cabos pelas ruas (OSRM)
   const autoDesignOut = await sp.evaluate(async () => {
