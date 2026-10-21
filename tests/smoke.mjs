@@ -2382,6 +2382,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     window.fetchOsrmRoute = async (from, to) => (osrmUp ? [from, new google.maps.LatLng(from.lat(), to.lng()), to] : null);
     const polygon = savedPolygons.find(p => p.uid === 'pg_ad');
     const menu = buildSidebarMenuItems({ kind: 'polygon', info: polygon, name: polygon.name, row: polygon.listItem }).some(i => i.action === 'auto-design');
+    AUTO_DESIGN_FIRST_STAGE = 'cables';
     openAutoDesign(polygon);
     const opened = !document.getElementById('autoDesignBox').classList.contains('hidden') && document.getElementById('autoDesignStart').value === 'mk_ad_pop';
     const labels = document.getElementById('autoDesignBody').textContent;
@@ -2422,7 +2423,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     const split = { ports: 16, primary: 8 };
     const extras = {
       options: autoDesign.options.length >= 2 && autoDesign.options.length <= 3 && plan.option.panel && document.querySelectorAll('[data-auto-design="option"]').length === autoDesign.options.length,
-      polygonHidden: polygon.polygonObject.getVisible() === false,
+      polygonHidden: polygon.polygonObject.get('clickable') === false,
       split128: clampAutoDesignPrimary(split).includes(8) && split.primary === 8,
       //Painel baixo: nada é espremido (a lista de cabos sumia); quem rola é o painel
       notSquashed: (() => {
@@ -2918,7 +2919,30 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await autoDesign.polesPromise;
       Object.assign(autoDesign.params, { occupancy: 20, ports: 8, maxFill: 100, coverRadius: 200, levels: 1, useHouses: true, usePoles: true, ctoSpacing: '' });
       renderAutoDesign();
+      AUTO_DESIGN_FIRST_STAGE = 'ctos';
       await generateAutoDesign();
+      AUTO_DESIGN_FIRST_STAGE = 'cables';
+      {
+        //Etapas: 1) só CTOs, sem cabos nem CEO; 2) CEOs com a linha fina da árvore; 3) cabos traçados de novo se mexeu
+        const cableLines = () => autoDesign.overlays.filter(o => o.get?.('icons')?.[0]?.repeat === '13px').length;
+        const st = { first: autoDesign.stage === 'ctos', noCables: cableLines() === 0, stepper: document.querySelectorAll('#autoDesignBody .auto-design__stages li').length === 3,
+          noAccept: !document.querySelector('#autoDesignActions [data-auto-design="accept"]'), next: /emendas/.test(document.getElementById('autoDesignActions').textContent) };
+        document.querySelector('#autoDesignActions [data-auto-design="stage"][data-stage="ceos"]').click();
+        await new Promise(r => setTimeout(r, 0));
+        st.ceos = autoDesign.stage === 'ceos' && cableLines() === 0 && autoDesign.overlays.some(o => o.getPath?.()?.getArray?.().length === 2 && o.get?.('strokeColor') === '#64748b');
+        autoDesign.cablesStale = true;
+        const before = autoDesign.result.cables.length;
+        await setAutoDesignStage('cables');
+        st.cables = autoDesign.stage === 'cables' && !autoDesign.cablesStale && cableLines() === before && before > 0 && !!document.querySelector('#autoDesignActions [data-auto-design="accept"]');
+        //Opacidade da área: muda o polígono e, na prévia, a área aparece sem pegar os cliques (0 = some)
+        const po = autoDesign.polygon.polygonObject;
+        setAutoDesignAreaOpacity(autoDesign, 50);
+        st.opacity = autoDesign.polygon.opacity === 0.5 && po.get('fillOpacity') === 0.5 && po.getVisible() && po.get('clickable') === false && !!document.getElementById('autoDesignAreaOpacity');
+        setAutoDesignAreaOpacity(autoDesign, 0);
+        st.hidden = !po.getVisible();
+        setAutoDesignAreaOpacity(autoDesign, 20);
+        out.stages = st;
+      }
       let plan = autoDesign.result;
       const ll = (x, y) => { const q = plan.model.proj.toLatLng([x, y]); return new google.maps.LatLng(q.lat, q.lng); };
       out.gen = plan?.ctos.length === 2 && plan.model.demand.length === 80 && plan.ctos.every(c => !getAutoDesignCtoMove(plan, c));
@@ -2994,7 +3018,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     }
     return out;
   });
-  check(adjust.gen && adjust.colors && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.oldHidden && adjust.drag.restored && adjust.drag.same && adjust.drag.changes && adjust.drag.reach && adjust.drag.dropMax && Object.values(adjust.move || {}).every(Boolean)
+  check(adjust.gen && adjust.colors && Object.values(adjust.stages || {}).every(Boolean) && adjust.drag?.overlays && adjust.drag.badge && adjust.drag.oldHidden && adjust.drag.restored && adjust.drag.same && adjust.drag.changes && adjust.drag.reach && adjust.drag.dropMax && Object.values(adjust.move || {}).every(Boolean)
     && Object.values(adjust.alone || {}).every(Boolean) && adjust.reach && adjust.split && adjust.readjust,
     `pré-projeto: prévia ao arrastar, poste melhor, dividir CTO, CTO para casas fora do alcance e reajustar em volta das fixas (${JSON.stringify(adjust)})`);
   //Ocupação máxima vale em todas as opções do pré-projeto (só a "com folga" usa menos)
@@ -3194,7 +3218,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await wait(50);
       [...document.querySelectorAll('#choiceModalButtons button')].find(b => /Desenhar nova/.test(b.textContent))?.click();
       await wait(50);
-      out.areaBox = box.querySelector('#polygonBoxTitle').textContent === 'Área do pré-projeto' && document.getElementById('polygonStyleFields').classList.contains('hidden')
+      out.areaBox = box.querySelector('#polygonBoxTitle').textContent === 'Área do pré-projeto' && document.getElementById('polygonName').closest('.map-tool-field').classList.contains('hidden') && !document.querySelector('#polygonStyleFields .pg-opacity-field').classList.contains('hidden')
         && document.getElementById('savePolygonButton').textContent === 'Continuar' && document.getElementById('polygonFinishButton').classList.contains('hidden');
       [P(500, 0), P(600, 0), P(600, 100), P(500, 100)].forEach(p => handleSketchMapClick(p));
       google.maps.event.__fire(map, 'dblclick');
