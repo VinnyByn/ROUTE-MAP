@@ -2956,13 +2956,15 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         //Clicar numa etapa feita volta para ela
         document.querySelector('#autoDesignFlow [data-stage="ctos"]').click();
         st.backByFlow = autoDesign.stage === 'ctos';
-        //Opacidade da área: muda o polígono e, na prévia, a área aparece sem pegar os cliques (0 = some)
+        //Opacidade: só no polígono (o painel do pré-projeto não tem); na prévia, a área aparece com a dela, sem pegar os
+        //cliques (0 = some)
         const po = autoDesign.polygon.polygonObject;
-        setAutoDesignAreaOpacity(autoDesign, 50);
-        st.opacity = autoDesign.polygon.opacity === 0.5 && po.get('fillOpacity') === 0.5 && po.getVisible() && po.get('clickable') === false && !!document.getElementById('autoDesignAreaOpacity');
-        setAutoDesignAreaOpacity(autoDesign, 0);
+        st.opacity = po.getVisible() && po.get('clickable') === false && !document.querySelector('#autoDesignBox input[type="range"]');
+        autoDesign.polygon.opacity = 0;
+        showAutoDesignPolygon(autoDesign, false);
         st.hidden = !po.getVisible();
-        setAutoDesignAreaOpacity(autoDesign, 20);
+        autoDesign.polygon.opacity = 0.2;
+        showAutoDesignPolygon(autoDesign, false);
         out.stages = st;
         //O resto (arrastar, conferir CTO por CTO) é da etapa 1
         await setAutoDesignStage('ctos');
