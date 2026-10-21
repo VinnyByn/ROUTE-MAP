@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261076a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261077a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -2116,6 +2116,7 @@
             <div class="client-modal__footer-left">
               <button type="button" id="deleteClientButton" class="btn btn-danger">Excluir</button>
               <button type="button" id="moveClientButton" class="btn btn-secondary">Mover no mapa</button>
+              <button type="button" id="traceClientButton" class="btn btn-secondary" title="Caminho do sinal até a OLT, com a potência em cada ponto">Rastrear sinal</button>
             </div>
             <button type="submit" id="saveClientButton" class="btn btn-success">Salvar</button>
           </div>
@@ -2170,6 +2171,19 @@
       <div class="map-tool-box__body" id="networkPanelBody"></div>
     </div>
 
+    <div id="signalTraceBox" class="floating-box map-tool-box hidden" role="dialog" aria-labelledby="signalTraceTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-route"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="signalTraceTitle">Rastreio do sinal</h3>
+          <span class="map-tool-box__subtitle" id="signalTraceSubtitle"></span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeSignalTraceBox" title="Fechar (Esc)" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body" id="signalTraceBody"></div>
+    </div>
     <div id="viabilityBox" class="floating-box map-tool-box viability-box hidden" role="dialog" aria-labelledby="viabilityTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-target"></use></svg></span>
@@ -3314,8 +3328,8 @@
   <script src="js/auth/account.js?v=20261072a" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/auth/platform.js?v=20261037a" defer></script>
-  <script src="js/network/clients.js?v=20261057a" defer></script>
-  <script src="js/network/optical-budget.js?v=20261010a" defer></script>
+  <script src="js/network/clients.js?v=20261076a" defer></script>
+  <script src="js/network/optical-budget.js?v=20261076a" defer></script>
   <script src="js/network/project-check.js?v=20261007m" defer></script>
   <script src="js/map/conduit.js?v=20261013k" defer></script>
   <script src="js/network/network-impact.js?v=20261010a" defer></script>
@@ -3334,6 +3348,7 @@
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
   <script src="js/network/network-docs.js?v=20261076a" defer></script>
   <script src="js/network/client-import.js?v=20261076a" defer></script>
+  <script src="js/network/signal-trace.js?v=20261076a" defer></script>
   <script src="js/network/auto-design.js?v=20261070a" defer></script>
   <script src="js/map/marker-hover.js?v=20261010e" defer></script>
   <script src="js/map/network-overlays.js?v=20261057a" defer></script>

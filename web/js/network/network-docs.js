@@ -233,8 +233,13 @@ function renderNetworkPanel() {
         ? `<select class="network-panel__city" data-net-panel="city" aria-label="Cidade">${cities.map(r => `<option value="${esc(getRootId(r))}"${getRootId(r) === networkDocs.panelRootId ? ' selected' : ''}>${esc(r.querySelector(':scope > .folder-title').dataset.folderName)}</option>`).join('')}</select>` : '';
     const tabs = `<div class="map-tool-segmented network-panel__tabs" role="tablist">
         <button type="button" role="tab" data-net-panel="tab" data-tab="resumo" class="${networkDocs.panelTab === 'resumo' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'resumo'}">Resumo</button>
+        <button type="button" role="tab" data-net-panel="tab" data-tab="pons" class="${networkDocs.panelTab === 'pons' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'pons'}">PONs</button>
         <button type="button" role="tab" data-net-panel="tab" data-tab="historico" class="${networkDocs.panelTab === 'historico' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'historico'}">Histórico</button>
     </div>`;
+    if (networkDocs.panelTab === 'pons' && typeof renderPonTabHtml === 'function') {
+        body.innerHTML = `${picker}${tabs}${renderPonTabHtml(root)}`;
+        return;
+    }
     if (networkDocs.panelTab === 'historico') {
         const log = (networkDocs.logs.get(networkDocs.panelRootId) || []).slice(-150).reverse();
         body.innerHTML = `${picker}${tabs}
@@ -297,7 +302,13 @@ function handleNetworkPanelClick(e) {
     if (!el) return;
     const kind = el.dataset.netPanel;
     const st = networkDocs.renderedStats;
-    if (kind === 'tab') { networkDocs.panelTab = el.dataset.tab; renderNetworkPanel(); return; }
+    if (kind === 'tab') {
+        networkDocs.panelTab = el.dataset.tab;
+        if (el.dataset.tab !== 'pons' && typeof clearSignalTraceOverlays === 'function' && !signalTrace.last) clearSignalTraceOverlays();
+        renderNetworkPanel();
+        return;
+    }
+    if (kind.startsWith('pon') && typeof handlePonPanelClick === 'function') { handlePonPanelClick(el); return; }
     if (kind === 'xlsx') { exportProjectSpreadsheet(); return; }
     if (kind === 'impact') { openNetworkImpact(); return; }
     if (kind === 'log') {

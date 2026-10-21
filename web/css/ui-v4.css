@@ -3237,3 +3237,42 @@ html[data-theme="dark"] .client-import__counts .is-erro b, html[data-theme="dark
 #clientImportModal { z-index: 1012; }
 .client-import-modal .modal-body-content { padding-top: 16px; }
 .client-import__notes { margin: 0; padding: 8px 12px 8px 28px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; background: color-mix(in srgb, #f59e0b 11%, var(--color-surface)); border: 1px solid color-mix(in srgb, #f59e0b 38%, transparent); color: var(--color-text); }
+
+/* Rastreio do sinal e PONs (js/network/signal-trace.js) */
+#signalTraceBox.map-tool-box { width: min(360px, calc(100vw - 28px)); }
+#signalTraceBox .map-tool-box__body { overflow-y: auto; gap: 12px; }
+.network-panel__tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.viability-verdict.is-warn { background: color-mix(in srgb, #d97706 11%, var(--color-surface)); border: 1px solid color-mix(in srgb, #d97706 40%, transparent); color: #92400e; }
+html[data-theme="dark"] .viability-verdict.is-warn { color: #fcd34d; }
+.trace-list { position: relative; display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.trace-step { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 6px 0; }
+.trace-step > i { position: relative; justify-self: center; width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; border: 2.5px solid #7c3aed; background: var(--color-surface); z-index: 1; }
+.trace-step:not(:last-child)::before { content: ''; position: absolute; left: 10px; top: 18px; bottom: -6px; width: 2px; background: color-mix(in srgb, #7c3aed 35%, var(--color-border-light)); }
+.trace-step.is-cable > i { width: 8px; height: 8px; margin-top: 5px; border-width: 0; background: color-mix(in srgb, #7c3aed 55%, transparent); border-radius: 2px; }
+.trace-step.is-olt > i { border-color: #0f766e; background: #0f766e; }
+.trace-step.is-client > i { border-color: #16a34a; background: #16a34a; }
+.trace-step > div { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.trace-step b, #signalTraceBox .trace-step .btn-link { font-size: 13px; font-weight: 700; color: var(--color-text); text-align: left; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#signalTraceBox .trace-step .btn-link { display: block; width: auto; max-width: 100%; min-height: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font-family: inherit; line-height: 1.35; cursor: pointer; }
+#signalTraceBox .trace-step .btn-link:hover { color: var(--brand-600, #1d7290); text-decoration: underline; }
+.trace-step.is-cable b { font-weight: 600; font-size: 12.5px; color: var(--color-text-muted); }
+.trace-step small { font-size: 11.5px; color: var(--color-text-muted); }
+.trace-step > em { font-style: normal; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-text); white-space: nowrap; }
+.pon-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pon-row { border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); overflow: hidden; }
+.pon-row.is-open { border-color: color-mix(in srgb, #7c3aed 45%, var(--color-border-light)); }
+#networkPanelBox .pon-row__head { display: grid; grid-template-columns: minmax(0, 1fr) 56px auto; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; background: none; font: inherit; text-align: left; color: var(--color-text); cursor: pointer; }
+#networkPanelBox .pon-row__head:hover { background: var(--color-surface-hover); }
+.pon-row__head > span { min-width: 0; display: flex; flex-direction: column; }
+.pon-row__head b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pon-row__head small { font-size: 11.5px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pon-row__head > i { height: 6px; border-radius: 999px; background: var(--color-surface-active); overflow: hidden; }
+.pon-row__head > i s { display: block; height: 100%; background: #16a34a; text-decoration: none; }
+.pon-row__head > i[data-level="high"] s { background: #d97706; }
+.pon-row__head > i[data-level="full"] s { background: #dc2626; }
+.pon-row__head > em { font-style: normal; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pon-row__head > em small { font-size: 11px; font-weight: 600; color: var(--color-text-muted); }
+.pon-row__ctos { margin: 0; padding: 2px 6px 6px 10px; list-style: none; border-top: 1px solid var(--color-border-light); }
+#networkPanelBox .pon-row__ctos button { display: flex; justify-content: space-between; width: 100%; padding: 5px 6px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 12.5px; color: var(--color-text); cursor: pointer; }
+#networkPanelBox .pon-row__ctos button:hover { background: var(--color-surface-hover); }
+.pon-row__ctos b { font-variant-numeric: tabular-nums; }

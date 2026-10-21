@@ -1220,6 +1220,8 @@ function openClientModal(clientInfo, presetKind) {
     updateClientDropSummary();
     document.getElementById('deleteClientButton').hidden = !clientInfo;
     document.getElementById('moveClientButton').hidden = !clientInfo;
+    const traceButton = document.getElementById('traceClientButton');
+    if (traceButton) traceButton.hidden = !clientInfo || !clientInfo.client?.ctoUid;
     document.getElementById('clientContinuousGroup').classList.toggle('hidden', !!clientInfo);
     document.getElementById('clientContinuousCheckbox').checked = !clientInfo && readContinuousMarkerPreference('CLIENTE');
     document.getElementById('saveClientButton').textContent = clientInfo ? 'Salvar' : 'Posicionar no mapa';

@@ -881,6 +881,53 @@ check(Math.abs(optical.port + 17.55) < 0.001 && optical.status === 'ok' && !opti
   `orçamento óptico soma as perdas do caminho (porta da CTO: ${optical.port?.toFixed(2)} dBm)`);
 check(optical.strict === 'erro' && optical.margin === 'aviso' && optical.rows === 'O-CTO2:sem,O-CTO:-17.55', `orçamento óptico classifica erro/margem e aponta CTO sem OLT (${optical.rows})`);
 
+//Rastreio do sinal: cliente na porta 3 da CTO → splitter → fibra 1 do cabo → CEO com o splitter ligado na OLT-1/placa 1/PON 1;
+//porta inexistente e CTO sem sinal explicam o motivo; clientes por PON
+const trace = await page.evaluate(() => {
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><div class="folder-title" data-folder-id="projTR" data-folder-name="Projeto TR"></div><ul id="projTR" class="subfolders"></ul></li>');
+  const fiber = (card, n) => [...card.querySelectorAll('.fiber-row')][n - 1].id;
+  const mk = (cards, links) => { const b = document.createElement('div'); b.append(...cards); return JSON.stringify({ version: 2, elements: b.innerHTML, svg: links.map(([x, y]) => `<path class="fusion-line" data-start-id="${x}" data-end-id="${y}"></path>`).join('') }); };
+  const s8 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8', outputs: 8, type: 'Fusão', olt: { olt: 'OLT-1', placa: '1', pon: '1' } });
+  const bOut = buildFusionCableCard({ name: 'TR-B', type: 'Cabo AS 80 FO-06', role: 'saida', fiberCount: 6 });
+  const ceo = { folderId: 'projTR', type: 'CEO', name: 'TR-CEO', uid: 'tr-ceo', fusionPlan: mk([s8, bOut], [['splitter-1-output-1', fiber(bOut, 1)]]) };
+  const bIn = buildFusionCableCard({ name: 'TR-B', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at = buildFusionSplitterCard({ id: 'splitter-1', label: '1:8 APC', outputs: 8, type: 'Atendimento' });
+  const cto = { folderId: 'projTR', type: 'CTO', name: 'TR-CTO', uid: 'tr-cto', fusionPlan: mk([bIn, at], [[fiber(bIn, 1), 'splitter-1-input-port']]) };
+  const orphan = buildFusionCableCard({ name: 'TR-SOLTO', type: 'Cabo AS 80 FO-06', role: 'entrada', fiberCount: 6 });
+  const at2 = buildFusionSplitterCard({ id: 'splitter-1', label: '1:16', outputs: 16, type: 'Atendimento' });
+  const cto2 = { folderId: 'projTR', type: 'CTO', name: 'TR-CTO2', uid: 'tr-cto2', fusionPlan: mk([orphan, at2], [[fiber(orphan, 1), 'splitter-1-input-port']]) };
+  const client = { folderId: 'projTR', type: 'CLIENTE', name: 'TR-Cliente', client: { kind: 'residencial', status: 'instalado', ctoUid: 'tr-cto', ctoPort: 3 } };
+  const cable = { folderId: 'projTR', name: 'TR-B', totalLength: 1000 };
+  const realDrop = window.getClientDropInfo;
+  window.getClientDropInfo = () => ({ length: 100 });
+  markers.push(ceo, cto, cto2, client); savedCables.push(cable);
+  try {
+    const r = traceClientSignal(client);
+    const bad = traceCtoPort(cto, 9);
+    const none = traceCtoPort(cto2, 1);
+    const { pons, noSignal } = getPonSummary(document.getElementById('projTR').closest('.folder'));
+    openSignalTrace(client);
+    const text = document.getElementById('signalTraceBody').textContent;
+    const open = !document.getElementById('signalTraceBox').classList.contains('hidden');
+    closeSignalTrace();
+    return {
+      path: [getPonLabel(r.source), ...r.steps.map(s => s.kind === 'cable' ? `${s.name}#${s.fiber}:${s.meters}` : `${s.box?.name}[${s.splitters.join('+')}]`)].join(' > '),
+      port: r.portDbm?.toFixed(2), client: r.clientDbm?.toFixed(3), status: r.status,
+      bad: /não tem a porta 9/.test(bad.error || ''), none: /Sem sinal/.test(none.error || ''),
+      pons: pons.map(p => `${p.label}:${p.ctos.map(c => c.cto.name).join('+')}:${p.clients}/${p.ports}`).join(), noSignal: noSignal.map(c => c.name).join(),
+      ui: open && /OLT-1 · placa 1 · PON 1/.test(text) && /TR-B · fibra 1/.test(text) && /TR-CTO · porta 3/.test(text) && /-18,1 dBm no cliente/.test(text),
+      closed: document.getElementById('signalTraceBox').classList.contains('hidden'),
+    };
+  } finally {
+    markers.splice(markers.indexOf(ceo), 4); savedCables.splice(savedCables.indexOf(cable), 1);
+    window.getClientDropInfo = realDrop;
+    document.querySelector('[data-folder-id="projTR"]').closest('.folder').remove();
+  }
+});
+check(trace.path === 'OLT-1 · placa 1 · PON 1 > TR-CEO[1:8] > TR-B#1:1000 > TR-CTO[1:8 APC]' && trace.port === '-17.55' && trace.client === '-18.085' && trace.status === 'ok'
+  && trace.bad && trace.none && trace.pons === 'OLT-1 · placa 1 · PON 1:TR-CTO:1/8' && trace.noSignal === 'TR-CTO2' && trace.ui && trace.closed,
+  `rastreio do sinal: cliente → CTO → cabo/fibra → CEO → OLT/placa/PON, com a potência, e clientes por PON (${JSON.stringify(trace)})`);
+
 //Sinal na caixa: cartão do mapa mostra a pior porta e a entrada do splitter (−17,05 antes do conector da porta)
 check(Math.abs(optical.sigPort + 17.55) < 0.001 && Math.abs(optical.sigIn + 6.55) < 0.001 && optical.sigNone === false && optical.hoverSig,
   `cartão da caixa mostra o sinal estimado (porta ${optical.sigPort?.toFixed(2)}, entrada ${optical.sigIn?.toFixed(2)})`);
@@ -3737,6 +3784,11 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       openNetworkPanel('historico');
       await new Promise(r => setTimeout(r, 20));
       out.historyTab = /alterou a CTO CTO-RENOMEADA/.test(document.getElementById('networkPanelBody').textContent);
+      openNetworkPanel('pons');
+      await new Promise(r => setTimeout(r, 20));
+      out.ponTab = /Nenhuma CTO desta cidade recebe sinal/.test(document.getElementById('networkPanelBody').textContent)
+        && !!document.querySelector('#networkPanelBody [data-tab="pons"].is-active');
+      networkDocs.panelTab = 'resumo';
       //Caixa da rede: de qual projeto veio e as últimas mudanças
       renderMarkerDocPanel(cto);
       const doc = document.getElementById('markerDocPanel');

@@ -86,7 +86,8 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
     });
     //Maior potência que chega em cada nó (Dijkstra com a perda como custo). "cut" simula falhas:
     //{ cables: Set(chave do cabo), boxes: Set(uid da caixa) } — nada passa por esses cabos e caixas.
-    const propagate = (seedNodes, cut = null) => {
+    //prevOut (Map nó → { from, edge }) guarda de onde veio o sinal de cada nó, para refazer o caminho até a OLT.
+    const propagate = (seedNodes, cut = null, prevOut = null) => {
         const power = new Map();
         const heap = [];
         const push = (item) => {
@@ -121,7 +122,7 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
         const p0 = cfg.oltPower - cfg.lossConnector; //Conector da OLT / DIO
         seedNodes.forEach(node => {
             if (cutBox(node)) return;
-            if (!power.has(node) || power.get(node) < p0) { power.set(node, p0); push([p0, node]); }
+            if (!power.has(node) || power.get(node) < p0) { power.set(node, p0); prevOut?.delete(node); push([p0, node]); }
         });
         while (heap.length) {
             const [p, node] = pop();
@@ -137,6 +138,7 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
                 const np = p - e.loss;
                 if (!power.has(e.to) || np > power.get(e.to) + 1e-9) {
                     power.set(e.to, np);
+                    prevOut?.set(e.to, { from: node, edge: e });
                     push([np, e.to]);
                 }
             });
@@ -145,7 +147,8 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
     };
     //1º: PONs ligadas no plano do POP. O sinal desce pelas fusões, cabos e splitters, perdendo em cada um.
     const seeds = sources.filter(s => !s.splitter).map(s => s.node);
-    const firstPass = propagate(seeds);
+    const firstPrev = new Map();
+    const firstPass = propagate(seeds, null, firstPrev);
     //2º: splitter com OLT/PON preenchida que não recebe sinal de nenhuma PON (rede sem POP desenhado).
     //Um splitter que já recebe sinal pelo caminho não vira origem (senão começaria de novo com a potência da OLT).
     //Splitter em cascata abaixo de outro que também vira origem não conta como origem.
@@ -167,10 +170,11 @@ function computeOpticalPower(cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_
         fallback.forEach(o => { if (o !== src && seen.has(o.node)) downstream.add(o.node); });
     });
     fallback.filter(s => !downstream.has(s.node)).forEach(s => seeds.push(s.node));
-    const power = fallback.length ? propagate(seeds) : firstPass;
+    const prev = fallback.length ? new Map() : firstPrev;
+    const power = fallback.length ? propagate(seeds, null, prev) : firstPass;
     //simulate(cut): mesma rede e mesmas origens, sem os cabos/caixas cortados (análise de impacto)
     const simulate = (cut) => propagate(seeds, cut);
-    return { power, info, sources, simulate };
+    return { power, info, sources, simulate, prev };
 }
 
 function classifyOpticalPower(dbm, cfg = lancamentoConfig?.optical || DEFAULT_OPTICAL_CONFIG) {
