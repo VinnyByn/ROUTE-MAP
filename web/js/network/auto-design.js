@@ -2980,25 +2980,11 @@ function commitAutoDesignArea(s) {
     s.polygon.path = path;
 }
 
-//O polígono só marca a área: some do mapa a partir da prévia e volta se a prévia for descartada
-//Opacidade do preenchimento da área (0–100), a mesma do polígono salvo
+//Opacidade do preenchimento da área (0–100): a do polígono (muda no próprio polígono, não no pré-projeto)
 const getAutoDesignAreaOpacity = (s) => {
     const v = Number(s?.polygon?.opacity);
     return Math.round((Number.isFinite(v) ? v : DEFAULT_POLYGON_OPACITY) * 100);
 };
-function setAutoDesignAreaOpacity(s, pct) {
-    const polygon = s?.polygon;
-    if (!polygon?.polygonObject) return;
-    const value = Math.max(0, Math.min(100, Math.round(Number(pct) || 0))) / 100;
-    if (polygon.opacity === value) return;
-    polygon.opacity = value;
-    polygon.polygonObject.setOptions({ fillOpacity: value });
-    if (s.phase === 'preview') showAutoDesignPolygon(s, false);
-    document.querySelectorAll('#autoDesignBox [data-auto-design-opacity-value]').forEach(el => { el.textContent = `${Math.round(value * 100)}%`; });
-    if (typeof markProjectDirty === 'function') markProjectDirty();
-}
-const renderAutoDesignAreaOpacity = (s) => `<div class="map-tool-field auto-design__opacity"><label for="autoDesignAreaOpacity">Opacidade da área <span data-auto-design-opacity-value>${getAutoDesignAreaOpacity(s)}%</span></label><input type="range" id="autoDesignAreaOpacity" min="0" max="100" step="5" value="${getAutoDesignAreaOpacity(s)}"></div>`;
-
 function showAutoDesignPolygon(s, shown) {
     const polygon = s?.polygon;
     if (!polygon?.polygonObject) return;
@@ -3188,7 +3174,6 @@ function renderAutoDesign() {
             <div class="auto-design__area-text"><b title="${esc(s.polygon.name || 'Polígono')}">${esc(s.polygon.name || 'Polígono')}</b><small>${esc(formatArea(area))} · sai de ${startName}</small>
                 ${s.areaEditing || areaChanged ? `<small class="auto-design__area-hint">${s.areaEditing ? 'Arraste os cantos no mapa para ajustar a área.' : ''}${areaChanged ? ` <button type="button" class="auto-design__link" data-auto-design="area-reset">Voltar como estava</button>` : ''}</small>` : ''}</div>
         </div>
-        ${renderAutoDesignAreaOpacity(s)}
         ${areaCrossed ? '<div class="auto-design__warn" role="alert">As bordas da área se cruzam (forma em "8"): a parte cruzada fica de fora. Arraste um canto para desfazer o cruzamento.</div>' : ''}
         ${section('Clientes', 'Quantas casas e quantas devem assinar', `
             <div class="map-tool-field-row">
@@ -4773,8 +4758,7 @@ function renderAutoDesignPreviewPanel() {
             ${hint}
             ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
             ${fixedCtos && fixedCtos < plan.ctos.length ? `<p class="map-tool-help auto-design__readjust">${fixedCtos === 1 ? '1 CTO fixa' : `${fixedCtos} CTOs fixas`} (movida, incluída ou conferida por você). <button type="button" class="auto-design__link" data-auto-design="readjust"${s.busy ? ' disabled' : ''}>Reajustar as outras em volta</button></p>` : ''}
-            ${renderAutoDesignCtoHouses(s, plan)}
-            ${renderAutoDesignAreaOpacity(s)}`;
+            ${renderAutoDesignCtoHouses(s, plan)}`;
     } else if (stage === 'ceos') {
         const newCeos = plan.ceos.filter(c => c.isNew).length;
         body = `
@@ -4794,8 +4778,7 @@ function renderAutoDesignPreviewPanel() {
             <div class="auto-design__tools" role="group" aria-label="Mexer nas CEOs">
                 ${tool('mode-add-ceo', '+ CEO', mode === 'add-ceo')}${tool('mode-remove-ceo', '− CEO', mode === 'remove-ceo')}
             </div>
-            ${hint}
-            ${renderAutoDesignAreaOpacity(s)}`;
+            ${hint}`;
     } else if (plan.cablesStale) {
         body = `
             ${renderAutoDesignHero('Etapa 3 de 3', 'Cabos e custo', 'Os cabos seguem pelas ruas, de poste em poste.')}
@@ -4823,8 +4806,7 @@ function renderAutoDesignPreviewPanel() {
             ${renderAutoDesignAccessRoutes(s)}
             ${warnBlock}
             ${hint}
-            <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao criar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${reserves ? `${reserves} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria.</p>
-            ${renderAutoDesignAreaOpacity(s)}`;
+            <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao criar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${reserves ? `${reserves} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria.</p>`;
     }
     document.getElementById('autoDesignBody').innerHTML = body;
     const actions = stage === 'cables'
@@ -5290,10 +5272,6 @@ document.addEventListener('keydown', (e) => {
         autoDesignPickingPolygon = false;
         setMapCursor('');
     }
-});
-
-document.addEventListener('input', (e) => {
-    if (e.target.id === 'autoDesignAreaOpacity' && autoDesign) setAutoDesignAreaOpacity(autoDesign, e.target.value);
 });
 
 document.addEventListener('input', (e) => {

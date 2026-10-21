@@ -2958,9 +2958,6 @@ html[data-theme="dark"] #materialModal .material-summary__total b { color: #4ade
 .sidebar-column .subfolders { width: auto; min-width: 0; }
 .sidebar-column .folder-wrapper > .subfolders { align-self: stretch; }
 
-.auto-design__opacity { margin: 8px 0 10px; }
-.auto-design__opacity label { display: flex; justify-content: space-between; }
-.auto-design__opacity input[type="range"] { width: 100%; }
 
 /* Pré-projeto em etapas: Dados → 1 CTOs → 2 Emendas → 3 Cabos */
 #autoDesignBox { --ad-brand: var(--brand-600, #1d7290); --ad-brand-soft: color-mix(in srgb, var(--ad-brand) 10%, var(--color-surface)); --ad-done: var(--action, #1f9d4a); }
