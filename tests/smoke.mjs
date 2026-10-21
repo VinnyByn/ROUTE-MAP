@@ -3686,13 +3686,34 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.reconclude = window.__fakeDb.projects[netId].data.sidebar.children.length === 2 && window.__fakeDb.projects[netId].data.markers.filter(m => m.type === 'CTO').length === 2;
       //Modo Rede: os projetos saem da tela (e voltam depois), a rede da cidade abre com o que foi construído
       await setAppMode('rede', { city: 'Lavras' });
+      const hidden = (sel) => getComputedStyle(document.querySelector(sel)).display === 'none';
       out.redeDetail = [appMode === 'rede', document.body.classList.contains('mode-rede'), !document.querySelector('#sidebar > .folder > .folder-title[data-folder-id="projNA"]'), !!document.getElementById(netId),
-        document.getElementById('networkCityButton').hidden === false, markers.filter(m => m.type === 'CTO').length, markers.every(m => m.asBuilt),
-        document.querySelector(`.folder-title[data-folder-id="${netId}"]`)?.dataset.folderType].join(',');
-      out.rede = out.redeDetail === 'true,true,true,true,true,2,true,Rede';
+        document.getElementById('networkTools').hidden === false, markers.filter(m => m.type === 'CTO').length, markers.every(m => m.asBuilt && m.marker.getVisible() !== false),
+        document.querySelector(`.folder-title[data-folder-id="${netId}"]`)?.dataset.folderType,
+        hidden('.top-bar-nav > .dropdown:has(#projectButton)') && hidden('.top-bar-nav > .dropdown:has(#toolsButton)') && hidden('.top-bar-nav > .dropdown:has(#materialsMenuButton)') && hidden('#projectReportButton'),
+        document.querySelector('.sidebar-header h3').textContent].join(',');
+      out.rede = out.redeDetail === 'true,true,true,true,true,2,true,Rede,true,Rede';
+      //Cidade nova: vazia, com pasta dentro
+      const perdoes = await createNetworkCity('Perdões');
+      setActiveFolder(getNetworkId('Perdões'));
+      out.city = !!perdoes && window.__fakeDb.projects[getNetworkId('Perdões')]?.project_type === 'Rede'
+        && buildSidebarMenuItems(getSidebarEntity(perdoes.querySelector('.folder-title'))).some(i => i.action === 'new-folder');
       await setAppMode('projeto');
       out.back = appMode === 'projeto' && !document.getElementById(netId) && !!document.getElementById('projNA') && !!document.getElementById('projNB')
-        && isProjectConcluded('projNA');
+        && isProjectConcluded('projNA') && document.querySelector('.sidebar-header h3').textContent === 'Projetos';
+      //Voltando sem cidade: as duas cidades aparecem só pelo nome; abrir uma carrega com tudo oculto no mapa
+      await setAppMode('rede');
+      const pending = [...document.querySelectorAll('#sidebar > .folder > .folder-title[data-network-pending="true"]')].map(t => t.dataset.folderName).join('|');
+      const before = window.__fakeDb.projects[netId].data.markers.length;
+      await persistProject(document.getElementById(netId).closest('.folder'));
+      const untouched = window.__fakeDb.projects[netId].data.markers.length === before;
+      document.querySelector(`#sidebar .folder-title[data-folder-id="${netId}"] .toggle-icon`).click();
+      await new Promise(r => setTimeout(r, 50));
+      const loaded = document.getElementById(netId).closest('.folder');
+      out.lazy = pending === 'Rede · Lavras|Rede · Perdões' && markers.length === 0 + markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length && untouched
+        && !loaded.querySelector(':scope > .folder-title').dataset.networkPending && markers.filter(m => m.type === 'CTO').length === 2
+        && markers.every(m => m.marker.getVisible() === false) && !document.getElementById(netId).classList.contains('hidden');
+      await setAppMode('projeto');
       out.merge = (() => {
         const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
           markers: [{ uid: 'a', folderId: 'f', type: 'CTO', ctoStatus: 'Troca' }], cables: [], polygons: [] }, { projectId: 'p', projectName: 'P', at: 'now', folderName: 'P · ok' });

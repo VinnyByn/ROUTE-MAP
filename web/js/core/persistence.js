@@ -87,7 +87,10 @@ async function fetchProjectSaveInfo(projectId) {
 async function persistProject(projectRootElement, { force = false, allowConcluded = false } = {}) {
     await appReady;
     if (!AppSession.canEdit) throw new Error('Seu cargo é somente de visualização.');
-    const rootId = projectRootElement?.querySelector('.folder-title')?.dataset.folderId;
+    const rootTitle = projectRootElement?.querySelector('.folder-title');
+    //Cidade da rede ainda não carregada (só o nome na barra lateral): não há o que salvar
+    if (rootTitle?.dataset.networkPending === 'true') return null;
+    const rootId = rootTitle?.dataset.folderId;
     if (!allowConcluded && typeof isProjectConcluded === 'function' && isProjectConcluded(rootId)) {
         throw new Error('Este projeto já foi concluído e enviado para a rede: está só para consulta.');
     }

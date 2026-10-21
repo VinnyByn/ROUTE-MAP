@@ -330,7 +330,8 @@ function liveSyncJoin(projectId) {
     channel.on('broadcast', { event: 'm' }, ({ payload }) => liveReceive(projectId, payload));
     channel.on('presence', { event: 'sync' }, () => renderLivePresence(projectId));
     channel.subscribe((status) => {
-        if (status !== 'SUBSCRIBED') return;
+        //Saiu do projeto antes de o canal abrir (fechou ou trocou de modo logo depois de abrir): não se anuncia
+        if (status !== 'SUBSCRIBED' || LIVE.rooms.get(projectId) !== room) return;
         channel.track({ name: liveMyName(), userId: AppSession.userId, at: room.joinedAt });
         liveSend(projectId, { t: 'hello' });
     });

@@ -8,7 +8,6 @@
 const NETWORK_PROJECT_TYPE = 'Rede';
 const NETWORK_COLOR = '#15803d';
 let appMode = 'projeto';
-let networkCity = '';
 let projectConclusions = {}; //Id do projeto → { at, by, byName, networkId, networkName }
 
 const appModeStorageKey = () => `routeMapMode:${AppSession.userId}`;
@@ -72,19 +71,20 @@ function applyAppModeUi() {
         button.classList.toggle('is-active', on);
         button.setAttribute('aria-checked', on ? 'true' : 'false');
     });
-    const chip = document.getElementById('networkCityButton');
-    if (chip) {
-        chip.hidden = appMode !== 'rede';
-        const label = chip.querySelector('.top-bar-button__label');
-        if (label) label.textContent = networkCity || 'Cidade';
-    }
+    const tools = document.getElementById('networkTools');
+    if (tools) tools.hidden = appMode !== 'rede';
+    const sidebarTitle = document.querySelector('.sidebar-header h3');
+    if (sidebarTitle) sidebarTitle.textContent = appMode === 'rede' ? 'Rede' : 'Projetos';
 }
+
+//Rede da cidade ainda não carregada: só o nome na barra lateral (carrega ao abrir, mostrar ou mexer nela)
+const isPendingNetworkRoot = (root) => root?.querySelector(':scope > .folder-title')?.dataset.networkPending === 'true';
 
 //Salva (quem pode editar) e tira da tela tudo o que está aberto. false = a pessoa desistiu ou deu erro ao salvar
 async function leaveCurrentWorkspace() {
     const roots = getOpenProjectRoots();
     if (!roots.length) return true;
-    const editable = roots.filter(root => AppSession.canEdit && !isProjectConcluded(getRootId(root)));
+    const editable = roots.filter(root => AppSession.canEdit && !isPendingNetworkRoot(root) && !isProjectConcluded(getRootId(root)));
     if (editable.length) {
         const names = editable.map(root => `"${root.querySelector(':scope > .folder-title')?.dataset.folderName || 'Projeto'}"`).join(', ');
         const choice = await showChoice({
@@ -109,7 +109,7 @@ async function leaveCurrentWorkspace() {
     }
     roots.forEach(root => {
         const id = getRootId(root);
-        if (typeof liveSyncLeave === 'function') liveSyncLeave(id);
+        if (typeof liveSyncLeave === 'function' && !isPendingNetworkRoot(root)) liveSyncLeave(id);
         removeProjectFromWorkspace(id, root);
     });
     return true;
@@ -127,24 +127,32 @@ function getSavedAppMode() {
     try { return JSON.parse(localStorage.getItem(appModeStorageKey()) || 'null')?.mode || 'projeto'; } catch (e) { return 'projeto'; }
 }
 
-function storeAppMode() {
-    try { localStorage.setItem(appModeStorageKey(), JSON.stringify({ mode: appMode, city: networkCity })); } catch (e) { /* ignora */ }
+//Modo ao entrar: o das preferências (Projeto ou Rede) ou, em "Último usado", o da última vez
+function getStartupAppMode() {
+    const pref = AppSession.profile?.preferences?.startMode;
+    return pref === 'projeto' || pref === 'rede' ? pref : getSavedAppMode();
 }
 
+function storeAppMode() {
+    try { localStorage.setItem(appModeStorageKey(), JSON.stringify({ mode: appMode })); } catch (e) { /* ignora */ }
+}
+
+//city: abre (e mostra no mapa) a rede dessa cidade ao entrar no modo Rede
 async function setAppMode(mode, { city = '', startup = false } = {}) {
     await appReady;
     if (mode === 'rede') {
-        const target = city || await pickNetworkCity();
-        if (!target) { applyAppModeUi(); return false; }
-        if (appMode === 'rede' && target === networkCity && document.getElementById(getNetworkId(target))) return true;
-        const leaving = appMode === 'projeto' ? getOpenProjectRoots().map(getRootId).filter(id => !isNetworkProjectId(id)) : null;
+        if (appMode === 'rede') {
+            if (city) await showNetworkCity(city);
+            return true;
+        }
+        const leaving = getOpenProjectRoots().map(getRootId).filter(id => !isNetworkProjectId(id));
         if (!(await leaveCurrentWorkspace())) { applyAppModeUi(); return false; }
-        if (leaving && !startup) rememberProjectWorkspace(leaving);
+        if (!startup) rememberProjectWorkspace(leaving);
         appMode = 'rede';
-        networkCity = target;
         applyAppModeUi();
         storeAppMode();
-        await openNetwork(target);
+        await listNetworksInSidebar();
+        if (city) await showNetworkCity(city);
         return true;
     }
     if (appMode === 'projeto') return true;
@@ -158,29 +166,92 @@ async function setAppMode(mode, { city = '', startup = false } = {}) {
     return true;
 }
 
-//Abre a rede da cidade (cria vazia na primeira vez)
-async function openNetwork(city) {
-    const id = getNetworkId(city);
-    if (document.getElementById(id)) { setActiveFolder(id); return; }
-    const { data } = await supabaseClient.from('projects').select('id').eq('id', id).maybeSingle();
-    if (data) {
-        await openProjectFromDatabase(id, null, { silent: true });
-    } else {
-        rebuildSidebarFromJSON([emptyNetworkData(city).sidebar], document.getElementById('sidebar'));
-        updateSidebarEmptyState();
-        if (AppSession.canEdit) {
-            try { await persistProject(document.getElementById(id).closest('.folder')); } catch (error) { console.error('Erro ao criar a rede:', error); }
-        }
-        if (typeof liveSyncJoin === 'function') liveSyncJoin(id);
+//Todas as cidades da empresa na barra lateral, só pelo nome (o conteúdo carrega quando a pessoa abre a cidade)
+async function listNetworksInSidebar() {
+    const { data, error } = await supabaseClient.from('projects').select('id, name, city').eq('project_type', NETWORK_PROJECT_TYPE).is('deleted_at', null);
+    if (error) { showAlert('Erro', 'Não foi possível carregar as cidades da rede.'); return; }
+    const rows = (data || []).filter(row => !document.getElementById(row.id)).sort((a, b) => (a.city || a.name).localeCompare(b.city || b.name, 'pt-BR'));
+    rows.forEach(row => addPendingNetworkRoot(row));
+    updateSidebarEmptyState();
+    if (!getOpenProjectRoots().length) {
+        showToast('Modo Rede', AppSession.canEdit ? 'Nenhuma cidade ainda. Use "+ Cidade" para cadastrar a primeira.' : 'Nenhuma cidade cadastrada na rede ainda.', 'progress');
     }
-    if (!document.getElementById(id)) return;
-    setActiveFolder(id);
-    const hasItems = markers.some(m => getAllDescendantFolderIds(id).includes(m.folderId));
-    if (hasItems && typeof focusMapToFolderScope === 'function') focusMapToFolderScope(id);
-    showToast(`Rede · ${city}`, hasItems ? 'Rede documentada da cidade. Clique numa CTO para ligar clientes nas portas.' : 'Ainda não há nada construído aqui. Conclua um projeto desta cidade para ele entrar na rede.', 'progress');
 }
 
-//Escolha da cidade: as cidades dos projetos e das redes da empresa, ou outra digitada
+function addPendingNetworkRoot(row) {
+    const city = row.city || row.name.replace(/^Rede · /, '');
+    rebuildSidebarFromJSON([{ id: row.id, name: row.name || `Rede · ${city}`, city, neighborhood: null, type: NETWORK_PROJECT_TYPE, isProject: true, children: [] }], document.getElementById('sidebar'));
+    const title = document.getElementById(row.id).closest('.folder').querySelector(':scope > .folder-title');
+    title.dataset.networkPending = 'true';
+    const box = title.querySelector('.visibility-toggle-btn');
+    if (box) { box.checked = false; box.dataset.visible = 'false'; box.title = 'Exibir no mapa'; }
+}
+
+//Carrega a rede de uma cidade no lugar do nome dela; visible: já mostra no mapa (senão fica tudo oculto)
+const networkLoads = new Map();
+function loadNetworkRoot(id, { visible = false } = {}) {
+    if (networkLoads.has(id)) return networkLoads.get(id);
+    const job = (async () => {
+        const placeholder = document.getElementById(id)?.closest('.folder');
+        if (!placeholder || !isPendingNetworkRoot(placeholder)) return placeholder;
+        placeholder.classList.add('is-loading');
+        const { data, error } = await supabaseClient.from('projects').select('id, name, data, revision').eq('id', id).maybeSingle();
+        if (error || !data) {
+            placeholder.classList.remove('is-loading');
+            showAlert('Erro', 'Não foi possível abrir a rede desta cidade.');
+            return null;
+        }
+        const next = placeholder.nextElementSibling;
+        placeholder.remove();
+        loadAndDisplayProject(id, { ...(data.data || {}), projectName: data.name }, { silent: true });
+        const root = document.getElementById(id)?.closest('.folder');
+        if (!root) return null;
+        if (next && next.parentElement) next.parentElement.insertBefore(root, next);
+        if (data.revision != null) setProjectRevision(root, data.revision);
+        if (!visible) handleVisibilityToggle(root.querySelector(':scope > .folder-title .visibility-toggle-btn'), false);
+        if (typeof liveSyncJoin === 'function') liveSyncJoin(id);
+        return root;
+    })().finally(() => networkLoads.delete(id));
+    networkLoads.set(id, job);
+    return job;
+}
+
+//Mostra no mapa a rede da cidade (carrega se preciso) e centraliza nela
+async function showNetworkCity(city) {
+    const id = getNetworkId(city);
+    if (!document.getElementById(id)) await listNetworksInSidebar();
+    if (!document.getElementById(id)) return;
+    const root = await loadNetworkRoot(id, { visible: true });
+    if (!root) return;
+    handleVisibilityToggle(root.querySelector(':scope > .folder-title .visibility-toggle-btn'), true);
+    setActiveFolder(id);
+    if (typeof focusMapToFolderScope === 'function' && markers.some(m => getAllDescendantFolderIds(id).includes(m.folderId))) focusMapToFolderScope(id);
+}
+
+//Clique (expandir, mostrar, menu ou selecionar) no nome de uma cidade ainda não carregada: carrega e repete o clique
+function wirePendingNetworkClicks() {
+    const sidebar = document.getElementById('sidebar');
+    const intercept = async (e) => {
+        const title = e.target.closest?.('.folder-title[data-network-pending="true"]');
+        if (!title) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const id = title.dataset.folderId;
+        const part = e.target.closest('.visibility-toggle-btn') ? 'show' : e.target.closest('.toggle-icon') ? 'expand'
+            : e.target.closest('.item-actions-toggle-btn') ? 'menu' : e.type === 'contextmenu' ? 'context' : 'select';
+        const root = await loadNetworkRoot(id, { visible: part === 'show' });
+        if (!root) return;
+        const fresh = root.querySelector(':scope > .folder-title');
+        if (part === 'show') handleVisibilityToggle(fresh.querySelector('.visibility-toggle-btn'), true);
+        else if (part === 'expand') toggleFolder(id);
+        else if (part === 'menu') fresh.querySelector('.item-actions-toggle-btn')?.click();
+        else if (part === 'context') fresh.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY }));
+        else setActiveFolder(id);
+    };
+    ['click', 'contextmenu', 'dblclick'].forEach(type => sidebar?.addEventListener(type, intercept, true));
+}
+
+//Cidades para escolher: as dos projetos da empresa, ou outra digitada
 async function listNetworkCities() {
     const { data, error } = await supabaseClient.rpc('project_facets');
     if (!error && data?.cities) return data.cities.map(c => c.value).filter(Boolean);
@@ -196,33 +267,33 @@ function ensureNetworkCityModal() {
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content net-city-modal" role="dialog" aria-labelledby="networkCityTitle">
-            <h2 id="networkCityTitle">Rede de qual cidade?</h2>
+            <h2 id="networkCityTitle">Nova cidade na rede</h2>
             <div class="modal-body-content">
-                <p class="net-city-modal__hint">Cada cidade tem a sua rede documentada: tudo o que já foi construído e os clientes de cada caixa.</p>
-                <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades"></div>
-                <label class="net-city-modal__other" for="networkCityInput">Outra cidade</label>
-                <input type="text" id="networkCityInput" placeholder="Nome da cidade" autocomplete="off" />
+                <p class="net-city-modal__hint">Cada cidade tem a sua rede documentada: tudo o que já foi construído e os clientes de cada caixa. Dentro dela você cria as pastas que quiser (bairros, POPs, regiões).</p>
+                <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades dos projetos"></div>
+                <label class="net-city-modal__other" for="networkCityInput">Nome da cidade</label>
+                <input type="text" id="networkCityInput" placeholder="Ex.: Lavras" autocomplete="off" />
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-net-city="cancel">Cancelar</button>
-                <button type="button" class="btn btn-success" data-net-city="ok">Abrir a rede</button>
+                <button type="button" class="btn btn-success" data-net-city="ok">Cadastrar cidade</button>
             </div>
         </div>`;
     document.body.appendChild(modal);
     return modal;
 }
 
+//Escolhe o nome da cidade nova: sugere as cidades dos projetos que ainda não estão na rede
 async function pickNetworkCity() {
     const modal = ensureNetworkCityModal();
     const list = modal.querySelector('#networkCityList');
     const input = modal.querySelector('#networkCityInput');
     input.value = '';
-    list.innerHTML = '<p class="net-city-modal__hint">Carregando as cidades…</p>';
+    list.innerHTML = '';
     modal.style.display = 'flex';
     listNetworkCities().then(cities => {
-        list.innerHTML = cities.length
-            ? cities.map(c => `<button type="button" class="net-city" data-city="${escapeHtml(c)}"${c === networkCity ? ' aria-current="true"' : ''}>${escapeHtml(c)}</button>`).join('')
-            : '<p class="net-city-modal__hint">Nenhuma cidade nos projetos ainda: digite abaixo.</p>';
+        const free = cities.filter(c => !document.getElementById(getNetworkId(c)));
+        list.innerHTML = free.length ? `<p class="net-city-modal__hint">Cidades dos projetos:</p>${free.map(c => `<button type="button" class="net-city" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}` : '';
     }).catch(() => { list.innerHTML = ''; });
     setTimeout(() => input.focus(), 50);
     return new Promise(resolve => {
@@ -234,7 +305,7 @@ async function pickNetworkCity() {
         };
         const onClick = (e) => {
             const pick = e.target.closest('.net-city');
-            if (pick) return finish(pick.dataset.city);
+            if (pick) { input.value = pick.dataset.city; input.focus(); return; }
             const action = e.target.closest('[data-net-city]')?.dataset.netCity;
             if (action === 'cancel' || e.target === modal) finish('');
             else if (action === 'ok' && input.value.trim()) finish(input.value);
@@ -247,6 +318,39 @@ async function pickNetworkCity() {
         modal.addEventListener('click', onClick);
         document.addEventListener('keydown', onKey, true);
     });
+}
+
+//"+ Cidade": cadastra a cidade na rede (vazia) e deixa selecionada para criar as pastas dela
+async function createNetworkCity(name = '') {
+    if (!requireEdit('cadastrar cidades na rede')) return null;
+    const city = name || await pickNetworkCity();
+    if (!city) return null;
+    const id = getNetworkId(city);
+    if (document.getElementById(id)) {
+        showToast('Cidade já cadastrada', `"${city}" já está na rede.`, 'progress');
+        await showNetworkCity(city);
+        return document.getElementById(id)?.closest('.folder') || null;
+    }
+    const { data: existing } = await supabaseClient.from('projects').select('id').eq('id', id).maybeSingle();
+    if (existing) {
+        await listNetworksInSidebar();
+        await showNetworkCity(city);
+        return document.getElementById(id)?.closest('.folder') || null;
+    }
+    rebuildSidebarFromJSON([emptyNetworkData(city).sidebar], document.getElementById('sidebar'));
+    updateSidebarEmptyState();
+    const root = document.getElementById(id).closest('.folder');
+    try {
+        await persistProject(root);
+    } catch (error) {
+        removeProjectFromWorkspace(id, root);
+        showAlert('Erro', `Não foi possível cadastrar a cidade. ${error.message || ''}`);
+        return null;
+    }
+    if (typeof liveSyncJoin === 'function') liveSyncJoin(id);
+    setActiveFolder(id);
+    showToast(`Rede · ${city}`, 'Cidade cadastrada. Use o menu ⋮ dela para criar as pastas.');
+    return root;
 }
 
 // ---------------------------------------------------------------
@@ -431,11 +535,12 @@ function guardProjectOnlyButton(id) {
 
 appReady.then(() => {
     document.querySelectorAll('[data-app-mode]').forEach(button => button.addEventListener('click', () => setAppMode(button.dataset.appMode)));
-    document.getElementById('networkCityButton')?.addEventListener('click', () => setAppMode('rede'));
+    document.getElementById('networkAddCityButton')?.addEventListener('click', () => createNetworkCity());
+    //"+ Marcador" no modo Rede: o mesmo de Desenhar → Marcador (CTO, CEO, cliente…), na pasta selecionada
+    document.getElementById('networkAddMarkerButton')?.addEventListener('click', () => document.getElementById('addMarkerButton')?.click());
     ['createProjectButton', 'loadProjectButton'].forEach(guardProjectOnlyButton);
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(appModeStorageKey()) || 'null'); } catch (e) { saved = null; }
+    wirePendingNetworkClicks();
     applyAppModeUi();
-    //Voltou no modo Rede: abre a rede da cidade de antes, quando o mapa estiver pronto
-    if (saved?.mode === 'rede' && saved.city) mapReady.then(() => setAppMode('rede', { city: saved.city, startup: true }));
+    //Entrar no modo Rede (preferência ou última vez): quando o mapa estiver pronto
+    if (getStartupAppMode() === 'rede') mapReady.then(() => setAppMode('rede', { startup: true }));
 });
