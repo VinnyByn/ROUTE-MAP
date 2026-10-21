@@ -10,6 +10,15 @@ const LEGEND_BOX_TYPES = ['POP', 'CEO', 'CTO', 'RESERVA', 'CLIENTE', 'CASA', 'PO
 
 const networkOverlays = { timer: null, legend: null };
 
+//Selo em forma de pílula (imagem SVG); âncora negativa = desenhado abaixo do ponto (embaixo do ícone da caixa).
+//Usado pelo pré-projeto (js/network/auto-design.js) nas CTOs propostas.
+function getMapBadgeIcon(text, color) {
+    const w = Math.max(30, text.length * 7 + 12), h = 18;
+    const safe = String(text).replace(/[<>&]/g, '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="9" fill="${color}" stroke="#ffffff" stroke-width="1"/><text x="${w / 2}" y="13" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#ffffff">${safe}</text></svg>`;
+    return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize: new google.maps.Size(w, h), anchor: new google.maps.Point(w / 2, -16) };
+}
+
 //Ocupação da CTO: portas em uso / portas de atendimento do plano de fusão. Sem splitter: só a quantidade de clientes.
 function getCtoOccupancy(cto) {
     const capacity = typeof getCtoPortCapacity === 'function' ? getCtoPortCapacity(cto) : null;
