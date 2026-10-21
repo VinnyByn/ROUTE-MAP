@@ -3549,12 +3549,49 @@ function getAutoDesignCtoAt(plan, box, xy) {
 }
 
 //Enquanto arrasta: onde a caixa vai encostar (poste ou rua), as casas que ela pegaria dali e o selo casas/cabe
+//e, das CTOs vizinhas, quantas casas cada uma ganha ou perde com a mudança: changes [{ cto, delta }]
 function getAutoDesignDragView(plan, box, latLng) {
     const xy = snapAutoDesignPoint(plan.model, latLng);
     const { local, cto } = getAutoDesignCtoAt(plan, box, xy);
     const sum = getAutoDesignCtoSummary({ params: plan.params, model: local }, cto);
-    return { xy, sum, points: cto.part.map(([j]) => local.demand[j]) };
+    return { xy, sum, points: cto.part.map(([j]) => local.demand[j]), changes: getAutoDesignDragChanges(plan, box, xy) };
 }
+
+//Casas que cada CTO vizinha ganha (+) ou perde (−) com a box em xy em vez de onde está (mesma conta, mesmas casas)
+function getAutoDesignDragChanges(plan, box, xy) {
+    const { model } = plan;
+    const range = model.drop.limit * 1.5;
+    const half = Math.hypot(xy.x - box.x, xy.y - box.y) / 2;
+    const cx = (xy.x + box.x) / 2, cy = (xy.y + box.y) / 2;
+    const local = getAutoDesignLocalModel(model, cx, cy, range + half);
+    const others = getAutoDesignCtosNear(plan, cx, cy, range + half).filter(c => c !== box);
+    if (!others.length) return [];
+    const before = evaluateAutoDesignCenters(local, [box, ...others]).load;
+    const after = evaluateAutoDesignCenters(local, [xy, ...others]).load;
+    return others.map((c, i) => ({ cto: c, delta: Math.round(((after[i + 1] || 0) - (before[i + 1] || 0)) * model.housesPerWeight) }))
+        .filter(c => c.delta !== 0);
+}
+
+//Selo "+3"/"−3" em cima da CTO vizinha enquanto arrasta outra
+function getAutoDesignDeltaBadgeIcon(delta) {
+    const icon = getAutoDesignCtoBadgeIcon(`${delta > 0 ? '+' : '−'}${Math.abs(delta)}`, delta > 0 ? '#0f766e' : '#64748b');
+    icon.anchor = new google.maps.Point(icon.scaledSize.width / 2, 40);
+    return icon;
+}
+
+const AUTO_DESIGN_LINK_MIN_M = 25;       //Trecho de rua a mais de 25 m da CTO ganha um traço fino até ela
+
+//Traços finos da CTO até cada trecho de rua dela que fica longe (até o ponto mais perto do trecho): [[xy, xy], ...]
+function getAutoDesignCtoLinks(cto, paths) {
+    return paths.map(path => {
+        const [a, b] = path;
+        const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+        const t = len2 > 0 ? Math.max(0, Math.min(1, ((cto.x - a[0]) * dx + (cto.y - a[1]) * dy) / len2)) : 0;
+        const q = [a[0] + dx * t, a[1] + dy * t];
+        return Math.hypot(q[0] - cto.x, q[1] - cto.y) > AUTO_DESIGN_LINK_MIN_M ? [[cto.x, cto.y], q] : null;
+    }).filter(Boolean);
+}
+const getAutoDesignLinkIcons = (color, opacity = 0.8) => [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: opacity, strokeColor: color, strokeWeight: 2, scale: 2 }, offset: '0', repeat: '8px' }];
 
 function startAutoDesignDrag(box) {
     const s = autoDesign;
@@ -3602,11 +3639,20 @@ function drawAutoDesignDragPreview() {
     const own = s.ctoColors?.get(drag.box) || AUTO_DESIGN_CTO_PALETTE[0];
     const paint = getAutoDesignCtoStreetPaint(plan, [view.points])[0];
     paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.85, strokeWeight: 7 })));
+    getAutoDesignCtoLinks(view.xy, paint).forEach(link => add(new google.maps.Polyline({ map, path: link.map(toLL), clickable: false, zIndex: 45, strokeOpacity: 0, icons: getAutoDesignLinkIcons(own) })));
+    view.changes.forEach(({ cto, delta }) => add(new google.maps.Marker({ map, position: cto.position, clickable: false, zIndex: 76, icon: getAutoDesignDeltaBadgeIcon(delta) })));
     if (!paint.length) {
         const hull = getAutoDesignHull([...view.points, view.xy]);
         if (hull.length) add(new google.maps.Polygon({ map, paths: hull.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.8, strokeWeight: 2, fillColor: own, fillOpacity: 0.15 }));
     }
+    //Casas que ela pegaria dali, uma a uma (vermelhas as fora do alcance do drop)
+    view.points.slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
+        const out = !isAutoDesignCovered(plan.model, q, view.xy);
+        add(new google.maps.Marker({ map, position: toLL(q), clickable: false, zIndex: out ? 67 : 66,
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: out ? 4 : 3, fillColor: out ? AUTO_DESIGN_CTO_LEVEL_COLORS.over : own, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1 } }));
+    });
     const at = toLL(view.xy);
+    add(new google.maps.Marker({ map, position: at, clickable: false, zIndex: 73, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 16, fillColor: own, fillOpacity: 0.3, strokeColor: own, strokeWeight: 3 } }));
     add(new google.maps.Marker({ map, position: at, clickable: false, zIndex: 74, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: color, fillOpacity: 0.9, strokeColor: '#ffffff', strokeWeight: 2 } }));
     const max = Number.isFinite(view.sum.maxHouses) ? view.sum.maxHouses : '∞';
     add(new google.maps.Marker({ map, position: at, clickable: false, zIndex: 75, icon: getAutoDesignCtoBadgeIcon(`${Math.round(view.sum.houses)}/${max}`, color) }));
@@ -3997,6 +4043,16 @@ const AUTO_DESIGN_CTO_LEVEL_COLORS = { ok: '#16a34a', over: '#dc2626' };
 //Selo "casas/cabe" embaixo da CTO: o mesmo selo da ocupação das CTOs no mapa (js/map/network-overlays.js)
 const getAutoDesignCtoBadgeIcon = (text, color) => getMapBadgeIcon(text, color);
 
+//Passando o mouse numa CTO: as ruas/casas dela ficam fortes e as das outras apagadas (null volta ao normal)
+function highlightAutoDesignCto(cto) {
+    const s = autoDesign;
+    if (!s?.ctoOverlays || s.drag) return;
+    s.ctoOverlays.forEach((list, c) => list.forEach(o => {
+        const look = o.__autoDesignLook;
+        if (look) o.setOptions?.(!cto || c === cto ? look.base : look.dim);
+    }));
+}
+
 function drawAutoDesignPreview() {
     clearAutoDesignPreview();
     const s = autoDesign;
@@ -4023,8 +4079,10 @@ function drawAutoDesignPreview() {
         s.ctoColors = new Map(plan.ctos.map((cto, i) => [cto, colors[i]]));
         const picked = plan.ctos.indexOf(s.selectedCto);
         const fade = (i) => picked >= 0 && i !== picked;
-        const own = (cto, overlay) => {
+        //base/dim: opções normal e apagada, para destacar uma CTO ao passar o mouse sem redesenhar tudo
+        const own = (cto, overlay, base = null, dim = null) => {
             if (!s.ctoOverlays.has(cto)) s.ctoOverlays.set(cto, []);
+            if (base && dim) overlay.__autoDesignLook = { base, dim };
             s.ctoOverlays.get(cto).push(add(overlay));
         };
         plan.ctos.forEach((cto, i) => {
@@ -4032,15 +4090,26 @@ function drawAutoDesignPreview() {
             //Sem ruas para pintar (sem o traçado das ruas): contorno das casas
             if (!paint[i].length) {
                 const hull = getAutoDesignHull([...lists[i], cto]);
+                const base = { strokeOpacity: fade(i) ? 0.2 : 0.7, fillOpacity: fade(i) ? 0.03 : 0.12 };
                 if (hull.length) own(cto, new google.maps.Polygon({
                     map, paths: hull.map(toLL), clickable: false, zIndex: 40,
-                    strokeColor: color, strokeOpacity: fade(i) ? 0.2 : 0.7, strokeWeight: i === picked ? 3 : 1.5, fillColor: color, fillOpacity: fade(i) ? 0.03 : 0.12,
-                }));
+                    strokeColor: color, strokeWeight: i === picked ? 3 : 1.5, fillColor: color, ...base,
+                }), base, { strokeOpacity: 0.2, fillOpacity: 0.03 });
             }
             paint[i].forEach(path => own(cto, new google.maps.Polyline({
                 map, path: path.map(toLL), clickable: false, zIndex: i === picked ? 43 : 41,
                 strokeColor: color, strokeOpacity: fade(i) ? 0.15 : 0.7, strokeWeight: i === picked ? 7 : 5,
-            })));
+            }), { strokeOpacity: fade(i) ? 0.15 : 0.7 }, { strokeOpacity: 0.15 }));
+            getAutoDesignCtoLinks(cto, paint[i]).forEach(link => {
+                const look = (o) => ({ icons: getAutoDesignLinkIcons(color, o) });
+                own(cto, new google.maps.Polyline({ map, path: link.map(toLL), clickable: false, zIndex: 40, strokeOpacity: 0, ...look(fade(i) ? 0.15 : 0.6) }),
+                    look(fade(i) ? 0.15 : 0.6), look(0.15));
+            });
+            //Anel na cor da CTO em volta da caixa: liga a caixa à cor das ruas que ela atende
+            own(cto, new google.maps.Marker({
+                map, position: cto.position, clickable: false, zIndex: 69, opacity: fade(i) ? 0.35 : 1,
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: i === picked ? 19 : 16, fillColor: color, fillOpacity: 0.3, strokeColor: color, strokeOpacity: 1, strokeWeight: 3 },
+            }), { opacity: fade(i) ? 0.35 : 1 }, { opacity: 0.35 });
         });
         //Casas da CTO clicada, uma a uma; as que ficam fora do alcance do drop em vermelho
         if (picked >= 0) lists[picked].slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
@@ -4056,7 +4125,7 @@ function drawAutoDesignPreview() {
             own(cto, new google.maps.Marker({
                 map, position: cto.position, clickable: false, zIndex: 72, opacity: fade(i) ? 0.45 : 1,
                 icon: getAutoDesignCtoBadgeIcon(text, AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(sum)]),
-            }));
+            }), { opacity: fade(i) ? 0.45 : 1 }, { opacity: 0.45 });
         });
     } else {
         plan.ctos.forEach(cto => add(new google.maps.Circle({
@@ -4095,7 +4164,9 @@ function drawAutoDesignPreview() {
         }));
         marker.addListener('click', () => handleAutoDesignBoxClick(box));
         if (editable && box.type === 'CTO') {
-            marker.addListener('dragstart', () => startAutoDesignDrag(box));
+            marker.addListener('mouseover', () => highlightAutoDesignCto(box));
+            marker.addListener('mouseout', () => highlightAutoDesignCto(null));
+            marker.addListener('dragstart', () => { highlightAutoDesignCto(null); startAutoDesignDrag(box); });
             marker.addListener('drag', (e) => dragAutoDesignBox(box, e?.latLng || marker.getPosition()));
         }
         if (editable) marker.addListener('dragend', (e) => { endAutoDesignDrag(); moveAutoDesignBox(box, e?.latLng || marker.getPosition()); });
