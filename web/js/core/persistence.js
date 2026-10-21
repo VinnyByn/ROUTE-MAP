@@ -25,7 +25,7 @@ function buildProjectRecord(projectRootElement) {
         children: getSidebarStructureAsJSON(projectUl)
     };
     const allFolderIds = getAllDescendantFolderIds(projectId);
-    return {
+    const record = {
         id: projectId,
         company_id: AppSession.company.id,
         created_by: AppSession.userId,
@@ -45,6 +45,9 @@ function buildProjectRecord(projectRootElement) {
             ...(typeof projectConclusions !== 'undefined' && projectConclusions[projectId] ? { concluded: projectConclusions[projectId] } : {})
         }
     };
+    //Rede: o histórico de alterações vai junto (js/network/network-docs.js)
+    if (record.project_type === 'Rede' && typeof withNetworkChangeLog === 'function') record.data = withNetworkChangeLog(projectId, record.data);
+    return record;
 }
 
 //Revisão do projeto (migração 20261005): null = banco ainda sem a coluna (salva do jeito antigo)
@@ -105,6 +108,7 @@ async function persistProject(projectRootElement, { force = false, allowConclude
         if (data && data.length) {
             setProjectRevision(projectRootElement, data[0].revision);
             if (typeof liveSyncAnnounceSaved === 'function') liveSyncAnnounceSaved(record.id, data[0].revision);
+            if (typeof commitNetworkSave === 'function') commitNetworkSave(record);
             return record;
         }
         const info = await fetchProjectSaveInfo(record.id);
@@ -117,6 +121,7 @@ async function persistProject(projectRootElement, { force = false, allowConclude
         projectRevisionsSupported = false;
         const retry = await supabaseClient.from('projects').upsert(record, { onConflict: 'id' });
         if (retry.error) throw retry.error;
+        if (typeof commitNetworkSave === 'function') commitNetworkSave(record);
         return record;
     }
     if (error) throw error;
@@ -125,6 +130,7 @@ async function persistProject(projectRootElement, { force = false, allowConclude
         setProjectRevision(projectRootElement, data[0].revision);
         if (typeof liveSyncAnnounceSaved === 'function') liveSyncAnnounceSaved(record.id, data[0].revision);
     }
+    if (typeof commitNetworkSave === 'function') commitNetworkSave(record);
     return record;
 }
 
@@ -322,6 +328,7 @@ function loadAndDisplayProject(projectId, projectData, { silent = false } = {}) 
     if (projectData.objective) {
         projectObjectives[projectId] = projectData.objective;
     }
+    if (typeof rememberNetworkLoaded === 'function') rememberNetworkLoaded(projectId, projectData);
     if (typeof projectConclusions !== 'undefined') {
         if (projectData.concluded) projectConclusions[projectId] = projectData.concluded;
         else delete projectConclusions[projectId];

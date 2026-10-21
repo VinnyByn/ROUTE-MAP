@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261073a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261075a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -89,13 +89,32 @@
         <button type="button" class="mode-switch__btn" data-app-mode="rede" role="radio" aria-checked="false" title="Modo Rede: a rede construída da cidade e os clientes de cada caixa">Rede</button>
       </div>
       <div class="network-tools" id="networkTools" role="group" aria-label="Rede" hidden>
-        <button id="networkAddCityButton" class="top-bar-button" type="button" data-edit-only title="Cadastrar uma cidade na rede">
-          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg>
-          <span class="top-bar-button__label">Cidade</span>
+        <div class="dropdown">
+          <button id="networkMenuButton" class="top-bar-button" type="button" aria-haspopup="menu">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg>
+            <span class="top-bar-button__label">Rede</span>
+            <svg class="ui-icon top-bar-button__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div id="networkDropdown" class="dropdown-content" role="menu">
+            <a href="#" id="networkAddCityButton" role="menuitem" data-edit-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg><span>Nova cidade</span></a>
+            <a href="#" id="networkAddMarkerButton" role="menuitem" data-edit-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg><span>Novo marcador</span><small>CTO, CEO, reserva… na pasta selecionada</small></a>
+            <a href="#" id="networkAddClientButton" role="menuitem" data-edit-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-client"></use></svg><span>Novo cliente</span><small>Ligado numa CTO e porta</small></a>
+            <div class="dropdown-divider" role="separator" data-edit-only></div>
+            <a href="#" id="networkCheckButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clipboard-check"></use></svg><span>Verificar a rede</span><small>Pontas soltas, fusões, portas e potência</small></a>
+            <a href="#" id="networkImpactMenuButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg><span>Rompimento e impacto</span><small>O que cai se um cabo ou caixa parar</small></a>
+            <a href="#" id="networkHistoryButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"></use></svg><span>Histórico de alterações</span></a>
+            <div class="dropdown-divider" role="separator"></div>
+            <a href="#" id="networkExportXlsxButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sheet"></use></svg><span>Exportar planilha (Excel)</span><small>Caixas, cabos, clientes, portas e fibras</small></a>
+            <a href="#" id="networkExportFusionButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-file-text"></use></svg><span>Exportar plano de fusão (PDF)</span></a>
+          </div>
+        </div>
+        <button id="networkViabilityButton" class="top-bar-button" type="button" title="Consulta de viabilidade: clique no endereço do cliente e veja as CTOs com porta livre por perto">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-target"></use></svg>
+          <span class="top-bar-button__label">Viabilidade</span>
         </button>
-        <button id="networkAddMarkerButton" class="top-bar-button" type="button" data-edit-only title="Incluir CTO, CEO, cliente… na pasta selecionada da rede">
-          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg>
-          <span class="top-bar-button__label">Marcador</span>
+        <button id="networkPanelButton" class="top-bar-button" type="button" title="Painel da rede: caixas, cabos, portas, clientes e o que precisa de atenção">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-report"></use></svg>
+          <span class="top-bar-button__label">Painel</span>
         </button>
       </div>
       <nav class="top-bar-nav" aria-label="Ferramentas principais">
@@ -1334,6 +1353,7 @@
           </div>
           <button type="button" class="map-tool-mini-btn" id="copyMarkerCoordsButton">Copiar</button>
         </div>
+        <div id="markerDocPanel" class="marker-doc hidden" aria-live="polite"></div>
         <div id="ctoClientsPanel" class="cto-clients-panel hidden">
           <div class="cto-clients-panel__header">
             <p class="marker-type-options__label">Clientes atendidos</p>
@@ -2134,6 +2154,34 @@
         <button type="button" class="route-clear" id="rerunProjectCheckButton">Verificar de novo</button>
       </div>
     </div>
+    <div id="networkPanelBox" class="floating-box map-tool-box network-panel-box hidden" role="dialog" aria-labelledby="networkPanelTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-report"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="networkPanelTitle">Painel da rede</h3>
+          <span class="map-tool-box__subtitle" id="networkPanelSubtitle"></span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeNetworkPanelBox" title="Fechar" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body" id="networkPanelBody"></div>
+    </div>
+
+    <div id="viabilityBox" class="floating-box map-tool-box viability-box hidden" role="dialog" aria-labelledby="viabilityTitle">
+      <div class="map-tool-box__header">
+        <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-target"></use></svg></span>
+        <div class="map-tool-box__heading">
+          <h3 id="viabilityTitle">Viabilidade</h3>
+          <span class="map-tool-box__subtitle">CTOs com porta livre perto do cliente</span>
+        </div>
+        <button type="button" class="map-tool-box__close" id="closeViabilityBox" title="Fechar (Esc)" aria-label="Fechar">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="map-tool-box__body" id="viabilityBody"></div>
+    </div>
+
     <div id="networkImpactBox" class="floating-box map-tool-box cable-route-box project-check-box network-impact-box hidden" role="dialog" aria-labelledby="networkImpactTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg></span>
@@ -3243,7 +3291,7 @@
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
   <script src="js/app.js?v=20261061a" defer></script>
-  <script src="js/core/persistence.js?v=20261073a" defer></script>
+  <script src="js/core/persistence.js?v=20261075a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261011b" defer></script>
   <script src="js/core/project-safety.js?v=20261016b" defer></script>
   <script src="js/catalog/catalog.js?v=20261062a" defer></script>
@@ -3254,10 +3302,10 @@
   <script src="js/map/sketch.js?v=20261068a" defer></script>
   <script src="js/projects/projects.js?v=20261073a" defer></script>
   <script src="js/projects/sidebar.js?v=20261073a" defer></script>
-  <script src="js/projects/network-mode.js?v=20261074a" defer></script>
+  <script src="js/projects/network-mode.js?v=20261075a" defer></script>
   <script src="js/core/permissions.js?v=20261004b" defer></script>
   <script src="js/map/marker-icons.js?v=20261007b" defer></script>
-  <script src="js/map/marker-panel.js?v=20261020a" defer></script>
+  <script src="js/map/marker-panel.js?v=20261075a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
   <script src="js/auth/account.js?v=20261072a" defer></script>
@@ -3281,6 +3329,7 @@
   <script src="js/network/cable-split.js?v=20261014i" defer></script>
   <script src="js/network/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
+  <script src="js/network/network-docs.js?v=20261075a" defer></script>
   <script src="js/network/auto-design.js?v=20261070a" defer></script>
   <script src="js/map/marker-hover.js?v=20261010e" defer></script>
   <script src="js/map/network-overlays.js?v=20261057a" defer></script>

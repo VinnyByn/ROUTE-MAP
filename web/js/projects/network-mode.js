@@ -475,6 +475,11 @@ function mergeProjectIntoNetwork(network, project, meta) {
     };
     boxes.forEach(marker => upsert(net.markers, toAsBuiltMarker({ ...marker, folderId: folderOf(marker.folderId) }, stamp)));
     cables.forEach(cable => upsert(net.cables, toAsBuiltCable({ ...cable, folderId: folderOf(cable.folderId) }, stamp)));
+    //Histórico da rede (js/network/network-docs.js)
+    net.changeLog = [...(net.changeLog || []), {
+        at: meta.at, by: meta.byName || '', action: 'projeto', name: meta.projectName,
+        detail: `${boxes.length} ${boxes.length === 1 ? 'caixa' : 'caixas'} e ${cables.length} ${cables.length === 1 ? 'cabo' : 'cabos'}`,
+    }].slice(-500);
     return { network: net, boxes: boxes.length, cables: cables.length, plans: boxes.filter(m => m.fusionPlan).length };
 }
 

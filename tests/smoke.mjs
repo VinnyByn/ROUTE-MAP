@@ -3716,6 +3716,47 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.lazy = pending === 'Rede · Lavras|Rede · Perdões' && markers.length === 0 + markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length && untouched
         && !loaded.querySelector(':scope > .folder-title').dataset.networkPending && markers.filter(m => m.type === 'CTO').length === 2
         && markers.every(m => m.marker.getVisible() === false) && !document.getElementById(netId).classList.contains('hidden');
+      //Painel da rede: números da cidade e o que precisa de atenção
+      setActiveFolder(netId);
+      await openNetworkPanel();
+      const panelText = document.getElementById('networkPanelBody').textContent;
+      out.panel = !document.getElementById('networkPanelBox').classList.contains('hidden') && /2\s*CTOs/.test(panelText) && /Clientes/.test(panelText)
+        && /CTOs sem splitter/.test(panelText);
+      //Histórico: a conclusão dos projetos e a alteração salva na rede (quem, o quê)
+      const cto = markers.find(m => m.type === 'CTO');
+      const oldName = cto.name;
+      cto.name = 'CTO-RENOMEADA';
+      await persistProject(document.getElementById(netId).closest('.folder'));
+      const log = window.__fakeDb.projects[netId].data.changeLog || [];
+      out.history = log.some(e => e.action === 'projeto' && e.name === 'Bairro A') && log.some(e => e.action === 'alterou' && e.name === 'CTO-RENOMEADA' && /nome/.test(e.detail) && e.by);
+      await persistProject(document.getElementById(netId).closest('.folder'));
+      out.historyOnce = (window.__fakeDb.projects[netId].data.changeLog || []).filter(e => e.action === 'alterou').length === 1;
+      openNetworkPanel('historico');
+      await new Promise(r => setTimeout(r, 20));
+      out.historyTab = /alterou a CTO CTO-RENOMEADA/.test(document.getElementById('networkPanelBody').textContent);
+      //Caixa da rede: de qual projeto veio e as últimas mudanças
+      renderMarkerDocPanel(cto);
+      const doc = document.getElementById('markerDocPanel');
+      out.doc = !doc.classList.contains('hidden') && /Construído pelo projeto/.test(doc.textContent) && /alterou/.test(doc.textContent);
+      cto.name = oldName;
+      //Viabilidade: ponto perto da CTO → viável; "+ Cliente" cadastra no ponto, ligado nessa CTO
+      await startViability();
+      const here = new google.maps.LatLng(-21.2412, -45.0012);
+      runViability(here);
+      const verdict = document.querySelector('#viabilityBody .viability-verdict')?.textContent || '';
+      const r0 = viability.results[0];
+      out.viability = /Viável/.test(verdict) && r0?.cto.type === 'CTO' && r0.street < 200 && !!document.querySelector('#viabilityBody [data-viab="client"]');
+      const clientsBefore = markers.filter(m => m.type === 'CLIENTE').length;
+      document.querySelector('#viabilityBody [data-viab="client"]').click();
+      document.getElementById('clientName').value = 'Cliente Viável';
+      document.getElementById('saveClientButton').click();
+      const created = markers.filter(m => m.type === 'CLIENTE');
+      const client = created[created.length - 1];
+      out.viabilityClient = created.length === clientsBefore + 1 && client.client.ctoUid === r0.cto.uid && !!client.client.ctoPort
+        && Math.abs(client.marker.getPosition().lat() - here.lat()) < 1e-9 && client.folderId === r0.cto.folderId;
+      document.getElementById('closeViabilityBox').click();
+      await new Promise(r => setTimeout(r, 20));
+      out.viabilityClosed = !viability.active && !viability.overlays.length;
       await setAppMode('projeto');
       out.merge = (() => {
         const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
