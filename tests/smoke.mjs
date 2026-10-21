@@ -3873,6 +3873,46 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         field.results[0]?.box.type, field.results[0]?.distance < 60, /Você está aqui/.test(nearbyText), /google\.com\/maps\/dir/.test(document.getElementById('nearbyBody').innerHTML), field.overlays.length].join();
       stopFieldNearby();
       out.field = out.fieldDetail === 'true,true,1,true,true,true,true,CTO,true,true,true,2' && document.getElementById('nearbyBox').classList.contains('hidden');
+      //Ocorrências: abre na caixa (anel no mapa, aba no painel), resolver anota no histórico; tudo salvo na rede
+      await openOccurrenceModal({ item: boxA });
+      document.getElementById('occurrenceKind').value = 'rompimento';
+      document.getElementById('occurrenceText').value = 'Cabo rompido no poste';
+      await saveOccurrenceFromModal();
+      const occSaved = window.__fakeDb.projects[netId].data.occurrences || [];
+      refreshOccurrenceOverlays();
+      const rings = occurrences.overlays.length;
+      openNetworkPanel('ocorrencias');
+      await new Promise(r => setTimeout(r, 20));
+      const occTab = document.getElementById('networkPanelBody').textContent;
+      await openOccurrenceModal({ occurrence: getNetworkOccurrences(netId)[0] });
+      setOccurrenceStatusUi('resolvida');
+      document.getElementById('occurrenceText').value = 'Emenda refeita';
+      await saveOccurrenceFromModal();
+      const occFinal = window.__fakeDb.projects[netId].data.occurrences || [];
+      const occLog = (window.__fakeDb.projects[netId].data.changeLog || []).filter(e => e.action === 'ocorrencia').map(e => describeNetworkLogEntry(e)).join('|');
+      networkDocs.panelTab = 'resumo';
+      document.getElementById('networkPanelBox').classList.add('hidden');
+      out.occDetail = [occSaved.length, occSaved[0]?.kind, occSaved[0]?.uid === boxA.uid, rings, /Rompimento de fibra/.test(occTab) && /Cabo rompido/.test(occTab),
+        occFinal[0]?.status, occFinal[0]?.updates.length, !!occFinal[0]?.resolvedBy, /abriu ocorrência "Rompimento de fibra" na CTO/.test(occLog) && /resolveu ocorrência/.test(occLog), occurrences.overlays.length].join();
+      out.occurrences = out.occDetail === '1,rompimento,true,1,true,resolvida,1,true,true,0';
+      //Técnico de campo: no modo Rede edita clientes e grava a rede; caixas e cabos não; no modo Projeto só consulta
+      const realRole = AppSession.company.role;
+      AppSession.company.role = 'tecnico';
+      applyRoleToUi();
+      try {
+        const cli = markers.find(m => m.type === 'CLIENTE' && getAllDescendantFolderIds(netId).includes(m.folderId));
+        openClientModal(cli);
+        const clientEditable = !document.getElementById('clientModal').classList.contains('is-readonly') && !document.getElementById('clientName').disabled;
+        closeClientModal();
+        const savedAsTec = await persistProject(netRoot).then(() => true, () => false);
+        const vis = (id) => getComputedStyle(document.getElementById(id)).display !== 'none';
+        out.tecnicoDetail = [AppSession.canEdit, AppSession.canDocument, requireEdit('mexer'), requireDocument('cadastrar'), clientEditable, savedAsTec,
+          vis('networkAddClientButton'), vis('networkOccurrenceButton'), vis('networkAddMarkerButton')].join();
+        out.tecnico = out.tecnicoDetail === 'false,true,false,true,true,true,true,true,false';
+      } finally {
+        AppSession.company.role = realRole;
+        applyRoleToUi();
+      }
       await setAppMode('projeto');
       //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
       window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',

@@ -89,8 +89,10 @@ async function fetchProjectSaveInfo(projectId) {
 //depois que o projeto foi aberto aqui; senão lança ProjectConflictError (force: true grava mesmo assim).
 async function persistProject(projectRootElement, { force = false, allowConcluded = false } = {}) {
     await appReady;
-    if (!AppSession.canEdit) throw new Error('Seu cargo é somente de visualização.');
     const rootTitle = projectRootElement?.querySelector('.folder-title');
+    //Técnico de campo grava só a rede (o banco confere que caixas e cabos não mudaram)
+    const tecnicoOnNetwork = AppSession.isTecnico && typeof isNetworkProjectId === 'function' && isNetworkProjectId(rootTitle?.dataset.folderId);
+    if (!AppSession.canEdit && !tecnicoOnNetwork) throw new Error('Seu cargo é somente de visualização.');
     //Cidade da rede ainda não carregada (só o nome na barra lateral): não há o que salvar
     if (rootTitle?.dataset.networkPending === 'true') return null;
     const rootId = rootTitle?.dataset.folderId;

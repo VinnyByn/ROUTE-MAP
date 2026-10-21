@@ -3293,3 +3293,41 @@ html[data-theme="dark"] .viability-verdict.is-warn { color: #fcd34d; }
 #nearbyBox a.viability-row__add { display: inline-flex; align-items: center; text-decoration: none; }
 #fieldQrModal { z-index: 1200; } /* acima do painel da caixa, de onde abre */
 .field-qr__link { width: 100%; margin-top: 12px; font-size: 12px; }
+
+/* Ocorrências (js/network/network-occurrences.js) e técnico de campo */
+body:not(.can-edit):not(.role-tecnico) .network-tools [data-document-only] { display: none; }
+.network-panel__tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.network-panel__tabs button { padding-left: 2px; padding-right: 2px; font-size: 12px; }
+.occurrence-modal { max-width: 480px; }
+.occurrence-modal .modal-body-content { display: flex; flex-direction: column; gap: 4px; }
+.occurrence-modal select, .occurrence-modal textarea { width: 100%; }
+.occurrence-modal__label { margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+.occurrence-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 10px; background: var(--color-surface-muted); border: 1px solid var(--color-border-light); }
+.occurrence-status button { padding: 7px 4px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); cursor: pointer; }
+.occurrence-status button.is-active { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 3px rgba(15, 23, 42, .15); }
+.occurrence-status button[data-status="aberta"].is-active { color: #b91c1c; }
+.occurrence-status button[data-status="andamento"].is-active { color: #b45309; }
+.occurrence-status button[data-status="resolvida"].is-active { color: #15803d; }
+.occurrence-history { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.occurrence-history:empty { display: none; }
+.occurrence-history li { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-left: 3px solid var(--color-border); background: var(--color-surface-muted); border-radius: 0 8px 8px 0; }
+.occurrence-history small { font-size: 11px; color: var(--color-text-dim); }
+.occurrence-history span { font-size: 12.5px; color: var(--color-text); white-space: pre-wrap; }
+.occurrence-list, .marker-doc__occ { display: flex; flex-direction: column; gap: 5px; }
+.occurrence-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--color-border-light); border-left: 4px solid var(--occ); background: var(--color-surface); font: inherit; text-align: left; color: var(--color-text); cursor: pointer; }
+.occurrence-row:hover { background: var(--color-surface-hover); }
+.occurrence-row > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.occurrence-row b { font-size: 12.5px; }
+.occurrence-row small { font-size: 11.5px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.occurrence-row > em { flex: none; font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, #dc2626 12%, var(--color-surface)); color: #b91c1c; }
+.occurrence-row.is-andamento > em { background: color-mix(in srgb, #d97706 14%, var(--color-surface)); color: #b45309; }
+.occurrence-row.is-resolvida { border-left-color: #16a34a; opacity: .85; }
+.occurrence-row.is-resolvida > em { background: color-mix(in srgb, #16a34a 13%, var(--color-surface)); color: #15803d; }
+html[data-theme="dark"] .occurrence-row > em { color: #fca5a5; }
+html[data-theme="dark"] .occurrence-row.is-andamento > em { color: #fcd34d; }
+html[data-theme="dark"] .occurrence-row.is-resolvida > em { color: #86efac; }
+.occurrence-filter { grid-template-columns: 1fr 1fr; }
+.marker-doc__occ { margin-top: 10px; }
+.marker-doc__occ header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+.marker-doc__occ header .btn-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 700; color: var(--brand-600, #1d7290); cursor: pointer; }
+.marker-doc__occ-empty { font-size: 12px; color: var(--color-text-dim); }

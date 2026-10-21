@@ -8,11 +8,13 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 
-//Cargos: admin controla tudo; projetista cria/edita/salva projetos; member (Membro) só visualiza.
-const ROLE_LABELS = { admin: 'Administrador', projetista: 'Projetista', member: 'Membro' };
+//Cargos: admin controla tudo; projetista cria/edita/salva projetos; tecnico (Técnico de campo) documenta a rede
+//(clientes, ocorrências e fotos) sem mexer em caixas e cabos; member (Membro) só visualiza.
+const ROLE_LABELS = { admin: 'Administrador', projetista: 'Projetista', tecnico: 'Técnico de campo', member: 'Membro' };
 const ROLE_DESCRIPTIONS = {
     admin: 'Controla tudo: equipe, convites, dados da empresa, preços, kits e configurações. Vê quem está online.',
     projetista: 'Cria, edita e salva projetos. Não acessa a parte administrativa.',
+    tecnico: 'No modo Rede, cadastra e liga clientes, registra ocorrências e fotos. Não altera caixas, cabos nem projetos.',
     member: 'Somente visualiza: abre e consulta projetos, sem editar nem salvar.'
 };
 
@@ -28,6 +30,9 @@ const AppSession = {
     get isAdmin() { return this.company?.role === 'admin'; },
     get canEdit() { return this.company?.role === 'admin' || this.company?.role === 'projetista'; },
     get isViewer() { return !!this.company && !this.canEdit; },
+    get isTecnico() { return this.company?.role === 'tecnico'; },
+    //Documentar a rede (clientes, ocorrências, fotos): quem edita e, no modo Rede, o técnico de campo
+    get canDocument() { return this.canEdit || (this.isTecnico && typeof appMode !== 'undefined' && appMode === 'rede'); },
     get roleLabel() { return ROLE_LABELS[this.company?.role] || ''; },
     get displayName() { return this.profile?.full_name || this.email || 'Usuário'; }
 };
@@ -46,6 +51,17 @@ function requireEdit(actionLabel = 'fazer alterações') {
     const message = `Seu cargo (${AppSession.roleLabel || 'Membro'}) é somente de visualização. Peça a um administrador para ${actionLabel}.`;
     if (typeof showToast === 'function') showToast('Somente visualização', message, 'progress');
     else console.warn(message);
+    return false;
+}
+
+//Como requireEdit, para o que o técnico de campo também pode fazer no modo Rede
+function requireDocument(actionLabel = 'documentar a rede') {
+    if (AppSession.canEdit) return requireEdit(actionLabel);
+    if (AppSession.canDocument) return true;
+    const message = AppSession.isTecnico
+        ? `No modo Projeto o técnico de campo só consulta. Troque para o modo Rede para ${actionLabel}.`
+        : `Seu cargo (${AppSession.roleLabel || 'Membro'}) é somente de visualização. Peça a um administrador para ${actionLabel}.`;
+    if (typeof showToast === 'function') showToast('Somente visualização', message, 'progress');
     return false;
 }
 

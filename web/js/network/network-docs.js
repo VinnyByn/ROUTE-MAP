@@ -8,7 +8,7 @@
 const NETWORK_LOG_MAX = 500;
 const VIABILITY_RADII = [100, 150, 200, 300, 500];
 const VIABILITY_STREET_FACTOR = 1.3; //Drop pela rua ≈ 1,3 × a distância em linha reta
-const networkDocs = { snapshots: new Map(), logs: new Map(), bulk: new Map(), panelRootId: '', panelTab: 'resumo', cursor: new Map() };
+const networkDocs = { snapshots: new Map(), logs: new Map(), bulk: new Map(), occurrences: new Map(), panelRootId: '', panelTab: 'resumo', cursor: new Map() };
 const viability = { active: false, radius: 200, point: null, listener: null, overlays: [], results: [] };
 
 const getNetworkRoots = () => getOpenProjectRoots().filter(isNetworkRoot);
@@ -124,7 +124,11 @@ function withNetworkChangeLog(projectId, data) {
     const log = networkDocs.logs.get(projectId) || [];
     const bulk = networkDocs.bulk.get(projectId);
     const changes = (before ? diffNetworkData(before, data) : []).filter(c => !bulk?.uids.has(c.uid));
-    return { ...data, changeLog: [...log, ...(bulk?.entries || []), ...changes].slice(-NETWORK_LOG_MAX) };
+    return {
+        ...data,
+        occurrences: networkDocs.occurrences.get(projectId) || data.occurrences || [],
+        changeLog: [...log, ...(bulk?.entries || []), ...changes].slice(-NETWORK_LOG_MAX),
+    };
 }
 
 //Mudança em lote (importar clientes): um registro só no histórico, em vez de um por item
@@ -149,11 +153,27 @@ function rememberNetworkLoaded(projectId, data) {
     if (data?.sidebar?.type !== NETWORK_PROJECT_TYPE) return;
     networkDocs.logs.set(projectId, data.changeLog || []);
     networkDocs.snapshots.set(projectId, snapshotNetworkData(data));
+    networkDocs.occurrences.set(projectId, Array.isArray(data.occurrences) ? data.occurrences : []);
+    if (typeof scheduleOccurrenceOverlays === 'function') scheduleOccurrenceOverlays(300);
+}
+
+//Salva a rede (importação, ocorrência…) e, se outra pessoa salvou antes, pergunta o que fazer. true = salva.
+async function saveNetworkRoot(root) {
+    const name = root.querySelector(':scope > .folder-title')?.dataset.folderName || 'Rede';
+    try {
+        return !!(await persistProject(root));
+    } catch (error) {
+        if (error instanceof ProjectConflictError) return resolveProjectConflict(root, name, error.info);
+        console.error(error);
+        showAlert('Erro ao salvar', `Não foi possível salvar a ${name}. ${error.message || ''}`);
+        return false;
+    }
 }
 
 function describeNetworkLogEntry(e) {
     const noun = e.type === 'CABO' ? 'o cabo' : e.type === 'CLIENTE' ? 'o cliente' : `a ${e.type || 'caixa'}`;
     if (e.action === 'projeto') return `concluiu o projeto "${e.name}"${e.detail ? `: ${e.detail}` : ''}`;
+    if (e.action === 'ocorrencia') return e.detail || 'registrou uma ocorrência';
     if (e.action === 'importou') return `importou clientes${e.name ? ` da planilha "${e.name}"` : ''}${e.detail ? `: ${e.detail}` : ''}`;
     return `${e.action} ${noun} ${e.name || ''}${e.detail ? ` (${e.detail})` : ''}`.trim();
 }
@@ -179,6 +199,7 @@ function renderMarkerDocPanel(markerInfo) {
             ${markerInfo.marker?.getPosition?.() ? `<a class="btn btn-secondary" href="https://www.google.com/maps/dir/?api=1&destination=${markerInfo.marker.getPosition().lat().toFixed(6)},${markerInfo.marker.getPosition().lng().toFixed(6)}" target="_blank" rel="noopener">Como chegar</a>` : ''}
             <button type="button" class="btn btn-secondary" data-field="link">Copiar link</button>
         </div>` : ''}
+        ${typeof renderItemOccurrencesHtml === 'function' && ['CTO', 'CEO', 'POP', 'RESERVA'].includes(markerInfo.type) ? renderItemOccurrencesHtml(markerInfo) : ''}
         ${log.length ? `<ul class="marker-doc__log">${log.map(e => `<li><small>${esc(formatDocDate(e.at))}</small> ${esc(e.by)} ${esc(e.action)}${e.detail ? ` ${esc(e.detail)}` : ''}</li>`).join('')}</ul>` : ''}`;
     panel.classList.remove('hidden');
 }
@@ -239,8 +260,13 @@ function renderNetworkPanel() {
     const tabs = `<div class="map-tool-segmented network-panel__tabs" role="tablist">
         <button type="button" role="tab" data-net-panel="tab" data-tab="resumo" class="${networkDocs.panelTab === 'resumo' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'resumo'}">Resumo</button>
         <button type="button" role="tab" data-net-panel="tab" data-tab="pons" class="${networkDocs.panelTab === 'pons' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'pons'}">PONs</button>
+        <button type="button" role="tab" data-net-panel="tab" data-tab="ocorrencias" class="${networkDocs.panelTab === 'ocorrencias' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'ocorrencias'}">Ocorrências</button>
         <button type="button" role="tab" data-net-panel="tab" data-tab="historico" class="${networkDocs.panelTab === 'historico' ? 'is-active' : ''}" aria-selected="${networkDocs.panelTab === 'historico'}">Histórico</button>
     </div>`;
+    if (networkDocs.panelTab === 'ocorrencias' && typeof renderOccurrencesTabHtml === 'function') {
+        body.innerHTML = `${picker}${tabs}${renderOccurrencesTabHtml(root)}`;
+        return;
+    }
     if (networkDocs.panelTab === 'pons' && typeof renderPonTabHtml === 'function') {
         body.innerHTML = `${picker}${tabs}${renderPonTabHtml(root)}`;
         return;
@@ -257,7 +283,9 @@ function renderNetworkPanel() {
     const st = getNetworkStats(root);
     const share = st.ports ? st.used / st.ports : 0;
     const level = share >= 0.9 ? 'full' : share >= 0.75 ? 'high' : 'ok';
+    const openOcc = typeof getNetworkOccurrences === 'function' ? getNetworkOccurrences(getRootId(root)).filter(isOccurrenceOpen).length : 0;
     const attention = [
+        ['occ', openOcc, `${openOcc === 1 ? 'ocorrência aberta' : 'ocorrências abertas'}`, 'Rompimentos, sinal baixo, manutenção', 'erro'],
         ['full', st.full.length, `${st.full.length === 1 ? 'CTO lotada' : 'CTOs lotadas'}`, 'Sem porta livre para cliente novo', 'erro'],
         ['high', st.high.length, `${st.high.length === 1 ? 'CTO quase lotada' : 'CTOs quase lotadas'}`, '75% ou mais das portas em uso', 'aviso'],
         ['noSplitter', st.noSplitter.length, `${st.noSplitter.length === 1 ? 'CTO sem splitter' : 'CTOs sem splitter'} de atendimento`, 'Sem portas definidas no plano de fusão', 'aviso'],
@@ -314,6 +342,7 @@ function handleNetworkPanelClick(e) {
         return;
     }
     if (kind.startsWith('pon') && typeof handlePonPanelClick === 'function') { handlePonPanelClick(el); return; }
+    if (kind.startsWith('occ') && typeof handleOccurrencePanelClick === 'function') { handleOccurrencePanelClick(el); return; }
     if (kind === 'xlsx') { exportProjectSpreadsheet(); return; }
     if (kind === 'impact') { openNetworkImpact(); return; }
     if (kind === 'log') {
@@ -327,6 +356,7 @@ function handleNetworkPanelClick(e) {
     if (kind === 'attn' && st) {
         const key = el.dataset.key;
         if (key === 'check') { openProjectCheck(); return; }
+        if (key === 'occ') { networkDocs.panelTab = 'ocorrencias'; occurrences.filter = 'abertas'; renderNetworkPanel(); return; }
         const list = key === 'unlinked' ? st.unlinked : st[key].map(c => c.cto);
         cycleNetworkAttention(key, list);
     }
@@ -484,7 +514,7 @@ appReady.then(() => {
     on('networkExportXlsxButton', async () => { if (await ensureActiveNetworkCity('exportar a planilha')) exportProjectSpreadsheet(); });
     on('networkExportFusionButton', async () => { if (await ensureActiveNetworkCity('exportar os planos de fusão')) exportProjectFusionPlans(); });
     on('networkAddClientButton', async () => {
-        if (!requireEdit('cadastrar clientes')) return;
+        if (!requireDocument('cadastrar clientes')) return;
         if (await ensureActiveNetworkCity('cadastrar o cliente')) openClientModal(null);
     });
     on('closeNetworkPanelBox', () => document.getElementById('networkPanelBox').classList.add('hidden'));

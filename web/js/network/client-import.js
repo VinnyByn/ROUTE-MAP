@@ -235,7 +235,7 @@ function ensureClientImportModal() {
 }
 
 async function openClientImport() {
-    if (!requireEdit('importar clientes')) return;
+    if (!requireDocument('importar clientes')) return;
     const root = await ensureActiveNetworkCity('importar os clientes');
     if (!root) return;
     if (typeof XLSX === 'undefined') {
@@ -415,7 +415,7 @@ function prepareImportedDrop(info, net) {
 
 async function runClientImport() {
     const root = getClientImportRoot();
-    if (!root || !requireEdit('importar clientes')) return;
+    if (!root || !requireDocument('importar clientes')) return;
     const rows = clientImport.rows.filter(r => r.action !== 'erro');
     if (!rows.length) return;
     const projectId = getRootId(root);
@@ -473,12 +473,7 @@ async function runClientImport() {
         action: 'importou', type: 'CLIENTE', name: clientImport.fileName,
         detail: `${created} novo${created === 1 ? '' : 's'}, ${updated} atualizado${updated === 1 ? '' : 's'}`,
     }, touched.map(info => info.uid));
-    let saved = false;
-    try {
-        saved = !!(await persistProject(root));
-    } catch (e) {
-        console.error(e);
-    }
+    const saved = await saveNetworkRoot(root);
     renderClientImport({ created, updated, skipped, saved });
 }
 

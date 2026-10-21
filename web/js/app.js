@@ -3682,6 +3682,7 @@ function addCustomMarker(location, importedData = null) {
         if (markerInfo.type === "CLIENTE") {
             refreshBomAfterProjectChange();
             if (!importedData) fillClientAddressFromMap(markerInfo);
+            if (typeof autosaveClientNetwork === 'function') autosaveClientNetwork(markerInfo);
         }
     } catch (error) {
         console.error(`Erro ao atualizar o marcador "${markerInfo.name}":`, error);
