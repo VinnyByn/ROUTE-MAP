@@ -464,6 +464,8 @@ function getSidebarStructureAsJSON(ulElement) {
                 neighborhood: titleDiv.dataset.folderNeighborhood || null,
                 type: isProject ? titleDiv.dataset.folderType : 'folder',
                 isProject: isProject,
+                //Pasta da rede que veio de um projeto concluído (concluir de novo a substitui): js/projects/network-mode.js
+                ...(titleDiv.dataset.fromProject ? { fromProject: titleDiv.dataset.fromProject } : {}),
                 //Chamada recursiva para processar subpastas
                 children: getSidebarStructureAsJSON(subUl)
             };
@@ -495,6 +497,7 @@ function rebuildSidebarFromJSON(structureArray, parentElement) {
         titleDiv.dataset.folderId = nodeData.id;
         titleDiv.dataset.folderName = nodeData.name;
         if (visibilityControl) visibilityControl.dataset.folderId = nodeData.id;
+        if (nodeData.fromProject) titleDiv.dataset.fromProject = nodeData.fromProject;
         //Se for projeto restaura cidade, bairro e tipo
         if (nodeData.isProject) {
             titleDiv.dataset.folderCity = nodeData.city;

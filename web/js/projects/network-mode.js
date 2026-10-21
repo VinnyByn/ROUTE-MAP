@@ -373,8 +373,37 @@ function toAsBuiltCable(cable, stamp) {
     return out;
 }
 
-//Junta o projeto (o JSON salvo) na rede: vira uma pasta da rede com a mesma árvore; concluir de novo substitui a pasta.
-//Item com o mesmo identificador de um que já está na rede é atualizado no lugar (não duplica); poste "Remover" sai.
+//O que vai para a rede: as caixas (com o plano de fusão de cada uma) e os cabos. Casas, clientes, postes, polígonos e
+//os outros marcadores ficam só no projeto (clientes são ligados nas caixas no modo Rede)
+const NETWORK_MARKER_TYPES = new Set(['CTO', 'CEO', 'POP', 'RESERVA']);
+const goesToNetwork = (marker) => NETWORK_MARKER_TYPES.has(marker.type);
+
+const walkFolders = (node, visit, parent = null) => {
+    visit(node, parent);
+    (node.children || []).forEach(child => walkFolders(child, visit, node));
+};
+
+function findNetworkFolder(sidebar, id) {
+    let found = null;
+    walkFolders(sidebar, (node) => { if (!found && node.id === id) found = node; });
+    return found;
+}
+
+//Pastas da rede para escolher o destino: [{ id, name, depth }] (a cidade é a primeira, profundidade 0)
+function listNetworkFolders(sidebar) {
+    const out = [];
+    const visit = (node, depth) => {
+        out.push({ id: node.id, name: node.name, depth });
+        (node.children || []).forEach(child => visit(child, depth + 1));
+    };
+    if (sidebar) visit(sidebar, 0);
+    return out;
+}
+
+//Junta o projeto (o JSON salvo) na rede. As caixas e os cabos entram como Existente, com a origem anotada, numa pasta
+//nova com o nome do projeto ou numa pasta da rede escolhida (targetFolderId); só as pastas do projeto que têm caixa ou
+//cabo vão junto. Item com o mesmo identificador de um que já está na rede é atualizado no lugar (não duplica). Concluir
+//de novo o mesmo projeto substitui o que ele tinha mandado. Devolve { network, boxes, cables, plans }.
 function mergeProjectIntoNetwork(network, project, meta) {
     const net = JSON.parse(JSON.stringify(network));
     net.markers = net.markers || [];
@@ -382,47 +411,86 @@ function mergeProjectIntoNetwork(network, project, meta) {
     net.polygons = net.polygons || [];
     net.sidebar.children = net.sidebar.children || [];
     const stamp = { projectId: meta.projectId, projectName: meta.projectName, at: meta.at, by: meta.byName || '' };
-    const toFolder = (node) => ({ ...node, isProject: false, type: 'folder', city: null, neighborhood: null, children: (node.children || []).map(toFolder) });
-    const folder = { ...toFolder(project.sidebar), id: project.sidebar.id, name: meta.folderName };
-    const ids = new Set();
-    const collect = (node) => { ids.add(node.id); (node.children || []).forEach(collect); };
-    collect(folder);
-    net.sidebar.children = net.sidebar.children.filter(child => child.id !== folder.id);
-    folder.order = net.sidebar.children.length;
-    net.sidebar.children.push(folder);
-    ['markers', 'cables', 'polygons'].forEach(key => { net[key] = net[key].filter(item => !ids.has(item.folderId)); });
+    //O que este projeto já tinha mandado sai antes (pastas criadas por ele e os itens com a origem nele)
+    const removed = new Set();
+    walkFolders(net.sidebar, (node) => {
+        const before = (node.children || []).length;
+        node.children = (node.children || []).filter(child => {
+            if (child.fromProject !== meta.projectId) return true;
+            walkFolders(child, (inner) => removed.add(inner.id));
+            return false;
+        });
+        if (node.children.length !== before) node.children.forEach((child, i) => { child.order = i; });
+    });
+    const fromThis = (item) => item.asBuilt?.projectId === meta.projectId || removed.has(item.folderId);
+    ['markers', 'cables', 'polygons'].forEach(key => { net[key] = net[key].filter(item => !fromThis(item)); });
+    //Pastas do projeto que têm o que vai para a rede
+    const boxes = (project.markers || []).filter(goesToNetwork);
+    const cables = project.cables || [];
+    const used = new Set([...boxes, ...cables].map(item => item.folderId));
+    const keep = (node) => {
+        const children = (node.children || []).map(keep).filter(Boolean);
+        if (!children.length && !used.has(node.id)) return null;
+        return { ...node, isProject: false, type: 'folder', city: null, neighborhood: null, fromProject: meta.projectId, children };
+    };
+    const folders = (project.sidebar.children || []).map(keep).filter(Boolean);
+    const target = meta.targetFolderId ? findNetworkFolder(net.sidebar, meta.targetFolderId) : null;
+    let destId;
+    if (target) {
+        destId = target.id;
+        target.children = target.children || [];
+        folders.forEach(folder => { folder.order = target.children.length; target.children.push(folder); });
+    } else {
+        destId = project.sidebar.id;
+        net.sidebar.children.push({
+            id: destId, name: meta.folderName || project.sidebar.name, isProject: false, type: 'folder',
+            fromProject: meta.projectId, order: net.sidebar.children.length, children: folders,
+        });
+    }
+    const folderOf = (id) => (id === project.sidebar.id ? destId : id);
     const upsert = (list, item) => {
         const at = item.uid ? list.findIndex(other => other.uid === item.uid) : -1;
         if (at >= 0) list[at] = { ...item, folderId: list[at].folderId };
         else list.push(item);
     };
-    (project.markers || []).forEach(marker => {
-        if (marker.type === 'POSTE' && marker.pole?.situation === 'Remover') {
-            net.markers = net.markers.filter(other => !marker.uid || other.uid !== marker.uid);
-            return;
-        }
-        upsert(net.markers, toAsBuiltMarker(marker, stamp));
-    });
-    (project.cables || []).forEach(cable => upsert(net.cables, toAsBuiltCable(cable, stamp)));
-    (project.polygons || []).filter(p => !p.preProjeto).forEach(p => upsert(net.polygons, { ...p, asBuilt: p.asBuilt || stamp }));
-    return net;
+    boxes.forEach(marker => upsert(net.markers, toAsBuiltMarker({ ...marker, folderId: folderOf(marker.folderId) }, stamp)));
+    cables.forEach(cable => upsert(net.cables, toAsBuiltCable({ ...cable, folderId: folderOf(cable.folderId) }, stamp)));
+    return { network: net, boxes: boxes.length, cables: cables.length, plans: boxes.filter(m => m.fusionPlan).length };
 }
 
+//O que o projeto aberto manda para a rede e o que fica só nele
 function getProjectSummaryForNetwork(projectId) {
     const folderIds = new Set(getAllDescendantFolderIds(projectId));
     const own = markers.filter(m => folderIds.has(m.folderId));
     const cables = savedCables.filter(c => folderIds.has(c.folderId));
-    const meters = cables.reduce((sum, c) => sum + (Number(c.totalLength) || 0), 0);
+    const count = (type) => own.filter(m => m.type === type).length;
+    const boxes = own.filter(goesToNetwork);
     return {
-        ctos: own.filter(m => m.type === 'CTO').length,
-        ceos: own.filter(m => m.type === 'CEO').length,
-        clients: own.filter(m => m.type === 'CLIENTE').length,
+        ctos: count('CTO'), ceos: count('CEO'), pops: count('POP'), reserves: count('RESERVA'),
+        plans: boxes.filter(m => m.fusionPlan).length,
         cables: cables.length,
-        meters,
+        meters: cables.reduce((sum, c) => sum + (Number(c.totalLength) || 0), 0),
+        stays: {
+            casas: count('CASA'), clientes: count('CLIENTE'), postes: count('POSTE'),
+            poligonos: savedPolygons.filter(p => folderIds.has(p.folderId)).length,
+            outros: own.filter(m => !goesToNetwork(m) && !['CASA', 'CLIENTE', 'POSTE'].includes(m.type)).length,
+        },
         issues: typeof runProjectCheck === 'function' ? runProjectCheck({ projectId, markers: own, cables }).filter(i => i.level === 'erro').length : 0,
     };
 }
 
+function ensureConcludeModal() {
+    let modal = document.getElementById('concludeProjectModal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'concludeProjectModal';
+    modal.className = 'modal';
+    modal.innerHTML = '<div class="modal-content conclude-modal" role="dialog" aria-labelledby="concludeProjectTitle"></div>';
+    document.body.appendChild(modal);
+    return modal;
+}
+
+//Janela "Enviar para a rede": de onde para onde, o que vai e o que fica, a pasta de destino e os erros da verificação
 async function openConcludeProject(projectId) {
     await appReady;
     const root = document.getElementById(projectId)?.closest('.folder');
@@ -440,42 +508,82 @@ async function openConcludeProject(projectId) {
     }
     const name = title.dataset.folderName || 'Projeto';
     const sum = getProjectSummaryForNetwork(projectId);
+    const esc = (v) => escapeHtml(String(v ?? ''));
     const fmt = (v) => Math.round(v).toLocaleString('pt-BR');
-    const lines = [
-        `"${name}" vai para a Rede · ${city}:`,
-        `• ${fmt(sum.ctos)} CTO(s), ${fmt(sum.ceos)} CEO(s) e ${fmt(sum.cables)} cabo(s), ${fmt(sum.meters)} m${sum.clients ? `, ${fmt(sum.clients)} cliente(s)` : ''}.`,
-        '• Tudo entra como Existente, anotado como construído por este projeto.',
-        '• O projeto fica concluído: só para consulta (relatórios, PDF e planilha continuam).',
-    ];
-    if (sum.issues) lines.push('', `⚠ A verificação achou ${sum.issues} erro(s) no projeto. Vale corrigir antes, para a rede não ficar com pontas soltas.`);
-    const choice = await showChoice({
-        title: 'Concluir e enviar para a rede',
-        message: lines.join('\n'),
-        choices: [
-            { label: 'Cancelar', kind: 'secondary', value: 'cancel' },
-            ...(sum.issues ? [{ label: 'Ver os erros', kind: 'secondary', value: 'check' }] : []),
-            { label: 'Concluir e enviar', kind: 'primary', value: 'go' },
-        ],
-    });
-    if (choice === 'check') { setActiveFolder(projectId); openProjectCheck(); return; }
-    if (choice !== 'go') return;
-    try {
-        const done = await concludeProject(projectId);
-        const next = await showChoice({
-            title: 'Projeto na rede',
-            message: `"${name}" foi concluído e entrou na ${done.networkName}.`,
-            choices: [{ label: 'Continuar aqui', kind: 'secondary', value: 'stay' }, { label: 'Abrir a rede', kind: 'primary', value: 'open' }],
-        });
-        if (next === 'open') setAppMode('rede', { city });
-    } catch (error) {
-        console.error('Erro ao concluir o projeto:', error);
-        showAlert('Erro', `Não foi possível enviar o projeto para a rede. ${error.message || ''}`);
-    }
+    const networkId = getNetworkId(city);
+    const { data: row } = await supabaseClient.from('projects').select('id, data').eq('id', networkId).maybeSingle();
+    const folders = listNetworkFolders(row?.data?.sidebar).slice(1);
+    const modal = ensureConcludeModal();
+    const content = modal.querySelector('.conclude-modal');
+    const goes = [
+        ['CTO', sum.ctos], ['CEO', sum.ceos], ['POP', sum.pops], ['Reserva técnica', sum.reserves],
+        [`Cabo${sum.cables === 1 ? '' : 's'} · ${fmt(sum.meters)} m`, sum.cables], ['Plano de fusão', sum.plans],
+    ].filter(([, n]) => n > 0);
+    const stays = [['casa', sum.stays.casas], ['cliente', sum.stays.clientes], ['poste', sum.stays.postes], ['polígono', sum.stays.poligonos], ['outro marcador', sum.stays.outros]]
+        .filter(([, n]) => n > 0).map(([label, n]) => `${fmt(n)} ${label}${n === 1 ? '' : 's'}`);
+    content.innerHTML = `
+        <h2 id="concludeProjectTitle">Enviar para a rede</h2>
+        <div class="modal-body-content">
+            <div class="conclude-flow">
+                <div class="conclude-flow__box"><small>Projeto</small><b>${esc(name)}</b></div>
+                <span class="conclude-flow__arrow" aria-hidden="true">→</span>
+                <div class="conclude-flow__box is-network"><small>Rede${row ? '' : ' (nova)'}</small><b>Rede · ${esc(city)}</b></div>
+            </div>
+            <h4 class="conclude-sec">Vai para a rede, como Existente</h4>
+            ${goes.length ? `<ul class="conclude-goes">${goes.map(([label, n]) => `<li><b>${fmt(n)}</b><span>${esc(label)}</span></li>`).join('')}</ul>`
+                : '<p class="conclude-empty">O projeto não tem caixas nem cabos para enviar.</p>'}
+            ${stays.length ? `<p class="conclude-stays"><b>Fica só no projeto:</b> ${esc(stays.join(', '))}. Os clientes são ligados nas caixas no modo Rede.</p>` : ''}
+            <label class="conclude-sec" for="concludeFolder">Onde fica na rede</label>
+            <select id="concludeFolder">
+                <option value="">Pasta nova com o nome do projeto</option>
+                ${folders.map(f => `<option value="${esc(f.id)}">${'— '.repeat(Math.max(0, f.depth - 1))}${esc(f.name)}</option>`).join('')}
+            </select>
+            <input type="text" id="concludeFolderName" value="${esc(name)}" aria-label="Nome da pasta nova" />
+            ${sum.issues ? `<div class="conclude-warn">⚠ A verificação achou <b>${sum.issues} erro(s)</b>. Vale corrigir antes, para a rede não ficar com pontas soltas. <button type="button" class="btn btn-secondary btn-sm" data-conclude="check">Ver os erros</button></div>` : '<p class="conclude-ok">✓ A verificação não achou erros.</p>'}
+            <p class="conclude-note">Depois de enviar, o projeto fica <b>concluído</b>: só para consulta (relatório, PDF e planilha continuam). As mudanças passam a ser feitas no modo Rede.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-conclude="cancel">Cancelar</button>
+            <button type="button" class="btn btn-success" data-conclude="go"${goes.length ? '' : ' disabled'}>Enviar para a rede</button>
+        </div>`;
+    const select = content.querySelector('#concludeFolder');
+    const folderName = content.querySelector('#concludeFolderName');
+    select.addEventListener('change', () => { folderName.hidden = !!select.value; });
+    modal.style.display = 'flex';
+    const close = () => { modal.style.display = 'none'; modal.onclick = null; };
+    modal.onclick = async (e) => {
+        const action = e.target.closest('[data-conclude]')?.dataset.conclude;
+        if (e.target === modal || action === 'cancel' || action === 'stay') return close();
+        if (action === 'check') { close(); setActiveFolder(projectId); openProjectCheck(); return; }
+        if (action === 'open') { close(); setAppMode('rede', { city }); return; }
+        if (action !== 'go') return;
+        const go = e.target.closest('[data-conclude="go"]');
+        go.disabled = true;
+        go.textContent = 'Enviando…';
+        try {
+            const done = await concludeProject(projectId, { targetFolderId: select.value || null, folderName: folderName.value.trim() || name });
+            content.innerHTML = `
+                <h2 id="concludeProjectTitle">Projeto na rede</h2>
+                <div class="modal-body-content">
+                    <p class="conclude-done">✓ <b>${esc(name)}</b> entrou na <b>${esc(done.networkName)}</b>: ${fmt(done.boxes)} caixa(s) e ${fmt(done.cables)} cabo(s)${done.plans ? `, com ${fmt(done.plans)} plano(s) de fusão` : ''}.</p>
+                    <p class="conclude-note">O projeto ficou concluído, só para consulta.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-conclude="stay">Continuar no projeto</button>
+                    <button type="button" class="btn btn-success" data-conclude="open">Abrir a rede</button>
+                </div>`;
+        } catch (error) {
+            console.error('Erro ao concluir o projeto:', error);
+            go.disabled = false;
+            go.textContent = 'Enviar para a rede';
+            showAlert('Erro', `Não foi possível enviar o projeto para a rede. ${error.message || ''}`);
+        }
+    };
 }
 
 //Grava a rede da cidade com o projeto dentro e marca o projeto como concluído. Se outra pessoa salvou a rede no meio
-//do caminho, lê de novo e junta outra vez (até 3 tentativas).
-async function concludeProject(projectId) {
+//do caminho, lê de novo e junta outra vez (até 3 tentativas). Devolve a conclusão com o que foi enviado.
+async function concludeProject(projectId, { targetFolderId = null, folderName = '' } = {}) {
     const root = document.getElementById(projectId).closest('.folder');
     const title = root.querySelector(':scope > .folder-title');
     const city = title.dataset.folderCity.trim();
@@ -484,17 +592,14 @@ async function concludeProject(projectId) {
     const record = buildProjectRecord(root);
     const at = new Date().toISOString();
     const byName = AppSession.profile?.full_name || '';
-    const meta = {
-        projectId, projectName: record.name, at, byName,
-        folderName: `${record.name} · concluído em ${new Date(at).toLocaleDateString('pt-BR')}`,
-    };
+    const meta = { projectId, projectName: record.name, at, byName, folderName: folderName || record.name, targetFolderId };
     for (let attempt = 0; attempt < 3; attempt++) {
         const { data: row, error } = await supabaseClient.from('projects').select('id, data, revision').eq('id', networkId).maybeSingle();
         if (error) throw error;
         const base = row?.data?.sidebar ? row.data : emptyNetworkData(city);
         const merged = mergeProjectIntoNetwork(base, record.data, meta);
         if (row) {
-            let query = supabaseClient.from('projects').update({ data: merged, name: networkName, city, project_type: NETWORK_PROJECT_TYPE }).eq('id', networkId);
+            let query = supabaseClient.from('projects').update({ data: merged.network, name: networkName, city, project_type: NETWORK_PROJECT_TYPE }).eq('id', networkId);
             if (row.revision != null) query = query.eq('revision', row.revision);
             const { data: saved, error: saveError } = await query.select('revision');
             if (saveError) throw saveError;
@@ -502,11 +607,11 @@ async function concludeProject(projectId) {
         } else {
             const { error: saveError } = await supabaseClient.from('projects').upsert({
                 id: networkId, company_id: AppSession.company.id, created_by: AppSession.userId,
-                name: networkName, city, neighborhood: null, project_type: NETWORK_PROJECT_TYPE, data: merged,
+                name: networkName, city, neighborhood: null, project_type: NETWORK_PROJECT_TYPE, data: merged.network,
             }, { onConflict: 'id' });
             if (saveError) throw saveError;
         }
-        projectConclusions[projectId] = { at, by: AppSession.userId, byName, networkId, networkName };
+        projectConclusions[projectId] = { at, by: AppSession.userId, byName, networkId, networkName, boxes: merged.boxes, cables: merged.cables, plans: merged.plans };
         try {
             await persistProject(root, { allowConcluded: true });
         } catch (saveError) {

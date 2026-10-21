@@ -12,6 +12,26 @@ const PROJECT_TYPES = [
 const PROJECT_PAGE_SIZE = 20;
 const PROJECT_PICKER_PREFS_KEY = 'routeMapProjectPicker';
 
+//Cidades já usadas (projetos e redes da empresa) como sugestão no campo Cidade do projeto: escrever a cidade igual
+//em todos os projetos é o que manda cada um para a mesma rede ao concluir
+let projectCitySuggestionsAt = 0;
+async function refreshProjectCitySuggestions() {
+    if (Date.now() - projectCitySuggestionsAt < 30000) return;
+    projectCitySuggestionsAt = Date.now();
+    await appReady;
+    const { data, error } = await supabaseClient.rpc('project_facets');
+    let cities = !error && data?.cities ? data.cities.map(c => c.value) : null;
+    if (!cities) {
+        const rows = await supabaseClient.from('projects').select('city');
+        cities = (rows.data || []).map(r => r.city);
+    }
+    const list = document.getElementById('projectCityOptions');
+    if (!list) return;
+    const unique = [...new Set(cities.map(c => String(c || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    list.innerHTML = unique.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+}
+document.addEventListener('focusin', (e) => { if (e.target?.id === 'projectCity') refreshProjectCitySuggestions(); });
+
 function getProjectTypeMeta(value) {
     if (value === 'Rede') return { value, label: 'Rede', color: '#15803d', hint: 'Rede construída da cidade' };
     return PROJECT_TYPES.find(t => t.value === value) || { value: value || '', label: value || '—', color: '#64748b' };
