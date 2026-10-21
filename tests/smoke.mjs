@@ -2964,7 +2964,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       const sum = getAutoDesignCtoSummary(plan, a);
       const card = document.querySelector('#autoDesignBox .auto-design__tips')?.textContent || '';
       out.alone = { over: sum.over, out: sum.outHouses >= 1, split: /Dividir em duas/.test(card), reach: /fora do alcance/.test(card) && /\+ CTO para elas/.test(card),
-        red: autoDesign.overlays.some(o => o.get?.('icon')?.fillColor === '#dc2626') };
+        red: !autoDesign.overlays.some(o => o.get?.('icon')?.path === google.maps.SymbolPath.CIRCLE && o.get?.('icon')?.scale <= 4) };
       await reachAutoDesignOutHouses(a);
       plan = autoDesign.result;
       out.reach = plan.ctos.length === 2 && plan.stats.coverage > 0.99;
