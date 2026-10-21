@@ -656,7 +656,9 @@ function setPolygonDrawMode(mode) {
 
 //Área do pré-projeto: sem nome, cor e opacidade (o polígono sai do projeto ao criar a rede); o botão vira "Continuar"
 function setPolygonBoxPurpose(forAutoDesign) {
-    document.getElementById('polygonStyleFields').classList.toggle('hidden', forAutoDesign);
+    //Para o pré-projeto: nome e cor ficam para depois, a opacidade continua (dá para ver o mapa por baixo da área)
+    const fields = document.getElementById('polygonStyleFields');
+    fields.querySelectorAll('.map-tool-field:not(.pg-opacity-field)').forEach(field => field.classList.toggle('hidden', forAutoDesign));
     document.getElementById('savePolygonButton').textContent = forAutoDesign ? 'Continuar' : 'Salvar';
 }
 
