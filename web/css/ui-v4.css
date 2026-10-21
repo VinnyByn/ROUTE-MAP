@@ -3331,3 +3331,5 @@ html[data-theme="dark"] .occurrence-row.is-resolvida > em { color: #86efac; }
 .marker-doc__occ header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
 .marker-doc__occ header .btn-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 700; color: var(--brand-600, #1d7290); cursor: pointer; }
 .marker-doc__occ-empty { font-size: 12px; color: var(--color-text-dim); }
+.account-badge--tecnico { background: color-mix(in srgb, #0d9488 12%, transparent); color: #0f766e; border-color: color-mix(in srgb, #0d9488 40%, transparent); }
+html[data-theme="dark"] .account-badge--tecnico { color: #5eead4; }

@@ -3904,7 +3904,14 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         openClientModal(cli);
         const clientEditable = !document.getElementById('clientModal').classList.contains('is-readonly') && !document.getElementById('clientName').disabled;
         closeClientModal();
+        //Mesma conta do banco (network_infrastructure): o técnico salvando não pode mudar caixas e cabos
+        const infra = (d) => JSON.stringify({
+          m: (d.markers || []).filter(x => x.type !== 'CLIENTE').map(x => [x.uid, x.type, x.name, x.folderId, x.position, x.fusionPlan, x.ctoStatus, x.ceoStatus, x.reservaStatus, x.popEquipment]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+          c: (d.cables || []).map(x => [x.uid, x.name, x.type, x.folderId, x.path, x.status, x.startAnchorUid, x.endAnchorUid, x.totalLength]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+        });
+        const infraBefore = infra(window.__fakeDb.projects[netId].data);
         const savedAsTec = await persistProject(netRoot).then(() => true, () => false);
+        out.tecnicoInfra = infra(window.__fakeDb.projects[netId].data) === infraBefore;
         const vis = (id) => getComputedStyle(document.getElementById(id)).display !== 'none';
         out.tecnicoDetail = [AppSession.canEdit, AppSession.canDocument, requireEdit('mexer'), requireDocument('cadastrar'), clientEditable, savedAsTec,
           vis('networkAddClientButton'), vis('networkOccurrenceButton'), vis('networkAddMarkerButton')].join();
