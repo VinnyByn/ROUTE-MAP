@@ -76,8 +76,8 @@ const AUTO_DESIGN_GENERATED_NOTE = 'Gerado pelo pré-projeto automático';
 const AUTO_DESIGN_STRATEGIES = [
     { id: 'panel', params: () => ({}) },
     //Raio maior, mas sem passar da ocupação máxima do painel (a folga pedida vale em todas as opções)
-    { id: 'wide', params: (p) => ({ coverRadius: getAutoDesignCoverRadius(p) * 1.3 }) },
-    { id: 'spare', params: (p) => ({ maxFill: Math.max(25, Math.min(100, Number(p.maxFill) || 100) - 25), coverRadius: getAutoDesignCoverRadius(p) * 0.8 }) },
+    { id: 'wide', params: (p) => ({ coverRadius: getAutoDesignCoverRadius(p) * 1.3, dropMax: getAutoDesignDropMax(p) * 1.3 }) },
+    { id: 'spare', params: (p) => ({ maxFill: Math.max(25, Math.min(100, Number(p.maxFill) || 100) - 25), coverRadius: getAutoDesignCoverRadius(p) * 0.8, dropMax: getAutoDesignDropMax(p) * 0.8 }) },
 ];
 const AUTO_DESIGN_LAYOUT_SEEDS = 3;  //Pontos de partida por estratégia (com o traçado das ruas; sem ele, 1)
 const AUTO_DESIGN_OPTION_COUNT = 3;
@@ -584,7 +584,33 @@ function buildAutoDesignStreetIndex(lines, proj) {
     };
     //Pontas de um trecho de rua (seg de snapPoint): [[x, y], [x, y]]
     const segmentEnds = (seg) => [nodeXY[segs[seg][0]], nodeXY[segs[seg][1]]];
-    return { distToStreet, nearestPoint, segmentOnStreets, distancesFrom, route, alternatives, crossesWater, firstHit, snapPoint, fieldFrom, segmentEnds, size: segs.length };
+    //Trechos de rua a até limit metros (pela rua) de um ponto encostado: [[[x, y], [x, y]], ...] ("cabos saindo da
+    //caixa em todas as direções")
+    const reachPaths = (from, limit) => {
+        const dist = fieldFrom(from, limit);
+        const out = [];
+        segs.forEach(([a, b], seg) => {
+            const A = nodeXY[a], B = nodeXY[b];
+            const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+            if (!(len > 0)) return;
+            const at = (m) => [A[0] + (B[0] - A[0]) * m / len, A[1] + (B[1] - A[1]) * m / len];
+            if (seg === from.seg) {
+                const t = from.u === a ? from.du : len - from.du;
+                out.push([at(Math.max(0, t - limit)), at(Math.min(len, t + limit))]);
+                return;
+            }
+            const da = dist.get(a), db = dist.get(b);
+            const fromA = da !== undefined ? Math.min(len, limit - da) : 0;
+            const fromB = db !== undefined ? Math.min(len, limit - db) : 0;
+            if (fromA + fromB >= len) out.push([A, B]);
+            else {
+                if (fromA > 0) out.push([A, at(fromA)]);
+                if (fromB > 0) out.push([at(len - fromB), B]);
+            }
+        });
+        return out;
+    };
+    return { distToStreet, nearestPoint, segmentOnStreets, distancesFrom, route, alternatives, crossesWater, firstHit, snapPoint, fieldFrom, reachPaths, segmentEnds, size: segs.length };
 }
 
 // ---------------------------------------------------------------
@@ -906,7 +932,7 @@ function buildAutoDesignModel(polygonPath, params, inputs = {}) {
     const allHouses = demandKind === 'houses' ? totalWeight : Number(params.houses) || 0;
     const housesPerWeight = totalWeight ? allHouses / totalWeight : 0;
     const clientsPerWeight = housesPerWeight * params.occupancy / 100;
-    const drop = createAutoDesignDropMeter(streetIndex, getAutoDesignCoverRadius(params));
+    const drop = createAutoDesignDropMeter(streetIndex, getAutoDesignCoverRadius(params), null, getAutoDesignDropMax(params));
     //CTOs que já existem atendem primeiro: o que sobra é a demanda das CTOs novas
     const served = serveAutoDesignDemandByExisting(demand, getAutoDesignActiveExisting(inputs.existingCtos, params).map(e => ({
         ...xyOfMarker(e.marker), markerInfo: e.marker, distance: e.distance, wired: isAutoDesignCtoWired(e.marker), served: 0,
@@ -1181,11 +1207,17 @@ const AUTO_DESIGN_SITE_GRIDS = new WeakMap(); //locais permitidos → grade para
 
 //Até onde o drop vai pela rua: casa no raio da CTO, num quarteirão comum, fica a no máximo raio × √2 pela rua
 //(dois lados do quarteirão), mais a descida do poste
-const getAutoDesignDropReach = (radius) => radius * Math.SQRT2 + AUTO_DESIGN_DROP_LEGS_M;
+//Alcance do drop pela rua: o "Cabo até o cliente" informado ou, em branco, raio × √2 + descida/entrada
+const getAutoDesignDropReach = (radius, dropMax = 0) => (dropMax > 0 ? dropMax : radius * Math.SQRT2 + AUTO_DESIGN_DROP_LEGS_M);
+const getAutoDesignDropMax = (params) => {
+    const n = parseInt(params?.dropMax, 10);
+    return n > 0 ? Math.min(AUTO_DESIGN_COVER_MAX * 2, Math.max(AUTO_DESIGN_COVER_MIN, n)) : 0;
+};
 
 //limit: até onde as distâncias pela rua são calculadas (mais longe: limit + linha reta)
-function createAutoDesignDropMeter(streetIndex, radius, limit = getAutoDesignDropReach(radius) * 1.5) {
-    const reach = getAutoDesignDropReach(radius);
+function createAutoDesignDropMeter(streetIndex, radius, limit = null, dropMax = 0) {
+    const reach = getAutoDesignDropReach(radius, dropMax);
+    limit = limit ?? reach * 1.5;
     const straight = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); //Math.hypot é lento nas voltas grandes
     if (!streetIndex?.fieldFrom) return { reach, limit, measure: straight };
     let cache = AUTO_DESIGN_DROP_CACHE.get(streetIndex);
@@ -2823,7 +2855,7 @@ const formatAutoDesignMoneyShort = (value) => `R$ ${Math.round(Number(value) || 
 
 const AUTO_DESIGN_DEFAULTS = {
     occupancy: 30, ports: 8, levels: 1, primary: 8, feederFiber: 'FO-48', distributionFiber: 'FO-12', span: 'AS 80',
-    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true, useExisting: true, ctoSpacing: '',
+    coverRadius: AUTO_DESIGN_COVER_M, fiberSpare: 20, maxFill: 100, reserveEvery: 0, ceoMax: 16, useHouses: true, usePoles: true, useExisting: true, ctoSpacing: '', dropMax: '',
 };
 const AUTO_DESIGN_STORED_KEYS = Object.keys(AUTO_DESIGN_DEFAULTS);
 
@@ -3124,7 +3156,10 @@ function renderAutoDesign() {
             ${s.poleMarkers.length ? check('autoDesignUsePoles', p.usePoles, `Caixas nos <b>${s.poleMarkers.length}</b> postes da área e cabos de poste em poste`, s.bdgdPoles?.used && s.markedPoles.length ? `${s.markedPoles.length} marcados + ${s.bdgdPoles.used} da BDGD` : '') : ''}`)}
         ${section(4, 'Caixas e cabos', 'Alcance de cada CTO e tipo de cabo', `
             <div class="map-tool-field-row">
-                <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO</label>${unit(`<input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO, em linha reta (pela rua, até o raio × 1,4)">`, 'm')}<small class="auto-design__field-hint">Até onde vai o drop</small></div>
+                <div class="map-tool-field"><label for="autoDesignRadius">Raio da CTO</label>${unit(`<input type="number" id="autoDesignRadius" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX}" step="10" inputmode="numeric" value="${esc(p.coverRadius)}" title="Até onde o drop chega a partir da CTO, em linha reta (pela rua, até o raio × 1,4)">`, 'm')}<small class="auto-design__field-hint">Em linha reta</small></div>
+                <div class="map-tool-field"><label for="autoDesignDropMax">Cabo até o cliente</label>${unit(`<input type="number" id="autoDesignDropMax" min="${AUTO_DESIGN_COVER_MIN}" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="${Math.round(getAutoDesignDropReach(getAutoDesignCoverRadius(p)))}" value="${esc(getAutoDesignDropMax(p) || '')}" title="Metragem máxima do drop, da CTO até a casa, seguindo a rua (como se saíssem cabos da caixa em todas as direções). Em branco: raio × 1,4 + 20 m">`, 'm')}<small class="auto-design__field-hint">Máximo pela rua</small></div>
+            </div>
+            <div class="map-tool-field-row">
                 <div class="map-tool-field"><label for="autoDesignSpacing">Entre CTOs</label>${unit(`<input type="number" id="autoDesignSpacing" min="10" max="${AUTO_DESIGN_COVER_MAX * 2}" step="10" inputmode="numeric" placeholder="Pelo raio" value="${esc(getAutoDesignCtoSpacing(p) || '')}" title="Mínimo entre duas CTOs na mesma rua, em linha reta. Em branco: vale só o raio">`, 'm')}<small class="auto-design__field-hint">Mínimo na mesma rua</small></div>
             </div>
             <div class="map-tool-field"><label>Vão do cabo</label><div class="map-tool-segmented" id="autoDesignSpan" role="radiogroup" aria-label="Tipo de vão"></div></div>`)}
@@ -3177,6 +3212,8 @@ function readAutoDesignForm() {
     p.fiberSpare = number('autoDesignSpare', p.fiberSpare, 0, 200);
     p.maxFill = number('autoDesignFill', p.maxFill, 25, 100);
     p.coverRadius = number('autoDesignRadius', getAutoDesignCoverRadius(p), AUTO_DESIGN_COVER_MIN, AUTO_DESIGN_COVER_MAX);
+    const dropMax = value('autoDesignDropMax');
+    if (dropMax !== undefined) p.dropMax = getAutoDesignDropMax({ dropMax }) || '';
     const spacing = value('autoDesignSpacing');
     if (spacing !== undefined) p.ctoSpacing = getAutoDesignCtoSpacing({ ctoSpacing: spacing }) || '';
     p.reserveEvery = number('autoDesignReserve', p.reserveEvery, 0, 100000);
@@ -3317,6 +3354,7 @@ async function buildAutoDesignCandidates(s, inputs, names, isCurrent) {
     for (const strategy of AUTO_DESIGN_STRATEGIES) {
         const extra = strategy.params(s.params);
         if (extra.coverRadius) extra.coverRadius = getAutoDesignCoverRadius({ coverRadius: Math.round(extra.coverRadius / 10) * 10 });
+        if ('dropMax' in extra) extra.dropMax = extra.dropMax ? Math.round(extra.dropMax / 10) * 10 : '';
         //Sem o traçado das ruas, cada estratégia tenta outro ponto de partida só se sair repetida
         for (let seed = 0, fresh = 0; seed < seeds + 3 && fresh < seeds; seed++) {
             const params = { ...s.params, ...extra, layoutSeed: seed };
@@ -3579,6 +3617,16 @@ function getAutoDesignDeltaBadgeIcon(delta) {
     return icon;
 }
 
+//Ruas que o drop alcança a partir de xy (até o alcance pela rua, dentro do raio): [[xy, xy], ...]; sem ruas, []
+function getAutoDesignReachPaths(plan, xy) {
+    const { streetIndex, drop } = plan.model;
+    const from = streetIndex?.reachPaths && streetIndex.snapPoint(xy.x, xy.y, AUTO_DESIGN_DROP_BOX_SNAP_M);
+    return from ? streetIndex.reachPaths(from, Math.max(0, drop.reach - AUTO_DESIGN_DROP_LEGS_M)) : [];
+}
+const drawAutoDesignReach = (plan, xy, color, add, toLL) => getAutoDesignReachPaths(plan, xy).forEach(path => add(new google.maps.Polyline({
+    map, path: path.map(toLL), clickable: false, zIndex: 39, strokeColor: color, strokeOpacity: 0.35, strokeWeight: 2,
+})));
+
 const AUTO_DESIGN_LINK_MIN_M = 25;       //Trecho de rua a mais de 25 m da CTO ganha um traço fino até ela
 
 //Traços finos da CTO até cada trecho de rua dela que fica longe (até o ponto mais perto do trecho): [[xy, xy], ...]
@@ -3638,6 +3686,7 @@ function drawAutoDesignDragPreview() {
     const color = AUTO_DESIGN_CTO_LEVEL_COLORS[getAutoDesignCtoLevel(view.sum)];
     const own = s.ctoColors?.get(drag.box) || AUTO_DESIGN_CTO_PALETTE[0];
     const paint = getAutoDesignCtoStreetPaint(plan, [view.points])[0];
+    drawAutoDesignReach(plan, view.xy, own, add, toLL);
     paint.forEach(path => add(new google.maps.Polyline({ map, path: path.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.85, strokeWeight: 7 })));
     getAutoDesignCtoLinks(view.xy, paint).forEach(link => add(new google.maps.Polyline({ map, path: link.map(toLL), clickable: false, zIndex: 45, strokeOpacity: 0, icons: getAutoDesignLinkIcons(own) })));
     view.changes.forEach(({ cto, delta }) => add(new google.maps.Marker({ map, position: cto.position, clickable: false, zIndex: 76, icon: getAutoDesignDeltaBadgeIcon(delta) })));
@@ -4111,6 +4160,8 @@ function drawAutoDesignPreview() {
                 icon: { path: google.maps.SymbolPath.CIRCLE, scale: i === picked ? 19 : 16, fillColor: color, fillOpacity: 0.3, strokeColor: color, strokeOpacity: 1, strokeWeight: 3 },
             }), { opacity: fade(i) ? 0.35 : 1 }, { opacity: 0.35 });
         });
+        //Ruas até onde o drop da CTO clicada chega (linha fina)
+        if (picked >= 0) drawAutoDesignReach(plan, plan.ctos[picked], colors[picked], (o) => own(plan.ctos[picked], o), toLL);
         //Casas da CTO clicada, uma a uma; as que ficam fora do alcance do drop em vermelho
         if (picked >= 0) lists[picked].slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
             const out = !isAutoDesignCovered(plan.model, q, plan.ctos[picked]);
@@ -4451,7 +4502,7 @@ function renderAutoDesignOptions(s) {
     const plan = s.result;
     const km = (plan.cost?.cableMeters || 0) / 1000;
     const detail = [
-        `raio de ${plan.model.coverRadius} m`, plan.model.ctoSpacing ? `CTOs a ${plan.model.ctoSpacing} m ou mais na mesma rua` : '', `CTOs com até ${getAutoDesignUsablePorts(plan.params)} clientes`,
+        `raio de ${plan.model.coverRadius} m`, `drop até ${Math.round(plan.model.drop.reach)} m pela rua`, plan.model.ctoSpacing ? `CTOs a ${plan.model.ctoSpacing} m ou mais na mesma rua` : '', `CTOs com até ${getAutoDesignUsablePorts(plan.params)} clientes`,
         km ? `${km.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km de cabo` : '', `${getAutoDesignFreePorts(plan)} portas livres`,
     ].filter(Boolean).join(' · ');
     return `<div class="auto-design__options" role="radiogroup" aria-label="Opções de projeto">${cards}</div>
@@ -4608,7 +4659,7 @@ function renderAutoDesignPreviewPanel() {
         ${s.exclusions.length ? `<p class="map-tool-help">${s.exclusions.length} trecho(s) sem casas. <button type="button" class="auto-design__link" data-auto-design="clear-exclusions">Limpar</button></p>` : ''}
         ${fixedCtos && fixedCtos < plan.ctos.length ? `<p class="map-tool-help auto-design__readjust">${fixedCtos === 1 ? '1 CTO fixa' : `${fixedCtos} CTOs fixas`} (movida, incluída ou conferida por você). <button type="button" class="auto-design__link" data-auto-design="readjust"${s.busy ? ' disabled' : ''}>Reajustar as outras em volta</button></p>` : ''}
         ${renderAutoDesignWarnings(warnings)}
-        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Rua pintada = casas de cada CTO, na cor dela; selo = casas dela / quantas cabem (verde: cabe, vermelho: passou das portas)' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
+        <p class="map-tool-help">Tracejado laranja = cabo do pré-projeto, ainda não salvo. Ao aceitar, as caixas (CTOs com splitter 1:${p.ports}${p.levels === 2 ? `, CEO com splitter 1:${p.primary}` : ''}), ${plan.reserves?.length ? `${plan.reserves.length} reserva(s) técnica(s), ` : ''}os cabos e os planos de fusão entram como <b>Novo</b> numa pasta própria. ${s.showHouses !== false ? 'Rua pintada = casas de cada CTO, na cor dela; selo = casas dela / quantas cabem (verde: cabe, vermelho: passou das portas); linha fina = até onde o drop chega pela rua (CTO clicada ou arrastada)' : `Círculo verde = raio de ${plan.model.coverRadius} m de cada CTO`}${st.existingCtos ? `; azul = CTO que já existe (atende ≈ ${st.existingClients.toLocaleString('pt-BR')} dos clientes previstos, as novas ficam com o resto)` : ''}.</p>`;
     document.getElementById('autoDesignActions').innerHTML = `
         <button type="button" class="map-tool-btn" data-auto-design="cancel">Descartar</button>
         <button type="button" class="map-tool-btn" data-auto-design="adjust">Ajustar</button>
@@ -5073,7 +5124,12 @@ document.addEventListener('input', (e) => {
     if (e.target.id === 'autoDesignHouses') p.houses = e.target.value;
     if (e.target.id === 'autoDesignOccupancy') p.occupancy = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 0));
     if (e.target.id === 'autoDesignFill') p.maxFill = Math.min(100, Math.max(25, parseInt(e.target.value, 10) || 100));
-    if (e.target.id === 'autoDesignRadius' && parseInt(e.target.value, 10) > 0) p.coverRadius = getAutoDesignCoverRadius({ coverRadius: e.target.value });
+    if (e.target.id === 'autoDesignRadius' && parseInt(e.target.value, 10) > 0) {
+        p.coverRadius = getAutoDesignCoverRadius({ coverRadius: e.target.value });
+        const drop = document.getElementById('autoDesignDropMax');
+        if (drop) drop.placeholder = Math.round(getAutoDesignDropReach(p.coverRadius));
+    }
+    if (e.target.id === 'autoDesignDropMax') p.dropMax = getAutoDesignDropMax({ dropMax: e.target.value }) || '';
     renderAutoDesignCalc();
 });
 
