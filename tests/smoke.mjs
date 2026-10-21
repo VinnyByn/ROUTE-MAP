@@ -3635,6 +3635,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
   await np.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
   await np.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
   await np.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
+  if (process.env.SMOKE_LIBS) {
+    await np.route('**/xlsx@0.18.5/dist/xlsx.full.min.js', r => r.fulfill({ path: path.join(process.env.SMOKE_LIBS, 'xlsx-0.18.5/dist/xlsx.full.min.js'), contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } }));
+  }
   await np.goto(baseUrl + '/index.html');
   await np.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
   await np.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
@@ -3757,6 +3760,42 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       document.getElementById('closeViabilityBox').click();
       await new Promise(r => setTimeout(r, 20));
       out.viabilityClosed = !viability.active && !viability.overlays.length;
+      //Importar clientes: CTO pelo nome, porta conferida, sem coordenadas fica ao lado da CTO, atualiza pelo código e
+      //entra um registro só no histórico
+      const netRoot = document.getElementById(netId).closest('.folder');
+      const ctoA = markers.find(m => m.type === 'CTO' && getAllDescendantFolderIds(netId).includes(m.folderId));
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+        ['Relatório de clientes'],
+        ['Nome do cliente', 'Código', 'Caixa', 'Porta', 'Status', 'Coordenadas', 'Telefone'],
+        ['Ana', '501', ctoA.name.toLowerCase(), 5, 'Ativo', '-21,2413, -45,0013', '3599'],
+        ['Bruno', '502', ctoA.name, 5, 'Ativo', '', ''],
+        ['Carla', '503', 'CTO-XX', '', '', '', ''],
+        ['Davi', '504', ctoA.name, '', 'a instalar', '', ''],
+      ]), 'Clientes');
+      setActiveFolder(netId);
+      await openClientImport();
+      const parsed = readClientSheetRows(book);
+      clientImport.fileName = 'clientes.xlsx';
+      clientImport.rows = validateClientImport(parsed.rows, netRoot);
+      renderClientImport();
+      const acts = clientImport.rows.map(r => r.action).join();
+      const preview = document.querySelectorAll('#clientImportModal tbody tr').length === 4 && /2\s*novos/.test(document.getElementById('clientImportModal').textContent)
+        && /já é de Ana/.test(document.getElementById('clientImportModal').textContent) && !document.querySelector('[data-import="run"]').disabled;
+      await runClientImport();
+      const doneText = document.getElementById('clientImportBody').textContent;
+      const ana = markers.find(m => m.type === 'CLIENTE' && m.client.code === '501');
+      const davi = markers.find(m => m.type === 'CLIENTE' && m.client.code === '504');
+      const first = [acts, preview, ana?.client.ctoUid === ctoA.uid, ana?.client.ctoPort === 5, Math.abs(ana?.marker.getPosition().lat() + 21.2413) < 1e-9, ana?.client.status === 'instalado',
+        ana?.client.phone === '3599', !!davi?.client.ctoPort && davi.client.ctoPort !== 5, davi?.client.status === 'a_instalar', /2 clientes/.test(doneText)].join();
+      clientImport.rows = validateClientImport([{ line: 2, name: 'Ana Maria', code: '501', cto: ctoA.name, port: 5, status: 'cancelado' }], netRoot);
+      await runClientImport();
+      document.querySelector('#clientImportModal [data-import="close"]').click();
+      const savedNet = window.__fakeDb.projects[netId].data;
+      out.importDetail = [first, markers.filter(m => m.client?.code === '501').length, ana.name, ana.client.status, savedNet.markers.filter(m => m.client?.code === '501').length,
+        savedNet.changeLog.filter(e => e.action === 'importou').length, savedNet.changeLog.some(e => e.type === 'CLIENTE' && e.action !== 'importou' && /Ana|Davi/.test(e.name || '')),
+        document.getElementById('clientImportModal').style.display].join(';');
+      out.importClients = out.importDetail === 'novo,erro,erro,novo,true,true,true,true,true,true,true,true,true;1;Ana Maria;cancelado;1;2;false;none';
       await setAppMode('projeto');
       //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
       window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',
@@ -3797,7 +3836,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     }
     return out;
   });
-  check(Object.entries(net).every(([k, v]) => (k === 'redeDetail' ? true : v === true)) && !netErrors.length,
+  check(Object.entries(net).every(([k, v]) => (/Detail$/.test(k) ? true : v === true)) && !netErrors.length,
     `modo rede: concluir manda para a rede da cidade como Existente, projeto só consulta, sem duplicar, e a troca de modo guarda os projetos (${JSON.stringify({ ...net, errors: netErrors })})`);
   await ctx.close();
 }

@@ -3196,3 +3196,44 @@ html[data-theme="dark"] .viability-verdict.is-no { color: #fca5a5; }
 .marker-doc__log { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-muted); }
 .marker-doc__log li + li { margin-top: 2px; }
 .marker-doc__log small { color: var(--color-text-dim); }
+
+/* Importar clientes (js/network/client-import.js) */
+.client-import-modal { max-width: 720px; width: min(720px, calc(100vw - 32px)); }
+.client-import-modal .modal-body-content { display: flex; flex-direction: column; gap: 12px; }
+.client-import__drop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1.5px dashed color-mix(in srgb, #15803d 45%, var(--color-border)); background: color-mix(in srgb, #15803d 5%, var(--color-surface)); }
+.client-import__drop > div:first-child { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.client-import__drop > div:first-child > b { font-size: 14px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.client-import__drop small { font-size: 12px; line-height: 1.45; color: var(--color-text-muted); }
+.client-import__drop-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.client-import__rules { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.45; color: var(--color-text-muted); }
+.client-import__counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.client-import__counts > span { display: inline-flex; align-items: baseline; gap: 5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-border-light); background: var(--color-surface); font-size: 12.5px; }
+.client-import__counts > span b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.client-import__counts .is-novo b { color: #15803d; }
+.client-import__counts .is-atualiza b { color: #2563eb; }
+.client-import__counts .is-erro b { color: #dc2626; }
+.client-import__filter { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-text-muted); cursor: pointer; }
+.client-import__table-wrap { max-height: min(46vh, 420px); overflow: auto; border: 1px solid var(--color-border-light); border-radius: 10px; }
+.client-import__table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.client-import__table th { position: sticky; top: 0; z-index: 1; padding: 7px 10px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--color-text-dim); background: var(--color-surface-muted); border-bottom: 1px solid var(--color-border-light); }
+.client-import__table td { padding: 6px 10px; vertical-align: top; border-bottom: 1px solid var(--color-border-light); color: var(--color-text); }
+.client-import__table td:first-child { width: 48px; font-variant-numeric: tabular-nums; color: var(--color-text-dim); }
+.client-import__table td small { display: block; font-size: 11.5px; color: var(--color-text-muted); }
+.client-import__table tr.is-erro td small { color: #b91c1c; }
+.client-import__tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, #15803d 13%, var(--color-surface)); color: #15803d; }
+.client-import__table tr.is-atualiza .client-import__tag { background: color-mix(in srgb, #2563eb 13%, var(--color-surface)); color: #1d4ed8; }
+.client-import__table tr.is-erro .client-import__tag { background: color-mix(in srgb, #dc2626 12%, var(--color-surface)); color: #b91c1c; }
+.client-import__table tr.is-erro td { background: color-mix(in srgb, #dc2626 4%, transparent); }
+.client-import__empty { text-align: center; color: var(--color-text-muted); padding: 16px !important; }
+.client-import-modal p.client-import__more { margin: 0; padding: 8px 10px; font-size: 12px; color: var(--color-text-muted); }
+.client-import__done { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, #16a34a 40%, transparent); background: color-mix(in srgb, #16a34a 9%, var(--color-surface)); }
+.client-import__done b { font-size: 16px; color: #166534; }
+.client-import__done span { font-size: 13px; color: var(--color-text); }
+.client-import__done small { font-size: 12px; color: var(--color-text-muted); }
+html[data-theme="dark"] .client-import__counts .is-novo b, html[data-theme="dark"] .client-import__tag, html[data-theme="dark"] .client-import__done b { color: #4ade80; }
+html[data-theme="dark"] .client-import__counts .is-atualiza b, html[data-theme="dark"] .client-import__table tr.is-atualiza .client-import__tag { color: #93c5fd; }
+html[data-theme="dark"] .client-import__counts .is-erro b, html[data-theme="dark"] .client-import__table tr.is-erro .client-import__tag, html[data-theme="dark"] .client-import__table tr.is-erro td small { color: #fca5a5; }
+@media (max-width: 560px) { .client-import__filter { margin-left: 0; } .client-import__table th:nth-child(3), .client-import__table td:nth-child(3) { display: none; } }
+#clientImportModal { z-index: 1012; }
+.client-import-modal .modal-body-content { padding-top: 16px; }
+.client-import__notes { margin: 0; padding: 8px 12px 8px 28px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; background: color-mix(in srgb, #f59e0b 11%, var(--color-surface)); border: 1px solid color-mix(in srgb, #f59e0b 38%, transparent); color: var(--color-text); }

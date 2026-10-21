@@ -8,7 +8,7 @@
 const NETWORK_LOG_MAX = 500;
 const VIABILITY_RADII = [100, 150, 200, 300, 500];
 const VIABILITY_STREET_FACTOR = 1.3; //Drop pela rua ≈ 1,3 × a distância em linha reta
-const networkDocs = { snapshots: new Map(), logs: new Map(), panelRootId: '', panelTab: 'resumo', cursor: new Map() };
+const networkDocs = { snapshots: new Map(), logs: new Map(), bulk: new Map(), panelRootId: '', panelTab: 'resumo', cursor: new Map() };
 const viability = { active: false, radius: 200, point: null, listener: null, overlays: [], results: [] };
 
 const getNetworkRoots = () => getOpenProjectRoots().filter(isNetworkRoot);
@@ -122,8 +122,17 @@ function diffNetworkData(before, data) {
 function withNetworkChangeLog(projectId, data) {
     const before = networkDocs.snapshots.get(projectId);
     const log = networkDocs.logs.get(projectId) || [];
-    const changes = before ? diffNetworkData(before, data) : [];
-    return { ...data, changeLog: [...log, ...changes].slice(-NETWORK_LOG_MAX) };
+    const bulk = networkDocs.bulk.get(projectId);
+    const changes = (before ? diffNetworkData(before, data) : []).filter(c => !bulk?.uids.has(c.uid));
+    return { ...data, changeLog: [...log, ...(bulk?.entries || []), ...changes].slice(-NETWORK_LOG_MAX) };
+}
+
+//Mudança em lote (importar clientes): um registro só no histórico, em vez de um por item
+function markNetworkBulkChange(projectId, entry, uids) {
+    const bulk = networkDocs.bulk.get(projectId) || { entries: [], uids: new Set() };
+    bulk.entries.push({ at: new Date().toISOString(), by: networkWho(), ...entry });
+    uids.forEach(uid => bulk.uids.add(uid));
+    networkDocs.bulk.set(projectId, bulk);
 }
 
 //Rede salva: o salvo passa a ser a base da próxima comparação
@@ -131,6 +140,7 @@ function commitNetworkSave(record) {
     if (record?.project_type !== NETWORK_PROJECT_TYPE) return;
     networkDocs.logs.set(record.id, record.data.changeLog || []);
     networkDocs.snapshots.set(record.id, snapshotNetworkData(record.data));
+    networkDocs.bulk.delete(record.id);
     if (networkDocs.panelRootId === record.id) renderNetworkPanel();
 }
 
@@ -144,6 +154,7 @@ function rememberNetworkLoaded(projectId, data) {
 function describeNetworkLogEntry(e) {
     const noun = e.type === 'CABO' ? 'o cabo' : e.type === 'CLIENTE' ? 'o cliente' : `a ${e.type || 'caixa'}`;
     if (e.action === 'projeto') return `concluiu o projeto "${e.name}"${e.detail ? `: ${e.detail}` : ''}`;
+    if (e.action === 'importou') return `importou clientes${e.name ? ` da planilha "${e.name}"` : ''}${e.detail ? `: ${e.detail}` : ''}`;
     return `${e.action} ${noun} ${e.name || ''}${e.detail ? ` (${e.detail})` : ''}`.trim();
 }
 
