@@ -131,6 +131,7 @@ function fillAccountForms() {
         mapType: prefs.mapType || 'roadmap',
         markerScale: prefs.markerScale || 'medio',
         reopenLastProject: !!prefs.reopenLastProject,
+        startMode: prefs.startMode || 'ultimo',
     });
     const search = document.getElementById('shortcutSearch');
     if (search) { search.value = ''; filterShortcuts(); }
@@ -563,6 +564,7 @@ function getPreferencesFormValues() {
         mapType: getPrefChoice('prefMapType') || 'roadmap',
         markerScale: getPrefChoice('prefMarkerScale') || 'medio',
         reopenLastProject: !!document.getElementById('prefReopenLastProject')?.checked,
+        startMode: getPrefChoice('prefStartMode') || 'ultimo',
     };
 }
 
@@ -571,6 +573,7 @@ function fillPreferencesForm(values) {
     setPrefChoice('prefMapType', values.mapType);
     setPrefChoice('prefMarkerScale', values.markerScale);
     document.getElementById('prefReopenLastProject').checked = !!values.reopenLastProject;
+    setPrefChoice('prefStartMode', values.startMode || 'ultimo');
     preferencesFormSnapshot = JSON.stringify(getPreferencesFormValues());
     updatePreferencesDirtyState();
 }
@@ -587,11 +590,11 @@ function updatePreferencesDirtyState() {
 async function savePreferencesForm(event) {
     event.preventDefault();
     const panel = document.querySelector('#accountModal [data-panel="preferences"]');
-    const { theme, mapType, reopenLastProject, markerScale } = getPreferencesFormValues();
+    const { theme, mapType, reopenLastProject, markerScale, startMode } = getPreferencesFormValues();
     applyTheme(theme);
     applyMarkerScale(markerScale);
     if (typeof map !== 'undefined' && map) map.setMapTypeId(mapType);
-    const ok = await saveUserPreferences({ theme, mapType, reopenLastProject, markerScale });
+    const ok = await saveUserPreferences({ theme, mapType, reopenLastProject, markerScale, startMode });
     if (ok) preferencesFormSnapshot = JSON.stringify(getPreferencesFormValues());
     updatePreferencesDirtyState();
     setFeedback(panel, ok ? 'Preferências salvas.' : 'Não foi possível salvar as preferências.', ok ? 'success' : 'error');
@@ -616,6 +619,7 @@ function lastProjectStorageKey() {
 }
 
 function rememberLastProject(projectId) {
+    if (/^rede_/.test(projectId || '')) return; //A rede volta pelo modo Rede (js/projects/network-mode.js)
     try { localStorage.setItem(lastProjectStorageKey(), projectId); } catch (e) { /* ignora */ }
 }
 
@@ -642,6 +646,7 @@ function applyStartupPreferences() {
     if (prefs.mapType && map) map.setMapTypeId(prefs.mapType);
     applyMarkerScale(prefs.markerScale);
     if (!prefs.reopenLastProject) return;
+    if (typeof getStartupAppMode === 'function' && getStartupAppMode() === 'rede') return;
     let lastId = null;
     try { lastId = localStorage.getItem(lastProjectStorageKey()); } catch (e) { /* ignora */ }
     if (lastId && !document.getElementById(lastId)) openProjectFromDatabase(lastId);

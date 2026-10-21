@@ -3623,6 +3623,112 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     `edição ao vivo: cabo, espera a edição em andamento, avisa a revisão salva e quem entra depois recebe o estado (${live.cable})`);
 }
 
+//Modo Projeto × Modo Rede: concluir o projeto manda tudo para a rede da cidade (Existente, com a origem) e deixa o
+//projeto só para consulta; outro projeto com a mesma caixa não duplica; trocar de modo guarda e volta os projetos
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const np = await ctx.newPage();
+  watchCsp(np);
+  const netErrors = [];
+  np.on('pageerror', e => netErrors.push(e.message));
+  await np.addInitScript(() => { try { localStorage.setItem('routeMapTourDone', '1'); } catch (e) {} });
+  await np.route('**/supabase.js', r => r.fulfill({ path: path.join(here, 'fake-supabase.js'), contentType: 'text/javascript' }));
+  await np.route(/maps\.googleapis|maps\.gstatic/, r => r.abort());
+  await np.route('**/__fake-google-maps.js', r => r.fulfill({ path: path.join(here, 'fake-google-maps.js'), contentType: 'text/javascript' }));
+  await np.goto(baseUrl + '/index.html');
+  await np.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
+  await np.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
+  const net = await np.evaluate(async () => {
+    if (!map) map = new google.maps.Map(document.getElementById('map'), {});
+    const out = {};
+    const realChoice = showChoice;
+    const answers = [];
+    showChoice = async (opts) => { answers.push(opts.title); return opts.choices.some(c => c.value === 'save') ? 'save' : 'stay'; };
+    try {
+      const sidebar = document.getElementById('sidebar');
+      const build = (id, name, ceoUid) => {
+        rebuildSidebarFromJSON([{ id, name, city: 'Lavras', neighborhood: 'Centro', type: 'TCR', isProject: true, children: [] }], sidebar);
+        rebuildMarker({ uid: ceoUid, folderId: id, type: 'CEO', name: 'CEO-01', color: '#f59e0b', ceoStatus: ceoUid === 'mk_ceo_shared' && id === 'projNB' ? 'Existente' : 'Nova', position: { lat: -21.24, lng: -45 } });
+        rebuildMarker({ uid: `mk_cto_${id}`, folderId: id, type: 'CTO', name: `CTO-${id}`, color: '#16a34a', ctoStatus: 'Nova', position: { lat: -21.241, lng: -45.001 } });
+        rebuildMarker({ uid: `mk_pole_${id}`, folderId: id, type: 'POSTE', name: 'P1', color: '#888', pole: { situation: 'Remover' }, position: { lat: -21.242, lng: -45 } });
+        rebuildCable({ uid: `cb_${id}`, folderId: id, name: `FO-12-${id}`, type: 'Cabo AS 80 FO-12', width: 4, color: '#0f0', status: 'Novo', totalLength: 120,
+          path: [{ lat: -21.24, lng: -45 }, { lat: -21.241, lng: -45.001 }], startAnchorUid: ceoUid, endAnchorUid: `mk_cto_${id}` });
+        rebuildPolygon({ uid: `pg_${id}`, folderId: id, name: 'Área', color: '#2dd4bf', opacity: 0.2, preProjeto: 'x', path: [{ lat: -21.2, lng: -45 }, { lat: -21.3, lng: -45 }, { lat: -21.3, lng: -45.1 }] });
+        return document.getElementById(id).closest('.folder');
+      };
+      const rootA = build('projNA', 'Bairro A', 'mk_ceo_shared');
+      await persistProject(rootA);
+      const netId = getNetworkId('Lavras');
+      out.menu = buildSidebarMenuItems(getSidebarEntity(rootA.querySelector('.folder-title'))).some(i => i.action === 'conclude');
+      await concludeProject('projNA');
+      const row = window.__fakeDb.projects[netId];
+      const nm = row?.data.markers || [];
+      out.network = !!row && row.project_type === 'Rede' && row.city === 'Lavras'
+        && nm.find(m => m.type === 'CTO')?.ctoStatus === 'Existente' && nm.find(m => m.type === 'CEO')?.ceoStatus === 'Existente'
+        && nm.every(m => m.asBuilt?.projectId === 'projNA') && !nm.some(m => m.type === 'POSTE')
+        && row.data.cables[0]?.status === 'Existente' && row.data.cables[0]?.width === 2 && !row.data.polygons.length
+        && row.data.sidebar.children.length === 1 && row.data.sidebar.children[0].id === 'projNA' && !row.data.sidebar.children[0].isProject;
+      out.concluded = !!window.__fakeDb.projects.projNA.data.concluded && rootA.querySelector('.folder-title').dataset.concluded === 'true'
+        && /Concluído/.test(rootA.querySelector('.project-type-tag')?.textContent || (updateSidebarCounts(), rootA.querySelector('.project-type-tag').textContent));
+      setActiveFolder('projNA');
+      out.readonly = requireEdit('mexer') === false && await persistProject(rootA).then(() => false, () => true)
+        && !buildSidebarMenuItems(getSidebarEntity(rootA.querySelector('.folder-title'))).some(i => i.action === 'conclude' || i.action === 'edit');
+      //Segundo projeto usa a mesma CEO (mesmo identificador): atualiza, não duplica
+      const rootB = build('projNB', 'Bairro B', 'mk_ceo_shared');
+      await persistProject(rootB);
+      await concludeProject('projNB');
+      const row2 = window.__fakeDb.projects[netId];
+      out.noDup = row2.data.markers.filter(m => m.uid === 'mk_ceo_shared').length === 1 && row2.data.markers.filter(m => m.type === 'CTO').length === 2
+        && row2.data.sidebar.children.length === 2;
+      //Concluir de novo o mesmo projeto substitui a pasta dele
+      delete projectConclusions.projNB;
+      await concludeProject('projNB');
+      out.reconclude = window.__fakeDb.projects[netId].data.sidebar.children.length === 2 && window.__fakeDb.projects[netId].data.markers.filter(m => m.type === 'CTO').length === 2;
+      //Modo Rede: os projetos saem da tela (e voltam depois), a rede da cidade abre com o que foi construído
+      await setAppMode('rede', { city: 'Lavras' });
+      const hidden = (sel) => getComputedStyle(document.querySelector(sel)).display === 'none';
+      out.redeDetail = [appMode === 'rede', document.body.classList.contains('mode-rede'), !document.querySelector('#sidebar > .folder > .folder-title[data-folder-id="projNA"]'), !!document.getElementById(netId),
+        document.getElementById('networkTools').hidden === false, markers.filter(m => m.type === 'CTO').length, markers.every(m => m.asBuilt && m.marker.getVisible() !== false),
+        document.querySelector(`.folder-title[data-folder-id="${netId}"]`)?.dataset.folderType,
+        hidden('.top-bar-nav > .dropdown:has(#projectButton)') && hidden('.top-bar-nav > .dropdown:has(#toolsButton)') && hidden('.top-bar-nav > .dropdown:has(#materialsMenuButton)') && hidden('#projectReportButton'),
+        document.querySelector('.sidebar-header h3').textContent].join(',');
+      out.rede = out.redeDetail === 'true,true,true,true,true,2,true,Rede,true,Rede';
+      //Cidade nova: vazia, com pasta dentro
+      const perdoes = await createNetworkCity('Perdões');
+      setActiveFolder(getNetworkId('Perdões'));
+      out.city = !!perdoes && window.__fakeDb.projects[getNetworkId('Perdões')]?.project_type === 'Rede'
+        && buildSidebarMenuItems(getSidebarEntity(perdoes.querySelector('.folder-title'))).some(i => i.action === 'new-folder');
+      await setAppMode('projeto');
+      out.back = appMode === 'projeto' && !document.getElementById(netId) && !!document.getElementById('projNA') && !!document.getElementById('projNB')
+        && isProjectConcluded('projNA') && document.querySelector('.sidebar-header h3').textContent === 'Projetos';
+      //Voltando sem cidade: as duas cidades aparecem só pelo nome; abrir uma carrega com tudo oculto no mapa
+      await setAppMode('rede');
+      const pending = [...document.querySelectorAll('#sidebar > .folder > .folder-title[data-network-pending="true"]')].map(t => t.dataset.folderName).join('|');
+      const before = window.__fakeDb.projects[netId].data.markers.length;
+      await persistProject(document.getElementById(netId).closest('.folder'));
+      const untouched = window.__fakeDb.projects[netId].data.markers.length === before;
+      document.querySelector(`#sidebar .folder-title[data-folder-id="${netId}"] .toggle-icon`).click();
+      await new Promise(r => setTimeout(r, 50));
+      const loaded = document.getElementById(netId).closest('.folder');
+      out.lazy = pending === 'Rede · Lavras|Rede · Perdões' && markers.length === 0 + markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length && untouched
+        && !loaded.querySelector(':scope > .folder-title').dataset.networkPending && markers.filter(m => m.type === 'CTO').length === 2
+        && markers.every(m => m.marker.getVisible() === false) && !document.getElementById(netId).classList.contains('hidden');
+      await setAppMode('projeto');
+      out.merge = (() => {
+        const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
+          markers: [{ uid: 'a', folderId: 'f', type: 'CTO', ctoStatus: 'Troca' }], cables: [], polygons: [] }, { projectId: 'p', projectName: 'P', at: 'now', folderName: 'P · ok' });
+        return m.markers[0].ctoStatus === 'Existente' && m.sidebar.children[0].children[0].id === 'f' && m.sidebar.children[0].name === 'P · ok';
+      })();
+    } finally {
+      showChoice = realChoice;
+    }
+    return out;
+  });
+  check(Object.entries(net).every(([k, v]) => (k === 'redeDetail' ? true : v === true)) && !netErrors.length,
+    `modo rede: concluir manda para a rede da cidade como Existente, projeto só consulta, sem duplicar, e a troca de modo guarda os projetos (${JSON.stringify({ ...net, errors: netErrors })})`);
+  await ctx.close();
+}
+
 //Empresa nova: começa sem os preços de outra empresa e sem planilhas; informa as suas no catálogo
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });

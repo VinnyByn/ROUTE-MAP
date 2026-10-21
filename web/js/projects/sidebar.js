@@ -85,7 +85,8 @@ function updateSidebarCounts() {
         if (title.dataset.isProject === 'true') {
             const tag = title.querySelector(':scope > .project-type-tag');
             const meta = typeof getProjectTypeMeta === 'function' ? getProjectTypeMeta(title.dataset.folderType || 'TCR') : { label: title.dataset.folderType, color: '#64748b' };
-            if (tag && tag.textContent !== (meta.label || '')) tag.textContent = meta.label || '';
+            const label = `${meta.label || ''}${title.dataset.concluded === 'true' ? ' · Concluído' : ''}`;
+            if (tag && tag.textContent !== label) tag.textContent = label;
             if (title.style.getPropertyValue('--project-color') !== meta.color) title.style.setProperty('--project-color', meta.color);
         }
     });
@@ -139,7 +140,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', conclude: 'check', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -162,7 +163,9 @@ function buildSidebarMenuItems(entity) {
         const ul = document.getElementById(entity.folderId);
         const hasSubfolders = !!ul?.querySelector('.folder-wrapper');
         const expanded = ul && !ul.classList.contains('hidden');
-        if (canEdit) items.push({ action: 'edit', label: isProject ? 'Editar projeto' : 'Renomear pasta', hint: isProject ? 'Nome, cidade, bairro e tipo' : '' });
+        const isNetwork = isProject && entity.title.dataset.folderType === 'Rede';
+        const concluded = isProject && entity.title.dataset.concluded === 'true';
+        if (canEdit && !isNetwork && !concluded) items.push({ action: 'edit', label: isProject ? 'Editar projeto' : 'Renomear pasta', hint: isProject ? 'Nome, cidade, bairro e tipo' : '' });
         if (canEdit) items.push({ action: 'new-folder', label: isProject ? 'Nova pasta' : 'Nova subpasta' });
         if (canEdit) items.push({ action: 'copy', label: isProject ? 'Copiar projeto' : 'Copiar pasta', hint: 'Com subpastas, marcadores, cabos e polígonos', kbd: 'Ctrl+C' });
         if (canEdit && sidebarClipboard) items.push({ action: 'paste', label: 'Colar aqui', kbd: 'Ctrl+V' });
@@ -173,7 +176,9 @@ function buildSidebarMenuItems(entity) {
         if (hasSubfolders || !expanded) items.push({ action: expanded ? 'collapse' : 'expand', label: expanded ? 'Recolher tudo' : 'Expandir tudo' });
         items.push({ divider: true });
         if (isProject) {
-            if (canEdit) items.push({ action: 'save', label: 'Salvar projeto', kbd: 'Ctrl+S' });
+            if (canEdit && !concluded) items.push({ action: 'save', label: isNetwork ? 'Salvar rede' : 'Salvar projeto', kbd: 'Ctrl+S' });
+            //Projeto pronto: vai para a rede da cidade (js/projects/network-mode.js)
+            if (canEdit && !isNetwork && !concluded) items.push({ action: 'conclude', label: 'Concluir e enviar para a rede', hint: 'Entra na rede da cidade como Existente; o projeto fica só para consulta' });
             items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
             items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
             items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
@@ -368,6 +373,9 @@ function handleSidebarMenuAction(action) {
     case 'check':
         setActiveFolder(entity.folderId);
         openProjectCheck();
+        break;
+    case 'conclude':
+        openConcludeProject(entity.folderId);
         break;
     case 'route':
         selectSidebarCable(info);

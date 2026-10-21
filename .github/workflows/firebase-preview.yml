@@ -1,0 +1,56 @@
+name: Versão de teste (Firebase)
+
+# Publica o branch de trabalho num endereço de teste do Firebase (canal "teste", separado do site oficial),
+# para conferir antes de juntar na main. Usa o mesmo banco (Supabase) do site oficial.
+on:
+  push:
+    branches:
+      - 'claude/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gerar materiais.json e kits.json a partir das planilhas
+        run: |
+          pip install --quiet -r api/requirements.txt
+          cd api && python -m scripts.export_json ../web/materiais.json ../web/kits.json
+      - name: Baixar a base de postes (BDGD)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("postes-"))][0].tagName // ""')
+          if [ -n "$tag" ]; then
+            gh release download "$tag" --pattern postes.tar.gz --dir "$RUNNER_TEMP"
+            tar xzf "$RUNNER_TEMP/postes.tar.gz" -C web
+          fi
+      - name: Instalar Firebase CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/fb" && cd "$RUNNER_TEMP/fb"
+          npm init -y > /dev/null
+          npm pkg set overrides.ignore=7.0.5
+          npm install --no-audit --no-fund firebase-tools
+          echo "$RUNNER_TEMP/fb/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Publicar na versão de teste
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase hosting:channel:deploy teste --expires 7d --project routemap-21 --non-interactive --json > "$RUNNER_TEMP/preview.json"
+          url=$(jq -r '.result[]?.url // empty' "$RUNNER_TEMP/preview.json" | head -n1)
+          echo "Versão de teste: $url"
+          echo "### Versão de teste: $url" >> "$GITHUB_STEP_SUMMARY"
