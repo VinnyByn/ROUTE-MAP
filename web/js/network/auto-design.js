@@ -3675,12 +3675,6 @@ function drawAutoDesignDragPreview() {
         const hull = getAutoDesignHull([...view.points, view.xy]);
         if (hull.length) add(new google.maps.Polygon({ map, paths: hull.map(toLL), clickable: false, zIndex: 46, strokeColor: own, strokeOpacity: 0.8, strokeWeight: 2, fillColor: own, fillOpacity: 0.15 }));
     }
-    //Casas que ela pegaria dali, uma a uma (vermelhas as fora do alcance do drop)
-    view.points.slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
-        const out = !isAutoDesignCovered(plan.model, q, view.xy);
-        add(new google.maps.Marker({ map, position: toLL(q), clickable: false, zIndex: out ? 67 : 66,
-            icon: { path: google.maps.SymbolPath.CIRCLE, scale: out ? 4 : 3, fillColor: out ? AUTO_DESIGN_CTO_LEVEL_COLORS.over : own, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1 } }));
-    });
     const at = toLL(view.xy);
     add(new google.maps.Marker({ map, position: at, clickable: false, zIndex: 73, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 16, fillColor: own, fillOpacity: 0.3, strokeColor: own, strokeWeight: 3 } }));
     add(new google.maps.Marker({ map, position: at, clickable: false, zIndex: 74, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: color, fillOpacity: 0.9, strokeColor: '#ffffff', strokeWeight: 2 } }));
@@ -4009,7 +4003,6 @@ function getAutoDesignCtoColors(ctos) {
     });
     return color.map(k => AUTO_DESIGN_CTO_PALETTE[k]);
 }
-const AUTO_DESIGN_HOUSE_DOTS_MAX = 600;
 
 //Balões de casas de cada CTO: [{ src, houses }] por CTO (casas do balão que ficaram com ela)
 function getAutoDesignCtoHouseSources(plan) {
@@ -4095,14 +4088,6 @@ function drawAutoDesignPreview() {
                 map, position: cto.position, clickable: false, zIndex: 69, opacity: fade(i) ? 0.35 : 1,
                 icon: { path: google.maps.SymbolPath.CIRCLE, scale: i === picked ? 19 : 16, fillColor: color, fillOpacity: 0.3, strokeColor: color, strokeOpacity: 1, strokeWeight: 3 },
             }), { opacity: fade(i) ? 0.35 : 1 }, { opacity: 0.35 });
-        });
-        //Casas da CTO clicada, uma a uma; as que ficam fora do alcance do drop em vermelho
-        if (picked >= 0) lists[picked].slice(0, AUTO_DESIGN_HOUSE_DOTS_MAX).forEach(q => {
-            const out = !isAutoDesignCovered(plan.model, q, plan.ctos[picked]);
-            own(plan.ctos[picked], new google.maps.Marker({
-                map, position: toLL(q), clickable: false, zIndex: out ? 67 : 66, title: out ? 'Fora do alcance do drop' : undefined,
-                icon: { path: google.maps.SymbolPath.CIRCLE, scale: out ? 4 : 3, fillColor: out ? AUTO_DESIGN_CTO_LEVEL_COLORS.over : colors[picked], fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1 },
-            }));
         });
         plan.ctos.forEach((cto, i) => {
             const sum = getAutoDesignCtoSummary(plan, cto);
