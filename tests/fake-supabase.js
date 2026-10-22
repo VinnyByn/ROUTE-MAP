@@ -79,6 +79,12 @@ window.supabase = { createClient() {
              must_change_password: !!window.__fakeMustChange, platform_admin: !!window.__fakePlatformAdmin,
              company: { id: 'c1', name: 'Empresa Teste', role: 'admin', blocked: !!window.__fakeBlocked, blocked_reason: window.__fakeBlocked || null } })
       : name === 'list_company_members' ? ok(window.__fakeMembers || [])
+      //Lista de projetos: ativos ou arquivados, sem as redes das cidades nem a lixeira
+      : name === 'search_projects' ? (() => {
+          const rows = Object.values(db.projects).filter(p => !p.deleted_at && p.project_type !== 'Rede' && !!p.archived_at === !!args.p_archived);
+          return ok(rows.map(p => ({ id: p.id, name: p.name, city: p.city || null, neighborhood: p.neighborhood || null, project_type: p.project_type, updated_at: p.updated_at || '2026-10-05T10:00:00Z',
+            summary: {}, total_count: rows.length, archived_at: p.archived_at || null, concluded: !!p.data?.concluded })));
+        })()
       : name === 'list_project_versions' ? ok(db.versions.filter(v => v.project_id === args.p_project).reverse()
           .map(v => ({ id: v.id, revision: v.revision, name: 'v', saved_at: v.saved_at || '2026-10-05T10:00:00Z', saved_by_name: 'Bia', markers: (v.data?.markers || []).length, cables: (v.data?.cables || []).length })))
       : name === 'list_trash' ? ok(Object.values(db.projects).filter(p => p.deleted_at)

@@ -1,7 +1,7 @@
 // Modo Projeto × Modo Rede. No modo Projeto se planeja (como sempre); no modo Rede fica a documentação da rede
 // construída, uma por cidade, com os clientes ligados nas caixas. A rede de cada cidade é guardada como um projeto do
 // tipo "Rede" (tabela projects: mesmas permissões, revisão, histórico de versões, lixeira e edição ao vivo).
-// "Concluir e enviar para a rede" copia o projeto para a rede da cidade dele (tudo vira Existente, com a origem
+// "Migrar para o modo Rede" copia o projeto para a rede da cidade dele (tudo vira Existente, com a origem
 // anotada em asBuilt) e deixa o projeto só para consulta.
 // Depende de js/app.js, js/core/persistence.js, js/projects/sidebar.js e js/network/project-check.js.
 
@@ -162,7 +162,9 @@ async function setAppMode(mode, { city = '', startup = false } = {}) {
             if (city) await showNetworkCity(city);
             return true;
         }
-        const leaving = getOpenProjectRoots().map(getRootId).filter(id => !isNetworkProjectId(id));
+        //Projeto arquivado (ou já migrado para a rede) não volta aberto
+        const leaving = getOpenProjectRoots().map(getRootId).filter(id => !isNetworkProjectId(id) && !isProjectConcluded(id)
+            && !(typeof isProjectArchived === 'function' && isProjectArchived(id)));
         if (!(await leaveCurrentWorkspace())) { applyAppModeUi(); return false; }
         if (!startup) rememberProjectWorkspace(leaving);
         appMode = 'rede';
@@ -638,7 +640,7 @@ async function openConcludeProject(projectId) {
     const stays = [['casa', sum.stays.casas], ['cliente', sum.stays.clientes], ['poste', sum.stays.postes], ['polígono', sum.stays.poligonos], ['outro marcador', sum.stays.outros]]
         .filter(([, n]) => n > 0).map(([label, n]) => `${fmt(n)} ${label}${n === 1 ? '' : 's'}`);
     content.innerHTML = `
-        <h2 id="concludeProjectTitle">Enviar para a rede</h2>
+        <h2 id="concludeProjectTitle">Migrar para o modo Rede</h2>
         <div class="modal-body-content">
             <div class="conclude-flow">
                 <div class="conclude-flow__box"><small>Projeto</small><b>${esc(name)}</b></div>
@@ -656,11 +658,11 @@ async function openConcludeProject(projectId) {
             </select>
             <input type="text" id="concludeFolderName" value="${esc(name)}" aria-label="Nome da pasta nova" />
             ${sum.issues ? `<div class="conclude-warn">⚠ A verificação achou <b>${sum.issues} erro(s)</b>. Vale corrigir antes, para a rede não ficar com pontas soltas. <button type="button" class="btn btn-secondary btn-sm" data-conclude="check">Ver os erros</button></div>` : '<p class="conclude-ok">✓ A verificação não achou erros.</p>'}
-            <p class="conclude-note">Depois de enviar, o projeto fica <b>concluído</b>: só para consulta (relatório, PDF e planilha continuam). As mudanças passam a ser feitas no modo Rede.</p>
+            <p class="conclude-note">Depois de migrar, o projeto fica <b>arquivado</b> (Abrir projeto → Arquivados), só para consulta: relatório, PDF e planilha continuam. As mudanças na rede passam a ser feitas no modo Rede.</p>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-conclude="cancel">Cancelar</button>
-            <button type="button" class="btn btn-success" data-conclude="go"${goes.length ? '' : ' disabled'}>Enviar para a rede</button>
+            <button type="button" class="btn btn-success" data-conclude="go"${goes.length ? '' : ' disabled'}>Migrar para a rede</button>
         </div>`;
     const select = content.querySelector('#concludeFolder');
     const folderName = content.querySelector('#concludeFolderName');
@@ -670,28 +672,30 @@ async function openConcludeProject(projectId) {
     modal.onclick = async (e) => {
         const action = e.target.closest('[data-conclude]')?.dataset.conclude;
         if (e.target === modal || action === 'cancel' || action === 'stay') return close();
+        if (action === 'close-project') { close(); closeProjectFromWorkspace(projectId); return; }
         if (action === 'check') { close(); setActiveFolder(projectId); openProjectCheck(); return; }
-        if (action === 'open') { close(); setAppMode('rede', { city }); return; }
+        if (action === 'open') { close(); closeProjectFromWorkspace(projectId); setAppMode('rede', { city }); return; }
         if (action !== 'go') return;
         const go = e.target.closest('[data-conclude="go"]');
         go.disabled = true;
-        go.textContent = 'Enviando…';
+        go.textContent = 'Migrando…';
         try {
             const done = await concludeProject(projectId, { targetFolderId: select.value || null, folderName: folderName.value.trim() || name });
             content.innerHTML = `
                 <h2 id="concludeProjectTitle">Projeto na rede</h2>
                 <div class="modal-body-content">
                     <p class="conclude-done">✓ <b>${esc(name)}</b> entrou na <b>${esc(done.networkName)}</b>: ${fmt(done.boxes)} caixa(s) e ${fmt(done.cables)} cabo(s)${done.plans ? `, com ${fmt(done.plans)} plano(s) de fusão` : ''}.</p>
-                    <p class="conclude-note">O projeto ficou concluído, só para consulta.</p>
+                    <p class="conclude-note">${done.archived ? 'O projeto foi <b>arquivado</b>: está em Projeto → Abrir projeto → Arquivados, só para consulta.' : 'O projeto ficou só para consulta.'}</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-conclude="stay">Continuar no projeto</button>
+                    <button type="button" class="btn btn-secondary" data-conclude="stay">Ver o projeto</button>
+                    ${done.archived ? '<button type="button" class="btn btn-secondary" data-conclude="close-project">Fechar o projeto</button>' : ''}
                     <button type="button" class="btn btn-success" data-conclude="open">Abrir a rede</button>
                 </div>`;
         } catch (error) {
             console.error('Erro ao concluir o projeto:', error);
             go.disabled = false;
-            go.textContent = 'Enviar para a rede';
+            go.textContent = 'Migrar para a rede';
             showAlert('Erro', `Não foi possível enviar o projeto para a rede. ${error.message || ''}`);
         }
     };
@@ -735,6 +739,8 @@ async function concludeProject(projectId, { targetFolderId = null, folderName = 
             await persistProject(root, { allowConcluded: true, force: true });
         }
         applyProjectConclusionUi(projectId);
+        //Migrado para a rede: o projeto fica arquivado em "Abrir projeto → Arquivados"
+        if (typeof setProjectArchived === 'function') projectConclusions[projectId].archived = await setProjectArchived(projectId, true, { silent: true });
         if (typeof networkLayer !== 'undefined') { networkLayer.cache.delete(city); scheduleNetworkLayerRefresh(0); }
         return projectConclusions[projectId];
     }

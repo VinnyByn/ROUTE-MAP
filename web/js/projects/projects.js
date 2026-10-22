@@ -89,6 +89,8 @@ const projectPicker = {
     timer: null,
     observer: null,
     rpcAvailable: true,
+    archived: false,          //Aba Arquivados (js/projects/project-archive.js)
+    archiveSupported: null,   //null = ainda não sabe; false = banco sem a migração de arquivados
     facets: null,
 };
 
@@ -109,7 +111,8 @@ function openProjectPicker() {
     document.getElementById('projectDropdown')?.classList.remove('show');
     const input = document.getElementById('projectSearchInput');
     input.value = '';
-    Object.assign(projectPicker, { term: '', type: '', city: '', sort: readProjectPickerPrefs().sort });
+    Object.assign(projectPicker, { term: '', type: '', city: '', archived: false, sort: readProjectPickerPrefs().sort });
+    renderProjectPickerTabs();
     document.getElementById('projectSortSelect').value = projectPicker.sort;
     document.getElementById('projectCityFilter').value = '';
     updateProjectSearchClear();
@@ -150,21 +153,41 @@ async function loadProjectFacets() {
         else if (isMissingRpcError(error)) projectPicker.rpcAvailable = false;
     }
     projectPicker.facets = facets;
+    renderProjectPickerTabs();
     renderProjectTypeChips();
     renderProjectCityOptions();
     if (typeof updateTrashButton === 'function') updateTrashButton(facets);
+}
+
+//Abas Projetos | Arquivados (com as quantidades)
+function renderProjectPickerTabs() {
+    const wrap = document.getElementById('projectPickerTabs');
+    if (!wrap) return;
+    const f = projectPicker.facets;
+    const tab = (value, label, count) => `<button type="button" role="tab" class="pp-tab${projectPicker.archived === value ? ' is-active' : ''}" data-archived="${value}" aria-selected="${projectPicker.archived === value}">${label}${typeof count === 'number' ? ` <small>${count}</small>` : ''}</button>`;
+    wrap.innerHTML = tab(false, 'Projetos', f?.total) + tab(true, 'Arquivados', f?.archived);
+}
+
+function setProjectPickerArchived(archived) {
+    if (projectPicker.archived === archived) return;
+    projectPicker.archived = archived;
+    renderProjectPickerTabs();
+    renderProjectTypeChips();
+    reloadProjectPickerList();
 }
 
 function renderProjectTypeChips() {
     const wrap = document.getElementById('projectTypeChips');
     if (!wrap) return;
     const counts = new Map((projectPicker.facets?.types || []).map(t => [t.value, t.count]));
-    const total = projectPicker.facets?.total;
+    //As quantidades por tipo são dos projetos ativos: na aba Arquivados ficam sem número
+    const withCounts = !!projectPicker.facets && !projectPicker.archived;
+    const total = withCounts ? projectPicker.facets.total : undefined;
     const chips = [{ value: '', label: 'Todos', color: 'var(--brand-600)', count: total }]
-        .concat(PROJECT_TYPES.map(t => ({ ...t, count: projectPicker.facets ? (counts.get(t.value) || 0) : undefined })));
+        .concat(PROJECT_TYPES.map(t => ({ ...t, count: withCounts ? (counts.get(t.value) || 0) : undefined })));
     //Tipos antigos/personalizados que existam no banco também aparecem
     counts.forEach((count, value) => {
-        if (value !== 'Rede' && !PROJECT_TYPES.some(t => t.value === value)) chips.push({ ...getProjectTypeMeta(value), count });
+        if (value !== 'Rede' && !PROJECT_TYPES.some(t => t.value === value)) chips.push({ ...getProjectTypeMeta(value), count: withCounts ? count : undefined });
     });
     wrap.innerHTML = '';
     chips.forEach(chip => {
@@ -233,15 +256,28 @@ async function fetchProjectPickerPage() {
     let rows = [];
     let total = 0;
     let error = null;
+    if (projectPicker.archived && projectPicker.archiveSupported === false) {
+        projectPicker.loading = false;
+        const list = document.getElementById('projectPickerList');
+        list.innerHTML = `<li class="project-picker__state pp-empty"><strong>Arquivados ainda não disponíveis</strong><span>${escapeHtml(typeof ARCHIVE_MIGRATION_HINT === 'string' ? ARCHIVE_MIGRATION_HINT : '')}</span></li>`;
+        updateProjectPickerCount(0);
+        return;
+    }
     if (projectPicker.rpcAvailable) {
-        const result = await supabaseClient.rpc('search_projects', {
+        const params = {
             p_term: projectPicker.term || null,
             p_type: projectPicker.type || null,
             p_city: projectPicker.city || null,
             p_sort: projectPicker.sort,
             p_limit: PROJECT_PAGE_SIZE,
             p_offset: offset,
-        });
+        };
+        let result = projectPicker.archiveSupported === false ? null : await supabaseClient.rpc('search_projects', { ...params, p_archived: projectPicker.archived });
+        //Banco sem a migração de arquivados: a busca antiga (sem a aba Arquivados)
+        if (!result || isMissingRpcError(result.error)) {
+            if (result) projectPicker.archiveSupported = false;
+            result = projectPicker.archived ? { data: [], error: null } : await supabaseClient.rpc('search_projects', params);
+        } else if (!result.error) projectPicker.archiveSupported = true;
         if (isMissingRpcError(result.error)) {
             projectPicker.rpcAvailable = false;
         } else {
@@ -291,10 +327,16 @@ async function fetchProjectPickerPageFallback(offset) {
     });
     if (projectPicker.type) query = query.eq('project_type', projectPicker.type);
     if (projectPicker.city) query = query.eq('city', projectPicker.city);
+    if (projectPicker.archiveSupported !== false) query = projectPicker.archived ? query.not('archived_at', 'is', null) : query.is('archived_at', null);
     if (projectPicker.sort === 'name') query = query.order('name', { ascending: true });
     else if (projectPicker.sort === 'city') query = query.order('city', { ascending: true, nullsFirst: false });
     query = query.order('updated_at', { ascending: projectPicker.sort === 'oldest' });
     const { data, error, count } = await query.range(offset, offset + PROJECT_PAGE_SIZE - 1);
+    if (error && projectPicker.archiveSupported !== false && /archived_at/.test(error.message || '')) {
+        projectPicker.archiveSupported = false;
+        if (projectPicker.archived) return { rows: [], total: 0, error: null };
+        return fetchProjectPickerPageFallback(offset);
+    }
     return { rows: data || [], total: count ?? (data?.length || 0), error };
 }
 
@@ -338,6 +380,13 @@ function showProjectPickerEmptyState(list) {
 
 function renderProjectPickerEmptyState() {
     const filtered = !!(projectPicker.term || projectPicker.type || projectPicker.city);
+    if (projectPicker.archived && !filtered) {
+        return `<li class="project-picker__state pp-empty">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder"></use></svg>
+            <strong>Nenhum projeto arquivado</strong>
+            <span>Projetos migrados para o modo Rede ou arquivados pelo menu do projeto aparecem aqui.</span>
+        </li>`;
+    }
     if (filtered) {
         return `<li class="project-picker__state pp-empty">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
@@ -409,7 +458,7 @@ function formatProjectSummary(summary) {
 function buildProjectPickerItem(project) {
     const isOpen = !!document.getElementById(project.id);
     const type = getProjectTypeMeta(project.project_type);
-    const place = [project.city, project.neighborhood].filter(Boolean);
+    const place = [project.city, project.neighborhood].filter(v => v && v !== 'undefined' && v !== 'null');
     const li = document.createElement('li');
     li.className = `pp-item${isOpen ? ' is-open' : ''}`;
     li.dataset.projectId = project.id;
@@ -421,7 +470,7 @@ function buildProjectPickerItem(project) {
     li.innerHTML = `
         <span class="pp-badge" title="${escapeHtml(type.hint || type.label)}">${escapeHtml(type.label || '—')}</span>
         <div class="pp-item__body">
-            <strong class="pp-item__name">${highlightProjectTerm(project.name)}</strong>
+            <strong class="pp-item__name">${highlightProjectTerm(project.name)}${project.concluded ? ' <em class="pp-tag pp-tag--net" title="Caixas, cabos e fusões já estão no modo Rede">Na rede</em>' : ''}${project.archived_at ? ` <em class="pp-tag" title="Arquivado em ${escapeHtml(new Date(project.archived_at).toLocaleDateString('pt-BR'))}">Arquivado</em>` : ''}</strong>
             <span class="pp-item__place">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg>
                 ${place.length ? place.map(p => highlightProjectTerm(p)).join(' · ') : 'Sem localização'}
@@ -431,6 +480,7 @@ function buildProjectPickerItem(project) {
         <div class="pp-item__side">
             <small title="${escapeHtml(new Date(project.updated_at).toLocaleString('pt-BR'))}">Atualizado ${escapeHtml(formatRelativeDate(project.updated_at))}${who}</small>
             <div class="pp-item__actions">
+                ${AppSession.canEdit && project.archived_at ? '<button type="button" class="btn btn-secondary btn-sm pp-unarchive-btn" title="Volta para a lista de projetos">Desarquivar</button>' : ''}
                 ${AppSession.canEdit ? `<button type="button" class="pp-delete-btn" title="Excluir projeto (vai para a lixeira)" aria-label="Excluir ${escapeHtml(project.name)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg></button>` : ''}
                 <button type="button" class="btn ${isOpen ? 'btn-secondary' : 'btn-success'} btn-sm load-project-btn" ${isOpen ? 'disabled' : ''}>${isOpen ? 'Aberto' : 'Abrir'}</button>
             </div>
@@ -441,12 +491,22 @@ function buildProjectPickerItem(project) {
         event?.stopPropagation();
     };
     li.querySelector('.load-project-btn').addEventListener('click', open);
+    li.querySelector('.pp-unarchive-btn')?.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        if (!(await unarchiveProject(project.id, project.name))) return;
+        li.remove();
+        projectPicker.items = projectPicker.items.filter(p => p.id !== project.id);
+        projectPicker.total = Math.max(0, projectPicker.total - 1);
+        updateProjectPickerCount(projectPicker.total);
+        if (!projectPicker.items.length) showProjectPickerEmptyState(document.getElementById('projectPickerList'));
+        loadProjectFacets();
+    });
     li.querySelector('.pp-delete-btn')?.addEventListener('click', (event) => {
         event.stopPropagation();
         deleteProjectFromPicker(project, li);
     });
     li.addEventListener('dblclick', (event) => {
-        if (!event.target.closest('.pp-delete-btn')) open(event);
+        if (!event.target.closest('.pp-delete-btn, .pp-unarchive-btn')) open(event);
     });
     li.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') open(event);
@@ -490,6 +550,10 @@ function handleProjectPickerKeys(event) {
 function setupProjectPicker() {
     renderProjectTypePicker();
     const input = document.getElementById('projectSearchInput');
+    document.getElementById('projectPickerTabs')?.addEventListener('click', (e) => {
+        const tab = e.target.closest('[data-archived]');
+        if (tab) setProjectPickerArchived(tab.dataset.archived === 'true');
+    });
     input.addEventListener('input', handleProjectSearchInput);
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {

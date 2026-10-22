@@ -138,7 +138,8 @@ Exportar PDF:
 --------------------------------------------------------------------------------------------------------------------------------------------
 6. Modo Rede (documentação da rede construída)
 A chave "Projeto | Rede" no topo troca o modo. No Projeto você planeja como sempre; no Rede fica a rede que já existe, uma por cidade.
-Enviar para a rede: no menu do projeto, "Concluir e enviar para a rede". Caixas, cabos e planos de fusão entram na rede da cidade como Existente; o projeto fica só para consulta.
+Migrar para o modo Rede: no menu do projeto, "Migrar para o modo Rede". Caixas, cabos e planos de fusão entram na rede da cidade como Existente; o projeto fica só para consulta e é arquivado.
+Arquivar: no menu do projeto, "Arquivar projeto" (sem mandar nada para a rede). Projetos arquivados saem da lista e ficam em Projeto → Abrir projeto → aba Arquivados, de onde podem ser abertos ou desarquivados.
 Rede por baixo do projeto: no modo Projeto, as caixas e cabos já construídos na cidade aparecem apagados. Clique numa caixa da rede (ou nela, desenhando um cabo) para trazê-la ao projeto como Existente; ao concluir, ela é atualizada na rede, sem duplicar. Liga/desliga em Projeto → "Rede da cidade por baixo".
 Menu "Rede":
 - + Cidade, + Marcador, Novo cliente, Importar clientes (planilha .xlsx ou .csv; baixe o modelo; a CTO e a porta são conferidas e o mesmo código atualiza o cliente), Nova ocorrência, Verificar a rede, Rompimento, Histórico, Exportar planilha e plano de fusão, Etiquetas QR das caixas.

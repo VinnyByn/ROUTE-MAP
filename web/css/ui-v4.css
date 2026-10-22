@@ -3461,3 +3461,13 @@ html[data-theme="dark"] .net-save-state[data-state="erro"] { color: #fca5a5; }
 #sidebar .net-type__item, #sidebar .net-type__more { border-left: 0; }
 #sidebar .folder-title[data-network-pending="true"] .net-save-state { display: none; }
 body.mode-rede #sidebar .folder-title[data-folder-type="Rede"] > .project-type-tag { display: none; }
+
+/* Projetos arquivados (js/projects/project-archive.js) */
+.pp-tabs { display: flex; gap: 4px; margin-bottom: 10px; padding: 3px; border-radius: 10px; background: var(--color-surface-muted); border: 1px solid var(--color-border-light); width: fit-content; }
+#loadProjectModal .pp-tab { min-height: 32px; padding: 4px 14px; border: 0; border-radius: 8px; background: none; box-shadow: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--color-text-muted); cursor: pointer; }
+#loadProjectModal .pp-tab.is-active { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 3px rgba(15, 23, 42, .15); }
+.pp-tab small { margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--color-surface-active); font-size: 11px; color: var(--color-text-muted); }
+.pp-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-style: normal; font-weight: 700; vertical-align: middle; background: var(--color-surface-active); color: var(--color-text-muted); }
+.pp-tag--net { background: color-mix(in srgb, #15803d 14%, var(--color-surface)); color: #15803d; }
+html[data-theme="dark"] .pp-tag--net { color: #4ade80; }
+#sidebar .folder-title[data-archived="true"] .folder-name-text { opacity: .75; }
