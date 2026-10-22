@@ -295,6 +295,15 @@ function formatNetworkCityName(value) {
 }
 
 const NETWORK_CITY_FOLDER_SUGGESTIONS = ['Backbone', 'Distribuição', 'Atendimento', 'POPs', 'Clientes empresariais'];
+const NETWORK_CITY_FOLDER_HINTS = {
+    Backbone: 'Cabos troncais e CEOs de passagem',
+    'Distribuição': 'Das CEOs até as CTOs',
+    Atendimento: 'CTOs e drops dos clientes',
+    POPs: 'OLT, DGO e equipamentos',
+    'Clientes empresariais': 'B2B, prediais e links dedicados',
+};
+
+const uiSvgIcon = (id) => `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"></use></svg>`;
 
 function ensureNetworkCityModal() {
     let modal = document.getElementById('networkCityModal');
@@ -304,20 +313,40 @@ function ensureNetworkCityModal() {
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content net-city-modal" role="dialog" aria-labelledby="networkCityTitle">
-            <h2 id="networkCityTitle">Nova cidade na rede</h2>
-            <div class="modal-body-content">
-                <p class="net-city-modal__hint">Cada cidade guarda a documentação da rede construída: caixas, cabos, planos de fusão e os clientes de cada porta. Ela se salva sozinha e só sai com confirmação.</p>
-                <label class="net-city-modal__label" for="networkCityInput">Cidade</label>
-                <input type="text" id="networkCityInput" placeholder="Ex.: Lavras" autocomplete="off" />
-                <p class="net-city-modal__status" id="networkCityStatus" aria-live="polite"></p>
-                <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades dos projetos"></div>
-                <span class="net-city-modal__label">Pastas para começar <small>(opcional; dá para criar depois)</small></span>
-                <div class="net-city-folders" id="networkCityFolders"></div>
-                <div class="net-city-folder-add">
-                    <input type="text" id="networkCityFolderInput" placeholder="Outra pasta (ex.: Bairro Centro)" autocomplete="off" />
-                    <button type="button" class="btn btn-secondary" data-net-city="add-folder">Adicionar</button>
+            <div class="modal-header-v2 rm-head rm-head--rede">
+                <span class="rm-head__icon">${uiSvgIcon('i-building')}</span>
+                <div class="rm-head__text">
+                    <h2 id="networkCityTitle">Nova cidade na rede</h2>
+                    <p class="rm-head__sub">A documentação da rede construída: caixas, cabos, fusões e os clientes de cada porta</p>
                 </div>
-                <div class="net-city-preview" id="networkCityPreview" aria-label="Como fica na barra lateral"></div>
+            </div>
+            <div class="modal-body-content rm-steps">
+                <ul class="net-city-perks">
+                    <li>${uiSvgIcon('i-save')}<span><b>Salva sozinha</b>a cada mudança</span></li>
+                    <li>${uiSvgIcon('i-lock')}<span><b>Só sai com confirmação</b>digitando o nome</span></li>
+                    <li>${uiSvgIcon('i-list')}<span><b>Pastas por tipo</b>com a quantidade</span></li>
+                </ul>
+                <section class="rm-step">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><label for="networkCityInput">Qual cidade?</label></header>
+                    <div class="net-city-input">
+                        ${uiSvgIcon('i-marker')}
+                        <input type="text" id="networkCityInput" placeholder="Digite o nome da cidade (ex.: Lavras)" autocomplete="off" />
+                    </div>
+                    <p class="net-city-modal__status" id="networkCityStatus" aria-live="polite"></p>
+                    <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades dos projetos"></div>
+                </section>
+                <section class="rm-step">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><span>Pastas para organizar</span><small>opcional · dá para criar depois</small></header>
+                    <div class="net-city-folders" id="networkCityFolders"></div>
+                    <div class="net-city-folder-add">
+                        <input type="text" id="networkCityFolderInput" placeholder="Outra pasta (ex.: Bairro Centro)" autocomplete="off" />
+                        <button type="button" class="btn btn-secondary" data-net-city="add-folder">${uiSvgIcon('i-folder-plus')} Adicionar</button>
+                    </div>
+                </section>
+                <section class="rm-step">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><span>Como fica na barra lateral</span></header>
+                    <div class="net-city-preview" id="networkCityPreview"></div>
+                </section>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-net-city="cancel">Cancelar</button>
@@ -349,21 +378,29 @@ async function pickNetworkCity() {
         const id = city ? getNetworkId(city) : '';
         const already = id && existing.get(id);
         status.className = `net-city-modal__status${already ? ' is-exists' : city ? ' is-ok' : ''}`;
-        status.textContent = already ? `${already} já existe: ela será aberta.` : city ? `Vai criar "Rede · ${city}".` : '';
+        status.innerHTML = already ? `${uiSvgIcon('i-folder')} <span><b>${esc(already)}</b> já existe: ela será aberta.</span>`
+            : city ? `${uiSvgIcon('i-check')} <span>Vai criar <b>Rede · ${esc(city)}</b></span>` : '';
         ok.textContent = already ? 'Abrir a cidade' : 'Cadastrar cidade';
         ok.disabled = !city;
-        foldersBox.innerHTML = folders.map((f, i) => `<button type="button" class="btn-chip net-city-folder${f.on ? ' is-on' : ''}" data-folder-i="${i}" aria-pressed="${f.on}">${esc(f.name)}</button>`).join('');
+        foldersBox.innerHTML = folders.map((f, i) => `<button type="button" class="btn-card net-city-folder${f.on ? ' is-on' : ''}" data-folder-i="${i}" aria-pressed="${f.on}">
+            <span class="net-city-folder__check" aria-hidden="true">${uiSvgIcon('i-check')}</span>
+            <span class="net-city-folder__text"><b>${esc(f.name)}</b><small>${esc(NETWORK_CITY_FOLDER_HINTS[f.name] || 'Pasta criada por você')}</small></span>
+        </button>`).join('');
         const chosen = folders.filter(f => f.on).map(f => f.name);
-        preview.innerHTML = city && !already ? `<small>Na barra lateral</small>
-            <div class="net-city-preview__root"><b>Rede · ${esc(city)}</b></div>
-            <div class="net-city-preview__auto">Por tipo (automático): POPs · CEOs · CTOs · Cabos · Clientes, com a quantidade</div>
-            ${chosen.map(n => `<div class="net-city-preview__folder">${esc(n)}</div>`).join('')}` : '';
+        const name = already || (city ? `Rede · ${city}` : 'Rede · (nome da cidade)');
+        preview.classList.toggle('is-placeholder', !city);
+        preview.innerHTML = `
+            <div class="net-city-preview__root">${uiSvgIcon('i-building')}<b>${esc(name)}</b><em>✓ Salva</em></div>
+            <div class="net-city-preview__types"><small>Por tipo · automático</small><span>POPs</span><span>CEOs</span><span>CTOs</span><span>Cabos</span><span>Clientes</span></div>
+            ${already ? '<div class="net-city-preview__folder is-muted">Abre a cidade como está</div>'
+                : chosen.length ? chosen.map(n => `<div class="net-city-preview__folder">${uiSvgIcon('i-folder')}${esc(n)}</div>`).join('')
+                : '<div class="net-city-preview__folder is-muted">Sem pastas: os itens ficam direto na cidade</div>'}`;
     };
     modal.style.display = 'flex';
     render();
     listNetworkCities().then(cities => {
         const free = cities.filter(c => !existing.has(getNetworkId(c)));
-        list.innerHTML = free.length ? `<p class="net-city-modal__hint">Cidades dos projetos, ainda sem rede:</p>${free.map(c => `<button type="button" class="btn-chip net-city" data-city="${esc(c)}">${esc(c)}</button>`).join('')}` : '';
+        list.innerHTML = free.length ? `<small class="net-city-list__label">Cidades dos seus projetos, ainda sem rede</small>${free.map(c => `<button type="button" class="btn-chip net-city" data-city="${esc(c)}">${uiSvgIcon('i-marker')}${esc(c)}</button>`).join('')}` : '';
     }).catch(() => { list.innerHTML = ''; });
     setTimeout(() => input.focus(), 50);
     return new Promise(resolve => {
