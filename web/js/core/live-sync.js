@@ -192,6 +192,7 @@ function handleLiveMessage(projectId, msg) {
     if (msg.t === 'saved') {
         const root = document.getElementById(projectId)?.closest('.folder');
         if (root && Number.isFinite(msg.revision)) setProjectRevision(root, msg.revision);
+        if (typeof onNetworkSavedElsewhere === 'function') onNetworkSavedElsewhere(projectId);
         return;
     }
     if (msg.t === 'ops') queueLiveOps(projectId, msg);

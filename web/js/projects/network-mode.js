@@ -86,7 +86,12 @@ async function leaveCurrentWorkspace() {
     const roots = getOpenProjectRoots();
     if (!roots.length) return true;
     const editable = roots.filter(root => AppSession.canEdit && !isPendingNetworkRoot(root) && !isProjectConcluded(getRootId(root)));
-    if (editable.length) {
+    //A rede salva sozinha: grava o que faltou, sem perguntar (js/network/network-sidebar.js)
+    if (appMode === 'rede' && typeof flushNetworkAutosave === 'function') {
+        for (const root of roots.filter(r => isNetworkRoot(r) && !isPendingNetworkRoot(r))) {
+            if (!(await flushNetworkAutosave(root))) return false;
+        }
+    } else if (editable.length) {
         const names = editable.map(root => `"${root.querySelector(':scope > .folder-title')?.dataset.folderName || 'Projeto'}"`).join(', ');
         const choice = await showChoice({
             title: appMode === 'rede' ? 'Ir para o modo Projeto' : 'Ir para o modo Rede',
@@ -279,6 +284,16 @@ async function listNetworkCities() {
     return [...new Set((rows.data || []).map(r => r.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
+//Nome da cidade arrumado: espaços e maiúsculas ("são joão del rei" → "São João del Rei")
+function formatNetworkCityName(value) {
+    const small = new Set(['de', 'da', 'do', 'das', 'dos', 'del', 'e']);
+    return String(value || '').trim().replace(/\s+/g, ' ').split(' ')
+        .map((w, i) => (i && small.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toLocaleUpperCase('pt-BR') + w.slice(1)))
+        .join(' ');
+}
+
+const NETWORK_CITY_FOLDER_SUGGESTIONS = ['Backbone', 'Distribuição', 'Atendimento', 'POPs', 'Clientes empresariais'];
+
 function ensureNetworkCityModal() {
     let modal = document.getElementById('networkCityModal');
     if (modal) return modal;
@@ -289,10 +304,18 @@ function ensureNetworkCityModal() {
         <div class="modal-content net-city-modal" role="dialog" aria-labelledby="networkCityTitle">
             <h2 id="networkCityTitle">Nova cidade na rede</h2>
             <div class="modal-body-content">
-                <p class="net-city-modal__hint">Cada cidade tem a sua rede documentada: tudo o que já foi construído e os clientes de cada caixa. Dentro dela você cria as pastas que quiser (bairros, POPs, regiões).</p>
-                <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades dos projetos"></div>
-                <label class="net-city-modal__other" for="networkCityInput">Nome da cidade</label>
+                <p class="net-city-modal__hint">Cada cidade guarda a documentação da rede construída: caixas, cabos, planos de fusão e os clientes de cada porta. Ela se salva sozinha e só sai com confirmação.</p>
+                <label class="net-city-modal__label" for="networkCityInput">Cidade</label>
                 <input type="text" id="networkCityInput" placeholder="Ex.: Lavras" autocomplete="off" />
+                <p class="net-city-modal__status" id="networkCityStatus" aria-live="polite"></p>
+                <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades dos projetos"></div>
+                <span class="net-city-modal__label">Pastas para começar <small>(opcional; dá para criar depois)</small></span>
+                <div class="net-city-folders" id="networkCityFolders"></div>
+                <div class="net-city-folder-add">
+                    <input type="text" id="networkCityFolderInput" placeholder="Outra pasta (ex.: Bairro Centro)" autocomplete="off" />
+                    <button type="button" class="btn btn-secondary" data-net-city="add-folder">Adicionar</button>
+                </div>
+                <div class="net-city-preview" id="networkCityPreview" aria-label="Como fica na barra lateral"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-net-city="cancel">Cancelar</button>
@@ -303,48 +326,97 @@ function ensureNetworkCityModal() {
     return modal;
 }
 
-//Escolhe o nome da cidade nova: sugere as cidades dos projetos que ainda não estão na rede
+//Escolhe a cidade nova e as pastas iniciais: { city, folders, open } (open: a cidade já existe, só abrir)
 async function pickNetworkCity() {
     const modal = ensureNetworkCityModal();
     const list = modal.querySelector('#networkCityList');
     const input = modal.querySelector('#networkCityInput');
+    const status = modal.querySelector('#networkCityStatus');
+    const foldersBox = modal.querySelector('#networkCityFolders');
+    const folderInput = modal.querySelector('#networkCityFolderInput');
+    const preview = modal.querySelector('#networkCityPreview');
+    const ok = modal.querySelector('[data-net-city="ok"]');
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    const folders = NETWORK_CITY_FOLDER_SUGGESTIONS.map(name => ({ name, on: false }));
+    const existing = new Map(getOpenProjectRoots().filter(isNetworkRoot).map(r => [getRootId(r), r.querySelector(':scope > .folder-title').dataset.folderName]));
     input.value = '';
+    folderInput.value = '';
     list.innerHTML = '';
+    const render = () => {
+        const city = formatNetworkCityName(input.value);
+        const id = city ? getNetworkId(city) : '';
+        const already = id && existing.get(id);
+        status.className = `net-city-modal__status${already ? ' is-exists' : city ? ' is-ok' : ''}`;
+        status.textContent = already ? `${already} já existe: ela será aberta.` : city ? `Vai criar "Rede · ${city}".` : '';
+        ok.textContent = already ? 'Abrir a cidade' : 'Cadastrar cidade';
+        ok.disabled = !city;
+        foldersBox.innerHTML = folders.map((f, i) => `<button type="button" class="btn-chip net-city-folder${f.on ? ' is-on' : ''}" data-folder-i="${i}" aria-pressed="${f.on}">${esc(f.name)}</button>`).join('');
+        const chosen = folders.filter(f => f.on).map(f => f.name);
+        preview.innerHTML = city && !already ? `<small>Na barra lateral</small>
+            <div class="net-city-preview__root"><b>Rede · ${esc(city)}</b></div>
+            <div class="net-city-preview__auto">Por tipo (automático): POPs · CEOs · CTOs · Cabos · Clientes, com a quantidade</div>
+            ${chosen.map(n => `<div class="net-city-preview__folder">${esc(n)}</div>`).join('')}` : '';
+    };
     modal.style.display = 'flex';
+    render();
     listNetworkCities().then(cities => {
-        const free = cities.filter(c => !document.getElementById(getNetworkId(c)));
-        list.innerHTML = free.length ? `<p class="net-city-modal__hint">Cidades dos projetos:</p>${free.map(c => `<button type="button" class="net-city" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}` : '';
+        const free = cities.filter(c => !existing.has(getNetworkId(c)));
+        list.innerHTML = free.length ? `<p class="net-city-modal__hint">Cidades dos projetos, ainda sem rede:</p>${free.map(c => `<button type="button" class="btn-chip net-city" data-city="${esc(c)}">${esc(c)}</button>`).join('')}` : '';
     }).catch(() => { list.innerHTML = ''; });
     setTimeout(() => input.focus(), 50);
     return new Promise(resolve => {
-        const finish = (city) => {
+        const finish = (value) => {
             modal.style.display = 'none';
             modal.removeEventListener('click', onClick);
+            modal.removeEventListener('input', render);
             document.removeEventListener('keydown', onKey, true);
-            resolve(city ? city.trim() : '');
+            resolve(value);
+        };
+        const result = () => {
+            const city = formatNetworkCityName(input.value);
+            return city ? { city, folders: folders.filter(f => f.on).map(f => f.name), open: existing.has(getNetworkId(city)) } : null;
+        };
+        const addFolder = () => {
+            const name = folderInput.value.trim().replace(/\s+/g, ' ');
+            if (!name) return;
+            const same = folders.find(f => f.name.toLowerCase() === name.toLowerCase());
+            if (same) same.on = true; else folders.push({ name, on: true });
+            folderInput.value = '';
+            render();
+            folderInput.focus();
         };
         const onClick = (e) => {
             const pick = e.target.closest('.net-city');
-            if (pick) { input.value = pick.dataset.city; input.focus(); return; }
+            if (pick) { input.value = pick.dataset.city; render(); input.focus(); return; }
+            const chip = e.target.closest('[data-folder-i]');
+            if (chip) { const f = folders[Number(chip.dataset.folderI)]; f.on = !f.on; render(); return; }
             const action = e.target.closest('[data-net-city]')?.dataset.netCity;
-            if (action === 'cancel' || e.target === modal) finish('');
-            else if (action === 'ok' && input.value.trim()) finish(input.value);
+            if (action === 'add-folder') { addFolder(); return; }
+            if (action === 'cancel' || e.target === modal) finish(null);
+            else if (action === 'ok' && result()) finish(result());
             else if (action === 'ok') input.focus();
         };
         const onKey = (e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(''); }
-            else if (e.key === 'Enter' && e.target === input && input.value.trim()) { e.preventDefault(); finish(input.value); }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); }
+            else if (e.key === 'Enter' && e.target === folderInput) { e.preventDefault(); addFolder(); }
+            else if (e.key === 'Enter' && e.target === input && result()) { e.preventDefault(); finish(result()); }
         };
         modal.addEventListener('click', onClick);
+        modal.addEventListener('input', render);
         document.addEventListener('keydown', onKey, true);
     });
 }
 
-//"+ Cidade": cadastra a cidade na rede (vazia) e deixa selecionada para criar as pastas dela
-async function createNetworkCity(name = '') {
+//"+ Cidade": cadastra a cidade na rede (com as pastas escolhidas) e deixa selecionada
+async function createNetworkCity(name = '', { folders = [] } = {}) {
     if (!requireEdit('cadastrar cidades na rede')) return null;
-    const city = name || await pickNetworkCity();
-    if (!city) return null;
+    let city = formatNetworkCityName(name);
+    if (!city) {
+        const picked = await pickNetworkCity();
+        if (!picked) return null;
+        city = picked.city;
+        folders = picked.folders;
+    }
     const id = getNetworkId(city);
     if (document.getElementById(id)) {
         showToast('Cidade já cadastrada', `"${city}" já está na rede.`, 'progress');
@@ -357,7 +429,11 @@ async function createNetworkCity(name = '') {
         await showNetworkCity(city);
         return document.getElementById(id)?.closest('.folder') || null;
     }
-    rebuildSidebarFromJSON([emptyNetworkData(city).sidebar], document.getElementById('sidebar'));
+    const data = emptyNetworkData(city);
+    data.sidebar.children = folders.map((folderName, i) => ({
+        id: `folder-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`, name: folderName, isProject: false, type: 'folder', children: [],
+    }));
+    rebuildSidebarFromJSON([data.sidebar], document.getElementById('sidebar'));
     updateSidebarEmptyState();
     const root = document.getElementById(id).closest('.folder');
     try {
@@ -369,7 +445,10 @@ async function createNetworkCity(name = '') {
     }
     if (typeof liveSyncJoin === 'function') liveSyncJoin(id);
     setActiveFolder(id);
-    showToast(`Rede · ${city}`, 'Cidade cadastrada. Use o menu ⋮ dela para criar as pastas.');
+    if (document.getElementById(id)?.classList.contains('hidden')) toggleFolder(id);
+    showToast(`Rede · ${city}`, folders.length
+        ? `Cidade cadastrada com ${folders.length} pasta${folders.length === 1 ? '' : 's'}. Ela se salva sozinha.`
+        : 'Cidade cadastrada. Crie pastas pelo menu ⋮ dela ou comece com + Marcador. Ela se salva sozinha.');
     return root;
 }
 

@@ -372,8 +372,15 @@ function serializeMarker(markerInfo) {
         popEquipment: markerInfo.type === 'POP' && markerInfo.popEquipment ? markerInfo.popEquipment : undefined,
         pole: markerInfo.type === 'POSTE' && markerInfo.pole ? markerInfo.pole : undefined,
         asBuilt: markerInfo.asBuilt || undefined, //Na rede: de qual projeto veio e quando (js/projects/network-mode.js)
+        alsoIn: serializeAlsoIn(markerInfo),
         position: { lat: position.lat(), lng: position.lng() }
     };
+}
+
+//Outras pastas onde o item aparece como atalho, sem duplicar no mapa (js/network/network-sidebar.js)
+function serializeAlsoIn(info) {
+    const list = (info.alsoIn || []).filter(f => f && f !== info.folderId && document.getElementById(f));
+    return list.length ? list : undefined;
 }
 
 //Identificador permanente do marcador (usado para ligar cliente → CTO)
@@ -419,7 +426,8 @@ function serializeCable(cableInfo) {
         endAnchorMarkerName: cableInfo.endAnchorMarkerName || null,
         startAnchorMarkerFolderId: cableInfo.startAnchorMarkerFolderId || null,
         endAnchorMarkerFolderId: cableInfo.endAnchorMarkerFolderId || null,
-        asBuilt: cableInfo.asBuilt || undefined
+        asBuilt: cableInfo.asBuilt || undefined,
+        alsoIn: serializeAlsoIn(cableInfo)
     };
 }
 

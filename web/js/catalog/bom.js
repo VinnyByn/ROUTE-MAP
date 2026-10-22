@@ -714,6 +714,7 @@ function refreshBomAfterProjectChange() {
     projectBoms[projectId] = JSON.parse(JSON.stringify(bomState));
     if (typeof scheduleProjectUndoSnapshot === 'function') scheduleProjectUndoSnapshot(projectId);
     if (typeof liveSyncLocalChange === 'function') liveSyncLocalChange(projectId);
+    if (typeof scheduleNetworkAutosave === 'function') scheduleNetworkAutosave(projectId);
     if (typeof scheduleNetworkOverlaysRefresh === 'function') scheduleNetworkOverlaysRefresh();
     const materialModal = document.getElementById('materialModal');
     if (materialModal && materialModal.style.display === 'flex') {

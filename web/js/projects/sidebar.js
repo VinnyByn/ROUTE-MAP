@@ -83,22 +83,30 @@ function describeSidebarFolderCounts(counts, limit = Infinity) {
 }
 
 function updateSidebarCounts() {
-    //Itens de cada pasta (direto nela), contados uma vez só
+    //Itens de cada pasta (direto nela, ou como atalho), contados uma vez só em cada pasta
     const direct = new Map();
-    const bump = (folderId, key) => {
-        if (!direct.has(folderId)) direct.set(folderId, {});
-        const c = direct.get(folderId);
-        c[key] = (c[key] || 0) + 1;
+    const add = (folderId, key, item) => {
+        if (!direct.has(folderId)) direct.set(folderId, []);
+        direct.get(folderId).push([key, item]);
     };
-    markers.forEach(m => bump(m.folderId, m.type));
-    savedCables.forEach(c => bump(c.folderId, 'cabo'));
-    savedPolygons.forEach(p => bump(p.folderId, 'polígono'));
+    const place = (item, key) => {
+        add(item.folderId, key, item);
+        (item.alsoIn || []).forEach(f => { if (f !== item.folderId) add(f, key, item); });
+    };
+    markers.forEach(m => place(m, m.type));
+    savedCables.forEach(c => place(c, 'cabo'));
+    savedPolygons.forEach(p => add(p.folderId, 'polígono', p));
     document.querySelectorAll('#sidebar .folder-title').forEach(title => {
         const ul = title.nextElementSibling;
-        const count = ul ? ul.querySelectorAll('.ge-pro-item').length : 0;
         const badge = title.querySelector(':scope > .folder-count');
         const counts = {};
-        if (ul) [ul, ...ul.querySelectorAll('ul.subfolders')].forEach(sub => Object.entries(direct.get(sub.id) || {}).forEach(([k, n]) => { counts[k] = (counts[k] || 0) + n; }));
+        const seen = new Set();
+        if (ul) [ul, ...ul.querySelectorAll('ul.subfolders')].forEach(sub => (direct.get(sub.id) || []).forEach(([k, item]) => {
+            if (seen.has(item)) return;
+            seen.add(item);
+            counts[k] = (counts[k] || 0) + 1;
+        }));
+        const count = seen.size;
         const detail = describeSidebarFolderCounts(counts);
         //Só mexe no texto quando muda (o observador da sidebar reage a qualquer troca de texto)
         const text = count ? String(count) : '';
@@ -118,7 +126,7 @@ function updateSidebarCounts() {
             if (meta.textContent !== short) meta.textContent = short;
             meta.classList.toggle('is-empty', !count);
         }
-        title.classList.toggle('is-empty-folder', !ul || !ul.querySelector('.folder-wrapper, .ge-pro-item'));
+        title.classList.toggle('is-empty-folder', !ul || !ul.querySelector('.folder-wrapper, .ge-pro-item, .net-link-item'));
         if (title.dataset.isProject === 'true') {
             const tag = title.querySelector(':scope > .project-type-tag');
             const meta = typeof getProjectTypeMeta === 'function' ? getProjectTypeMeta(title.dataset.folderType || 'TCR') : { label: title.dataset.folderType, color: '#64748b' };
@@ -127,6 +135,8 @@ function updateSidebarCounts() {
             if (title.style.getPropertyValue('--project-color') !== meta.color) title.style.setProperty('--project-color', meta.color);
         }
     });
+    //Rede: pastas por tipo e atalhos (js/network/network-sidebar.js)
+    if (typeof renderNetworkSidebarExtras === 'function') renderNetworkSidebarExtras();
 }
 
 // ---------------------------------------------------------------
@@ -152,6 +162,14 @@ function getSidebarEntity(element) {
         const client = markers.find(m => m.listItem === dropRow.parentElement);
         return client ? { kind: 'drop', info: client, name: `Drop · ${client.name}`, row: dropRow } : null;
     }
+    //Atalho de um item em outra pasta, ou a lista "Por tipo" da rede (js/network/network-sidebar.js)
+    const linkRow = element.closest('.net-link-item, .net-type__item');
+    if (linkRow) {
+        const uid = linkRow.dataset.linkUid || linkRow.dataset.uid;
+        const info = markers.find(m => m.uid === uid) || savedCables.find(c => c.uid === uid);
+        if (!info) return null;
+        return { kind: savedCables.includes(info) ? 'cable' : 'marker', info, name: info.name, row: linkRow, linkFolderId: linkRow.dataset.linkFolder || null };
+    }
     const li = element.closest('.ge-pro-item');
     if (!li) return null;
     const marker = markers.find(m => m.listItem === li);
@@ -164,7 +182,8 @@ function getSidebarEntity(element) {
 }
 
 function getEntityVisibilityCheckbox(entity) {
-    return entity.row.querySelector(':scope > .ge-vis-checkbox');
+    return entity.row.querySelector(':scope > .ge-vis-checkbox')
+        || (entity.info?.listItem || entity.info?.item)?.querySelector(':scope > .ge-vis-checkbox') || null;
 }
 
 // ---------------------------------------------------------------
@@ -177,6 +196,7 @@ const SB_ICONS = {
     edit: 'edit', rename: 'edit', open: 'edit', view: 'eye', 'new-folder': 'folder-plus', style: 'palette',
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
+    'link-folders': 'folder-plus', unlink: 'folder-x',
     'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', conclude: 'check', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
 };
 
@@ -220,10 +240,14 @@ function buildSidebarMenuItems(entity) {
             items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
             items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
             items.push({ action: 'export-fusion', label: 'Exportar plano de fusão (PDF)', hint: 'Todas as caixas com as fusões' });
-            items.push({ action: 'close', label: 'Fechar projeto', hint: 'Continua salvo no banco' });
-            if (canEdit) items.push({ action: 'delete', label: 'Excluir projeto', hint: 'Vai para a lixeira por 30 dias', danger: true });
+            //A rede da cidade fica sempre na lista (salva sozinha); excluir pede o nome da cidade
+            if (!isNetwork) items.push({ action: 'close', label: 'Fechar projeto', hint: 'Continua salvo no banco' });
+            if (canEdit) items.push(isNetwork
+                ? { action: 'delete', label: 'Excluir cidade da rede', hint: 'Pede o nome da cidade; fica 30 dias na lixeira', danger: true }
+                : { action: 'delete', label: 'Excluir projeto', hint: 'Vai para a lixeira por 30 dias', danger: true });
         } else if (canEdit) {
-            items.push({ action: 'delete', label: 'Excluir pasta', danger: true });
+            const inNetwork = typeof isNetworkProjectId === 'function' && isNetworkProjectId(entity.title.closest('#sidebar > .folder')?.querySelector(':scope > .folder-title')?.dataset.folderId);
+            items.push({ action: 'delete', label: 'Excluir pasta', hint: inNetwork ? 'Pergunta o que fazer com o que está dentro' : '', danger: true });
         }
     } else {
         const labels = { marker: 'marcador', cable: 'cabo', polygon: 'polígono' };
@@ -245,6 +269,10 @@ function buildSidebarMenuItems(entity) {
         if (entity.kind === 'marker' && entity.info.type === 'POP') items.push({ action: 'pop-equipment', label: 'Cadastro de equipamentos', hint: 'OLTs, placas, DGOs e switches' });
         if (canEdit && entity.kind === 'polygon') items.push({ action: 'auto-design', label: 'Gerar pré-projeto', hint: 'CTOs e cabos pelas ruas da área' });
         if (entity.kind === 'cable') items.push({ action: 'route', label: 'Ver rota', hint: 'Por onde as fibras seguem, pelas fusões' });
+        if (canEdit && typeof isNetworkItem === 'function' && isNetworkItem(entity.info)) {
+            items.push({ action: 'link-folders', label: 'Também em outras pastas…', hint: 'Aparece nelas sem duplicar no mapa' });
+            if (entity.linkFolderId) items.push({ action: 'unlink', label: 'Tirar desta pasta', hint: 'Continua na pasta dele e no mapa' });
+        }
         if (canEdit && entity.kind === 'cable') items.push({ action: 'conduit', icon: 'cable', label: 'Trecho tubulado', hint: 'Marca o que vai em duto, sem ferragens de poste' });
         items.push({ action: 'focus', label: 'Centralizar no mapa' });
         items.push(visibility);
@@ -461,10 +489,21 @@ function handleSidebarMenuAction(action) {
     case 'history':
         openProjectHistory(entity.folderId, entity.container, entity.name);
         break;
-    case 'delete':
-        if (kind === 'project') deleteProject(entity.folderId, entity.container, entity.name);
+    case 'delete': {
+        const rootId = (entity.container || entity.row)?.closest?.('#sidebar > .folder')?.querySelector(':scope > .folder-title')?.dataset.folderId;
+        const inNetwork = typeof isNetworkProjectId === 'function' && isNetworkProjectId(rootId);
+        if (kind === 'project' && inNetwork) confirmDeleteNetworkCity(entity);
+        else if (kind === 'project') deleteProject(entity.folderId, entity.container, entity.name);
+        else if (kind === 'folder' && inNetwork) confirmDeleteNetworkFolder(entity);
         else if (kind === 'folder') deleteFolder(entity.folderId, entity.container, entity.name);
         else deleteSidebarMapItem(entity);
+        break;
+    }
+    case 'link-folders':
+        openNetworkLinkFolders(info);
+        break;
+    case 'unlink':
+        removeNetworkLink(info, entity.linkFolderId);
         break;
     case 'open':
         if (kind === 'marker') {
@@ -768,7 +807,7 @@ function handleSidebarDragOver(event) {
     autoScrollSidebar(event);
     const target = computeSidebarDropTarget(event);
     sidebarDnd.target = target;
-    event.dataTransfer.dropEffect = target ? 'move' : 'none';
+    event.dataTransfer.dropEffect = target ? (event.ctrlKey || event.altKey ? 'copy' : 'move') : 'none';
     showSidebarDropFeedback(target);
 }
 
@@ -779,6 +818,11 @@ function handleSidebarDrop(event) {
     const target = sidebarDnd.target || computeSidebarDropTarget(event);
     clearSidebarDropState();
     if (!target || !AppSession.canEdit) return;
+    //Rede: com Ctrl ou Alt, o item também aparece na pasta (atalho), sem sair da dele (js/network/network-sidebar.js)
+    if ((event.ctrlKey || event.altKey) && typeof addNetworkLinkFromDrop === 'function' && addNetworkLinkFromDrop(dragged, target)) {
+        window.dropWasSuccessful = true;
+        return;
+    }
     const sourceProject = window.draggedItemSourceProject;
     if (target.mode === 'before') target.ref.before(dragged);
     else if (target.mode === 'after') target.ref.after(dragged);

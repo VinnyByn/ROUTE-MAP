@@ -1447,6 +1447,14 @@ function deleteFolder(folderId, folderElement, folderName) {
     if (!requireEdit('excluir pastas')) return;
     const message = `Tem certeza que deseja excluir a pasta "${folderName}" e todos os seus conteúdos? Esta ação não pode ser desfeita.`;
     showConfirm('Excluir Pasta', message, () => {
+        removeFolderAndContents(folderId, folderElement);
+        showAlert("Sucesso", `Pasta "${folderName}" excluída com sucesso.`);
+    });
+}
+
+//Remove a pasta com tudo o que está dentro (já confirmado)
+function removeFolderAndContents(folderId, folderElement) {
+    {
         //Identifica hierarquia de pastas a serem removidas
         const folderIdsToDelete = getAllDescendantFolderIds(folderId);
         //Remoção dos marcadores
@@ -1466,8 +1474,7 @@ function deleteFolder(folderId, folderElement, folderName) {
         if (folderIdsToDelete.includes(activeFolderId)) {
             activeFolderId = null;
         }
-        showAlert("Sucesso", `Pasta "${folderName}" excluída com sucesso.`);
-    });
+    }
 }
 
 
@@ -3971,6 +3978,13 @@ function handleVisibilityToggle(element, explicitVisible) {
         if (folderIdsToToggle.includes(polygon.folderId)) {
             polygon.polygonObject.setVisible(newVisibility);
         }
+    });
+    //Itens que aparecem nessas pastas como atalho (js/network/network-sidebar.js) seguem a pasta
+    [...markers, ...savedCables].forEach(info => {
+        if (!info.alsoIn?.some(id => folderIdsToToggle.includes(id)) || folderIdsToToggle.includes(info.folderId)) return;
+        (info.marker || info.polyline)?.setVisible(newVisibility);
+        const cb = (info.listItem || info.item)?.querySelector(':scope > .ge-vis-checkbox');
+        if (cb) { cb.checked = newVisibility; cb.dataset.visible = String(newVisibility); }
     });
     element.dataset.visible = String(newVisibility);
     if (element.type === 'checkbox') {
