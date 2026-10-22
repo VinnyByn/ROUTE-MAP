@@ -3721,7 +3721,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         && row.data.cables[0]?.status === 'Existente' && row.data.cables[0]?.width === 2 && !row.data.polygons.length
         && row.data.sidebar.children.length === 1 && row.data.sidebar.children[0].id === 'projNA' && !row.data.sidebar.children[0].isProject;
       out.concluded = !!window.__fakeDb.projects.projNA.data.concluded && rootA.querySelector('.folder-title').dataset.concluded === 'true'
-        && /Concluído/.test(rootA.querySelector('.project-type-tag')?.textContent || (updateSidebarCounts(), rootA.querySelector('.project-type-tag').textContent));
+        && (updateSidebarCounts(), /Na rede · Arquivado/.test(rootA.querySelector('.project-type-tag').textContent))
+        && !!window.__fakeDb.projects.projNA.archived_at && projectConclusions.projNA.archived === true;
       setActiveFolder('projNA');
       out.readonly = requireEdit('mexer') === false && await persistProject(rootA).then(() => false, () => true)
         && !buildSidebarMenuItems(getSidebarEntity(rootA.querySelector('.folder-title'))).some(i => i.action === 'conclude' || i.action === 'edit');
@@ -3751,8 +3752,9 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.city = !!perdoes && window.__fakeDb.projects[getNetworkId('Perdões')]?.project_type === 'Rede'
         && buildSidebarMenuItems(getSidebarEntity(perdoes.querySelector('.folder-title'))).some(i => i.action === 'new-folder');
       await setAppMode('projeto');
-      out.back = appMode === 'projeto' && !document.getElementById(netId) && !!document.getElementById('projNA') && !!document.getElementById('projNB')
-        && isProjectConcluded('projNA') && document.querySelector('.sidebar-header h3').textContent === 'Projetos';
+      //Projetos migrados para a rede ficam arquivados: não voltam abertos
+      out.back = appMode === 'projeto' && !document.getElementById(netId) && !document.getElementById('projNA') && !document.getElementById('projNB')
+        && document.querySelector('.sidebar-header h3').textContent === 'Projetos';
       //Voltando sem cidade: as duas cidades aparecem só pelo nome; abrir uma carrega com tudo oculto no mapa
       await setAppMode('rede');
       const pending = [...document.querySelectorAll('#sidebar > .folder > .folder-title[data-network-pending="true"]')].map(t => t.dataset.folderName).join('|');
@@ -4037,11 +4039,11 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       rebuildSidebarFromJSON([{ id: 'projNC', name: 'Bairro C', city: 'Lavras', type: 'TCR', isProject: true, children: [] }], sidebar);
       setActiveFolder('projNC');
       await refreshNetworkLayer();
-      const layerTitles = networkLayer.overlays.filter(o => o.getTitle).map(o => o.getTitle());
+      const layerTitles = networkLayer.overlays.filter(o => o.getTitle).map(o => o.getTitle()).filter(t => /CTO-REDE/.test(t));
       const item = window.__fakeDb.projects[netId].data.markers.find(m => m.uid === 'mk_net_only');
       const used = useNetworkBoxInProject(item, 'Lavras', { quiet: true });
       await refreshNetworkLayer();
-      const after = networkLayer.overlays.filter(o => o.getTitle).length;
+      const after = networkLayer.overlays.filter(o => o.getTitle && /CTO-REDE/.test(o.getTitle())).length;
       await persistProject(document.getElementById('projNC').closest('.folder'));
       await concludeProject('projNC');
       const finalMarkers = window.__fakeDb.projects[netId].data.markers;
@@ -4051,6 +4053,27 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       setNetworkLayerEnabled(false);
       out.layerOff = !networkLayer.overlays.length && document.getElementById('networkLayerToggle').getAttribute('aria-checked') === 'false';
       setNetworkLayerEnabled(true);
+      //Arquivar (sem migrar): sai da tela e da lista de projetos, aparece em Arquivados e pode ser desarquivado
+      showChoice = async (opts) => (opts.choices.some(c => c.value === 'archive') ? 'archive' : 'cancel');
+      rebuildSidebarFromJSON([{ id: 'projNZ', name: 'Bairro Z', city: 'Lavras', type: 'TCR', isProject: true, children: [] }], sidebar);
+      await persistProject(document.getElementById('projNZ').closest('.folder'));
+      const zMenu = buildSidebarMenuItems(getSidebarEntity(document.querySelector('.folder-title[data-folder-id="projNZ"]'))).map(i => `${i.action}:${i.label}`);
+      await archiveProject('projNZ');
+      const zArchived = !!window.__fakeDb.projects.projNZ.archived_at && !document.getElementById('projNZ');
+      openProjectPicker();
+      await new Promise(r => setTimeout(r, 120));
+      const activeNames = [...document.querySelectorAll('#projectPickerList .pp-item')].map(li => li.dataset.projectId).join();
+      document.querySelector('#projectPickerTabs [data-archived="true"]').click();
+      await new Promise(r => setTimeout(r, 120));
+      const archivedNames = [...document.querySelectorAll('#projectPickerList .pp-item')].map(li => li.dataset.projectId).sort().join();
+      const netTag = /Na rede/.test(document.querySelector('#projectPickerList .pp-item[data-project-id="projNA"]')?.textContent || '');
+      document.querySelector('#projectPickerList .pp-item[data-project-id="projNZ"] .pp-unarchive-btn').click();
+      await new Promise(r => setTimeout(r, 120));
+      const unarchived = !window.__fakeDb.projects.projNZ.archived_at && !document.querySelector('#projectPickerList .pp-item[data-project-id="projNZ"]');
+      closeProjectPicker();
+      out.archiveDetail = [zMenu.includes('conclude:Migrar para o modo Rede'), zMenu.includes('archive:Arquivar projeto'), zArchived, !/projNZ|projNA/.test(activeNames),
+        archivedNames.includes('projNA') && archivedNames.includes('projNZ'), netTag, unarchived].join();
+      out.archive = out.archiveDetail === 'true,true,true,true,true,true,true';
       out.merge = (() => {
         const m = mergeProjectIntoNetwork(emptyNetworkData('X'), { sidebar: { id: 'p', name: 'P', isProject: true, children: [{ id: 'f', name: 'F', isProject: false, children: [] }] },
           markers: [{ uid: 'a', folderId: 'f', type: 'CTO', ctoStatus: 'Troca' }], cables: [], polygons: [] }, { projectId: 'p', projectName: 'P', at: 'now', folderName: 'P · ok' });

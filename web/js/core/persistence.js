@@ -260,6 +260,7 @@ async function openProjectFromDatabase(projectId, button, { silent = false } = {
     }
     if (typeof rememberLastProject === 'function') rememberLastProject(data.id);
     if (typeof liveSyncJoin === 'function') liveSyncJoin(data.id);
+    if (typeof refreshProjectArchiveState === 'function') refreshProjectArchiveState(data.id);
 }
 
 /*Limpa a barra lateral e o mapa, removendo todos os elementos visuais*/

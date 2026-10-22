@@ -130,7 +130,7 @@ function updateSidebarCounts() {
         if (title.dataset.isProject === 'true') {
             const tag = title.querySelector(':scope > .project-type-tag');
             const meta = typeof getProjectTypeMeta === 'function' ? getProjectTypeMeta(title.dataset.folderType || 'TCR') : { label: title.dataset.folderType, color: '#64748b' };
-            const label = `${meta.label || ''}${title.dataset.concluded === 'true' ? ' · Concluído' : ''}`;
+            const label = `${meta.label || ''}${title.dataset.concluded === 'true' ? ' · Na rede' : ''}${title.dataset.archived === 'true' ? ' · Arquivado' : ''}`;
             if (tag && tag.textContent !== label) tag.textContent = label;
             if (title.style.getPropertyValue('--project-color') !== meta.color) title.style.setProperty('--project-color', meta.color);
         }
@@ -197,7 +197,7 @@ const SB_ICONS = {
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
     'link-folders': 'folder-plus', unlink: 'folder-x',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', conclude: 'check', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
+    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', conclude: 'check', archive: 'folder-x', unarchive: 'folder-plus', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -235,7 +235,11 @@ function buildSidebarMenuItems(entity) {
         if (isProject) {
             if (canEdit && !concluded) items.push({ action: 'save', label: isNetwork ? 'Salvar rede' : 'Salvar projeto', kbd: 'Ctrl+S' });
             //Projeto pronto: vai para a rede da cidade (js/projects/network-mode.js)
-            if (canEdit && !isNetwork && !concluded) items.push({ action: 'conclude', label: 'Concluir e enviar para a rede', hint: 'Entra na rede da cidade como Existente; o projeto fica só para consulta' });
+            //Cada projeto: migrar para o modo Rede (e arquivar) ou só arquivar (js/projects/project-archive.js)
+            if (canEdit && !isNetwork && !concluded) items.push({ action: 'conclude', label: 'Migrar para o modo Rede', hint: 'Caixas, cabos e fusões vão para a rede da cidade; o projeto é arquivado' });
+            if (canEdit && !isNetwork) items.push(entity.title.dataset.archived === 'true'
+                ? { action: 'unarchive', label: 'Desarquivar', hint: 'Volta para a lista de projetos' }
+                : { action: 'archive', label: 'Arquivar projeto', hint: 'Sai da lista de projetos; fica em Abrir projeto → Arquivados' });
             items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
             items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
             items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
@@ -438,6 +442,12 @@ function handleSidebarMenuAction(action) {
     case 'check':
         setActiveFolder(entity.folderId);
         openProjectCheck();
+        break;
+    case 'archive':
+        archiveProject(entity.folderId);
+        break;
+    case 'unarchive':
+        unarchiveProject(entity.folderId, entity.name);
         break;
     case 'conclude':
         openConcludeProject(entity.folderId);

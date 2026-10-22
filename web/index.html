@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261084a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261085a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -3176,6 +3176,7 @@
         <span class="close" id="closeLoadProjectModal">&times;</span>
         <h2 id="loadProjectTitle">Abrir projeto</h2>
         <div class="pp-body">
+          <div class="pp-tabs" id="projectPickerTabs" role="tablist" aria-label="Projetos ou arquivados"></div>
           <div class="pp-toolbar">
             <div class="pp-search">
               <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"></use></svg>
@@ -3346,7 +3347,7 @@
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
   <script src="js/app.js?v=20261084a" defer></script>
-  <script src="js/core/persistence.js?v=20261084a" defer></script>
+  <script src="js/core/persistence.js?v=20261085a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261084a" defer></script>
   <script src="js/core/project-safety.js?v=20261084a" defer></script>
   <script src="js/catalog/catalog.js?v=20261062a" defer></script>
@@ -3355,9 +3356,10 @@
   <script src="js/catalog/labor.js?v=20261036a" defer></script>
   <script src="js/catalog/report.js?v=20261036a" defer></script>
   <script src="js/map/sketch.js?v=20261068a" defer></script>
-  <script src="js/projects/projects.js?v=20261073a" defer></script>
-  <script src="js/projects/sidebar.js?v=20261084a" defer></script>
-  <script src="js/projects/network-mode.js?v=20261084a" defer></script>
+  <script src="js/projects/projects.js?v=20261085a" defer></script>
+  <script src="js/projects/project-archive.js?v=20261085a" defer></script>
+  <script src="js/projects/sidebar.js?v=20261085a" defer></script>
+  <script src="js/projects/network-mode.js?v=20261085a" defer></script>
   <script src="js/projects/network-layer.js?v=20261076a" defer></script>
   <script src="js/core/permissions.js?v=20261078a" defer></script>
   <script src="js/map/marker-icons.js?v=20261007b" defer></script>
