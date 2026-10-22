@@ -290,7 +290,7 @@ function beginSidebarDrag(containerElement, e) {
     }
     e.stopPropagation();
     e.dataTransfer.setData('text/plain', containerElement.id || 'sidebar-item');
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = 'copyMove'; //Ctrl/Alt na rede: atalho em outra pasta
     window.draggedItem = containerElement;
     window.draggedItemSourceProject = containerElement.closest('.folder');
     window.dropWasSuccessful = false;

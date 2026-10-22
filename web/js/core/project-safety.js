@@ -112,25 +112,28 @@ function moveProjectToTrash(projectId, projectElement, projectName, onDone = nul
     if (!requireEdit('excluir projetos')) return;
     showConfirm('Excluir projeto',
         `Mover "${projectName}" para a lixeira? Ele some para toda a equipe, mas pode ser restaurado em até 30 dias (Projeto → Abrir projeto → Lixeira).`,
-        async () => {
-            const { data, error } = await supabaseClient.from('projects')
-                .update({ deleted_at: new Date().toISOString() }).eq('id', projectId).select('id');
-            if (error && isMissingFeatureError(error)) return deleteProjectPermanently(projectId, projectElement, projectName, onDone);
-            if (error) {
-                return showAlert('Sem permissão', /lixeira|42501/i.test(`${error.message} ${error.code}`)
-                    ? 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.'
-                    : `Não foi possível excluir o projeto. ${error.message}`);
-            }
-            if (!data.length && await projectExistsInDatabase(projectId)) {
-                return showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
-            }
-            if (projectElement) {
-                if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
-                removeProjectFromWorkspace(projectId, projectElement);
-            }
-            onDone?.();
-            showToast('Projeto na lixeira', `"${projectName}" pode ser restaurado em até 30 dias.`);
-        });
+        () => trashProject(projectId, projectElement, projectName, onDone));
+}
+
+//Move para a lixeira (já confirmado)
+async function trashProject(projectId, projectElement, projectName, onDone = null) {
+    const { data, error } = await supabaseClient.from('projects')
+        .update({ deleted_at: new Date().toISOString() }).eq('id', projectId).select('id');
+    if (error && isMissingFeatureError(error)) return deleteProjectPermanently(projectId, projectElement, projectName, onDone);
+    if (error) {
+        return showAlert('Sem permissão', /lixeira|42501/i.test(`${error.message} ${error.code}`)
+            ? 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.'
+            : `Não foi possível excluir o projeto. ${error.message}`);
+    }
+    if (!data.length && await projectExistsInDatabase(projectId)) {
+        return showAlert('Sem permissão', 'Somente quem criou o projeto ou um administrador da empresa pode excluí-lo.');
+    }
+    if (projectElement) {
+        if (typeof liveSyncLeave === 'function') liveSyncLeave(projectId);
+        removeProjectFromWorkspace(projectId, projectElement);
+    }
+    onDone?.();
+    showToast(typeof isNetworkProjectId === 'function' && isNetworkProjectId(projectId) ? 'Cidade na lixeira' : 'Projeto na lixeira', `"${projectName}" pode ser restaurado em até 30 dias.`);
 }
 
 //Exclusão definitiva (sem lixeira no banco, ou a partir da lixeira)

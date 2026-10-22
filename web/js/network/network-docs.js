@@ -145,6 +145,7 @@ function commitNetworkSave(record) {
     networkDocs.logs.set(record.id, record.data.changeLog || []);
     networkDocs.snapshots.set(record.id, snapshotNetworkData(record.data));
     networkDocs.bulk.delete(record.id);
+    if (typeof rememberNetworkSaved === 'function') rememberNetworkSaved(record);
     if (networkDocs.panelRootId === record.id) renderNetworkPanel();
 }
 
@@ -155,6 +156,7 @@ function rememberNetworkLoaded(projectId, data) {
     networkDocs.snapshots.set(projectId, snapshotNetworkData(data));
     networkDocs.occurrences.set(projectId, Array.isArray(data.occurrences) ? data.occurrences : []);
     if (typeof scheduleOccurrenceOverlays === 'function') scheduleOccurrenceOverlays(300);
+    if (typeof markNetworkBaseline === 'function') setTimeout(() => markNetworkBaseline(projectId), 0);
 }
 
 //Salva a rede (importação, ocorrência…) e, se outra pessoa salvou antes, pergunta o que fazer. true = salva.

@@ -3972,6 +3972,63 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         AppSession.company.role = realRole;
         applyRoleToUi();
       }
+      //Barra lateral da rede: pastas por tipo com a quantidade, atalho em outra pasta sem duplicar no mapa, salva sozinha
+      const lavras = document.getElementById(netId).closest('.folder');
+      updateSidebarCounts();
+      const typeCount = (t) => lavras.querySelector(`.net-types .net-type[data-type="${t}"] .net-type__count`)?.textContent;
+      const ctoTyped = typeCount('CTO') === String(markers.filter(m => m.type === 'CTO' && getAllDescendantFolderIds(netId).includes(m.folderId)).length);
+      lavras.querySelector('.net-types .net-type[data-type="CTO"] .net-type__row').click();
+      const typeList = lavras.querySelectorAll('.net-types .net-type[data-type="CTO"] .net-type__item').length;
+      const ctoNA = markers.find(m => m.uid === 'mk_cto_projNA');
+      const otherFolder = lavras.querySelector('.folder-title[data-folder-id="projNB"]') ? 'projNB' : null;
+      const markersBefore = markers.length;
+      const nbBefore = Number(document.querySelector(`.folder-title[data-folder-id="${otherFolder}"] > .folder-count`)?.textContent || 0);
+      setItemLinks(ctoNA, [otherFolder]);
+      updateSidebarCounts();
+      const linkRow = document.querySelector(`#${otherFolder} > .net-link-item[data-link-uid="mk_cto_projNA"]`);
+      const nbCount = document.querySelector(`.folder-title[data-folder-id="${otherFolder}"] > .folder-count`)?.textContent;
+      const linkEntity = getSidebarEntity(linkRow);
+      const linkMenu = buildSidebarMenuItems(linkEntity).map(i => i.action).filter(a => a === 'unlink' || a === 'link-folders').join();
+      ctoNA.name = 'CTO-AUTO';
+      scheduleNetworkAutosave(netId, 30);
+      await new Promise(r => setTimeout(r, 400));
+      const savedAuto = window.__fakeDb.projects[netId].data.markers.find(m => m.uid === 'mk_cto_projNA');
+      const stateChip = lavras.querySelector(':scope > .folder-title .net-save-state')?.dataset.state;
+      out.netSidebarDetail = [ctoTyped, typeList, !!linkRow, Number(nbCount) === nbBefore + 1, markers.length === markersBefore, linkEntity?.info === ctoNA, linkMenu,
+        savedAuto?.name, (savedAuto?.alsoIn || []).join(), stateChip].join(';');
+      removeNetworkLink(ctoNA, otherFolder);
+      ctoNA.name = 'CTO-projNA';
+      await flushNetworkAutosave(lavras);
+      //Nova cidade pela janela (nome arrumado e pasta inicial); excluir pasta mantendo os itens; excluir a cidade digitando o nome
+      const creating = createNetworkCity();
+      await new Promise(r => setTimeout(r, 60));
+      const cityInput = document.getElementById('networkCityInput');
+      cityInput.value = 'são joão del rei';
+      cityInput.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('#networkCityFolders [data-folder-i="0"]').click();
+      const previewOk = /Rede · São João del Rei/.test(document.getElementById('networkCityPreview').textContent) && /Backbone/.test(document.getElementById('networkCityPreview').textContent);
+      document.querySelector('#networkCityModal [data-net-city="ok"]').click();
+      const sjRoot = await creating;
+      const sjId = getNetworkId('São João del Rei');
+      const sjRow = window.__fakeDb.projects[sjId];
+      const sjFolder = sjRow?.data.sidebar.children[0];
+      rebuildMarker({ uid: 'mk_sj_cto', folderId: sjFolder.id, type: 'CTO', name: 'CTO-SJ', color: '#16a34a', ctoStatus: 'Existente', position: { lat: -21.1, lng: -44.2 } });
+      removeNetworkFolderKeepingItems(getSidebarEntity(document.querySelector(`.folder-title[data-folder-id="${sjFolder.id}"]`)));
+      const keptCto = markers.find(m => m.uid === 'mk_sj_cto')?.folderId === sjId && !document.getElementById(sjFolder.id);
+      const cityMenu = buildSidebarMenuItems(getSidebarEntity(sjRoot.querySelector('.folder-title'))).map(i => i.action);
+      const deleting = confirmDeleteNetworkCity(getSidebarEntity(sjRoot.querySelector('.folder-title')));
+      await new Promise(r => setTimeout(r, 60));
+      const typed = document.getElementById('typedConfirmInput');
+      typed.value = 'Lavras';
+      typed.dispatchEvent(new Event('input'));
+      const blockedWrong = document.querySelector('#typedConfirmModal [data-typed="ok"]').disabled;
+      typed.value = 'sao joao del rei';
+      typed.dispatchEvent(new Event('input'));
+      document.querySelector('#typedConfirmModal [data-typed="ok"]').click();
+      await deleting;
+      out.netCityDetail = [previewOk, sjRow?.name, sjFolder?.name, keptCto, cityMenu.includes('close'), blockedWrong, !!window.__fakeDb.projects[sjId]?.deleted_at, !document.getElementById(sjId)].join(';');
+      out.netSidebar = out.netSidebarDetail === 'true;2;true;true;true;true;link-folders,unlink;CTO-AUTO;projNB;salva'
+        && out.netCityDetail === 'true;Rede · São João del Rei;Backbone;true;false;true;true;true';
       await setAppMode('projeto');
       //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
       window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',
