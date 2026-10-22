@@ -3644,3 +3644,64 @@ html[data-theme="dark"] #occurrenceModal .occurrence-status button.is-active { c
 .modal .modal-content > .modal-header-v2.rm-head h2 { position: static; margin: 0; padding: 0; border: none; background: none !important; color: var(--color-text) !important; font: 700 18px/1.3 var(--font-sans); letter-spacing: -0.01em; text-align: left; box-shadow: none; }
 .modal .modal-content > .modal-header-v2.rm-head h2::before, .modal .modal-content > .modal-header-v2.rm-head h2::after { display: none; }
 #networkCityModal .net-city-folder, #occurrenceModal .occurrence-kind { justify-content: flex-start; }
+
+/* Cargos (js/core/permissions.js): Viabilidade só consulta a rede; técnico não exporta */
+body.role-viabilidade .mode-switch,
+body.role-viabilidade .network-tools > .dropdown:has(#networkMenuButton) { display: none !important; }
+body.role-tecnico #networkExportXlsxButton,
+body.role-tecnico #networkExportFusionButton { display: none !important; }
+.role-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: 100%; }
+#accountModal .account-new-user .form-group:has(#inviteRoleCards) { grid-column: 1 / -1; }
+.role-cards[hidden] { display: none; }
+#accountModal .role-card { display: flex; min-height: 0; width: 100%; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 11px; border-radius: 11px; border: 1px solid var(--color-border); background: var(--color-surface); box-shadow: none; font: inherit; text-align: left; color: var(--color-text); cursor: pointer; transition: border-color .15s, background .15s; }
+#accountModal .role-card:hover { border-color: color-mix(in srgb, var(--role) 55%, var(--color-border)); }
+#accountModal .role-card.is-active { border-color: var(--role); background: color-mix(in srgb, var(--role) 8%, var(--color-surface)); box-shadow: inset 0 0 0 1px var(--role); }
+.role-card b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.role-card b::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--role); }
+.role-card small { font-size: 11.5px; font-weight: 400; line-height: 1.35; color: var(--color-text-muted); }
+.role-card[data-role="admin"] { --role: #7c3aed; }
+.role-card[data-role="projetista"] { --role: #2563eb; }
+.role-card[data-role="tecnico"] { --role: #0d9488; }
+.role-card[data-role="viabilidade"] { --role: #d97706; }
+.account-badge--viabilidade, .account-badge--member { background: color-mix(in srgb, #d97706 12%, transparent); color: #b45309; border-color: color-mix(in srgb, #d97706 40%, transparent); }
+html[data-theme="dark"] .account-badge--viabilidade, html[data-theme="dark"] .account-badge--member { color: #fcd34d; }
+@media (max-width: 560px) { .role-cards { grid-template-columns: 1fr; } }
+.role-matrix-wrap { overflow-x: auto; border: 1px solid var(--color-border-light); border-radius: 12px; }
+.role-matrix { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12.5px; }
+.role-matrix thead th:first-child { width: 36%; }
+.role-matrix th, .role-matrix td { padding: 7px 8px; border-bottom: 1px solid var(--color-border-light); text-align: center; vertical-align: middle; }
+.role-matrix tbody tr:last-child > * { border-bottom: 0; }
+.role-matrix thead th { background: var(--color-surface-muted); }
+.role-matrix thead th { font-size: 11.5px; font-weight: 800; letter-spacing: 0; text-transform: none; }
+.role-matrix thead th.is-admin { color: #7c3aed; }
+.role-matrix thead th.is-projetista { color: #2563eb; }
+.role-matrix thead th.is-tecnico { color: #0f766e; }
+.role-matrix thead th.is-viabilidade { color: #b45309; }
+.role-matrix th[scope="row"] { font-size: 12px; letter-spacing: 0; text-transform: none; line-height: 1.35; }
+.role-matrix th[scope="row"], .role-matrix thead th:first-child { text-align: left; font-weight: 600; color: var(--color-text); }
+.role-matrix td.is-yes { color: #15803d; font-weight: 800; }
+.role-matrix td.is-no { color: var(--color-text-dim); }
+.role-matrix td.is-part { color: #b45309; font-size: 11.5px; font-weight: 600; }
+html[data-theme="dark"] .role-matrix td.is-yes { color: #4ade80; }
+html[data-theme="dark"] .role-matrix td.is-part { color: #fcd34d; }
+#accountModal .account-new-user .role-cards .role-card { grid-column: auto; justify-self: stretch; }
+
+/* Ocorrências: responsável, prazo e tempo aberto */
+.occurrence-team { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.occurrence-due { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--color-surface-muted); border: 1px solid var(--color-border-light); }
+#occurrenceModal .occurrence-due button { min-height: 30px; padding: 4px 9px; border: 1px solid transparent; border-radius: 8px; background: none; box-shadow: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--color-text-muted); white-space: nowrap; cursor: pointer; }
+#occurrenceModal .occurrence-due button.is-active { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text); box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
+.occurrence-due__when { font-size: 11.5px; color: var(--color-text-muted); }
+.occurrence-timing { font-size: 11px; color: var(--color-text-dim); }
+.occurrence-row small.occurrence-timing, .occurrence-summary small.occurrence-timing { color: var(--color-text-dim); }
+.occurrence-row small.occurrence-timing.is-late, .occurrence-summary small.occurrence-timing.is-late { color: #b91c1c; font-weight: 700; }
+html[data-theme="dark"] .occurrence-row small.occurrence-timing.is-late, html[data-theme="dark"] .occurrence-summary small.occurrence-timing.is-late { color: #fca5a5; }
+.occurrence-row.is-late { background: color-mix(in srgb, #dc2626 5%, var(--color-surface)); }
+.occurrence-row.is-late > em { color: #fff; background: #dc2626; }
+@media (max-width: 560px) { .occurrence-team { grid-template-columns: 1fr; } .occurrence-due { overflow-x: auto; } }
+/* Linhas de ocorrência dentro das caixas flutuantes (o estilo geral de botão deixava o texto branco) */
+.floating-box .occurrence-row { color: var(--color-text); }
+.floating-box .occurrence-row small { white-space: normal; }
+.floating-box.map-tool-box .occurrence-filter { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.floating-box .occurrence-row { border: 1px solid var(--color-border-light); border-left: 4px solid var(--occ); }
+.floating-box .occurrence-row.is-late { border-color: color-mix(in srgb, #dc2626 35%, var(--color-border-light)); border-left-color: #dc2626; }

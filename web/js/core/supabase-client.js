@@ -8,15 +8,18 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 
-//Cargos: admin controla tudo; projetista cria/edita/salva projetos; tecnico (Técnico de campo) documenta a rede
-//(clientes, ocorrências e fotos) sem mexer em caixas e cabos; member (Membro) só visualiza.
-const ROLE_LABELS = { admin: 'Administrador', projetista: 'Projetista', tecnico: 'Técnico de campo', member: 'Membro' };
+//Cargos: admin controla tudo; projetista cria/edita/salva projetos e a rede; tecnico (Técnico de campo) documenta a rede
+//(clientes, ocorrências e fotos) sem mexer em caixas e cabos; viabilidade só consulta a rede (não vê projetos).
+//"member" (Membro) é o cargo antigo: virou Viabilidade (migração 20261023120000) e é tratado igual.
+const ROLE_LABELS = { admin: 'Administrador', projetista: 'Projetista', tecnico: 'Técnico de campo', viabilidade: 'Viabilidade', member: 'Viabilidade' };
+const ROLE_ORDER = ['admin', 'projetista', 'tecnico', 'viabilidade'];
 const ROLE_DESCRIPTIONS = {
-    admin: 'Controla tudo: equipe, convites, dados da empresa, preços, kits e configurações. Vê quem está online.',
-    projetista: 'Cria, edita e salva projetos. Não acessa a parte administrativa.',
+    admin: 'Controla tudo: equipe, dados da empresa, preços, kits e configurações, além de projetos e rede. Vê quem está online.',
+    projetista: 'Cria e edita projetos, migra para o modo Rede e mantém a rede (caixas, cabos, fusões, clientes). Sem a parte administrativa.',
     tecnico: 'No modo Rede, cadastra e liga clientes, registra ocorrências e fotos. Não altera caixas, cabos nem projetos.',
-    member: 'Somente visualiza: abre e consulta projetos, sem editar nem salvar.'
+    viabilidade: 'Consulta a rede: viabilidade de atendimento, caixas, portas livres e clientes. Não vê projetos e não altera nada.',
 };
+ROLE_DESCRIPTIONS.member = ROLE_DESCRIPTIONS.viabilidade;
 
 //Contexto do usuário logado (preenchido por loadAppContext)
 const AppSession = {
@@ -31,6 +34,9 @@ const AppSession = {
     get canEdit() { return this.company?.role === 'admin' || this.company?.role === 'projetista'; },
     get isViewer() { return !!this.company && !this.canEdit; },
     get isTecnico() { return this.company?.role === 'tecnico'; },
+    get isViabilidade() { return this.company?.role === 'viabilidade' || this.company?.role === 'member'; },
+    //Projetos (modo Projeto): todos menos a viabilidade, que só consulta a rede
+    get canSeeProjects() { return !!this.company && !this.isViabilidade; },
     //Documentar a rede (clientes, ocorrências, fotos): quem edita e, no modo Rede, o técnico de campo
     get canDocument() { return this.canEdit || (this.isTecnico && typeof appMode !== 'undefined' && appMode === 'rede'); },
     get roleLabel() { return ROLE_LABELS[this.company?.role] || ''; },
@@ -48,8 +54,8 @@ function requireEdit(actionLabel = 'fazer alterações') {
         return false;
     }
     if (AppSession.canEdit) return true;
-    const message = `Seu cargo (${AppSession.roleLabel || 'Membro'}) é somente de visualização. Peça a um administrador para ${actionLabel}.`;
-    if (typeof showToast === 'function') showToast('Somente visualização', message, 'progress');
+    const message = `Seu cargo (${AppSession.roleLabel || 'Viabilidade'}) é somente de consulta. Peça a um administrador para ${actionLabel}.`;
+    if (typeof showToast === 'function') showToast('Somente consulta', message, 'progress');
     else console.warn(message);
     return false;
 }
@@ -60,8 +66,8 @@ function requireDocument(actionLabel = 'documentar a rede') {
     if (AppSession.canDocument) return true;
     const message = AppSession.isTecnico
         ? `No modo Projeto o técnico de campo só consulta. Troque para o modo Rede para ${actionLabel}.`
-        : `Seu cargo (${AppSession.roleLabel || 'Membro'}) é somente de visualização. Peça a um administrador para ${actionLabel}.`;
-    if (typeof showToast === 'function') showToast('Somente visualização', message, 'progress');
+        : `Seu cargo (${AppSession.roleLabel || 'Viabilidade'}) é somente de consulta. Peça a um administrador para ${actionLabel}.`;
+    if (typeof showToast === 'function') showToast('Somente consulta', message, 'progress');
     return false;
 }
 

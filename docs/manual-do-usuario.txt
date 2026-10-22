@@ -13,8 +13,10 @@ Menu do usuário (avatar no canto superior direito):
 - Preferências e atalhos: tema, tipo de mapa ao abrir, reabrir o último projeto e lista de atalhos do teclado.
 Cargos:
 - Administrador: controla tudo. Convida pessoas, altera cargos, remove membros, edita os dados da empresa, os preços, kits e regras de cálculo e exclui qualquer projeto. Só ele vê quem está online.
-- Projetista: tudo de projeto liberado (criar, desenhar, editar, salvar, importar KML, plano de fusão, mão de obra, relatórios), menos a parte administrativa. Consulta preços e kits, mas não os altera.
-- Membro: somente visualiza. Abre projetos, navega no mapa, consulta marcadores, cabos, planos de fusão, lista de materiais e relatório, e usa a régua. Não cria, não edita e não salva nada; os botões de edição ficam ocultos.
+- Projetista: tudo de projeto liberado (criar, desenhar, editar, salvar, importar KML, plano de fusão, mão de obra, relatórios) e a manutenção da rede no modo Rede, menos a parte administrativa. Consulta preços e kits, mas não os altera.
+- Técnico de campo: no modo Rede cadastra e liga clientes, registra ocorrências e fotos. Não altera caixas, cabos nem projetos (no modo Projeto só consulta). Abre direto no modo Rede.
+- Viabilidade (o antigo Membro): só consulta a rede das cidades — viabilidade de atendimento, caixas, portas livres, clientes e ocorrências. Não vê os projetos e não altera nada. Abre direto no modo Rede com a consulta de viabilidade aberta.
+Em Minha conta → Equipe, a tabela "Cargos" mostra o que cada cargo pode fazer.
 Ao convidar, escolha o cargo; a pessoa cria a conta com o mesmo e-mail e já entra com esse cargo. O administrador pode trocar o cargo depois em Equipe e convites. A empresa sempre mantém pelo menos um administrador.
 Quem está online (administrador): o botão "N online" ao lado do avatar mostra quantas pessoas estão conectadas agora e o nome de cada uma. Em Equipe e convites, cada membro mostra "Online agora" (com o projeto aberto) ou "Visto há…". O status atualiza sozinho a cada 30 segundos.
 --------------------------------------------------------------------------------------------------------------------------------------------
@@ -47,7 +49,7 @@ Como ler a lista: o nome de cada item fica em destaque e os detalhes (cidade, ba
 Mostrar e ocultar: o ícone de olho ao lado do item o esconde ou mostra no mapa. No projeto ou na pasta, o olho vale para tudo que está dentro.
 Menu de ações: clique no botão de três pontinhos (ou use o clique direito) em qualquer linha — projeto, pasta, marcador, cabo ou polígono. O menu muda conforme o item:
 - Projeto e pasta: editar/renomear, nova pasta ou subpasta, colar (Ctrl+V), padronizar estilo, centralizar no mapa, mostrar/ocultar, expandir/recolher tudo, salvar (Ctrl+S, só no projeto), fechar projeto e excluir.
-- Marcador, cabo e polígono: editar (ou "Ver", para quem é Membro), plano de fusão (CEO e CTO), centralizar no mapa, mostrar/ocultar, copiar (Ctrl+C, marcadores) e excluir.
+- Marcador, cabo e polígono: editar (ou "Ver", para quem só consulta), plano de fusão (CEO e CTO), centralizar no mapa, mostrar/ocultar, copiar (Ctrl+C, marcadores) e excluir.
 - Pelo teclado: ↑ e ↓ percorrem o menu, Enter escolhe e Esc fecha.
 Padronizar estilo: aplica cor, cor do nome e tamanho dos marcadores e espessura dos cabos a tudo que está no projeto ou na pasta. Enquanto você mexe, a prévia aparece no mapa; "Cancelar" desfaz e devolve o visual anterior.
 Arrastar e soltar: arraste qualquer item para reorganizar. Uma linha azul mostra onde ele vai cair — antes do item, depois do item ou dentro da pasta (a pasta fica destacada). Arrastar até a borda da lista rola sozinho. A ordem que você deixar é salva junto com o projeto e volta igual quando você reabre.
@@ -122,7 +124,7 @@ Preços, kits e configurações (catálogo da empresa):
 - Materiais e preços: busca, filtro por categoria (chips), preço editável direto na tabela (clique no preço, Enter salva) e importação de planilha.
 - Kits: cartões com os itens, o custo de cada item e o custo total do kit.
 - Regras de cálculo: lançamento de cabos (vão, plaquetas, BAP, SUPAS, alças), clientes (sobra por drop) e mão de obra (custo/hora, jornada e produtividade), com exemplos do cálculo.
-Somente o administrador altera; projetistas e membros apenas consultam.
+Somente o administrador altera; os demais cargos apenas consultam.
 Relatório do Projeto (botão "Relatório" na barra):
 - Lista de projetos: cada projeto mostra custo total, novas portas e lançamento para você escolher o certo.
 - Painel do projeto: custo total, novas portas, lançamento e prazo no topo; cartões de rede e cobertura (com a taxa de penetração), rede nova (lançamento, postes, CTOs, CEOs, reservas, cordoalhas), materiais por categoria, mão de obra, clientes (quando houver), resumo financeiro (composição do custo, coeficiente de segurança de 5%, custo por nova porta e custo total final) e observações.
@@ -150,7 +152,7 @@ Painel da rede: Resumo (números da cidade e o que precisa de atenção), PONs (
 Painel da caixa (clique na caixa): de qual projeto veio, QR code / etiqueta, Como chegar, Copiar link, ocorrências, fotos e as últimas mudanças.
 QR code: imprima as etiquetas (Rede → Etiquetas QR das caixas, da cidade ou da pasta selecionada) e cole nas caixas. Quem escanear com o celular abre a caixa já no sistema (depois de entrar com a conta da empresa).
 Rastrear sinal: na janela do cliente, mostra o caminho até a OLT/placa/PON (caixas, cabos, fibras e splitters) com a potência estimada em cada ponto, e destaca o caminho no mapa.
-Ocorrências: rompimento, sinal baixo, caixa danificada, poste, vandalismo, preventiva. Cada uma tem situação (aberta, em andamento, resolvida), anotações de quem atendeu e fotos. As abertas aparecem com um anel no mapa. Ao escolher a caixa ou o cabo, a janela mostra quantos clientes estão nele e o que fica sem sinal se ele estiver parado.
+Ocorrências: rompimento, sinal baixo, caixa danificada, poste, vandalismo, preventiva. Cada uma tem situação (aberta, em andamento, resolvida), responsável (alguém da equipe), prazo para resolver (4 h, 24 h, 3 dias, 7 dias ou sem prazo; o padrão depende do tipo), anotações de quem atendeu e fotos. As abertas aparecem com um anel no mapa (mais grosso quando atrasada). Em cada uma aparece há quanto tempo está aberta e quanto falta para vencer (ou há quanto está atrasada). No Painel da rede → Ocorrências: Abertas, Minhas, Atrasadas e Resolvidas, com as atrasadas primeiro; no Resumo, "ocorrências atrasadas" aparece em "Precisa de atenção". O técnico de campo, ao entrar, já vê as ocorrências abertas com ele. Ao escolher a caixa ou o cabo, a janela mostra quantos clientes estão nele e o que fica sem sinal se ele estiver parado.
 Verificar a rede: um resumo (erros, avisos, temas ok), filtro Todos/Erros/Avisos e os problemas por tema (cabos, caixas e fusões, clientes e portas, sinal, nomes); clique leva ao item no mapa. Embaixo, a potência de cada CTO numa barra com o mínimo da ONU marcado.
 Rompimento e impacto: no topo, "Simular um rompimento" (escolha o cabo ou a caixa e veja clientes fora do ar, CTOs sem sinal e com sinal pior). Depois, o ranking do que mais derruba, com o número de clientes; aberto, mostra as CTOs, "Ver no mapa", "Sugerir anel" e "Registrar ocorrência".
 Fotos: no painel da caixa ("+ Foto") ou na ocorrência. No celular abre a câmera; a foto é reduzida antes de enviar.

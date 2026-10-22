@@ -935,6 +935,9 @@ function describePresence(member, isSelf) {
     return { online: false, text: 'Ainda não acessou' };
 }
 
+//Cargo para a tela: o antigo Membro aparece como Viabilidade
+const teamRole = (member) => (member.role === 'member' ? 'viabilidade' : member.role);
+
 //Cartão da equipe: quantas pessoas, quantas online (administrador) e quantas em cada cargo
 let teamRoleFilter = '';
 function renderTeamHero(members) {
@@ -944,8 +947,8 @@ function renderTeamHero(members) {
         details.textContent = `${members.length} ${members.length === 1 ? 'pessoa' : 'pessoas'} com acesso`
             + (AppSession.isAdmin ? ` · ${online} online agora` : '');
     }
-    const counts = Object.fromEntries(['admin', 'projetista', 'tecnico', 'member'].map(role => [role, members.filter(m => m.role === role).length]));
-    const plural = { admin: ['administrador', 'administradores'], projetista: ['projetista', 'projetistas'], tecnico: ['técnico de campo', 'técnicos de campo'], member: ['membro', 'membros'] };
+    const counts = Object.fromEntries(ROLE_ORDER.map(role => [role, members.filter(m => teamRole(m) === role).length]));
+    const plural = { admin: ['administrador', 'administradores'], projetista: ['projetista', 'projetistas'], tecnico: ['técnico de campo', 'técnicos de campo'], viabilidade: ['viabilidade', 'viabilidade'] };
     const chips = document.getElementById('teamHeroChips');
     if (chips) {
         chips.innerHTML = Object.entries(counts).filter(([, n]) => n > 0)
@@ -954,7 +957,7 @@ function renderTeamHero(members) {
     const filter = document.getElementById('teamRoleFilter');
     if (filter) {
         if (teamRoleFilter && !counts[teamRoleFilter]) teamRoleFilter = '';
-        const options = [['', 'Todos', members.length], ...['admin', 'projetista', 'tecnico', 'member'].map(role => [role, ROLE_LABELS[role], counts[role]])];
+        const options = [['', 'Todos', members.length], ...ROLE_ORDER.map(role => [role, ROLE_LABELS[role], counts[role]])];
         filter.innerHTML = options.filter(([role, , n]) => !role || n > 0)
             .map(([role, label, n]) => `<button type="button" class="team-filter__chip${role === teamRoleFilter ? ' is-active' : ''}" data-role="${role}" aria-pressed="${role === teamRoleFilter}">${escapeHtml(label)} <b>${n}</b></button>`).join('');
     }
@@ -988,12 +991,12 @@ function renderMembers(members) {
         const isSelf = member.user_id === AppSession.userId;
         const li = document.createElement('li');
         li.className = 'account-list__item';
-        li.dataset.role = member.role;
+        li.dataset.role = teamRole(member);
         li.dataset.search = foldText([member.full_name, member.email, member.job_title].filter(Boolean).join(' '));
         const canManage = AppSession.isAdmin && !isSelf;
         const presence = AppSession.isAdmin ? describePresence(member, isSelf) : null;
-        const roleOptions = ['admin', 'projetista', 'tecnico', 'member']
-            .map(role => `<option value="${role}" ${member.role === role ? 'selected' : ''}>${ROLE_LABELS[role]}</option>`).join('');
+        const roleOptions = ROLE_ORDER
+            .map(role => `<option value="${role}" ${teamRole(member) === role ? 'selected' : ''}>${ROLE_LABELS[role]}</option>`).join('');
         li.innerHTML = `
             <span class="user-avatar${presence ? ' user-avatar--presence' : ''}${presence?.online ? ' is-online' : ''}">${escapeHtml(getInitials(member.full_name || member.email))}</span>
             <div class="account-list__info">
@@ -1009,7 +1012,7 @@ function renderMembers(members) {
                 <button type="button" class="account-icon-btn" data-member-action="remove" title="Remover da equipe" aria-label="Remover ${escapeHtml(member.email)}">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg>
                 </button></div>`
-            : `<span class="account-badge account-badge--${member.role}">${ROLE_LABELS[member.role]}</span>`}`;
+            : `<span class="account-badge account-badge--${teamRole(member)}">${ROLE_LABELS[member.role]}</span>`}`;
         if (canManage) {
             li.querySelector('select').addEventListener('change', (e) => changeMemberRole(member, e.target));
             li.querySelector('[data-member-action="reset"]').addEventListener('click', () => resetMemberPassword(member));
@@ -1322,13 +1325,29 @@ function setupAccountMenu() {
     document.getElementById('leaveCompanyButton').addEventListener('click', leaveCompany);
     document.getElementById('clearClientErrorsButton').addEventListener('click', clearClientErrors);
     document.getElementById('inviteRole').addEventListener('change', updateInviteRoleHint);
+    document.getElementById('inviteRoleCards')?.addEventListener('click', (e) => {
+        const card = e.target.closest('[data-role]');
+        if (!card) return;
+        document.getElementById('inviteRole').value = card.dataset.role;
+        updateInviteRoleHint();
+    });
     updateInviteRoleHint();
+}
+
+//Cargo do usuário novo: um cartão por cargo, com o que ele permite (a lista #inviteRole guarda a escolha)
+function renderInviteRoleCards() {
+    const select = document.getElementById('inviteRole');
+    const box = document.getElementById('inviteRoleCards');
+    if (!select || !box) return;
+    box.innerHTML = ROLE_ORDER.map(role => `<button type="button" class="btn-role role-card${select.value === role ? ' is-active' : ''}" data-role="${role}" role="radio" aria-checked="${select.value === role}">
+        <b>${escapeHtml(ROLE_LABELS[role])}</b><small>${escapeHtml(ROLE_DESCRIPTIONS[role])}</small></button>`).join('');
 }
 
 //Explica o que o cargo escolhido no convite permite
 function updateInviteRoleHint() {
     const hint = document.getElementById('inviteRoleHint');
-    if (hint) hint.textContent = ROLE_DESCRIPTIONS[document.getElementById('inviteRole').value] || '';
+    if (hint) hint.textContent = document.getElementById('inviteRoleCards') ? '' : ROLE_DESCRIPTIONS[document.getElementById('inviteRole').value] || '';
+    renderInviteRoleCards();
 }
 
 setupAccountMenu();

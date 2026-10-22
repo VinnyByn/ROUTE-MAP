@@ -15,7 +15,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-const ROLES = ['admin', 'projetista', 'tecnico', 'member'];
+const ROLES = ['admin', 'projetista', 'tecnico', 'viabilidade'];
 const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
 
 class HttpError extends Error {
