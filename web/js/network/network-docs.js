@@ -288,9 +288,12 @@ function renderNetworkPanel() {
     const st = getNetworkStats(root);
     const share = st.ports ? st.used / st.ports : 0;
     const level = share >= 0.9 ? 'full' : share >= 0.75 ? 'high' : 'ok';
-    const openOcc = typeof getNetworkOccurrences === 'function' ? getNetworkOccurrences(getRootId(root)).filter(isOccurrenceOpen).length : 0;
+    const occList = typeof getNetworkOccurrences === 'function' ? getNetworkOccurrences(getRootId(root)) : [];
+    const lateOcc = occList.filter(o => isOccurrenceLate(o)).length;
+    const openOcc = occList.filter(isOccurrenceOpen).length - lateOcc;
     const attention = [
-        ['occ', openOcc, `${openOcc === 1 ? 'ocorrência aberta' : 'ocorrências abertas'}`, 'Rompimentos, sinal baixo, manutenção', 'erro'],
+        ['occLate', lateOcc, `${lateOcc === 1 ? 'ocorrência atrasada' : 'ocorrências atrasadas'}`, 'Passaram do prazo para resolver', 'erro'],
+        ['occ', openOcc, `${openOcc === 1 ? 'ocorrência aberta' : 'ocorrências abertas'}${lateOcc ? ' no prazo' : ''}`, 'Rompimentos, sinal baixo, manutenção', 'erro'],
         ['full', st.full.length, `${st.full.length === 1 ? 'CTO lotada' : 'CTOs lotadas'}`, 'Sem porta livre para cliente novo', 'erro'],
         ['high', st.high.length, `${st.high.length === 1 ? 'CTO quase lotada' : 'CTOs quase lotadas'}`, '75% ou mais das portas em uso', 'aviso'],
         ['noSplitter', st.noSplitter.length, `${st.noSplitter.length === 1 ? 'CTO sem splitter' : 'CTOs sem splitter'} de atendimento`, 'Sem portas definidas no plano de fusão', 'aviso'],
@@ -362,7 +365,7 @@ function handleNetworkPanelClick(e) {
     if (kind === 'attn' && st) {
         const key = el.dataset.key;
         if (key === 'check') { openProjectCheck(); return; }
-        if (key === 'occ') { networkDocs.panelTab = 'ocorrencias'; occurrences.filter = 'abertas'; renderNetworkPanel(); return; }
+        if (key === 'occ' || key === 'occLate') { networkDocs.panelTab = 'ocorrencias'; occurrences.filter = key === 'occLate' ? 'atrasadas' : 'abertas'; renderNetworkPanel(); return; }
         const list = key === 'unlinked' ? st.unlinked : st[key].map(c => c.cto);
         cycleNetworkAttention(key, list);
     }

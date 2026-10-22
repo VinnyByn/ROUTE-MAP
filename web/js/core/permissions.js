@@ -1,10 +1,12 @@
-// Cargos na interface: administrador (tudo), projetista (edita projetos) e membro (só visualiza).
+// Cargos na interface: administrador (tudo), projetista (projetos e rede), técnico de campo (documenta a rede) e
+// viabilidade (só consulta a rede; o antigo Membro).
 // O banco também bloqueia por RLS (supabase/migrations); aqui a interface esconde o que o cargo não pode usar.
 // Depende de js/core/supabase-client.js (AppSession) e de js/app.js (appReady).
 
 function applyRoleToUi() {
     const role = AppSession.role;
-    ['admin', 'projetista', 'tecnico', 'member'].forEach(r => document.body.classList.toggle(`role-${r}`, role === r));
+    ['admin', 'projetista', 'tecnico'].forEach(r => document.body.classList.toggle(`role-${r}`, role === r));
+    document.body.classList.toggle('role-viabilidade', AppSession.isViabilidade);
     document.body.classList.toggle('is-company-admin', AppSession.isAdmin);
     document.body.classList.toggle('is-viewer', AppSession.isViewer);
     document.body.classList.toggle('can-edit', AppSession.canEdit);

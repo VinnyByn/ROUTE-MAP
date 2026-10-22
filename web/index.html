@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261086a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261087c" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -2772,12 +2772,13 @@
                   </div>
                   <div class="form-group">
                     <label for="inviteRole">Cargo</label>
-                    <select id="inviteRole">
+                    <select id="inviteRole" class="visually-hidden" tabindex="-1">
                       <option value="projetista">Projetista</option>
-                      <option value="tecnico">Técnico de campo (clientes e ocorrências na rede)</option>
-                      <option value="member">Membro (somente visualiza)</option>
+                      <option value="tecnico">Técnico de campo</option>
+                      <option value="viabilidade">Viabilidade</option>
                       <option value="admin">Administrador</option>
                     </select>
+                    <div class="role-cards" id="inviteRoleCards" role="radiogroup" aria-label="Cargo"></div>
                   </div>
                   <div class="form-group">
                     <label for="newUserPassword">Senha provisória</label>
@@ -2823,12 +2824,23 @@
                   <span class="company-section__icon company-section__icon--violet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-briefcase"></use></svg></span>
                   <div><h4>Cargos</h4><p>O que cada cargo pode fazer no sistema.</p></div>
                 </header>
-                <dl>
-                  <div><dt><span class="account-badge account-badge--admin">Administrador</span></dt><dd>Controla tudo: equipe, convites, dados da empresa, preços, kits e configurações. Vê quem está online.</dd></div>
-                  <div><dt><span class="account-badge account-badge--projetista">Projetista</span></dt><dd>Cria, edita e salva projetos. Não acessa a parte administrativa.</dd></div>
-                  <div><dt><span class="account-badge account-badge--tecnico">Técnico de campo</span></dt><dd>No modo Rede, cadastra e liga clientes, registra ocorrências e fotos. Não altera caixas, cabos nem projetos.</dd></div>
-                  <div><dt><span class="account-badge account-badge--member">Membro</span></dt><dd>Somente visualiza: abre e consulta projetos, sem editar nem salvar.</dd></div>
-                </dl>
+                <div class="role-matrix-wrap">
+                  <table class="role-matrix">
+                    <thead><tr><th scope="col">O que pode fazer</th><th scope="col" class="is-admin" title="Administrador">Admin</th><th scope="col" class="is-projetista">Projetista</th><th scope="col" class="is-tecnico" title="Técnico de campo">Técnico</th><th scope="col" class="is-viabilidade">Viabilidade</th></tr></thead>
+                    <tbody>
+                      <tr><th scope="row">Equipe, empresa, preços, kits e configurações</th><td class="is-yes">✓</td><td class="is-no">—</td><td class="is-no">—</td><td class="is-no">—</td></tr>
+                      <tr><th scope="row">Criar e editar projetos, migrar para a rede, arquivar</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td><td class="is-no">—</td></tr>
+                      <tr><th scope="row">Ver projetos</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-part">consulta</td><td class="is-no">—</td></tr>
+                      <tr><th scope="row">Alterar caixas, cabos e fusões da rede</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td><td class="is-no">—</td></tr>
+                      <tr><th scope="row">Cadastrar e ligar clientes nas portas</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td></tr>
+                      <tr><th scope="row">Ocorrências e fotos</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-part">ver</td></tr>
+                      <tr><th scope="row">Viabilidade, painel, filtro e perto de mim</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td></tr>
+                      <tr><th scope="row">Exportar planilha e plano de fusão</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td><td class="is-no">—</td></tr>
+                      <tr><th scope="row">Etiquetas QR das caixas</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="account-note">Técnico de campo e Viabilidade abrem direto no modo Rede; a Viabilidade já abre com a consulta de viabilidade e não vê os projetos.</p>
               </section>
             </section>
 
@@ -3343,7 +3355,7 @@
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" integrity="sha384-TtrQp5nveof/QP1+f/OLiEHL3GuOIRyl3IfsGxu5X45VO2vHeT4HRNmQuTR3Ea3w" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
-  <script src="js/core/supabase-client.js?v=20261078a"></script>
+  <script src="js/core/supabase-client.js?v=20261087b"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261005a" defer></script>
   <script src="js/app.js?v=20261084a" defer></script>
@@ -3359,14 +3371,14 @@
   <script src="js/projects/projects.js?v=20261085a" defer></script>
   <script src="js/projects/project-archive.js?v=20261085a" defer></script>
   <script src="js/projects/sidebar.js?v=20261085a" defer></script>
-  <script src="js/projects/network-mode.js?v=20261086a" defer></script>
+  <script src="js/projects/network-mode.js?v=20261087b" defer></script>
   <script src="js/projects/network-layer.js?v=20261076a" defer></script>
-  <script src="js/core/permissions.js?v=20261078a" defer></script>
+  <script src="js/core/permissions.js?v=20261087b" defer></script>
   <script src="js/map/marker-icons.js?v=20261007b" defer></script>
   <script src="js/map/marker-panel.js?v=20261075a" defer></script>
   <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
   <script src="js/network/fusion.js?v=20261014e" defer></script>
-  <script src="js/auth/account.js?v=20261079a" defer></script>
+  <script src="js/auth/account.js?v=20261087b" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/auth/platform.js?v=20261037a" defer></script>
   <script src="js/network/clients.js?v=20261076a" defer></script>
@@ -3387,11 +3399,11 @@
   <script src="js/network/cable-split.js?v=20261014i" defer></script>
   <script src="js/network/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
-  <script src="js/network/network-docs.js?v=20261086a" defer></script>
+  <script src="js/network/network-docs.js?v=20261087b" defer></script>
   <script src="js/network/client-import.js?v=20261076a" defer></script>
   <script src="js/network/signal-trace.js?v=20261076a" defer></script>
   <script src="js/network/field-docs.js?v=20261076a" defer></script>
-  <script src="js/network/network-occurrences.js?v=20261086a" defer></script>
+  <script src="js/network/network-occurrences.js?v=20261087b" defer></script>
   <script src="js/network/network-photos.js?v=20261076a" defer></script>
   <script src="js/network/network-filters.js?v=20261076a" defer></script>
   <script src="js/network/network-timeline.js?v=20261076a" defer></script>

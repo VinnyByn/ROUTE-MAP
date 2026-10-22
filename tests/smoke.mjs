@@ -1481,7 +1481,8 @@ const accountUi = await page.evaluate(() => {
   search.value = ''; fire(search);
   renderMembers([{ user_id: AppSession.userId, email: 'eu@x.com', role: 'admin' }, { user_id: 'x2', email: 'p@x.com', full_name: 'Paula', role: 'projetista' }, { user_id: 'x3', email: 'm@x.com', full_name: 'Mário', role: 'member' }]);
   out.hero = /3 pessoas/.test(document.getElementById('teamHeroDetails').textContent) && document.querySelectorAll('#teamHeroChips .account-badge').length === 3;
-  document.querySelector('#teamRoleFilter [data-role="member"]').click();
+  out.legacyMember = !!document.querySelector('#teamHeroChips .account-badge--viabilidade') && /Viabilidade/.test(document.getElementById('teamMembersList').textContent);
+  document.querySelector('#teamRoleFilter [data-role="viabilidade"]').click();
   const visible = () => [...document.querySelectorAll('#teamMembersList > li')].filter(li => !li.hidden).length;
   out.filter = visible() === 1;
   document.querySelector('#teamRoleFilter [data-role=""]').click();
@@ -1667,10 +1668,12 @@ const accounts = await page.evaluate(async () => {
   await new Promise(r => setTimeout(r, 300));
   document.getElementById('newUserName').value = 'Carlos Lima';
   document.getElementById('newUserEmail').value = 'Carlos@Empresa.com';
-  document.getElementById('inviteRole').value = 'member';
+  document.querySelector('#inviteRoleCards [data-role="viabilidade"]').click();
+  out.roleCards = document.querySelectorAll('#inviteRoleCards .role-card').length === 4 && document.getElementById('inviteRole').value === 'viabilidade'
+    && document.querySelector('#inviteRoleCards [data-role="viabilidade"]').classList.contains('is-active');
   await createTeamUser({ preventDefault() {}, submitter: document.querySelector('#newUserForm [type="submit"]') });
   const call = window.__fakeFunctionCalls.find(c => c.body.action === 'team.create');
-  out.create = call?.body.email === 'carlos@empresa.com' && call.body.role === 'member' && call.body.full_name === 'Carlos Lima'
+  out.create = call?.body.email === 'carlos@empresa.com' && call.body.role === 'viabilidade' && call.body.full_name === 'Carlos Lima'
     && !document.getElementById('accountCredentials').hidden && document.getElementById('accountCredentialsPassword').textContent === 'Abcd-Efgh-Jkmn';
   await new Promise(r => setTimeout(r, 200));
   const resetButtons = document.querySelectorAll('#teamMembersList [data-member-action="reset"]');
@@ -3909,9 +3912,33 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         && getComputedStyle(occModal.querySelector('[data-status="andamento"]')).backgroundColor !== 'rgb(47, 122, 148)';
       out.occModal = kindUi && /CTO/.test(document.getElementById('occurrenceTarget').textContent) && /cliente/.test(document.getElementById('occurrenceTarget').textContent);
       document.getElementById('occurrenceKind').value = 'rompimento';
+      occModal.querySelector('[data-kind="rompimento"]').click();
+      document.getElementById('occurrenceAssignee').value = AppSession.userId;
       document.getElementById('occurrenceText').value = 'Cabo rompido no poste';
       await saveOccurrenceFromModal();
       const occSaved = window.__fakeDb.projects[netId].data.occurrences || [];
+      const dueHours = (Date.parse(occSaved[0]?.dueAt) - Date.parse(occSaved[0]?.openedAt)) / 3600000;
+      out.occTeamDetail = [occSaved[0]?.assignee?.id === AppSession.userId, occSaved[0]?.dueId, dueHours, isMyOccurrence(occSaved[0]), isOccurrenceLate(occSaved[0]),
+        /aberta há .* · vence em 4 h/.test(describeOccurrenceTiming(occSaved[0]).text)].join();
+      //Atrasada: vai para o topo, aparece em "Atrasadas" e no "Precisa de atenção"
+      const lateOcc = { id: 'oc_late', uid: boxA.uid, itemKind: 'm', itemType: 'CTO', itemName: boxA.name, kind: 'sinal', status: 'aberta', openedAt: new Date(Date.now() - 30 * 3600000).toISOString(),
+        dueAt: new Date(Date.now() - 6 * 3600000).toISOString(), assignee: { id: 'outro', name: 'Joana' }, updates: [] };
+      networkDocs.occurrences.set(netId, [...getNetworkOccurrences(netId), lateOcc]);
+      openNetworkPanel('resumo');
+      await new Promise(r => setTimeout(r, 20));
+      const attnLate = /1\s*ocorrência atrasada/.test(document.getElementById('networkPanelBody').textContent);
+      occurrences.filter = 'atrasadas';
+      openNetworkPanel('ocorrencias');
+      await new Promise(r => setTimeout(r, 20));
+      const lateRows = [...document.querySelectorAll('#networkPanelBody .occurrence-row')];
+      out.occLateDetail = [attnLate, lateRows.length, lateRows[0]?.classList.contains('is-late'), /atrasada 6 h/.test(lateRows[0]?.textContent), /Joana/.test(lateRows[0]?.textContent)].join();
+      occurrences.filter = 'minhas';
+      renderNetworkPanel();
+      const mineRows = document.querySelectorAll('#networkPanelBody .occurrence-row').length;
+      out.occTeam = out.occTeamDetail === 'true,4h,4,true,false,true' && out.occLateDetail === 'true,1,true,true,true' && mineRows === 1;
+      networkDocs.occurrences.set(netId, getNetworkOccurrences(netId).filter(o => o.id !== 'oc_late'));
+      occurrences.filter = 'abertas';
+      document.getElementById('networkPanelBox').classList.add('hidden');
       refreshOccurrenceOverlays();
       const rings = occurrences.overlays.length;
       openNetworkPanel('ocorrencias');
@@ -4014,10 +4041,42 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         out.tecnicoDetail = [AppSession.canEdit, AppSession.canDocument, requireEdit('mexer'), requireDocument('cadastrar'), clientEditable, savedAsTec,
           vis('networkAddClientButton'), vis('networkOccurrenceButton'), vis('networkAddMarkerButton')].join();
         out.tecnico = out.tecnicoDetail === 'false,true,false,true,true,true,true,true,false';
+        out.tecnicoExports = !vis('networkExportXlsxButton') && !vis('networkExportFusionButton') && vis('networkQrLabelsButton') && getStartupAppMode() === 'rede';
+        //Ao entrar, o técnico vê as ocorrências abertas com ele
+        const dbOcc = window.__fakeDb.projects[netId].data.occurrences || (window.__fakeDb.projects[netId].data.occurrences = []);
+        dbOcc.push({ id: 'oc_mine', uid: 'x', status: 'aberta', openedAt: new Date().toISOString(), assignee: { id: AppSession.userId, name: 'Eu' } });
+        await openRoleHome();
+        out.tecnicoHome = !document.getElementById('networkPanelBox').classList.contains('hidden') && networkDocs.panelTab === 'ocorrencias' && occurrences.filter === 'minhas'
+          && [...document.querySelectorAll('.toast')].some(t => /Ocorrências com você/.test(t.textContent));
+        dbOcc.splice(dbOcc.findIndex(o => o.id === 'oc_mine'), 1);
+        document.getElementById('networkPanelBox').classList.add('hidden');
+        networkDocs.panelTab = 'resumo';
+        occurrences.filter = 'abertas';
       } finally {
         AppSession.company.role = realRole;
         applyRoleToUi();
       }
+      //Viabilidade (o antigo Membro): só a rede, sem trocar para Projeto, sem o menu Rede, abre já na consulta
+      for (const role of ['viabilidade', 'member']) {
+        AppSession.company.role = role;
+        applyRoleToUi();
+        try {
+          const vis = (sel) => getComputedStyle(document.querySelector(sel)).display !== 'none';
+          const toProject = await setAppMode('projeto');
+          await openRoleHome();
+          const viabOpen = !document.getElementById('viabilityBox').classList.contains('hidden') && viability.active;
+          document.getElementById('closeViabilityBox').click();
+          const saved = await persistProject(netRoot).then(() => true, () => false);
+          out[`viabRole${role}Detail`] = [AppSession.isViabilidade, AppSession.canEdit, AppSession.canDocument, AppSession.canSeeProjects, toProject, appMode,
+            getStartupAppMode(), vis('.mode-switch'), vis('.network-tools > .dropdown:has(#networkMenuButton)'), vis('#networkViabilityButton'), viabOpen, saved,
+            AppSession.roleLabel].join();
+        } finally {
+          AppSession.company.role = realRole;
+          applyRoleToUi();
+        }
+      }
+      out.viabRole = out.viabRoleviabilidadeDetail === 'true,false,false,false,false,rede,rede,false,false,true,true,false,Viabilidade'
+        && out.viabRolememberDetail === out.viabRoleviabilidadeDetail;
       //Barra lateral da rede: pastas por tipo com a quantidade, atalho em outra pasta sem duplicar no mapa, salva sozinha
       const lavras = document.getElementById(netId).closest('.folder');
       updateSidebarCounts();

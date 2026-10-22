@@ -144,9 +144,11 @@ function getPendingFieldLink() {
 }
 
 //Modo ao entrar: o das preferências (Projeto ou Rede) ou, em "Último usado", o da última vez. Link de caixa: Rede.
+//Viabilidade sempre na Rede; técnico de campo começa na Rede, a não ser que prefira o Projeto.
 function getStartupAppMode() {
-    if (getPendingFieldLink()) return 'rede';
+    if (getPendingFieldLink() || AppSession.isViabilidade) return 'rede';
     const pref = AppSession.profile?.preferences?.startMode;
+    if (AppSession.isTecnico && pref !== 'projeto') return 'rede';
     return pref === 'projeto' || pref === 'rede' ? pref : getSavedAppMode();
 }
 
@@ -175,6 +177,11 @@ async function setAppMode(mode, { city = '', startup = false } = {}) {
         return true;
     }
     if (appMode === 'projeto') return true;
+    if (!AppSession.canSeeProjects) {
+        showToast('Somente a rede', 'O cargo Viabilidade consulta só a rede das cidades.', 'progress');
+        applyAppModeUi();
+        return false;
+    }
     if (!(await leaveCurrentWorkspace())) { applyAppModeUi(); return false; }
     appMode = 'projeto';
     applyAppModeUi();
@@ -798,6 +805,26 @@ function guardProjectOnlyButton(id) {
     }, true);
 }
 
+//Tela inicial do cargo (sem link de caixa para abrir): a viabilidade já abre com a consulta de viabilidade; o técnico de
+//campo, com as ocorrências abertas com ele (na cidade que tem mais)
+async function openRoleHome() {
+    if (getPendingFieldLink()) return;
+    if (AppSession.isViabilidade && typeof startViability === 'function') { await startViability(); return; }
+    if (!AppSession.isTecnico || typeof isMyOccurrence !== 'function') return;
+    const { data, error } = await supabaseClient.from('projects').select('id, occurrences:data->occurrences')
+        .eq('project_type', NETWORK_PROJECT_TYPE).is('deleted_at', null);
+    if (error) return;
+    const mine = (data || []).map(row => ({ id: row.id, list: (row.occurrences ?? row.data?.occurrences ?? []).filter(o => isOccurrenceOpen(o) && isMyOccurrence(o)) }))
+        .filter(row => row.list.length && document.getElementById(row.id)).sort((a, b) => b.list.length - a.list.length);
+    if (!mine.length) return;
+    const total = mine.reduce((n, row) => n + row.list.length, 0);
+    await loadNetworkRoot(mine[0].id);
+    setActiveFolder(mine[0].id);
+    occurrences.filter = 'minhas';
+    await openNetworkPanel('ocorrencias');
+    showToast('Ocorrências com você', `${total} ${total === 1 ? 'ocorrência aberta' : 'ocorrências abertas'}${mine.length > 1 ? ` em ${mine.length} cidades` : ''}. Atrasadas aparecem primeiro.`, 'progress');
+}
+
 appReady.then(() => {
     document.querySelectorAll('[data-app-mode]').forEach(button => button.addEventListener('click', () => setAppMode(button.dataset.appMode)));
     document.getElementById('networkAddCityButton')?.addEventListener('click', () => createNetworkCity());
@@ -807,5 +834,5 @@ appReady.then(() => {
     wirePendingNetworkClicks();
     applyAppModeUi();
     //Entrar no modo Rede (preferência ou última vez): quando o mapa estiver pronto
-    if (getStartupAppMode() === 'rede') appModeStartup = mapReady.then(() => setAppMode('rede', { startup: true }));
+    if (getStartupAppMode() === 'rede') appModeStartup = mapReady.then(() => setAppMode('rede', { startup: true })).then(openRoleHome);
 });

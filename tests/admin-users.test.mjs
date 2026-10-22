@@ -103,13 +103,13 @@ w.mfaPending.delete('admin1');
 r = await call('tok-temp', { action: 'team.create', email: 'x@a.com', full_name: 'X' });
 check(r.status === 403, 'conta com senha provisória não cria usuário');
 
-r = await call('tok-admin1', { action: 'team.create', email: ' Nova@A.com ', full_name: 'Nova Pessoa', role: 'member' });
+r = await call('tok-admin1', { action: 'team.create', email: ' Nova@A.com ', full_name: 'Nova Pessoa', role: 'viabilidade' });
 const created = r.body.user;
-check(r.status === 200 && created.email === 'nova@a.com' && created.role === 'member' && /^\S{4}-\S{4}-\S{4}$/.test(r.body.password)
+check(r.status === 200 && created.email === 'nova@a.com' && created.role === 'viabilidade' && /^\S{4}-\S{4}-\S{4}$/.test(r.body.password)
   && w.users[created.id].confirmed === true && w.passwords[created.id] === r.body.password,
   `administrador cria usuário confirmado com senha provisória (${JSON.stringify(r.body)})`);
 check(w.tables.profiles.find(p => p.id === created.id)?.must_change_password === true
-  && w.tables.company_members.some(m => m.user_id === created.id && m.company_id === 'cA' && m.role === 'member'),
+  && w.tables.company_members.some(m => m.user_id === created.id && m.company_id === 'cA' && m.role === 'viabilidade'),
   'usuário novo: troca obrigatória e na empresa do administrador');
 r = await call('tok-admin1', { action: 'team.create', email: 'nova@a.com', full_name: 'Repetida' });
 check(r.status === 409, 'e-mail repetido: avisa');
