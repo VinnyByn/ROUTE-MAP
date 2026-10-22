@@ -4,18 +4,18 @@
 // Depende de js/app.js, js/projects/network-mode.js e js/network/network-docs.js.
 
 const OCCURRENCE_KINDS = [
-    { id: 'rompimento', label: 'Rompimento de fibra', color: '#dc2626' },
-    { id: 'sinal', label: 'Sinal baixo / atenuação', color: '#d97706' },
-    { id: 'danificada', label: 'Caixa ou cabo danificado', color: '#dc2626' },
-    { id: 'poste', label: 'Poste ou fixação', color: '#d97706' },
-    { id: 'vandalismo', label: 'Vandalismo ou furto', color: '#dc2626' },
-    { id: 'preventiva', label: 'Manutenção preventiva', color: '#2563eb' },
-    { id: 'outro', label: 'Outro', color: '#64748b' },
+    { id: 'rompimento', label: 'Rompimento de fibra', color: '#dc2626', hint: 'Fibra ou cabo partido' },
+    { id: 'sinal', label: 'Sinal baixo / atenuação', color: '#d97706', hint: 'Potência fora do esperado' },
+    { id: 'danificada', label: 'Caixa ou cabo danificado', color: '#dc2626', hint: 'Quebrada, aberta, molhada' },
+    { id: 'poste', label: 'Poste ou fixação', color: '#d97706', hint: 'Poste caído, cabo solto' },
+    { id: 'vandalismo', label: 'Vandalismo ou furto', color: '#dc2626', hint: 'Corte ou furto de cabo' },
+    { id: 'preventiva', label: 'Manutenção preventiva', color: '#2563eb', hint: 'Limpeza, revisão, troca' },
+    { id: 'outro', label: 'Outro', color: '#64748b', hint: 'Qualquer outro problema' },
 ];
 const OCCURRENCE_STATUSES = [
-    { id: 'aberta', label: 'Aberta' },
-    { id: 'andamento', label: 'Em andamento' },
-    { id: 'resolvida', label: 'Resolvida' },
+    { id: 'aberta', label: 'Aberta', color: '#dc2626' },
+    { id: 'andamento', label: 'Em andamento', color: '#d97706' },
+    { id: 'resolvida', label: 'Resolvida', color: '#16a34a' },
 ];
 const occurrences = { overlays: [], editing: null, rootId: '', filter: 'abertas', timer: null };
 
@@ -73,23 +73,48 @@ async function saveOccurrenceChange(root) {
 function ensureOccurrenceModal() {
     let modal = document.getElementById('occurrenceModal');
     if (modal) return modal;
+    const icon = (id) => `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"></use></svg>`;
     modal = document.createElement('div');
     modal.id = 'occurrenceModal';
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content occurrence-modal" role="dialog" aria-labelledby="occurrenceTitle">
-            <h2 id="occurrenceTitle">Nova ocorrência</h2>
-            <div class="modal-body-content">
-                <label class="occurrence-modal__label" for="occurrenceItem">Onde</label>
-                <select id="occurrenceItem"></select>
-                <label class="occurrence-modal__label" for="occurrenceKind">Tipo</label>
-                <select id="occurrenceKind">${OCCURRENCE_KINDS.map(k => `<option value="${k.id}">${k.label}</option>`).join('')}</select>
-                <span class="occurrence-modal__label">Situação</span>
-                <div class="occurrence-status" id="occurrenceStatus" role="radiogroup">${OCCURRENCE_STATUSES.map(s => `<button type="button" role="radio" data-status="${s.id}">${s.label}</button>`).join('')}</div>
-                <label class="occurrence-modal__label" for="occurrenceText" id="occurrenceTextLabel">O que aconteceu</label>
-                <textarea id="occurrenceText" rows="3" placeholder="Ex.: cabo rompido no poste em frente ao nº 120, 3 clientes sem sinal"></textarea>
-                <div id="occurrenceExtra"></div>
-                <ol class="occurrence-history" id="occurrenceHistory"></ol>
+            <div class="modal-header-v2 rm-head rm-head--occ">
+                <span class="rm-head__icon">${icon('i-clipboard-check')}</span>
+                <div class="rm-head__text">
+                    <h2 id="occurrenceTitle">Nova ocorrência</h2>
+                    <p class="rm-head__sub" id="occurrenceSubtitle">Registre o problema na caixa ou no cabo; a equipe acompanha até resolver</p>
+                </div>
+            </div>
+            <div class="modal-body-content rm-steps">
+                <div class="occurrence-summary" id="occurrenceSummary" hidden></div>
+                <section class="rm-step" id="occurrenceStepItem">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><label for="occurrenceItem">Onde</label></header>
+                    <select id="occurrenceItem"></select>
+                    <div class="occurrence-target" id="occurrenceTarget" aria-live="polite"></div>
+                </section>
+                <section class="rm-step" id="occurrenceStepKind">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><span>O que aconteceu</span></header>
+                    <input type="hidden" id="occurrenceKind" value="rompimento" />
+                    <div class="occurrence-kinds" id="occurrenceKinds" role="radiogroup" aria-label="Tipo">${OCCURRENCE_KINDS.map(k => `
+                        <button type="button" class="btn-card occurrence-kind" role="radio" data-kind="${k.id}" style="--occ:${k.color}">
+                            <i aria-hidden="true"></i><span><b>${k.label}</b><small>${k.hint}</small></span>
+                        </button>`).join('')}
+                    </div>
+                </section>
+                <section class="rm-step">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><span>Situação</span></header>
+                    <div class="occurrence-status" id="occurrenceStatus" role="radiogroup">${OCCURRENCE_STATUSES.map(st => `<button type="button" class="btn-seg" role="radio" data-status="${st.id}" style="--occ:${st.color}"><i aria-hidden="true"></i>${st.label}</button>`).join('')}</div>
+                </section>
+                <section class="rm-step">
+                    <header class="rm-step__head"><span class="rm-step__n"></span><label for="occurrenceText" id="occurrenceTextLabel">Detalhes</label><small>opcional</small></header>
+                    <textarea id="occurrenceText" rows="3" placeholder="Ex.: cabo rompido no poste em frente ao nº 120, 3 clientes sem sinal"></textarea>
+                    <div id="occurrenceExtra"></div>
+                </section>
+                <section class="rm-step rm-step--plain" id="occurrenceHistoryStep" hidden>
+                    <header class="rm-step__head">${icon('i-clock')}<span>Histórico</span></header>
+                    <ol class="occurrence-history" id="occurrenceHistory"></ol>
+                </section>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-occ="cancel">Cancelar</button>
@@ -100,10 +125,13 @@ function ensureOccurrenceModal() {
     modal.addEventListener('click', (e) => {
         const status = e.target.closest('[data-status]');
         if (status) { setOccurrenceStatusUi(status.dataset.status); return; }
+        const kind = e.target.closest('[data-kind]');
+        if (kind) { setOccurrenceKindUi(kind.dataset.kind); return; }
         const action = e.target.closest('[data-occ]')?.dataset.occ;
         if (e.target === modal || action === 'cancel') closeOccurrenceModal();
         if (action === 'save') saveOccurrenceFromModal();
     });
+    modal.addEventListener('change', (e) => { if (e.target.id === 'occurrenceItem') renderOccurrenceTarget(); });
     return modal;
 }
 
@@ -117,6 +145,51 @@ function setOccurrenceStatusUi(statusId) {
 
 const getOccurrenceStatusUi = () => document.querySelector('#occurrenceStatus [data-status].is-active')?.dataset.status || 'aberta';
 
+function setOccurrenceKindUi(kindId) {
+    const input = document.getElementById('occurrenceKind');
+    if (input) input.value = kindId;
+    document.querySelectorAll('#occurrenceKinds [data-kind]').forEach(b => {
+        const on = b.dataset.kind === kindId;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+}
+
+//Item escolhido: o que é, quantos clientes estão nele e o que cai se ele parar (mesmo cálculo de "Rompimento e impacto")
+function renderOccurrenceTarget() {
+    const box = document.getElementById('occurrenceTarget');
+    if (!box || occurrences.editing) return;
+    const [kind, uid] = (document.getElementById('occurrenceItem')?.value || '').split(':');
+    const item = !uid ? null : kind === 'c' ? savedCables.find(c => c.uid === uid) : markers.find(m => m.uid === uid);
+    if (!item) { box.innerHTML = ''; return; }
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    const facts = [];
+    if (kind === 'c') {
+        const ends = [findMarkerByUid(item.startAnchorUid), findMarkerByUid(item.endAnchorUid)].filter(Boolean).map(m => m.name);
+        if (ends.length) facts.push(`liga ${ends.map(esc).join(' → ')}`);
+        if (item.totalLength) facts.push(`${Math.round(item.totalLength)} m`);
+    } else if (item.type === 'CTO' && typeof getCtoClients === 'function') {
+        const n = getCtoClients(item).length;
+        facts.push(`${n} cliente${n === 1 ? '' : 's'} nesta caixa`);
+    }
+    let impact = '';
+    try {
+        const root = document.getElementById(occurrences.rootId)?.closest('.folder');
+        if (root && typeof buildImpactModel === 'function') {
+            occurrences.impactModel = occurrences.impactModel || buildImpactModel(getNetworkScope(root));
+            if (occurrences.impactModel.base.size) {
+                const target = kind === 'c' ? { kind: 'cable', cable: item } : { kind: 'box', box: item };
+                const result = analyzeNetworkCut(occurrences.impactModel, networkCutFor(target), kind === 'c' ? null : item);
+                impact = result.lost.length || result.degraded.length
+                    ? `<span class="occurrence-target__impact is-bad">Se estiver parado: ${esc(describeImpactResult(result))}</span>`
+                    : '<span class="occurrence-target__impact">Se estiver parado: nenhuma CTO perde sinal</span>';
+            }
+        }
+    } catch (e) { /* sem cálculo de sinal: mostra só o item */ }
+    box.innerHTML = `<span class="occurrence-target__type">${kind === 'c' ? 'Cabo' : esc(item.type)}</span>
+        <span class="occurrence-target__text"><b>${esc(item.name)}</b>${facts.length ? `<small>${facts.join(' · ')}</small>` : ''}${impact}</span>`;
+}
+
 //item: caixa/cabo já escolhido (painel da caixa); occurrence: ocorrência existente (atualizar)
 async function openOccurrenceModal({ item = null, occurrence = null, root = null } = {}) {
     if (!requireDocument('registrar ocorrências')) return;
@@ -125,6 +198,7 @@ async function openOccurrenceModal({ item = null, occurrence = null, root = null
     if (!root) return;
     occurrences.rootId = getRootId(root);
     occurrences.editing = occurrence;
+    occurrences.impactModel = null;
     const modal = ensureOccurrenceModal();
     const esc = (v) => escapeHtml(String(v ?? ''));
     const targets = getOccurrenceTargets(root);
@@ -136,20 +210,35 @@ async function openOccurrenceModal({ item = null, occurrence = null, root = null
     };
     select.innerHTML = `${selectedUid ? '' : '<option value="">Escolha a caixa ou o cabo…</option>'}${group('m', 'Caixas')}${group('c', 'Cabos')}`;
     select.disabled = !!occurrence;
-    modal.querySelector('#occurrenceKind').value = occurrence?.kind || 'rompimento';
-    modal.querySelector('#occurrenceKind').disabled = !!occurrence;
+    setOccurrenceKindUi(occurrence?.kind || 'rompimento');
     setOccurrenceStatusUi(occurrence?.status || 'aberta');
+    modal.querySelector('#occurrenceStepItem').hidden = !!occurrence;
+    modal.querySelector('#occurrenceStepKind').hidden = !!occurrence;
     modal.querySelector('#occurrenceText').value = '';
-    modal.querySelector('#occurrenceTextLabel').textContent = occurrence ? 'Anotação (o que foi feito)' : 'O que aconteceu';
-    modal.querySelector('#occurrenceTitle').textContent = occurrence ? `${getOccurrenceKind(occurrence.kind).label} · ${occurrence.itemName}` : 'Nova ocorrência';
+    modal.querySelector('#occurrenceText').placeholder = occurrence ? 'Ex.: emenda refeita, sinal normalizado' : 'Ex.: cabo rompido no poste em frente ao nº 120, 3 clientes sem sinal';
+    modal.querySelector('#occurrenceTextLabel').textContent = occurrence ? 'Anotação (o que foi feito)' : 'Detalhes';
+    modal.querySelector('#occurrenceTitle').textContent = occurrence ? 'Acompanhar ocorrência' : 'Nova ocorrência';
+    modal.querySelector('#occurrenceSubtitle').textContent = occurrence ? 'Mude a situação e anote o que foi feito' : 'Registre o problema na caixa ou no cabo; a equipe acompanha até resolver';
     modal.querySelector('[data-occ="save"]').textContent = occurrence ? 'Salvar' : 'Registrar';
-    modal.querySelector('#occurrenceHistory').innerHTML = occurrence ? [
+    const summary = modal.querySelector('#occurrenceSummary');
+    summary.hidden = !occurrence;
+    if (occurrence) {
+        const k = getOccurrenceKind(occurrence.kind);
+        const st = getOccurrenceStatus(occurrence.status);
+        summary.style.setProperty('--occ', k.color);
+        summary.innerHTML = `<i aria-hidden="true"></i><span><b>${esc(k.label)}</b><small>${occurrence.itemKind === 'c' ? 'Cabo' : esc(occurrence.itemType)} ${esc(occurrence.itemName)} · aberta ${esc(formatOccurrenceAge(occurrence.openedAt))} por ${esc(occurrence.openedBy || '')}</small></span>
+            <em class="is-${esc(occurrence.status)}">${esc(st.label)}</em>`;
+    }
+    const history = occurrence ? [
         { at: occurrence.openedAt, by: occurrence.openedBy, status: 'aberta', text: occurrence.text, first: true },
         ...(occurrence.updates || []),
-    ].reverse().map(u => `<li><small>${esc(formatDocDate(u.at))} · ${esc(u.by || '')}${u.first ? ' · abriu' : u.status ? ` · ${esc(getOccurrenceStatus(u.status).label)}` : ''}</small>${u.text ? `<span>${esc(u.text)}</span>` : ''}</li>`).join('') : '';
+    ].reverse() : [];
+    modal.querySelector('#occurrenceHistoryStep').hidden = !history.length;
+    modal.querySelector('#occurrenceHistory').innerHTML = history.map(u => `<li class="is-${esc(u.first ? 'aberta' : u.status || 'nota')}"><small>${esc(formatDocDate(u.at))} · ${esc(u.by || '')}${u.first ? ' · abriu' : u.status ? ` · ${esc(getOccurrenceStatus(u.status).label)}` : ''}</small>${u.text ? `<span>${esc(u.text)}</span>` : ''}</li>`).join('');
+    renderOccurrenceTarget();
     if (typeof renderOccurrencePhotos === 'function') renderOccurrencePhotos(modal.querySelector('#occurrenceExtra'), occurrence, root);
     modal.style.display = 'flex';
-    setTimeout(() => modal.querySelector(occurrence ? '#occurrenceText' : (selectedUid ? '#occurrenceKind' : '#occurrenceItem'))?.focus(), 50);
+    setTimeout(() => modal.querySelector(occurrence ? '#occurrenceText' : (selectedUid ? '#occurrenceKinds .is-active' : '#occurrenceItem'))?.focus(), 50);
 }
 
 function closeOccurrenceModal() {

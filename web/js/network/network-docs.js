@@ -9,7 +9,7 @@ const NETWORK_LOG_MAX = 500;
 const VIABILITY_RADII = [100, 150, 200, 300, 500];
 const VIABILITY_STREET_FACTOR = 1.3; //Drop pela rua ≈ 1,3 × a distância em linha reta
 const networkDocs = { snapshots: new Map(), logs: new Map(), bulk: new Map(), occurrences: new Map(), panelRootId: '', panelTab: 'resumo', cursor: new Map() };
-const viability = { active: false, radius: 200, point: null, listener: null, overlays: [], results: [] };
+const viability = { active: false, radius: 200, point: null, listener: null, overlays: [], results: [], run: 0, routing: false };
 
 const getNetworkRoots = () => getOpenProjectRoots().filter(isNetworkRoot);
 const networkWho = () => AppSession.profile?.full_name || AppSession.email || 'Alguém';
@@ -392,6 +392,7 @@ async function startViability() {
 
 function stopViability() {
     viability.active = false;
+    viability.run++;
     viability.listener?.remove?.();
     viability.listener = null;
     clearViabilityOverlays();
@@ -416,36 +417,106 @@ function findViableCtos(point, radius) {
             const capacity = getCtoPortCapacity(cto);
             const used = getOccupiedPorts(cto).size;
             const free = capacity ? capacity - used : null;
-            const street = straight * VIABILITY_STREET_FACTOR;
-            const status = street > radius ? 'longe' : free === 0 ? 'cheia' : 'ok';
-            out.push({ cto, root, straight, street, capacity, used, free, status });
+            out.push(classifyViability({ cto, root, straight, street: straight * VIABILITY_STREET_FACTOR, routed: false, capacity, used, free }, radius));
         });
     });
-    const rank = { ok: 0, cheia: 1, longe: 2 };
-    return out.sort((a, b) => rank[a.status] - rank[b.status] || a.street - b.street).slice(0, 6);
+    return sortViability(out).slice(0, 6);
 }
+
+function classifyViability(r, radius) {
+    r.status = r.street > radius ? 'longe' : r.free === 0 ? 'cheia' : 'ok';
+    return r;
+}
+
+const sortViability = (list) => {
+    const rank = { ok: 0, cheia: 1, longe: 2 };
+    return list.sort((a, b) => rank[a.status] - rank[b.status] || a.street - b.street);
+};
+
+const VIABILITY_COLORS = { ok: '#16a34a', cheia: '#dc2626', longe: '#64748b' };
+const VIABILITY_ROUTES = 3; //Rotas pela rua desenhadas até as CTOs mais perto
 
 function runViability(point) {
     viability.point = point;
     viability.results = findViableCtos(point, viability.radius);
-    clearViabilityOverlays();
-    viability.overlays.push(new google.maps.Marker({
-        map, position: point, zIndex: 90, clickable: false,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: '#2563eb', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 3 },
-    }));
-    viability.overlays.push(new google.maps.Circle({
-        map, center: point, radius: viability.radius / VIABILITY_STREET_FACTOR, clickable: false, zIndex: 30,
-        strokeColor: '#2563eb', strokeOpacity: 0.5, strokeWeight: 1, fillColor: '#2563eb', fillOpacity: 0.06,
-    }));
-    const colors = { ok: '#16a34a', cheia: '#dc2626', longe: '#94a3b8' };
-    viability.results.slice(0, 3).forEach(r => {
+    viability.run = (viability.run || 0) + 1;
+    viability.routing = viability.results.slice(0, VIABILITY_ROUTES).length > 0;
+    viability.results.slice(0, VIABILITY_ROUTES).forEach(r => {
         const box = r.root.querySelector(':scope > .folder-title .visibility-toggle-btn');
         if (box && !box.checked) handleVisibilityToggle(box, true);
-        viability.overlays.push(new google.maps.Polyline({
-            map, path: [point, r.cto.marker.getPosition()], clickable: false, zIndex: 88, strokeOpacity: 0,
-            icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: colors[r.status], strokeWeight: 3, scale: 3 }, offset: '0', repeat: '10px' }],
-        }));
     });
+    drawViability();
+    renderViability();
+    routeViabilityResults(viability.run);
+}
+
+//Raio do drop: anel forte com borda branca, preenchimento leve e o tamanho escrito na borda de cima
+function drawViabilityArea(point) {
+    const radius = viability.radius / VIABILITY_STREET_FACTOR;
+    const ring = { map, center: point, radius, clickable: false };
+    viability.overlays.push(new google.maps.Circle({ ...ring, zIndex: 29, strokeColor: '#ffffff', strokeOpacity: 0.9, strokeWeight: 6, fillOpacity: 0 }));
+    viability.overlays.push(new google.maps.Circle({ ...ring, zIndex: 30, strokeColor: '#2563eb', strokeOpacity: 1, strokeWeight: 3, fillColor: '#3b82f6', fillOpacity: 0.13 }));
+    const top = new google.maps.LatLng(point.lat() + radius / 111320, point.lng());
+    viability.overlays.push(new google.maps.Marker({
+        map, position: top, zIndex: 92, clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+        label: { text: `drop até ${viability.radius} m`, className: 'viab-map-label viab-map-label--radius', color: '#ffffff', fontSize: '12px', fontWeight: '700' },
+    }));
+    viability.overlays.push(new google.maps.Marker({
+        map, position: point, zIndex: 95, clickable: false, title: 'Cliente',
+        icon: { path: 'M12 2C7.6 2 4 5.5 4 9.9 4 15.7 12 23 12 23s8-7.3 8-13.1C20 5.5 16.4 2 12 2z', fillColor: '#2563eb', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2.5, scale: 1.7, anchor: new google.maps.Point(12, 23), labelOrigin: new google.maps.Point(12, 10) },
+        label: { text: '●', color: '#ffffff', fontSize: '11px' },
+    }));
+}
+
+//Linha do cliente até a CTO: pela rua (rota) com contorno branco; reta tracejada enquanto a rota não chega ou se falhar
+function drawViabilityRoute(r, index) {
+    const color = VIABILITY_COLORS[r.status];
+    const end = r.cto.marker.getPosition();
+    const path = r.path || [viability.point, end];
+    if (r.path) {
+        viability.overlays.push(new google.maps.Polyline({ map, path, clickable: false, zIndex: 86, strokeColor: '#ffffff', strokeOpacity: 0.95, strokeWeight: 8 }));
+        viability.overlays.push(new google.maps.Polyline({ map, path, clickable: false, zIndex: 87, strokeColor: color, strokeOpacity: 1, strokeWeight: 4.5 }));
+    } else {
+        viability.overlays.push(new google.maps.Polyline({
+            map, path, clickable: false, zIndex: 88, strokeOpacity: 0,
+            icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: color, strokeWeight: 3, scale: 3 }, offset: '0', repeat: '10px' }],
+        }));
+    }
+    const mid = path[Math.floor((path.length - 1) / 2)];
+    const midPoint = path.length === 2 ? google.maps.geometry.spherical.interpolate(path[0], path[1], 0.5) : mid;
+    viability.overlays.push(new google.maps.Marker({
+        map, position: midPoint, zIndex: 93 - index, clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+        label: { text: `${index + 1} · ${Math.round(r.street)} m`, className: `viab-map-label viab-map-label--${r.status}`, color: '#ffffff', fontSize: '12px', fontWeight: '700' },
+    }));
+}
+
+function drawViability() {
+    clearViabilityOverlays();
+    if (!viability.point) return;
+    drawViabilityArea(viability.point);
+    viability.results.slice(0, VIABILITY_ROUTES).forEach((r, i) => drawViabilityRoute(r, i));
+}
+
+//Busca a rota a pé pelas ruas (OSRM, js/network/clients.js) até as CTOs mais perto; troca a estimativa pela distância da rota
+async function routeViabilityResults(run) {
+    const list = viability.results.slice(0, VIABILITY_ROUTES);
+    if (!list.length || typeof fetchOsrmRoute !== 'function') { viability.routing = false; renderViability(); return; }
+    const point = viability.point;
+    await Promise.all(list.map(async (r) => {
+        let path = null;
+        try { path = await fetchOsrmRoute(point, r.cto.marker.getPosition()); } catch (e) { path = null; }
+        if (run !== viability.run || !path?.length) return;
+        r.path = [point, ...path, r.cto.marker.getPosition()];
+        r.street = google.maps.geometry.spherical.computeLength(r.path);
+        r.routed = true;
+        classifyViability(r, viability.radius);
+    }));
+    if (run !== viability.run) return;
+    viability.routing = false;
+    sortViability(viability.results);
+    drawViability();
     renderViability();
 }
 
@@ -456,26 +527,36 @@ function renderViability() {
     const fmt = (v) => Math.round(v).toLocaleString('pt-BR');
     const radius = `<div class="map-tool-field"><label>Drop até</label><div class="map-tool-segmented viability-radius" role="radiogroup">${VIABILITY_RADII.map(r => `<button type="button" data-viab="radius" data-r="${r}" class="${r === viability.radius ? 'is-active' : ''}" aria-pressed="${r === viability.radius}">${r} m</button>`).join('')}</div></div>`;
     if (!viability.point) {
-        body.innerHTML = `${radius}<p class="viability-hint">Clique no mapa onde fica o cliente (use <b>Localizar</b> para achar o endereço). Aparecem as CTOs por perto, com as portas livres.</p>`;
+        body.innerHTML = `${radius}
+            <div class="viability-empty">
+                <span class="viability-empty__icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><use href="#i-target"></use></svg></span>
+                <b>Clique no mapa onde fica o cliente</b>
+                <p class="viability-hint">Use <b>Localizar</b> para achar o endereço. Aparecem o raio do drop, as CTOs por perto com as portas livres e o caminho pela rua até cada uma.</p>
+            </div>`;
         return;
     }
     const best = viability.results.find(r => r.status === 'ok');
     const verdict = best
-        ? `<div class="viability-verdict is-ok"><b>Viável</b><span>${esc(best.cto.name)} a ≈ ${fmt(best.street)} m${best.free != null ? `, ${best.free} ${best.free === 1 ? 'porta livre' : 'portas livres'}` : ''}</span></div>`
+        ? `<div class="viability-verdict is-ok"><b>Viável</b><span>${esc(best.cto.name)} a ${best.routed ? '' : '≈ '}${fmt(best.street)} m pela rua${best.free != null ? `, ${best.free} ${best.free === 1 ? 'porta livre' : 'portas livres'}` : ''}</span></div>`
         : `<div class="viability-verdict is-no"><b>Sem viabilidade</b><span>Nenhuma CTO com porta livre num drop de até ${viability.radius} m.</span></div>`;
     const label = { ok: 'Atende', cheia: 'Sem porta', longe: 'Longe' };
-    const rows = viability.results.map((r, i) => `
+    const rows = viability.results.map((r, i) => {
+        const pct = r.capacity ? Math.round((r.used / r.capacity) * 100) : 0;
+        return `
         <li class="viability-row is-${r.status}">
+            <span class="viability-row__n" aria-hidden="true">${i < VIABILITY_ROUTES ? i + 1 : ''}</span>
             <button type="button" class="viability-row__main" data-viab="focus" data-i="${i}">
-                <b>${esc(r.cto.name)}</b>
-                <small>≈ ${fmt(r.street)} m pela rua · ${r.capacity ? `${r.free} de ${r.capacity} livres` : `${r.used} cliente(s), sem splitter`}</small>
+                <b>${esc(r.cto.name)} <em class="viability-row__tag">${label[r.status]}</em></b>
+                <small>${r.routed ? `${fmt(r.street)} m pela rua (rota)` : `≈ ${fmt(r.street)} m pela rua${i < VIABILITY_ROUTES && viability.routing ? ' · buscando rota…' : ''}`}</small>
+                ${r.capacity ? `<span class="viability-row__ports"><i style="width:${pct}%"></i></span><small>${r.free} de ${r.capacity} portas livres</small>` : `<small>${r.used} cliente(s), sem splitter</small>`}
             </button>
-            <span class="viability-row__tag">${label[r.status]}</span>
             ${AppSession.canEdit && r.status === 'ok' ? `<button type="button" class="map-tool-btn viability-row__add" data-viab="client" data-i="${i}">+ Cliente</button>` : ''}
-        </li>`).join('');
+        </li>`;
+    }).join('');
+    const routed = viability.results.some(r => r.routed);
     body.innerHTML = `${radius}${verdict}
         ${rows ? `<ul class="viability-list">${rows}</ul>` : '<p class="viability-hint">Nenhuma CTO da rede perto daqui.</p>'}
-        <p class="viability-hint">Clique em outro ponto do mapa para consultar de novo. A distância pela rua é estimada (1,3 × a linha reta).</p>`;
+        <p class="viability-hint">Clique em outro ponto do mapa para consultar de novo. ${routed ? 'As distâncias marcadas com "rota" seguem as ruas (a pé).' : 'Sem a rota, a distância pela rua é estimada (1,3 × a linha reta).'}</p>`;
 }
 
 function handleViabilityClick(e) {

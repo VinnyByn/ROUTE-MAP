@@ -291,12 +291,24 @@ function describeImpactResult(result) {
 }
 
 function renderImpactDetail(row) {
-    const names = (list) => list.slice(0, 12).map(l => escapeHtml(l.cto.name)).join(', ') + (list.length > 12 ? ` e mais ${list.length - 12}` : '');
+    const chips = (list, cls, text) => list.slice(0, 16).map(l => `<span class="impact-chip ${cls}">${text(l)}</span>`).join('') + (list.length > 16 ? `<span class="impact-chip">+${list.length - 16}</span>` : '');
     const lines = [];
-    if (row.result.lost.length) lines.push(`<p><b class="is-erro">Sem sinal:</b> ${names(row.result.lost)}</p>`);
-    if (row.result.degraded.length) lines.push(`<p><b class="is-aviso">Sinal pior:</b> ${row.result.degraded.slice(0, 12).map(d => `${escapeHtml(d.cto.name)} (${formatDbm(d.before)} → ${formatDbm(d.after)})`).join(', ')}</p>`);
+    if (row.result.lost.length) lines.push(`<div class="impact-detail__row"><b class="is-erro">Sem sinal</b><div>${chips(row.result.lost, 'is-erro', l => `${escapeHtml(l.cto.name)}${l.clients ? ` · ${l.clients}` : ''}`)}</div></div>`);
+    if (row.result.degraded.length) lines.push(`<div class="impact-detail__row"><b class="is-aviso">Sinal pior</b><div>${chips(row.result.degraded, 'is-aviso', d => `${escapeHtml(d.cto.name)} ${formatDbm(d.before)} → ${formatDbm(d.after)}`)}</div></div>`);
     return lines.join('');
 }
+
+//Números grandes do corte: CTOs sem sinal, clientes fora do ar, CTOs com sinal pior
+function renderImpactNumbers(result) {
+    const tile = (n, label, cls) => `<div class="impact-num ${n ? cls : 'is-zero'}"><b>${n}</b><span>${label}</span></div>`;
+    return `<div class="impact-nums">
+        ${tile(result.clientsLost, result.clientsLost === 1 ? 'cliente fora do ar' : 'clientes fora do ar', 'is-erro')}
+        ${tile(result.lost.length, result.lost.length === 1 ? 'CTO sem sinal' : 'CTOs sem sinal', 'is-erro')}
+        ${tile(result.degraded.length, result.degraded.length === 1 ? 'CTO com sinal pior' : 'CTOs com sinal pior', 'is-aviso')}
+    </div>`;
+}
+
+const canRegisterImpactOccurrence = () => typeof appMode !== 'undefined' && appMode === 'rede' && typeof openOccurrenceModal === 'function' && AppSession.canDocument;
 
 function renderNetworkImpact() {
     const body = document.getElementById('networkImpactBody');
@@ -304,69 +316,82 @@ function renderNetworkImpact() {
     const state = networkImpactState;
     if (!state) return;
     subtitle.textContent = state.projectName || '';
+    document.getElementById('networkImpactTitle').textContent = typeof appMode !== 'undefined' && appMode === 'rede' ? 'Rompimento e impacto' : 'Redundância e impacto';
     if (state.error) {
         body.innerHTML = `<p class="route-note">${escapeHtml(state.error)}</p>`;
         return;
     }
     if (state.progress) {
-        body.innerHTML = `<p class="route-note">Simulando falhas… ${state.progress.done} de ${state.progress.total}</p>`;
+        const pct = state.progress.total ? Math.round((state.progress.done / state.progress.total) * 100) : 0;
+        body.innerHTML = `<div class="impact-progress"><p class="route-note">Simulando falhas… ${state.progress.done} de ${state.progress.total}</p><i><i style="width:${pct}%"></i></i></div>`;
         return;
     }
     const { structure, rows, topo, baseCtos } = state.data;
     const bridgeCount = structure.bridges.size;
     const inRing = topo.edges.length - bridgeCount;
     const singles = rows.filter(r => r.single);
-    const summary = `<div class="check-summary">
-        <span class="${singles.length ? 'is-erro' : 'is-ok'}">${singles.length} ponto${singles.length === 1 ? '' : 's'} único${singles.length === 1 ? '' : 's'} de falha</span>
-        <span class="is-ok">${inRing} cabo${inRing === 1 ? '' : 's'} em anel</span>
-        <span class="${bridgeCount ? 'is-aviso' : 'is-ok'}">${bridgeCount} sem rota alternativa</span>
+    const stat = (n, label, cls) => `<div class="impact-stat ${cls}"><b>${n}</b><span>${label}</span></div>`;
+    const summary = `<div class="impact-stats">
+        ${stat(singles.length, singles.length === 1 ? 'ponto único de falha' : 'pontos únicos de falha', singles.length ? 'is-erro' : 'is-ok')}
+        ${stat(inRing, inRing === 1 ? 'cabo em anel' : 'cabos em anel', 'is-ok')}
+        ${stat(bridgeCount, 'sem rota alternativa', bridgeCount ? 'is-aviso' : 'is-ok')}
     </div>`;
     if (!baseCtos) {
-        body.innerHTML = summary + '<p class="route-note">Nenhuma CTO recebe sinal hoje, então não há o que simular. No plano do POP, ligue a OLT à fibra do cabo (ou vincule o splitter) e verifique de novo. Os números acima mostram só a proteção física dos cabos.</p>' + renderRingsSection(structure);
+        body.innerHTML = summary + '<div class="impact-empty"><b>Nenhuma CTO recebe sinal hoje</b><p class="route-note">Não há o que simular. No plano do POP, ligue a OLT à fibra do cabo (ou vincule o splitter) e analise de novo. Os números acima mostram só a proteção física dos cabos.</p></div>' + renderRingsSection(structure);
         return;
     }
-    const list = rows.length ? `<ul class="impact-list">${rows.map((row, index) => `
-        <li class="impact-item" data-impact-index="${index}">
+    const worst = Math.max(1, ...rows.map(r => r.result.clientsLost));
+    const list = rows.length ? `<ol class="impact-list">${rows.map((row, index) => `
+        <li class="impact-item${row.single ? ' is-single' : ''}" data-impact-index="${index}">
             <button type="button" class="impact-item__head">
-                <span class="impact-item__kind">${row.kind === 'cable' ? 'Cabo' : escapeHtml(row.box.type)}</span>
-                <strong>${escapeHtml(row.name)}</strong>
-                <small>${escapeHtml(describeImpactResult(row.result))}</small>
-                ${row.single ? '<span class="impact-tag is-erro">sem alternativa</span>' : '<span class="impact-tag is-ok">tem alternativa parcial</span>'}
+                <span class="impact-item__rank">${index + 1}</span>
+                <span class="impact-item__main">
+                    <span class="impact-item__name"><span class="impact-item__kind">${row.kind === 'cable' ? 'Cabo' : escapeHtml(row.box.type)}</span><strong>${escapeHtml(row.name)}</strong></span>
+                    <small>${escapeHtml(describeImpactResult(row.result))}</small>
+                    <span class="impact-item__bar" aria-hidden="true"><i style="width:${Math.max(3, (row.result.clientsLost / worst) * 100)}%"></i></span>
+                </span>
+                <span class="impact-item__score"><b>${row.result.clientsLost}</b><small>${row.result.clientsLost === 1 ? 'cliente' : 'clientes'}</small></span>
+                ${row.single ? '<span class="impact-tag is-erro">sem alternativa</span>' : '<span class="impact-tag is-ok">alternativa parcial</span>'}
             </button>
             <div class="impact-item__detail" hidden>
                 ${renderImpactDetail(row)}
                 <div class="impact-item__actions">
                     <button type="button" class="route-clear" data-impact-focus="${index}">Ver no mapa</button>
                     ${row.kind === 'cable' && row.edge && structure.bridges.has(row.edge.id) ? `<button type="button" class="route-clear" data-impact-ring="${index}">Sugerir anel</button>` : ''}
+                    ${canRegisterImpactOccurrence() ? `<button type="button" class="route-clear" data-impact-occ="${index}">Registrar ocorrência</button>` : ''}
                 </div>
                 <p class="route-note" data-impact-note="${index}"></p>
             </div>
-        </li>`).join('')}</ul>` : '<p class="check-ok">Nenhum cabo ou caixa derruba sozinho a rede.</p>';
-    body.innerHTML = summary + `<h4 class="check-section">O que cai se parar <small>${baseCtos} CTO${baseCtos === 1 ? '' : 's'} com sinal hoje</small></h4>` + list + renderSimulatePicker(state) + renderRingsSection(structure);
+        </li>`).join('')}</ol>` : '<p class="check-ok">Nenhum cabo ou caixa derruba sozinho a rede.</p>';
+    body.innerHTML = renderSimulatePicker(state) + summary
+        + `<h4 class="check-section">O que mais derruba <small>${baseCtos} CTO${baseCtos === 1 ? '' : 's'} com sinal hoje</small></h4>` + list + renderRingsSection(structure);
 }
 
 function renderSimulatePicker(state) {
-    const { topo } = state.data;
     const cables = state.scope.cables.map((c, i) => `<option value="c${i}">${escapeHtml(c.name)}</option>`).join('');
     const boxes = state.scope.markers.filter(m => IMPACT_BOX_TYPES.includes(m.type)).map((m, i) => `<option value="b${i}">${escapeHtml(m.type)} ${escapeHtml(m.name)}</option>`).join('');
     if (!cables && !boxes) return '';
-    return `<h4 class="check-section">Simular um elemento</h4>
-        <div class="impact-picker">
+    return `<section class="impact-picker">
+            <label for="impactPicker"><b>Simular um rompimento</b><small>Escolha um cabo ou caixa e veja o que para</small></label>
             <select id="impactPicker"><option value="">Escolha um cabo ou caixa…</option>
                 ${cables ? `<optgroup label="Cabos">${cables}</optgroup>` : ''}${boxes ? `<optgroup label="Caixas">${boxes}</optgroup>` : ''}
             </select>
-            <p class="route-note" id="impactPickerResult"></p>
-        </div>`;
+            <div class="impact-picker__result" id="impactPickerResult"></div>
+        </section>`;
+}
+
+function renderSimulateResult(row) {
+    return `${renderImpactNumbers(row.result)}${renderImpactDetail(row)}
+        ${canRegisterImpactOccurrence() ? '<div class="impact-item__actions"><button type="button" class="route-clear" data-impact-occ="picker">Registrar ocorrência</button></div>' : ''}`;
 }
 
 function renderRingsSection(structure) {
     if (!structure.rings.length) return '<h4 class="check-section">Anéis</h4><p class="route-note">Nenhum anel fechado: todos os trechos são ponta a ponta.</p>';
     return `<h4 class="check-section">Anéis <small>${structure.rings.length}</small></h4><ul class="impact-rings">${structure.rings.map((ring, i) =>
-        `<li><button type="button" data-impact-ring-focus="${i}">Anel ${i + 1}: ${ring.boxes.length} caixas · ${ring.cables.length} cabos</button></li>`).join('')}</ul>`;
+        `<li><button type="button" class="btn-ring" data-impact-ring-focus="${i}"><span>Anel ${i + 1}</span><small>${ring.boxes.length} caixas · ${ring.cables.length} cabos</small></button></li>`).join('')}</ul>`;
 }
 
 async function refreshNetworkImpact() {
-    const body = document.getElementById('networkImpactBody');
     const scope = getActiveProjectScope();
     clearImpactOverlays();
     if (!scope) {
@@ -382,7 +407,7 @@ async function refreshNetworkImpact() {
         const data = await runNetworkImpact(scope, (done, total) => {
             if (run !== networkImpactRun) return;
             networkImpactState.progress = { done, total };
-            body.querySelector('.route-note') && (body.querySelector('.route-note').textContent = `Simulando falhas… ${done} de ${total}`);
+            renderNetworkImpact();
         }, () => run !== networkImpactRun);
         if (!data || run !== networkImpactRun) return;
         networkImpactState = { scope, projectName, data };
@@ -428,6 +453,13 @@ function setupNetworkImpact() {
             else clearImpactOverlays();
             return;
         }
+        const occ = e.target.closest('[data-impact-occ]');
+        if (occ) {
+            const row = occ.dataset.impactOcc === 'picker' ? networkImpactState.picked : state.rows[Number(occ.dataset.impactOcc)];
+            const item = row?.kind === 'cable' ? row.cable : row?.box;
+            if (item) openOccurrenceModal({ item, root: document.getElementById(state.scope?.projectId || networkImpactState.scope.projectId)?.closest('.folder') });
+            return;
+        }
         const focus = e.target.closest('[data-impact-focus]');
         if (focus) return showImpactOnMap(state.rows[Number(focus.dataset.impactFocus)]);
         const ring = e.target.closest('[data-impact-ring]');
@@ -465,7 +497,8 @@ function setupNetworkImpact() {
             : { kind: 'box', box: boxesList[Number(value.slice(1))], name: boxesList[Number(value.slice(1))].name };
         const result = analyzeNetworkCut(state.data.model, networkCutFor(target), target.kind === 'box' ? target.box : null);
         const row = { ...target, result };
-        out.innerHTML = `<b>${escapeHtml(target.name)}:</b> ${escapeHtml(describeImpactResult(result))}${renderImpactDetail(row) ? '<br>' + renderImpactDetail(row) : ''}`;
+        networkImpactState.picked = row;
+        out.innerHTML = renderSimulateResult(row);
         showImpactOnMap(row);
     });
 }

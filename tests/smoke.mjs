@@ -834,7 +834,12 @@ const projCheck = await page.evaluate(() => {
     document.querySelector('[data-folder-id="projV"]').closest('.folder').remove();
     activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
   };
-  return { titles: issues.map(i => `${i.level}:${i.title}`), panelHasCount: /erros?/.test(panel) && /avisos?/.test(panel) };
+  const groups = [...document.querySelectorAll('#projectCheckBody .check-group__head span')].map(h => h.textContent).join('|');
+  document.querySelector('#projectCheckBody [data-check-filter="erro"]').click();
+  const onlyErrors = [...document.querySelectorAll('#projectCheckBody .check-list button')].every(b => b.classList.contains('is-erro'))
+    && document.querySelectorAll('#projectCheckBody .check-list button').length === issues.filter(i => i.level === 'erro').length;
+  return { titles: issues.map(i => `${i.level}:${i.title}`), panelHasCount: /erros?/.test(panel) && /avisos?/.test(panel) && groups === 'Cabos|Caixas e fusões|Clientes e portas|Nomes repetidos' && onlyErrors
+    && document.getElementById('projectCheckTitle').textContent === 'Verificação do projeto', groups };
 });
 if (process.env.SMOKE_SHOTS) {
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
@@ -846,7 +851,7 @@ const expectCheck = ['aviso:Nome de cabo repetido: V-2', 'erro:Cabo com ponta so
   'erro:Cabo inexistente no plano de V-CEO', 'erro:Fusão duplicada em V-CEO', 'erro:Fusão quebrada em V-CEO', 'aviso:Splitter sem entrada em V-CEO',
   'aviso:Cliente sem porta: V-SemPorta', 'erro:Porta usada duas vezes na V-CTO', 'aviso:Drop longo: V-Longe', 'aviso:Cliente sem CTO: V-Solto'];
 const missingCheck = expectCheck.filter(t => !projCheck.titles.includes(t));
-check(!missingCheck.length && projCheck.panelHasCount, `verificação do projeto encontra os problemas${missingCheck.length ? ` (faltou: ${missingCheck.join(' | ')})` : ''}`);
+check(!missingCheck.length && projCheck.panelHasCount, `verificação do projeto encontra os problemas e agrupa por tema${missingCheck.length ? ` (faltou: ${missingCheck.join(' | ')})` : ''} (${projCheck.groups})`);
 
 //Orçamento óptico: OLT +5 → conector 0,5 → 1:8 (10,5) → fusão 0,1 → 1 km (0,35) → fusão 0,1 → 1:8 (10,5) → conector 0,5 = −17,55 dBm
 const optical = await page.evaluate(() => {
@@ -1068,6 +1073,17 @@ const impact = await page.evaluate(async () => {
   const rowOf = (name) => data.rows.find(r => r.name === name);
   const summary = (name) => { const r = rowOf(name); return r ? `${r.result.lost.map(l => l.cto.name).join('+')}/${r.result.clientsLost}` : 'nenhum'; };
   const out = { base: data.baseCtos, cutA: summary('I-A'), cutB: summary('I-B'), cutCeo: summary('I-CEO'), cutCto1: summary('I-CTO1'), first: data.rows[0]?.name };
+  //Tela: ranking com os clientes de cada corte e a simulação com os números grandes
+  networkImpactState = { scope, projectName: 'Impacto', data };
+  renderNetworkImpact();
+  const impactBody = document.getElementById('networkImpactBody');
+  const picker = document.getElementById('impactPicker');
+  picker.value = `b${scope.markers.filter(m => IMPACT_BOX_TYPES.includes(m.type)).indexOf(ceo)}`;
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  out.screen = [impactBody.querySelector('.impact-item__score b')?.textContent, impactBody.querySelectorAll('.impact-item').length,
+    [...document.querySelectorAll('#impactPickerResult .impact-num b')].map(b => b.textContent).join('/')].join(';');
+  networkImpactState = null;
+  impactBody.innerHTML = '';
   //Topologia: anel de 4 caixas + cabo solto (ponte)
   const realGoogle = window.google;
   const R = 6378137, rad = d => d * Math.PI / 180;
@@ -1089,7 +1105,8 @@ const impact = await page.evaluate(async () => {
   markers.splice(markers.indexOf(ceo), 3 + clients.length); savedCables.splice(savedCables.indexOf(cabA), 2);
   return result;
 });
-check(impact.base === 2 && impact.cutA === 'I-CTO1/2' && impact.cutB === 'I-CTO2/1' && impact.cutCeo.startsWith('I-CTO') && impact.cutCeo.endsWith('/3') && impact.cutCto1 === 'nenhum',
+check(impact.base === 2 && impact.cutA === 'I-CTO1/2' && impact.cutB === 'I-CTO2/1' && impact.cutCeo.startsWith('I-CTO') && impact.cutCeo.endsWith('/3') && impact.cutCto1 === 'nenhum'
+  && impact.screen === '3;3;3/2/0',
   `simular rompimento: cabo derruba só a CTO dele, CEO derruba as duas (${JSON.stringify(impact)})`);
 check(impact.bridgeNames === 'tail,tail2' && impact.articulation === 't-b,t-c' && impact.rings === 1 && impact.ringBoxes === 4 && impact.ringCables === 4,
   `topologia: anel sem ponte, cabos soltos são pontes e caixas de articulação (${impact.bridgeNames} | ${impact.articulation})`);
@@ -3799,12 +3816,23 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.doc = !doc.classList.contains('hidden') && /Construído pelo projeto/.test(doc.textContent) && /alterou/.test(doc.textContent);
       cto.name = oldName;
       //Viabilidade: ponto perto da CTO → viável; "+ Cliente" cadastra no ponto, ligado nessa CTO
+      //Rota pela rua até as CTOs mais perto (OSRM falso: vai até a longitude da CTO e depois sobe)
+      const realOsrm = window.fetchOsrmRoute;
+      window.fetchOsrmRoute = async (from, to) => [from, new google.maps.LatLng(from.lat(), to.lng()), to];
       await startViability();
       const here = new google.maps.LatLng(-21.2412, -45.0012);
       runViability(here);
       const verdict = document.querySelector('#viabilityBody .viability-verdict')?.textContent || '';
       const r0 = viability.results[0];
       out.viability = /Viável/.test(verdict) && r0?.cto.type === 'CTO' && r0.street < 200 && !!document.querySelector('#viabilityBody [data-viab="client"]');
+      await new Promise(r => setTimeout(r, 30));
+      const labels = viability.overlays.map(o => o.get?.('label')?.text).filter(Boolean);
+      const area = viability.overlays.filter(o => o.get?.('radius'));
+      out.viabilityRouteDetail = [viability.routing, viability.results[0]?.routed, viability.overlays.some(o => (o.getPath?.()?.getLength?.() || 0) >= 4 && o.get('strokeWeight') >= 4),
+        labels.includes('drop até 200 m'), labels.some(t => /^1 · \d+ m$/.test(t)), area.length, area.some(c => c.get('strokeWeight') >= 3 && c.get('fillOpacity') >= 0.1),
+        /pela rua \(rota\)/.test(document.getElementById('viabilityBody').textContent)].join();
+      out.viabilityRoute = out.viabilityRouteDetail === 'false,true,true,true,true,2,true,true';
+      window.fetchOsrmRoute = realOsrm;
       const clientsBefore = markers.filter(m => m.type === 'CLIENTE').length;
       document.querySelector('#viabilityBody [data-viab="client"]').click();
       document.getElementById('clientName').value = 'Cliente Viável';
@@ -3875,6 +3903,11 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.field = out.fieldDetail === 'true,true,1,true,true,true,true,CTO,true,true,true,2' && document.getElementById('nearbyBox').classList.contains('hidden');
       //Ocorrências: abre na caixa (anel no mapa, aba no painel), resolver anota no histórico; tudo salvo na rede
       await openOccurrenceModal({ item: boxA });
+      const occModal = document.getElementById('occurrenceModal');
+      occModal.querySelector('[data-kind="sinal"]').click();
+      const kindUi = document.getElementById('occurrenceKind').value === 'sinal' && occModal.querySelector('[data-kind="sinal"]').classList.contains('is-active')
+        && getComputedStyle(occModal.querySelector('[data-status="andamento"]')).backgroundColor !== 'rgb(47, 122, 148)';
+      out.occModal = kindUi && /CTO/.test(document.getElementById('occurrenceTarget').textContent) && /cliente/.test(document.getElementById('occurrenceTarget').textContent);
       document.getElementById('occurrenceKind').value = 'rompimento';
       document.getElementById('occurrenceText').value = 'Cabo rompido no poste';
       await saveOccurrenceFromModal();
@@ -3885,6 +3918,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await new Promise(r => setTimeout(r, 20));
       const occTab = document.getElementById('networkPanelBody').textContent;
       await openOccurrenceModal({ occurrence: getNetworkOccurrences(netId)[0] });
+      out.occFollow = document.getElementById('occurrenceStepKind').hidden && !document.getElementById('occurrenceSummary').hidden
+        && /Rompimento de fibra/.test(document.getElementById('occurrenceSummary').textContent) && document.querySelectorAll('#occurrenceHistory li').length === 1;
       setOccurrenceStatusUi('resolvida');
       document.getElementById('occurrenceText').value = 'Emenda refeita';
       await saveOccurrenceFromModal();
@@ -3895,6 +3930,15 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.occDetail = [occSaved.length, occSaved[0]?.kind, occSaved[0]?.uid === boxA.uid, rings, /Rompimento de fibra/.test(occTab) && /Cabo rompido/.test(occTab),
         occFinal[0]?.status, occFinal[0]?.updates.length, !!occFinal[0]?.resolvedBy, /abriu ocorrência "Rompimento de fibra" na CTO/.test(occLog) && /resolveu ocorrência/.test(occLog), occurrences.overlays.length].join();
       out.occurrences = out.occDetail === '1,rompimento,true,1,true,resolvida,1,true,true,0';
+      //Verificar a rede e Rompimento e impacto, abertos no modo Rede
+      setActiveFolder(netId);
+      openProjectCheck();
+      out.netCheck = document.getElementById('projectCheckTitle').textContent === 'Verificar a rede' && !!document.querySelector('#projectCheckBody .check-hero');
+      document.getElementById('closeProjectCheckBox').click();
+      openNetworkImpact();
+      await new Promise(r => setTimeout(r, 60));
+      out.netImpact = document.getElementById('networkImpactTitle').textContent === 'Rompimento e impacto' && document.querySelectorAll('#networkImpactBody .impact-stat').length === 3;
+      document.getElementById('closeNetworkImpactBox').click();
       //Fotos: reduzidas no navegador, com miniatura, na pasta da empresa; aparecem no painel da caixa e somem ao apagar
       const canvas = document.createElement('canvas');
       canvas.width = 2400; canvas.height = 1200;

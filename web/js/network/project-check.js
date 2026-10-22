@@ -15,7 +15,8 @@ function getActiveProjectScope() {
 
 function runProjectCheck(scope) {
     const issues = [];
-    const add = (level, title, detail, target) => issues.push({ level, title, detail, target });
+    let section = 'nomes';
+    const add = (level, title, detail, target) => issues.push({ level, title, detail, target, section });
     const boxes = scope.markers.filter(m => m.type === 'CEO' || m.type === 'CTO' || m.type === 'POP');
 
     //Nomes repetidos: o sistema liga pelo identificador, mas na rua e nos relatórios confunde
@@ -31,6 +32,7 @@ function runProjectCheck(scope) {
     });
 
     //Cabos: pontas nas caixas
+    section = 'cabos';
     scope.cables.forEach(cable => {
         const loose = [];
         if (!findMarkerByUid(cable.startAnchorUid)) loose.push('A');
@@ -42,6 +44,7 @@ function runProjectCheck(scope) {
     });
 
     //Caixas e planos de fusão
+    section = 'fusoes';
     boxes.forEach(box => {
         const connected = scope.cables.filter(c => c.startAnchorUid === box.uid || c.endAnchorUid === box.uid);
         const plan = readFusionPlan(box);
@@ -76,6 +79,7 @@ function runProjectCheck(scope) {
     });
 
     //Clientes
+    section = 'clientes';
     const maxDrop = Number(lancamentoConfig?.dropMaxLength) || 300;
     const portsTaken = new Map();
     scope.markers.filter(m => m.type === 'CLIENTE' && m.client?.status !== 'cancelado').forEach(client => {
@@ -101,6 +105,7 @@ function runProjectCheck(scope) {
         if (drop && drop.length > maxDrop) add('aviso', `Drop longo: ${client.name}`, `${drop.length} m (limite configurado: ${maxDrop} m).`, { kind: 'marker', info: client });
     });
     //Orçamento óptico
+    section = 'potencia';
     const optical = getProjectOpticalBudget(scope);
     if (optical.ctos.length && !optical.hasSource) {
         add('aviso', 'Orçamento óptico sem OLT', 'Não há OLT no caminho. No plano do POP, ligue a PON da OLT no DGO e o DGO na fibra do cabo (ou use "Vincular" no splitter que recebe o sinal).', null);
@@ -131,14 +136,23 @@ function getProjectOpticalBudget(scope) {
     return { cfg, ctos, rows, hasSource };
 }
 
+//Barra da potência: de 6 dB abaixo do mínimo da ONU até a potência da OLT
 function renderOpticalTable(scope) {
     const optical = getProjectOpticalBudget(scope);
     if (!optical.rows.length) return '';
-    return `<h4 class="check-section">Potência nas CTOs <small>OLT ${formatDbm(optical.cfg.oltPower)} · ONU mín. ${formatDbm(optical.cfg.onuSensitivity)}</small></h4>
-        <ul class="check-power">${optical.rows.map(row => `
+    const lo = optical.cfg.onuSensitivity - 6;
+    const hi = optical.cfg.oltPower;
+    const pct = (dbm) => Math.max(4, Math.min(100, ((dbm - lo) / (hi - lo)) * 100));
+    const minPct = pct(optical.cfg.onuSensitivity);
+    return `<section class="check-group check-group--power">
+        <h4 class="check-section">Potência nas CTOs <small>OLT ${formatDbm(optical.cfg.oltPower)} · ONU mín. ${formatDbm(optical.cfg.onuSensitivity)}</small></h4>
+        <ul class="check-power" style="--min:${minPct}%">${optical.rows.map(row => `
             <li><button type="button" data-power-cto="${escapeHtml(row.cto.uid || '')}">
-                <span>${escapeHtml(row.cto.name)}</span><b class="is-${row.status}">${row.dbm == null ? 'sem OLT' : formatDbm(row.dbm)}</b>
-            </button></li>`).join('')}</ul>`;
+                <span>${escapeHtml(row.cto.name)}</span>
+                <span class="check-power__bar is-${row.status}" aria-hidden="true"><span style="width:${row.dbm == null ? 0 : pct(row.dbm)}%"></span></span>
+                <b class="is-${row.status}">${row.dbm == null ? 'sem OLT' : formatDbm(row.dbm)}</b>
+            </button></li>`).join('')}</ul>
+    </section>`;
 }
 
 function focusProjectCheckTarget(target) {
@@ -153,11 +167,21 @@ function focusProjectCheckTarget(target) {
 }
 
 let projectCheckIssues = [];
+let projectCheckFilter = 'todos';
+const CHECK_SECTIONS = [
+    { id: 'cabos', label: 'Cabos', icon: 'i-cable' },
+    { id: 'fusoes', label: 'Caixas e fusões', icon: 'i-ceo' },
+    { id: 'clientes', label: 'Clientes e portas', icon: 'i-client' },
+    { id: 'potencia', label: 'Sinal e potência', icon: 'i-target' },
+    { id: 'nomes', label: 'Nomes repetidos', icon: 'i-tag' },
+];
 
 function renderProjectCheck() {
     const scope = getActiveProjectScope();
     const body = document.getElementById('projectCheckBody');
     const subtitle = document.getElementById('projectCheckSubtitle');
+    const isNetwork = typeof isNetworkProjectId === 'function' && scope && isNetworkProjectId(scope.projectId);
+    document.getElementById('projectCheckTitle').textContent = isNetwork ? 'Verificar a rede' : 'Verificação do projeto';
     if (!scope) {
         subtitle.textContent = '';
         body.innerHTML = '<p class="route-note">Abra ou selecione um projeto para verificar.</p>';
@@ -168,20 +192,49 @@ function renderProjectCheck() {
     const warnings = projectCheckIssues.length - errors;
     const name = document.querySelector(`.folder-title[data-folder-id="${CSS.escape(scope.projectId)}"]`)?.dataset.folderName || '';
     subtitle.textContent = name;
+    const boxes = scope.markers.filter(m => ['CEO', 'CTO', 'POP', 'RESERVA'].includes(m.type)).length;
+    const clients = scope.markers.filter(m => m.type === 'CLIENTE').length;
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const state = errors ? 'erro' : warnings ? 'aviso' : 'ok';
+    const headline = { erro: `${plural(errors, 'erro', 'erros')} para corrigir`, aviso: `${plural(warnings, 'aviso', 'avisos')} para conferir`, ok: `Nenhum problema encontrado${isNetwork ? ' na rede' : ''}` }[state];
+    const hero = `<div class="check-hero is-${state}">
+        <span class="check-hero__icon" aria-hidden="true">${state === 'ok' ? '✓' : '!'}</span>
+        <div><b>${headline}</b><small>Verificado agora · ${plural(boxes, 'caixa', 'caixas')}, ${plural(scope.cables.length, 'cabo', 'cabos')}, ${plural(clients, 'cliente', 'clientes')}</small></div>
+    </div>
+    <div class="check-summary">
+        <span class="is-erro"><b>${errors}</b> ${errors === 1 ? 'erro' : 'erros'}</span>
+        <span class="is-aviso"><b>${warnings}</b> ${warnings === 1 ? 'aviso' : 'avisos'}</span>
+        <span class="is-ok"><b>${CHECK_SECTIONS.filter(sec => !projectCheckIssues.some(i => i.section === sec.id)).length}</b> de ${CHECK_SECTIONS.length} temas ok</span>
+    </div>`;
     const opticalHtml = renderOpticalTable(scope);
     if (!projectCheckIssues.length) {
-        body.innerHTML = '<p class="check-ok">Nenhum problema encontrado.</p>' + opticalHtml;
+        body.innerHTML = hero + opticalHtml;
         return;
     }
-    const sorted = [...projectCheckIssues].sort((a, b) => (a.level === b.level ? 0 : a.level === 'erro' ? -1 : 1));
-    body.innerHTML = `<div class="check-summary"><span class="is-erro">${errors} erro${errors === 1 ? '' : 's'}</span><span class="is-aviso">${warnings} aviso${warnings === 1 ? '' : 's'}</span></div>
-        <ul class="check-list">${sorted.map((issue) => `
-            <li><button type="button" class="is-${issue.level}" data-check-index="${projectCheckIssues.indexOf(issue)}">
-                <strong>${escapeHtml(issue.title)}</strong><small>${escapeHtml(issue.detail)}</small>
-            </button></li>`).join('')}</ul>` + opticalHtml;
+    if (projectCheckFilter === 'erro' && !errors) projectCheckFilter = 'todos';
+    if (projectCheckFilter === 'aviso' && !warnings) projectCheckFilter = 'todos';
+    const visible = projectCheckIssues.filter(i => projectCheckFilter === 'todos' || i.level === projectCheckFilter);
+    const filters = [['todos', `Todos (${projectCheckIssues.length})`], ['erro', `Erros (${errors})`], ['aviso', `Avisos (${warnings})`]];
+    const icon = (id) => `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"></use></svg>`;
+    const groups = CHECK_SECTIONS.map(sec => {
+        const list = visible.filter(i => i.section === sec.id).sort((a, b) => (a.level === b.level ? 0 : a.level === 'erro' ? -1 : 1));
+        if (!list.length) return '';
+        const e = list.filter(i => i.level === 'erro').length;
+        return `<section class="check-group">
+            <h4 class="check-group__head">${icon(sec.icon)}<span>${sec.label}</span>${e ? `<em class="is-erro">${e}</em>` : ''}${list.length - e ? `<em class="is-aviso">${list.length - e}</em>` : ''}</h4>
+            <ul class="check-list">${list.map(issue => `
+                <li><button type="button" class="is-${issue.level}" data-check-index="${projectCheckIssues.indexOf(issue)}">
+                    <span class="check-list__lvl" aria-hidden="true">${issue.level === 'erro' ? '×' : '!'}</span>
+                    <span class="check-list__text"><strong>${escapeHtml(issue.title)}</strong><small>${escapeHtml(issue.detail)}</small></span>
+                </button></li>`).join('')}</ul>
+        </section>`;
+    }).join('');
+    body.innerHTML = hero + `<div class="map-tool-segmented check-filter" role="radiogroup">${filters.map(([id, label]) => `<button type="button" data-check-filter="${id}" class="${projectCheckFilter === id ? 'is-active' : ''}" aria-pressed="${projectCheckFilter === id}">${label}</button>`).join('')}</div>`
+        + groups + opticalHtml;
 }
 
 function openProjectCheck() {
+    projectCheckFilter = 'todos';
     document.getElementById('projectCheckBox').classList.remove('hidden');
     renderProjectCheck();
 }
@@ -197,6 +250,8 @@ function setupProjectCheck() {
         openProjectCheck();
     });
     box.addEventListener('click', (e) => {
+        const filter = e.target.closest('[data-check-filter]');
+        if (filter) { projectCheckFilter = filter.dataset.checkFilter; renderProjectCheck(); return; }
         const item = e.target.closest('[data-check-index]');
         if (item) focusProjectCheckTarget(projectCheckIssues[Number(item.dataset.checkIndex)]?.target);
         const power = e.target.closest('[data-power-cto]');
