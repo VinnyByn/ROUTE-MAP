@@ -472,6 +472,18 @@ function drawViabilityArea(point) {
     }));
 }
 
+//Ponto a uma fração do comprimento do caminho
+function pointAlongPath(path, frac) {
+    const sph = google.maps.geometry.spherical;
+    const legs = path.slice(1).map((p, i) => sph.computeDistanceBetween(path[i], p));
+    let left = legs.reduce((a, b) => a + b, 0) * frac;
+    for (let i = 0; i < legs.length; i++) {
+        if (left <= legs[i] || i === legs.length - 1) return sph.interpolate(path[i], path[i + 1], legs[i] ? Math.min(1, left / legs[i]) : 0);
+        left -= legs[i];
+    }
+    return path[0];
+}
+
 //Linha do cliente até a CTO: pela rua (rota) com contorno branco; reta tracejada enquanto a rota não chega ou se falhar
 function drawViabilityRoute(r, index) {
     const color = VIABILITY_COLORS[r.status];
@@ -486,11 +498,10 @@ function drawViabilityRoute(r, index) {
             icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: color, strokeWeight: 3, scale: 3 }, offset: '0', repeat: '10px' }],
         }));
     }
-    const mid = path[Math.floor((path.length - 1) / 2)];
-    const midPoint = path.length === 2 ? google.maps.geometry.spherical.interpolate(path[0], path[1], 0.5) : mid;
+    //Rótulo a 35% do caminho (lado do cliente) e um pouco acima da linha, para não cobrir a CTO
     viability.overlays.push(new google.maps.Marker({
-        map, position: midPoint, zIndex: 93 - index, clickable: false,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+        map, position: pointAlongPath(path, 0.35), zIndex: 93 - index, clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0, labelOrigin: new google.maps.Point(0, -14) },
         label: { text: `${index + 1} · ${Math.round(r.street)} m`, className: `viab-map-label viab-map-label--${r.status}`, color: '#ffffff', fontSize: '12px', fontWeight: '700' },
     }));
 }
