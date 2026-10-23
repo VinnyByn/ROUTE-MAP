@@ -38,6 +38,24 @@ const getFolderNameById = (folderId) => document.getElementById(folderId)?.previ
 const isNetworkItem = (info) => !!info && typeof getNetworkRootOf === 'function' && !!getNetworkRootOf(info);
 const getItemRow = (info) => info?.listItem || info?.item || null;
 const getItemShape = (info) => info?.marker || info?.polyline || null;
+//Clientes no modo Rede: sem drop no mapa e ocultos (pesa e polui); aparecem pela caixa ("Mostrar clientes no mapa"),
+//pela pasta por tipo "Clientes" ou ao clicar no cliente na barra lateral. Na CTO, o splitter mostra o nome em cada porta.
+const networkClientsShown = { all: false, ctos: new Set(), uids: new Set() };
+function isNetworkClientHidden(info) {
+    if (info?.type !== 'CLIENTE' || typeof appMode === 'undefined' || appMode !== 'rede' || !isNetworkItem(info)) return false;
+    return !networkClientsShown.all && !networkClientsShown.ctos.has(info.client?.ctoUid) && !networkClientsShown.uids.has(info.uid);
+}
+function applyNetworkClientVisibility() {
+    markers.forEach(m => { if (m.type === 'CLIENTE' && m.marker?.getVisible() !== false && isNetworkClientHidden(m)) m.marker.setVisible(false); });
+}
+function setCtoClientsShown(cto, shown) {
+    if (!cto?.uid) return;
+    if (shown) networkClientsShown.ctos.add(cto.uid); else networkClientsShown.ctos.delete(cto.uid);
+    const root = typeof getNetworkRootOf === 'function' ? getNetworkRootOf(cto) : null;
+    const cityBox = root?.querySelector(':scope > .folder-title .visibility-toggle-btn');
+    if (shown && cityBox && !cityBox.checked) { cityBox.checked = true; cityBox.dataset.visible = 'true'; }
+    getCtoClients(cto).forEach(c => c.marker?.setVisible(!isNetworkClientHidden(c)));
+}
 const findItemByUid = (uid) => markers.find(m => m.uid === uid) || savedCables.find(c => c.uid === uid) || null;
 
 function getItemIconClass(info) {
@@ -167,6 +185,7 @@ function renderNetworkTypeGroups(root) {
 }
 
 function setNetworkTypeVisible(root, key, visible) {
+    if (key === 'CLIENTE') networkClientsShown.all = visible;
     const group = getNetworkTypeGroups(root).find(g => g.key === key);
     group?.items.forEach(info => {
         const cb = getItemRow(info)?.querySelector(':scope > .ge-vis-checkbox');

@@ -236,6 +236,7 @@ function loadNetworkRoot(id, { visible = false } = {}) {
         if (next && next.parentElement) next.parentElement.insertBefore(root, next);
         if (data.revision != null) setProjectRevision(root, data.revision);
         if (!visible) handleVisibilityToggle(root.querySelector(':scope > .folder-title .visibility-toggle-btn'), false);
+        if (typeof applyNetworkClientVisibility === 'function') applyNetworkClientVisibility();
         if (typeof liveSyncJoin === 'function') liveSyncJoin(id);
         //Sobras de projetos concluídos antes (casas, postes, polígonos): saem e a rede é salva limpa
         if (removed && AppSession.canEdit) {
@@ -301,6 +302,18 @@ function formatNetworkCityName(value) {
         .join(' ');
 }
 
+const BR_STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+const networkStateKey = () => `routeMapNetworkUF:${AppSession.company?.id || ''}`;
+//Estado padrão: o último usado nesta empresa; senão a sigla no endereço da empresa ("… - MG")
+function getDefaultNetworkState() {
+    try { const v = localStorage.getItem(networkStateKey()); if (BR_STATES.includes(v)) return v; } catch (e) { /* ignora */ }
+    const m = String(AppSession.company?.address || '').toUpperCase().match(/(?:^|[\s,/-])([A-Z]{2})\s*(?:,|$|\d|-)/g) || [];
+    const uf = m.map(x => x.replace(/[^A-Z]/g, '')).reverse().find(x => BR_STATES.includes(x));
+    return uf || '';
+}
+//Nome que aparece na barra lateral: "Rede · Lavras - MG" (o id da rede continua só pela cidade)
+const networkDisplayName = (city, state) => `Rede · ${city}${state ? ` - ${state}` : ''}`;
+
 const NETWORK_CITY_FOLDER_SUGGESTIONS = ['Backbone', 'Distribuição', 'Atendimento', 'POPs', 'Clientes empresariais'];
 const NETWORK_CITY_FOLDER_HINTS = {
     Backbone: 'Cabos troncais e CEOs de passagem',
@@ -338,6 +351,7 @@ function ensureNetworkCityModal() {
                     <div class="net-city-input">
                         ${uiSvgIcon('i-marker')}
                         <input type="text" id="networkCityInput" placeholder="Digite o nome da cidade (ex.: Lavras)" autocomplete="off" />
+                        <select id="networkCityState" aria-label="Estado"><option value="">UF</option>${BR_STATES.map(uf => `<option value="${uf}">${uf}</option>`).join('')}</select>
                     </div>
                     <p class="net-city-modal__status" id="networkCityStatus" aria-live="polite"></p>
                     <div class="net-city-list" id="networkCityList" role="listbox" aria-label="Cidades dos projetos"></div>
@@ -369,6 +383,8 @@ async function pickNetworkCity() {
     const modal = ensureNetworkCityModal();
     const list = modal.querySelector('#networkCityList');
     const input = modal.querySelector('#networkCityInput');
+    const stateSelect = modal.querySelector('#networkCityState');
+    stateSelect.value = getDefaultNetworkState();
     const status = modal.querySelector('#networkCityStatus');
     const foldersBox = modal.querySelector('#networkCityFolders');
     const folderInput = modal.querySelector('#networkCityFolderInput');
@@ -386,7 +402,7 @@ async function pickNetworkCity() {
         const already = id && existing.get(id);
         status.className = `net-city-modal__status${already ? ' is-exists' : city ? ' is-ok' : ''}`;
         status.innerHTML = already ? `${uiSvgIcon('i-folder')} <span><b>${esc(already)}</b> já existe: ela será aberta.</span>`
-            : city ? `${uiSvgIcon('i-check')} <span>Vai criar <b>Rede · ${esc(city)}</b></span>` : '';
+            : city ? `${uiSvgIcon('i-check')} <span>Vai criar <b>${esc(networkDisplayName(city, stateSelect.value))}</b></span>` : '';
         ok.textContent = already ? 'Abrir a cidade' : 'Cadastrar cidade';
         ok.disabled = !city;
         foldersBox.innerHTML = folders.map((f, i) => `<button type="button" class="btn-card net-city-folder${f.on ? ' is-on' : ''}" data-folder-i="${i}" aria-pressed="${f.on}">
@@ -394,7 +410,7 @@ async function pickNetworkCity() {
             <span class="net-city-folder__text"><b>${esc(f.name)}</b><small>${esc(NETWORK_CITY_FOLDER_HINTS[f.name] || 'Pasta criada por você')}</small></span>
         </button>`).join('');
         const chosen = folders.filter(f => f.on).map(f => f.name);
-        const name = already || (city ? `Rede · ${city}` : 'Rede · (nome da cidade)');
+        const name = already || (city ? networkDisplayName(city, stateSelect.value) : 'Rede · (nome da cidade)');
         preview.classList.toggle('is-placeholder', !city);
         preview.innerHTML = `
             <div class="net-city-preview__root">${uiSvgIcon('i-building')}<b>${esc(name)}</b><em>✓ Salva</em></div>
@@ -420,7 +436,7 @@ async function pickNetworkCity() {
         };
         const result = () => {
             const city = formatNetworkCityName(input.value);
-            return city ? { city, folders: folders.filter(f => f.on).map(f => f.name), open: existing.has(getNetworkId(city)) } : null;
+            return city ? { city, state: stateSelect.value, folders: folders.filter(f => f.on).map(f => f.name), open: existing.has(getNetworkId(city)) } : null;
         };
         const addFolder = () => {
             const name = folderInput.value.trim().replace(/\s+/g, ' ');
@@ -454,7 +470,7 @@ async function pickNetworkCity() {
 }
 
 //"+ Cidade": cadastra a cidade na rede (com as pastas escolhidas) e deixa selecionada
-async function createNetworkCity(name = '', { folders = [] } = {}) {
+async function createNetworkCity(name = '', { folders = [], state = '' } = {}) {
     if (!requireEdit('cadastrar cidades na rede')) return null;
     let city = formatNetworkCityName(name);
     if (!city) {
@@ -462,6 +478,8 @@ async function createNetworkCity(name = '', { folders = [] } = {}) {
         if (!picked) return null;
         city = picked.city;
         folders = picked.folders;
+        state = picked.state || '';
+        try { if (state) localStorage.setItem(networkStateKey(), state); } catch (e) { /* ignora */ }
     }
     const id = getNetworkId(city);
     if (document.getElementById(id)) {
@@ -476,6 +494,7 @@ async function createNetworkCity(name = '', { folders = [] } = {}) {
         return document.getElementById(id)?.closest('.folder') || null;
     }
     const data = emptyNetworkData(city);
+    if (state) { data.sidebar.name = networkDisplayName(city, state); data.sidebar.state = state; }
     data.sidebar.children = folders.map((folderName, i) => ({
         id: `folder-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`, name: folderName, isProject: false, type: 'folder', children: [],
     }));

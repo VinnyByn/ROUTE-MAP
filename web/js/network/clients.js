@@ -508,6 +508,8 @@ function refreshClientDrops(options = {}) {
     };
     markers.forEach(clientInfo => {
         if (clientInfo.type !== 'CLIENTE' || clientInfo === dropEditSession?.clientInfo) return;
+        //Rede documentada: sem drop desenhado (a viabilidade mostra a distância pela rua)
+        if (typeof isNetworkItem === 'function' && isNetworkItem(clientInfo)) { clientInfo.dropLine?.setPath([]); return; }
         const anchored = findClientAnchoredCable(clientInfo);
         if (anchored) {
             if (onlyCto) return;

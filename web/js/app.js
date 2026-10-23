@@ -3968,7 +3968,7 @@ function handleVisibilityToggle(element, explicitVisible) {
     const folderIdsToToggle = getAllDescendantFolderIds(folderId);
     markers.forEach(markerInfo => {
         if (folderIdsToToggle.includes(markerInfo.folderId)) {
-            markerInfo.marker.setVisible(newVisibility);
+            markerInfo.marker.setVisible(newVisibility && !(typeof isNetworkClientHidden === 'function' && isNetworkClientHidden(markerInfo)));
         }
     });
     savedCables.forEach(cable => {
