@@ -3705,3 +3705,6 @@ html[data-theme="dark"] .occurrence-row small.occurrence-timing.is-late, html[da
 .floating-box.map-tool-box .occurrence-filter { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .floating-box .occurrence-row { border: 1px solid var(--color-border-light); border-left: 4px solid var(--occ); }
 .floating-box .occurrence-row.is-late { border-color: color-mix(in srgb, #dc2626 35%, var(--color-border-light)); border-left-color: #dc2626; }
+/* Modo Rede: tudo é Existente, então o campo Situação de marcadores e cabos some (o resto fica igual) */
+body.mode-rede #markerInfraStatusGroup,
+body.mode-rede .map-tool-field:has(> #cableStatusSegmented) { display: none !important; }
