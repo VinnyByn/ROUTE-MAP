@@ -466,7 +466,8 @@ function readMarkerPanelForm() {
         labelColor: document.getElementById('markerLabelColor').value,
         size: parseInt(document.getElementById('markerSize').value, 10) || DEFAULT_MARKER_SIZE,
         description: document.getElementById('markerDescription').value,
-        status: getSegmentedValue('markerStatusSegmented') || 'Nova',
+        //Modo Rede: tudo o que está na rede é Existente (o campo Situação fica oculto)
+        status: typeof appMode !== 'undefined' && appMode === 'rede' ? 'Existente' : getSegmentedValue('markerStatusSegmented') || 'Nova',
         accessory: getSegmentedValue('markerAccessorySegmented') || 'Raquete',
         isPredial: document.getElementById('ctoPredialCheckbox').checked,
         needsStickers: document.getElementById('ctoStickerCheckbox').checked,

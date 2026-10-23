@@ -4056,6 +4056,12 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         AppSession.company.role = realRole;
         applyRoleToUi();
       }
+      //Modo Rede: tudo é Existente, sem o campo Situação no marcador e no cabo
+      openMarkerCreatePanel('CTO');
+      const hiddenStatus = getComputedStyle(document.getElementById('markerInfraStatusGroup')).display === 'none'
+        && getComputedStyle(document.getElementById('cableStatusSegmented').closest('.map-tool-field')).display === 'none';
+      out.redeExisting = hiddenStatus && readMarkerPanelForm().status === 'Existente' && !!document.getElementById('markerName');
+      resetMarkerModal();
       //Viabilidade (o antigo Membro): só a rede, sem trocar para Projeto, sem o menu Rede, abre já na consulta
       for (const role of ['viabilidade', 'member']) {
         AppSession.company.role = role;

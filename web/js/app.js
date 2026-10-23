@@ -3114,10 +3114,11 @@ function startDrawingCable() {
     if (cablePolyline) cablePolyline.setMap(null);
     cablePolyline = null;
     clearCableEditHelpers();
-    document.getElementById("cableStatusSelect").value = currentCableStatus;
+    const newCableStatus = typeof appMode !== 'undefined' && appMode === 'rede' ? 'Existente' : currentCableStatus;
+    document.getElementById("cableStatusSelect").value = newCableStatus;
     document.getElementById("cableName").value = "";
     cableNameAutoFill = { endMarkerName: null, lastValue: null };
-    document.getElementById("cableWidth").value = getDefaultCableWidthForStatus(currentCableStatus);
+    document.getElementById("cableWidth").value = getDefaultCableWidthForStatus(newCableStatus);
     document.getElementById("deleteCableButton").classList.add("hidden");
     document.getElementById("invertCableButton").classList.add("hidden");
     openCablePanel({ title: 'Novo cabo', subtitle: 'Da ponta A até a ponta B' });
@@ -3182,7 +3183,8 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
     const fullCableType = `Cabo ${asType} ${newFiberTypeSelection}`;
     const cor = getCableColor(newFiberTypeSelection);
     const largura = parseInt(document.getElementById("cableWidth").value, 10) || 4;
-    const cableStatus = document.getElementById("cableStatusSelect").value || "Novo";
+    //Modo Rede: tudo o que está na rede é Existente (o campo Situação fica oculto)
+    const cableStatus = typeof appMode !== 'undefined' && appMode === 'rede' ? 'Existente' : document.getElementById("cableStatusSelect").value || "Novo";
     //Não troca o tipo de fibra de um cabo que já tem fusões
     if (editingCableIndex !== null) {
         const originalCable = savedCables[editingCableIndex];
