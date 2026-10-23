@@ -54,6 +54,7 @@ function focusNetworkItem(info) {
     const root = getNetworkRoots().find(r => getAllDescendantFolderIds(getRootId(r)).includes(info.folderId));
     const box = root?.querySelector(':scope > .folder-title .visibility-toggle-btn');
     if (box && !box.checked) handleVisibilityToggle(box, true);
+    if (info.type === 'CLIENTE' && typeof networkClientsShown !== 'undefined') networkClientsShown.uids.add(info.uid);
     if (info.marker) {
         if (info.marker.getVisible?.() === false) info.marker.setVisible(true);
         focusMapToMarker(info);
@@ -200,6 +201,7 @@ function renderMarkerDocPanel(markerInfo) {
             <button type="button" class="btn btn-secondary" data-field="qr">QR code / etiqueta</button>
             ${markerInfo.marker?.getPosition?.() ? `<a class="btn btn-secondary" href="https://www.google.com/maps/dir/?api=1&destination=${markerInfo.marker.getPosition().lat().toFixed(6)},${markerInfo.marker.getPosition().lng().toFixed(6)}" target="_blank" rel="noopener">Como chegar</a>` : ''}
             <button type="button" class="btn btn-secondary" data-field="link">Copiar link</button>
+            ${markerInfo.type === 'CTO' && typeof getCtoClients === 'function' && getCtoClients(markerInfo).length ? `<button type="button" class="btn btn-secondary" data-field="clients">${networkClientsShown.ctos.has(markerInfo.uid) ? 'Ocultar clientes do mapa' : `Mostrar clientes no mapa (${getCtoClients(markerInfo).length})`}</button>` : ''}
         </div>` : ''}
         ${typeof renderItemOccurrencesHtml === 'function' && ['CTO', 'CEO', 'POP', 'RESERVA'].includes(markerInfo.type) ? renderItemOccurrencesHtml(markerInfo) : ''}
         ${typeof renderDocPhotosHtml === 'function' && ['CTO', 'CEO', 'POP', 'RESERVA'].includes(markerInfo.type) ? renderDocPhotosHtml() : ''}

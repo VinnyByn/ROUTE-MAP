@@ -4056,6 +4056,19 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         AppSession.company.role = realRole;
         applyRoleToUi();
       }
+      //Clientes da rede: sem drop no mapa e ocultos; "Mostrar clientes no mapa" na CTO mostra os dela
+      networkClientsShown.uids.clear(); networkClientsShown.all = false;
+      refreshClientDrops();
+      const netClients = markers.filter(m => m.type === 'CLIENTE' && isNetworkItem(m));
+      const ctoWith = netClients.map(c => findMarkerByUid(c.client?.ctoUid)).find(Boolean);
+      handleVisibilityToggle(netRoot.querySelector(':scope > .folder-title .visibility-toggle-btn'), true);
+      const hiddenNoDrop = netClients.length > 0 && netClients.every(c => c.marker.getVisible() === false && !(c.dropLine?.getPath().getLength() > 0));
+      editingMarkerInfo = ctoWith; renderMarkerDocPanel(ctoWith);
+      document.querySelector('#markerDocPanel [data-field="clients"]')?.click();
+      const shownOfCto = getCtoClients(ctoWith).every(c => c.marker.getVisible() !== false);
+      setCtoClientsShown(ctoWith, false); editingMarkerInfo = null;
+      out.netClientsDetail = [netClients.length > 0, hiddenNoDrop, shownOfCto, getCtoClients(ctoWith).every(c => c.marker.getVisible() === false)].join();
+      out.netClients = out.netClientsDetail === 'true,true,true,true';
       //Modo Rede: tudo é Existente, sem o campo Situação no marcador e no cabo
       openMarkerCreatePanel('CTO');
       const hiddenStatus = getComputedStyle(document.getElementById('markerInfraStatusGroup')).display === 'none'
@@ -4115,9 +4128,10 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await new Promise(r => setTimeout(r, 60));
       const cityInput = document.getElementById('networkCityInput');
       cityInput.value = 'são joão del rei';
+      document.getElementById('networkCityState').value = 'MG';
       cityInput.dispatchEvent(new Event('input', { bubbles: true }));
       document.querySelector('#networkCityFolders [data-folder-i="0"]').click();
-      const previewOk = /Rede · São João del Rei/.test(document.getElementById('networkCityPreview').textContent) && /Backbone/.test(document.getElementById('networkCityPreview').textContent);
+      const previewOk = /Rede · São João del Rei - MG/.test(document.getElementById('networkCityPreview').textContent) && /Backbone/.test(document.getElementById('networkCityPreview').textContent);
       document.querySelector('#networkCityModal [data-net-city="ok"]').click();
       const sjRoot = await creating;
       const sjId = getNetworkId('São João del Rei');
@@ -4139,7 +4153,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await deleting;
       out.netCityDetail = [previewOk, sjRow?.name, sjFolder?.name, keptCto, cityMenu.includes('close'), blockedWrong, !!window.__fakeDb.projects[sjId]?.deleted_at, !document.getElementById(sjId)].join(';');
       out.netSidebar = out.netSidebarDetail === 'true;2;true;true;true;true;link-folders,unlink;CTO-AUTO;projNB;salva'
-        && out.netCityDetail === 'true;Rede · São João del Rei;Backbone;true;false;true;true;true';
+        && out.netCityDetail === 'true;Rede · São João del Rei - MG;Backbone;true;false;true;true;true';
       await setAppMode('projeto');
       //Rede por baixo do projeto: caixa só da rede aparece apagada; "Usar no projeto" traz como Existente e não duplica ao concluir
       window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_only', folderId: netId, type: 'CTO', name: 'CTO-REDE', color: '#16a34a', ctoStatus: 'Existente',

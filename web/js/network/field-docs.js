@@ -358,6 +358,10 @@ function handleMarkerDocFieldClick(e) {
     if (!action || !box) return;
     if (action === 'qr') openFieldQr(box);
     if (action === 'link') copyFieldLink(box);
+    if (action === 'clients') {
+        setCtoClientsShown(box, !networkClientsShown.ctos.has(box.uid));
+        renderMarkerDocPanel(box);
+    }
 }
 
 appReady.then(() => {

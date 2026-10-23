@@ -3708,3 +3708,6 @@ html[data-theme="dark"] .occurrence-row small.occurrence-timing.is-late, html[da
 /* Modo Rede: tudo é Existente, então o campo Situação de marcadores e cabos some (o resto fica igual) */
 body.mode-rede #markerInfraStatusGroup,
 body.mode-rede .map-tool-field:has(> #cableStatusSegmented) { display: none !important; }
+.net-city-input { display: flex; gap: 8px; }
+.net-city-input > input { flex: 1; min-width: 0; }
+.net-city-modal .net-city-input select { flex: none; width: 86px; min-height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; }

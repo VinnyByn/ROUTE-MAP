@@ -25,10 +25,15 @@ async function refreshProjectCitySuggestions() {
         const rows = await supabaseClient.from('projects').select('city');
         cities = (rows.data || []).map(r => r.city);
     }
+    //Cidades que já têm rede (modo Rede) vêm primeiro: o projeto nasce ligado à rede da cidade
+    const nets = await supabaseClient.from('projects').select('city, project_type').eq('project_type', 'Rede').is('deleted_at', null);
+    const networkCities = [...new Set((nets.data || []).filter(r => r.project_type === 'Rede').map(r => String(r.city || '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const list = document.getElementById('projectCityOptions');
     if (!list) return;
-    const unique = [...new Set(cities.map(c => String(c || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    list.innerHTML = unique.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+    const unique = [...new Set(cities.map(c => String(c || '').trim()).filter(Boolean))].filter(c => !networkCities.includes(c)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    list.innerHTML = networkCities.map(c => `<option value="${escapeHtml(c)}" label="Na rede"></option>`).join('')
+        + unique.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
 }
 document.addEventListener('focusin', (e) => { if (e.target?.id === 'projectCity') refreshProjectCitySuggestions(); });
 
