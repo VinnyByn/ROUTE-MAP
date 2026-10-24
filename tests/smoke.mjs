@@ -4069,6 +4069,18 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       setCtoClientsShown(ctoWith, false); editingMarkerInfo = null;
       out.netClientsDetail = [netClients.length > 0, hiddenNoDrop, shownOfCto, getCtoClients(ctoWith).every(c => c.marker.getVisible() === false)].join();
       out.netClients = out.netClientsDetail === 'true,true,true,true';
+      //Painéis no mesmo canto: abrir o Filtro fecha a Viabilidade (e ela para de ouvir o mapa)
+      await startViability();
+      await new Promise(r => setTimeout(r, 20));
+      await openNetworkFilter();
+      await new Promise(r => setTimeout(r, 20));
+      const viabClosed = document.getElementById('viabilityBox').classList.contains('hidden') && !viability.active;
+      setActiveFolder(netId);
+      await openNetworkPanel('resumo');
+      await new Promise(r => setTimeout(r, 20));
+      out.exclusivePanels = viabClosed && document.getElementById('networkFilterBox').classList.contains('hidden')
+        && !document.getElementById('networkPanelBox').classList.contains('hidden');
+      document.getElementById('closeNetworkPanelBox').click();
       //Modo Rede: tudo é Existente, sem o campo Situação no marcador e no cabo
       openMarkerCreatePanel('CTO');
       const hiddenStatus = getComputedStyle(document.getElementById('markerInfraStatusGroup')).display === 'none'
