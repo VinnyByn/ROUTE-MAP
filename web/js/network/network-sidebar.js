@@ -35,7 +35,16 @@ function storeNetTypeState() {
 }
 
 const getFolderNameById = (folderId) => document.getElementById(folderId)?.previousElementSibling?.dataset.folderName || '';
-const isNetworkItem = (info) => !!info && typeof getNetworkRootOf === 'function' && !!getNetworkRootOf(info);
+//Pastas das redes abertas: calculadas uma vez por rodada de trabalho (antes era por item, pesado em redes grandes)
+let networkFolderCache = null;
+function getNetworkFolderSet() {
+    if (!networkFolderCache) {
+        networkFolderCache = new Set(typeof getNetworkRoots === 'function' ? getNetworkRoots().flatMap(r => getAllDescendantFolderIds(getRootId(r))) : []);
+        setTimeout(() => { networkFolderCache = null; }, 0);
+    }
+    return networkFolderCache;
+}
+const isNetworkItem = (info) => !!info?.folderId && getNetworkFolderSet().has(info.folderId);
 const getItemRow = (info) => info?.listItem || info?.item || null;
 const getItemShape = (info) => info?.marker || info?.polyline || null;
 //Clientes no modo Rede: sem drop no mapa e ocultos (pesa e polui); aparecem pela caixa ("Mostrar clientes no mapa"),

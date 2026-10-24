@@ -3714,10 +3714,12 @@ function addCustomMarker(location, importedData = null) {
 function updateMarkerAppearance(markerInfo) {
     if (markerInfo.type === "CLIENTE") {
         applyClientAppearance(markerInfo);
-        refreshClientDrops();
+        //Só o drop deste cliente (refazer todos a cada cliente deixava a abertura de redes grandes muito lenta)
+        const cto = !markerInfo.client?.cableName && findMarkerByUid(markerInfo.client?.ctoUid);
+        if (cto) refreshClientDrops({ onlyCto: cto }); else refreshClientDrops();
         return;
     }
-    if (markerInfo.type === "CTO") refreshClientDrops();
+    if (markerInfo.type === "CTO") refreshClientDrops({ onlyCto: markerInfo });
     const isCasa = markerInfo.type === "CASA";
     const color = markerInfo.color || (isCasa ? '#ffffff' : '#f59e0b');
     markerInfo.marker.setIcon(buildMarkerMapIcon(markerInfo.type, {

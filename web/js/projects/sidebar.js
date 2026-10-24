@@ -37,10 +37,27 @@ function isSidebarOrderedChild(el) {
 }
 
 //Posição do item entre os irmãos (pastas e itens) — salva com o projeto
+//Posições de cada lista guardadas até o fim da rodada de trabalho: salvar uma rede grande perguntava a posição de
+//cada item varrendo a lista inteira (milhares de itens → milhões de passos)
+let sidebarOrderCache = null;
 function getSidebarOrderIndex(el) {
     const parent = el?.parentElement;
     if (!parent) return null;
-    return Array.from(parent.children).filter(isSidebarOrderedChild).indexOf(el);
+    if (!sidebarOrderCache) {
+        sidebarOrderCache = new Map();
+        setTimeout(() => { sidebarOrderCache = null; }, 0);
+        //Mudou a ordem na mesma rodada (arrastar e salvar logo em seguida): recalcula
+        const observer = new MutationObserver(() => { sidebarOrderCache = null; observer.disconnect(); });
+        observer.observe(document.getElementById('sidebar') || document.body, { childList: true, subtree: true });
+        setTimeout(() => observer.disconnect(), 0);
+    }
+    let positions = sidebarOrderCache.get(parent);
+    if (!positions) {
+        positions = new Map();
+        Array.from(parent.children).filter(isSidebarOrderedChild).forEach((child, i) => positions.set(child, i));
+        sidebarOrderCache.set(parent, positions);
+    }
+    return positions.has(el) ? positions.get(el) : -1;
 }
 
 //Depois de abrir um projeto, recoloca pastas e itens na ordem salva

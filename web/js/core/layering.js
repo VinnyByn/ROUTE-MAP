@@ -27,9 +27,31 @@ function bringLayerToFront(el) {
     el.style.zIndex = String(++layerSeq);
 }
 
+//Painéis de consulta no mesmo canto do mapa: abrir um fecha os outros (pelo botão Fechar de cada um, para
+//desfazer o que ele desenhou). Editores (marcador, cabo, polígono, régua, drop) e o pré-projeto não entram: fechar perderia o trabalho.
+const EXCLUSIVE_PANELS = {
+    viabilityBox: 'closeViabilityBox', networkFilterBox: 'closeNetworkFilterBox', networkPanelBox: 'closeNetworkPanelBox',
+    nearbyBox: 'closeNearbyBox', signalTraceBox: 'closeSignalTraceBox', projectCheckBox: 'closeProjectCheckBox',
+    networkImpactBox: 'closeNetworkImpactBox',
+};
+
+function closeOtherPanels(el) {
+    if (!(el.id in EXCLUSIVE_PANELS)) return;
+    Object.entries(EXCLUSIVE_PANELS).forEach(([id, closeId]) => {
+        const other = document.getElementById(id);
+        if (!other || other === el || !isLayerVisible(other)) return;
+        const close = document.getElementById(closeId);
+        if (close) close.click(); else other.classList.add('hidden');
+        if (isLayerVisible(other)) other.classList.add('hidden');
+    });
+}
+
 function checkLayer(el) {
     const visible = isLayerVisible(el);
-    if (visible && !layerWasVisible.get(el)) bringLayerToFront(el);
+    if (visible && !layerWasVisible.get(el)) {
+        bringLayerToFront(el);
+        closeOtherPanels(el);
+    }
     layerWasVisible.set(el, visible);
 }
 
