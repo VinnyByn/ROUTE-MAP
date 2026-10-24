@@ -360,9 +360,15 @@ function openNetworkLinkFolders(info) {
     const esc = (v) => escapeHtml(String(v ?? ''));
     modal.innerHTML = `
         <div class="modal-content net-link-modal" role="dialog" aria-labelledby="netLinkTitle">
-            <h2 id="netLinkTitle">${esc(info.name)} em outras pastas</h2>
+            <div class="modal-header-v2 rm-head rm-head--rede">
+                <span class="rm-head__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus"></use></svg></span>
+                <div class="rm-head__text">
+                    <h2 id="netLinkTitle">${esc(info.name)} em outras pastas</h2>
+                    <p class="rm-head__sub">No mapa continua um só; ao editar em qualquer pasta, muda em todas</p>
+                </div>
+            </div>
             <div class="modal-body-content">
-                <p class="net-link-modal__hint">Marque as pastas onde ele também deve aparecer. No mapa continua um só; ao editar em qualquer pasta, muda em todas. Dica: arraste o item com <kbd>Ctrl</kbd> para uma pasta.</p>
+                <p class="net-link-modal__hint">Marque as pastas onde ele também deve aparecer. Dica: arraste o item com <kbd>Ctrl</kbd> para uma pasta.</p>
                 <ul class="net-link-modal__list">${folders.map(f => {
                     const home = f.id === info.folderId;
                     return `<li style="--depth:${f.depth}"><label class="${home ? 'is-home' : ''}">
@@ -521,7 +527,10 @@ function confirmByTyping({ title, message, word, confirmLabel = 'Excluir' }) {
     const esc = (v) => escapeHtml(String(v ?? ''));
     modal.innerHTML = `
         <div class="modal-content typed-confirm" role="alertdialog" aria-labelledby="typedConfirmTitle">
-            <h2 id="typedConfirmTitle">${esc(title)}</h2>
+            <div class="modal-header-v2 rm-head rm-head--occ">
+                <span class="rm-head__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg></span>
+                <div class="rm-head__text"><h2 id="typedConfirmTitle">${esc(title)}</h2><p class="rm-head__sub">Esta exclusão pede confirmação</p></div>
+            </div>
             <div class="modal-body-content">
                 <p class="typed-confirm__msg">${esc(message)}</p>
                 <label for="typedConfirmInput">Para confirmar, digite <b>${esc(word)}</b></label>

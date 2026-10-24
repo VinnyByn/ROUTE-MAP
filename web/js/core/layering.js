@@ -84,4 +84,22 @@ function setupLayering() {
     }, true);
 }
 
+//Clicar de novo no botão de um painel já aberto fecha o painel
+const PANEL_TOGGLES = {
+    networkViabilityButton: 'viabilityBox', networkFilterButton: 'networkFilterBox', networkPanelButton: 'networkPanelBox',
+    networkCheckButton: 'projectCheckBox', projectCheckButton: 'projectCheckBox',
+    networkImpactMenuButton: 'networkImpactBox', networkImpactButton: 'networkImpactBox',
+};
+document.addEventListener('click', (e) => {
+    const button = e.target.closest?.('[id]');
+    const boxId = button && PANEL_TOGGLES[button.id];
+    const box = boxId && document.getElementById(boxId);
+    if (!box || !isLayerVisible(box)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    document.querySelectorAll('.dropdown-content.show').forEach(d => d.classList.remove('show'));
+    const close = document.getElementById(EXCLUSIVE_PANELS[boxId]);
+    if (close) close.click(); else box.classList.add('hidden');
+}, true);
+
 setupLayering();
