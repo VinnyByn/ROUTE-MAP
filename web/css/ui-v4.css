@@ -3729,3 +3729,71 @@ body.mode-rede .network-tools { gap: 4px; margin-right: 0; }
 /* Modo Rede: sem o resumo ("4 CTOs · 2,8 km de cabo · 3/64 portas") embaixo do nome da cidade */
 body.mode-rede .sidebar-column .ge-pro-project > .folder-title[data-summary]::after { content: none !important; display: none !important; }
 body.mode-rede .sidebar-column .ge-pro-project > .folder-title[data-summary] { flex-wrap: nowrap; }
+
+/* ---------------------------------------------------------------
+   Controles deslizantes (espessura, opacidade, tamanho…): trilho fino com a parte preenchida na cor da ação
+   e botão redondo com borda; --fill é atualizado por js/core/layering.js
+   --------------------------------------------------------------- */
+html body input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 22px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer;
+  --fill: 50%; --range-color: var(--action, #1f7a94);
+}
+html body input[type="range"]:focus { outline: none; }
+html body input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--range-color) 0 var(--fill), var(--color-border, #cbd5e1) var(--fill) 100%);
+}
+html body input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--color-border, #cbd5e1); }
+html body input[type="range"]::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--range-color); }
+html body input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--range-color); box-shadow: 0 1px 4px rgba(15, 23, 42, .25); transition: transform .12s;
+}
+html body input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 3px solid var(--range-color); box-shadow: 0 1px 4px rgba(15, 23, 42, .25);
+}
+html body input[type="range"]:hover::-webkit-slider-thumb, html body input[type="range"]:focus-visible::-webkit-slider-thumb { transform: scale(1.15); }
+html body input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--range-color) 25%, transparent); }
+html body input[type="range"]:disabled { opacity: .5; cursor: default; }
+html[data-theme="dark"] body input[type="range"]::-webkit-slider-thumb, html[data-theme="dark"] body input[type="range"]::-moz-range-thumb { background: #0f172a; }
+/* Espessura do cabo: o número vira um selo e há uma prévia da linha */
+.range-value { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; padding: 1px 7px; margin-left: 6px; border-radius: 999px; font-size: 11.5px; font-weight: 800; color: var(--action, #1f7a94); background: color-mix(in srgb, var(--action, #1f7a94) 12%, var(--color-surface)); }
+.range-line-preview { display: block; height: 22px; margin-top: 2px; border-radius: 8px; background: var(--color-surface-muted); position: relative; }
+.range-line-preview::after { content: ''; position: absolute; left: 12px; right: 12px; top: 50%; height: var(--w, 4px); transform: translateY(-50%); border-radius: 999px; background: var(--line-color, var(--action, #1f7a94)); }
+.net-filter__loading { display: flex; align-items: center; gap: 10px; padding: 14px 4px; font-size: 13px; color: var(--color-text-muted); }
+.net-filter__loading .route-suggest__spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, #15803d 30%, transparent); border-top-color: #15803d; animation: route-suggest-spin 0.8s linear infinite; flex-shrink: 0; }
+/* Novo projeto / Nova pasta no padrão das janelas novas */
+.rm-head--proj { --rm-accent: var(--action, #1f7a94); }
+.project-modal { max-width: 560px; }
+.folder-modal { max-width: 440px; }
+.project-modal .modal-header-v2, .folder-modal .modal-header-v2 { padding-right: 56px !important; }
+.project-modal__body { gap: 14px; }
+.modal-content input.project-modal__name { min-height: 46px; font-size: 16px; font-weight: 600; border-radius: 12px; }
+.project-modal__place { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.project-modal__hint { margin-top: -6px; font-size: 11.5px; color: var(--color-text-muted); }
+@media (max-width: 520px) { .project-modal__place { grid-template-columns: 1fr; } }
+#choiceModal .choice-modal__message { white-space: pre-line; }
+.auto-design__opacity { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--color-border-light); background: var(--color-surface); }
+.auto-design__opacity label { margin: 0; font-size: 12px; font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+.trash-actions { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: var(--color-surface-muted); border: 1px solid var(--color-border-light); }
+.trash-actions[hidden] { display: none; }
+.trash-actions > span { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+/* Abrir projeto: escolher a cidade antes da lista */
+.pp-cities { list-style: none; padding: 4px 2px; }
+.pp-cities__hint { margin: 0 0 10px; font-size: 13px; color: var(--color-text-muted); }
+.pp-cities__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+#loadProjectModal .pp-city { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--color-border); border-left: 4px solid var(--action, #1f7a94); background: var(--color-surface); box-shadow: none; font: inherit; text-align: left; color: var(--color-text); cursor: pointer; transition: border-color .15s, background .15s; }
+#loadProjectModal .pp-city:hover { border-color: var(--action, #1f7a94); background: color-mix(in srgb, var(--action, #1f7a94) 7%, var(--color-surface)); }
+#loadProjectModal .pp-city b { font-size: 14px; }
+#loadProjectModal .pp-city small { font-size: 12px; color: var(--color-text-muted); }
+#loadProjectModal .pp-city--all { border-left-color: var(--color-text-dim); border-style: dashed; border-left-style: solid; }
+/* Rede existente por baixo (modo Projeto): aviso no mapa */
+.network-layer-chip { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 40px); padding: 7px 8px 7px 12px; border-radius: 999px; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-md, 0 4px 14px rgba(15,23,42,.18)); font-size: 12.5px; color: var(--color-text); }
+.network-layer-chip.hidden, body.mode-rede .network-layer-chip { display: none; }
+.network-layer-chip > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.network-layer-chip__swatch { flex: none; width: 22px; height: 0; border-top: 3px dashed #475569; }
+.network-layer-chip .btn-chip { flex: none; min-height: 0; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface-muted); font: inherit; font-size: 12px; font-weight: 700; color: var(--color-text); cursor: pointer; }
+.network-layer-chip .btn-chip:hover { background: var(--color-surface-hover); }
+.network-area__count { margin: 0; font-size: 12.5px; font-weight: 700; color: #7c3aed; }
+@media (max-width: 640px) { .network-layer-chip { bottom: 70px; max-width: calc(100% - 24px); flex-wrap: wrap; border-radius: 14px; } }

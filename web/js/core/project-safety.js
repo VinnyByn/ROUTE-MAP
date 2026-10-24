@@ -160,9 +160,23 @@ async function openTrash() {
         list.innerHTML = `<li class="safety-list__state safety-list__state--error">${escapeHtml(isMissingFeatureError(error) ? SAFETY_MIGRATION_HINT : 'Não foi possível carregar a lixeira.')}</li>`;
         return;
     }
+    const actions = document.getElementById('trashActions');
     if (!data?.length) {
         list.innerHTML = '<li class="safety-list__state">A lixeira está vazia.</li>';
+        if (actions) actions.hidden = true;
         return;
+    }
+    //Restaurar tudo / Excluir tudo: só o que a pessoa pode mexer (criou ou é administrador)
+    const manageable = data.filter(p => p.can_manage);
+    if (actions) {
+        actions.hidden = !manageable.length;
+        actions.innerHTML = manageable.length ? `<span>${data.length} na lixeira${manageable.length < data.length ? ` · ${manageable.length} seus` : ''}</span>
+            <button type="button" class="btn btn-secondary safety-list__btn" data-trash-all="restore">Restaurar tudo</button>
+            <button type="button" class="btn btn-danger safety-list__btn" data-trash-all="purge">Excluir tudo</button>` : '';
+        actions.onclick = (e) => {
+            const kind = e.target.closest('[data-trash-all]')?.dataset.trashAll;
+            if (kind) handleTrashAll(kind, manageable);
+        };
     }
     list.innerHTML = '';
     data.forEach(project => {
@@ -187,6 +201,30 @@ async function openTrash() {
         });
         list.appendChild(li);
     });
+}
+
+async function handleTrashAll(kind, projects) {
+    const n = projects.length;
+    if (kind === 'restore') {
+        showConfirm('Restaurar tudo', `Restaurar ${n} ${n === 1 ? 'item' : 'itens'} da lixeira? Voltam para a lista de projetos (cidades voltam para o modo Rede).`, async () => {
+            const { error } = await supabaseClient.from('projects').update({ deleted_at: null }).in('id', projects.map(p => p.id));
+            if (error) return showAlert('Não foi possível restaurar', error.message);
+            showToast('Lixeira', `${n} ${n === 1 ? 'item restaurado' : 'itens restaurados'}.`);
+            openTrash();
+            if (typeof loadProjectFacets === 'function') loadProjectFacets();
+            if (typeof reloadProjectPickerList === 'function') reloadProjectPickerList();
+        });
+        return;
+    }
+    const ok = typeof confirmByTyping === 'function'
+        ? await confirmByTyping({ title: 'Excluir tudo da lixeira', message: `Apagar definitivamente ${n} ${n === 1 ? 'item' : 'itens'}, com todo o histórico de versões. Não dá para desfazer.`, word: 'EXCLUIR', confirmLabel: 'Excluir tudo' })
+        : window.confirm(`Apagar definitivamente ${n} itens?`);
+    if (!ok) return;
+    const { error } = await supabaseClient.from('projects').delete().in('id', projects.map(p => p.id));
+    if (error) return showAlert('Não foi possível excluir', error.message);
+    showToast('Lixeira esvaziada', `${n} ${n === 1 ? 'item apagado' : 'itens apagados'} de vez.`);
+    openTrash();
+    if (typeof loadProjectFacets === 'function') loadProjectFacets();
 }
 
 async function restoreFromTrash(project) {

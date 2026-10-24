@@ -3022,10 +3022,15 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         //Clicar numa etapa feita volta para ela
         document.querySelector('#autoDesignFlow [data-stage="ctos"]').click();
         st.backByFlow = autoDesign.stage === 'ctos';
-        //Opacidade: só no polígono (o painel do pré-projeto não tem); na prévia, a área aparece com a dela, sem pegar os
-        //cliques (0 = some)
+        //Opacidade da prévia (controle no topo da caixa): deixa os desenhos mais transparentes; a área não pega os cliques
         const po = autoDesign.polygon.polygonObject;
-        st.opacity = po.getVisible() && po.get('clickable') === false && !document.querySelector('#autoDesignBox input[type="range"]');
+        const range = document.getElementById('autoDesignOpacity');
+        const overlay = autoDesign.overlays.find(o => typeof o.get?.('strokeOpacity') === 'number' && o.get('strokeOpacity') > 0);
+        const strokeBefore = overlay?.get('strokeOpacity');
+        range.value = '50'; range.dispatchEvent(new Event('input', { bubbles: true }));
+        const halved = !overlay || Math.abs(overlay.get('strokeOpacity') - strokeBefore / 2) < 1e-6;
+        range.value = '100'; range.dispatchEvent(new Event('input', { bubbles: true }));
+        st.opacity = po.getVisible() && po.get('clickable') === false && !!range && halved && (!overlay || Math.abs(overlay.get('strokeOpacity') - strokeBefore) < 1e-6);
         autoDesign.polygon.opacity = 0;
         showAutoDesignPolygon(autoDesign, false);
         st.hidden = !po.getVisible();
@@ -4081,6 +4086,30 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       out.exclusivePanels = viabClosed && document.getElementById('networkFilterBox').classList.contains('hidden')
         && !document.getElementById('networkPanelBox').classList.contains('hidden');
       document.getElementById('closeNetworkPanelBox').click();
+      //Trecho: abre só o que está dentro da área; o resto fica guardado e volta ao salvar
+      {
+        const before = window.__fakeDb.projects[netId].data;
+        const total = before.markers.length + before.cables.length;
+        const target = before.markers.find(m => m.type === 'CTO');
+        const d = 0.0004, p0 = target.position;
+        const realDraw = window.drawNetworkArea;
+        window.drawNetworkArea = async () => [{ lat: p0.lat - d, lng: p0.lng - d }, { lat: p0.lat - d, lng: p0.lng + d }, { lat: p0.lat + d, lng: p0.lng + d }, { lat: p0.lat + d, lng: p0.lng - d }];
+        await openNetworkCityArea(netId);
+        const partRoot = document.getElementById(netId).closest('.folder');
+        const loadedHere = markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length + savedCables.filter(c => getAllDescendantFolderIds(netId).includes(c.folderId)).length;
+        const stash = partRoot.__networkStash;
+        await persistProject(partRoot);
+        const after = window.__fakeDb.projects[netId].data;
+        out.areaDetail = [loadedHere > 0 && loadedHere < total, stash.markers.length + stash.cables.length + loadedHere === total, after.markers.length + after.cables.length === total,
+          partRoot.querySelector(':scope > .folder-title').dataset.networkArea === 'true',
+          buildSidebarMenuItems(getSidebarEntity(partRoot.querySelector('.folder-title'))).some(i => i.action === 'net-whole')].join();
+        await openNetworkCityWhole(netId);
+        await new Promise(r => setTimeout(r, 300));
+        const wholeRoot = document.getElementById(netId).closest('.folder');
+        out.areaWhole = !wholeRoot.__networkStash && markers.filter(m => getAllDescendantFolderIds(netId).includes(m.folderId)).length + savedCables.filter(c => getAllDescendantFolderIds(netId).includes(c.folderId)).length === total;
+        out.area = out.areaDetail === 'true,true,true,true,true' && out.areaWhole;
+        window.drawNetworkArea = realDraw;
+      }
       //Modo Rede: tudo é Existente, sem o campo Situação no marcador e no cabo
       openMarkerCreatePanel('CTO');
       const hiddenStatus = getComputedStyle(document.getElementById('markerInfraStatusGroup')).display === 'none'
@@ -4182,7 +4211,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       await persistProject(document.getElementById('projNC').closest('.folder'));
       await concludeProject('projNC');
       const finalMarkers = window.__fakeDb.projects[netId].data.markers;
-      out.layer = layerTitles.length === 1 && /CTO-REDE · já existe na Rede/.test(layerTitles[0]) && used?.uid === 'mk_net_only' && used.folderId === 'projNC'
+      out.layer = layerTitles.length === 1 && /CTO-REDE · EXISTENTE/.test(layerTitles[0]) && used?.uid === 'mk_net_only' && used.folderId === 'projNC'
         && used.ctoStatus === 'Existente' && after === 0 && finalMarkers.filter(m => m.uid === 'mk_net_only').length === 1
         && finalMarkers.find(m => m.uid === 'mk_net_only').asBuilt.projectId === 'antigo' && finalMarkers.find(m => m.uid === 'mk_net_only').folderId === netId;
       setNetworkLayerEnabled(false);

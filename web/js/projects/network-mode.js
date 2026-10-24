@@ -215,7 +215,7 @@ function addPendingNetworkRoot(row) {
 
 //Carrega a rede de uma cidade no lugar do nome dela; visible: já mostra no mapa (senão fica tudo oculto)
 const networkLoads = new Map();
-function loadNetworkRoot(id, { visible = false } = {}) {
+function loadNetworkRoot(id, { visible = false, area = null } = {}) {
     if (networkLoads.has(id)) return networkLoads.get(id);
     const job = (async () => {
         const placeholder = document.getElementById(id)?.closest('.folder');
@@ -229,10 +229,18 @@ function loadNetworkRoot(id, { visible = false } = {}) {
         }
         const next = placeholder.nextElementSibling;
         placeholder.remove();
-        const { content, removed } = cleanNetworkData(data.data || {});
+        const { content: cleaned, removed } = cleanNetworkData(data.data || {});
+        //Trecho (js/network/network-area.js): só o que está dentro da área carrega; o resto fica guardado para salvar junto
+        const part = area && typeof splitNetworkDataByArea === 'function' ? splitNetworkDataByArea(cleaned, area) : null;
+        const content = part ? part.content : cleaned;
         loadAndDisplayProject(id, { ...content, projectName: data.name }, { silent: true });
         const root = document.getElementById(id)?.closest('.folder');
         if (!root) return null;
+        if (part) {
+            root.__networkStash = part.stash;
+            root.querySelector(':scope > .folder-title').dataset.networkArea = 'true';
+            showNetworkAreaShape(id, area);
+        }
         if (next && next.parentElement) next.parentElement.insertBefore(root, next);
         if (data.revision != null) setProjectRevision(root, data.revision);
         if (!visible) handleVisibilityToggle(root.querySelector(':scope > .folder-title .visibility-toggle-btn'), false);

@@ -214,7 +214,7 @@ const SB_ICONS = {
     focus: 'target', hide: 'eye-off', show: 'eye', collapse: 'collapse', expand: 'expand', save: 'save',
     close: 'folder-x', history: 'clock', delete: 'trash', fusion: 'branch', copy: 'copy', paste: 'copy',
     'link-folders': 'folder-plus', unlink: 'folder-x',
-    'drop-edit': 'edit', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', conclude: 'check', archive: 'folder-x', unarchive: 'folder-plus', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
+    'drop-edit': 'edit', 'net-area': 'polygon', 'net-whole': 'expand', route: 'branch', check: 'list', 'export-xlsx': 'download', 'export-fusion': 'branch', 'pop-equipment': 'pop', conclude: 'check', archive: 'folder-x', unarchive: 'folder-plus', 'drop-recalc': 'refresh', 'open-client': 'client', cable: 'cable', 'auto-design': 'cto',
 };
 
 function buildSidebarMenuItems(entity) {
@@ -257,6 +257,9 @@ function buildSidebarMenuItems(entity) {
             if (canEdit && !isNetwork) items.push(entity.title.dataset.archived === 'true'
                 ? { action: 'unarchive', label: 'Desarquivar', hint: 'Volta para a lista de projetos' }
                 : { action: 'archive', label: 'Arquivar projeto', hint: 'Sai da lista de projetos; fica em Abrir projeto → Arquivados' });
+            if (isNetwork) items.push(entity.title.dataset.networkArea === 'true'
+                ? { action: 'net-whole', label: 'Abrir a cidade inteira', hint: 'Carrega tudo de novo (agora está só num trecho)' }
+                : { action: 'net-area', label: 'Abrir só um trecho…', hint: 'Desenhe a área no mapa: só o que estiver dentro carrega' });
             items.push({ action: 'history', label: 'Histórico de versões', hint: 'Ver e restaurar versões salvas' });
             items.push({ action: 'check', label: 'Verificar projeto', hint: 'Pontas soltas, fusões, portas, drops e potência' });
             items.push({ action: 'export-xlsx', label: 'Exportar planilha (Excel)', hint: 'Caixas, cabos, clientes, portas e fibras' });
@@ -451,6 +454,12 @@ function handleSidebarMenuAction(action) {
     case 'export-fusion':
         setActiveFolder(entity.folderId);
         exportProjectFusionPlans();
+        break;
+    case 'net-area':
+        openNetworkCityArea(entity.folderId);
+        break;
+    case 'net-whole':
+        openNetworkCityWhole(entity.folderId);
         break;
     case 'export-xlsx':
         setActiveFolder(entity.folderId);

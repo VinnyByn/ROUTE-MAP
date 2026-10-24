@@ -45,6 +45,8 @@ function buildProjectRecord(projectRootElement) {
             ...(typeof projectConclusions !== 'undefined' && projectConclusions[projectId] ? { concluded: projectConclusions[projectId] } : {})
         }
     };
+    //Rede aberta só num trecho: o que ficou fora volta para o registro (js/network/network-area.js)
+    if (record.project_type === 'Rede' && typeof mergeNetworkStash === 'function') mergeNetworkStash(projectRootElement, record);
     //Rede: o histórico de alterações vai junto (js/network/network-docs.js)
     if (record.project_type === 'Rede' && typeof withNetworkChangeLog === 'function') record.data = withNetworkChangeLog(projectId, record.data);
     return record;

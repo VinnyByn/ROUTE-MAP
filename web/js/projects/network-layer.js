@@ -22,12 +22,39 @@ function updateNetworkLayerToggle() {
     if (!item) return;
     const on = isNetworkLayerEnabled();
     item.setAttribute('aria-checked', on ? 'true' : 'false');
-    item.querySelector('small').textContent = on ? 'Ligado: caixas e cabos já construídos aparecem apagados' : 'Desligado';
+    item.querySelector('small').textContent = on ? 'Ligado: a rede existente aparece apagada e tracejada' : 'Desligado';
 }
 
 function clearNetworkLayer() {
     networkLayer.overlays.forEach(o => o.setMap(null));
     networkLayer.overlays = [];
+    if (typeof hideNetworkAreaShape === 'function') hideNetworkAreaShape('layer');
+    renderNetworkLayerChip(null);
+}
+
+//Aviso no mapa: deixa claro que o apagado por baixo é a rede EXISTENTE, de qual cidade, e se é a cidade toda ou um trecho
+function renderNetworkLayerChip(info) {
+    let chip = document.getElementById('networkLayerChip');
+    if (!info) { chip?.classList.add('hidden'); return; }
+    if (!chip) {
+        chip = document.createElement('div');
+        chip.id = 'networkLayerChip';
+        chip.className = 'network-layer-chip';
+        document.getElementById('map')?.parentElement?.appendChild(chip);
+        chip.addEventListener('click', (e) => {
+            const action = e.target.closest('[data-layer]')?.dataset.layer;
+            if (action === 'area') chooseNetworkLayerArea();
+            if (action === 'whole') setNetworkLayerArea(null);
+            if (action === 'off') setNetworkLayerEnabled(false);
+        });
+    }
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    chip.innerHTML = `<span class="network-layer-chip__swatch" aria-hidden="true"></span>
+        <span title="${esc(info.cities.join(', '))}"><b>Rede existente</b> · ${esc(info.cities.join(', '))} · ${info.area ? 'trecho' : 'cidade inteira'} · ${info.count}</span>
+        <button type="button" class="btn-chip" data-layer="area">${info.area ? 'Outro trecho' : 'Só um trecho'}</button>
+        ${info.area ? '<button type="button" class="btn-chip" data-layer="whole">Cidade inteira</button>' : ''}
+        <button type="button" class="btn-chip" data-layer="off" title="Desligar (Projeto → Rede da cidade por baixo)">Ocultar</button>`;
+    chip.classList.remove('hidden');
 }
 
 //Cidades dos projetos abertos (cada uma com a rede dela)
@@ -64,26 +91,36 @@ async function refreshNetworkLayer() {
     clearNetworkLayer();
     //O que já está no projeto (trazido da rede ou concluído) não aparece duas vezes
     const inWorkspace = new Set([...markers.map(m => m.uid), ...savedCables.map(c => c.uid)].filter(Boolean));
+    //Trecho escolhido (js/network/network-area.js): só a rede dentro dele
+    const area = typeof getNetworkLayerArea === 'function' ? getNetworkLayerArea() : null;
+    let count = 0;
     loaded.forEach(([city, data]) => {
         if (!data) return;
         (data.cables || []).forEach(cable => {
             if (inWorkspace.has(cable.uid) || !(cable.path || []).length) return;
+            if (area && !isCableDataInArea(cable, area)) return;
+            count++;
+            //Existente: tracejado cinza, bem diferente dos cabos do projeto (linha cheia e colorida)
             networkLayer.overlays.push(new google.maps.Polyline({
-                map, path: cable.path.map(p => new google.maps.LatLng(p.lat, p.lng)), clickable: false, zIndex: 1,
-                strokeColor: cable.color || '#64748b', strokeOpacity: 0.32, strokeWeight: 2,
+                map, path: cable.path.map(p => new google.maps.LatLng(p.lat, p.lng)), clickable: false, zIndex: 1, strokeOpacity: 0,
+                icons: [{ icon: { path: 'M 0,-1 0,1', strokeColor: '#475569', strokeOpacity: 0.7, strokeWeight: 2.5, scale: 2.5 }, offset: '0', repeat: '9px' }],
             }));
         });
         (data.markers || []).filter(goesToNetwork).forEach(item => {
             if (inWorkspace.has(item.uid) || !item.position) return;
+            if (area && !isMarkerDataInArea(item, area)) return;
+            count++;
             const marker = new google.maps.Marker({
                 map, position: new google.maps.LatLng(item.position.lat, item.position.lng), zIndex: 2, opacity: 0.8,
-                title: `${item.name} · já existe na Rede · ${city}`,
+                title: `${item.name} · EXISTENTE (rede de ${city}) · clique para usar no projeto`,
                 icon: buildMarkerMapIcon(item.type, { color: item.color || '#f59e0b', faded: true }),
             });
             marker.addListener('click', () => handleNetworkLayerClick(item, city));
             networkLayer.overlays.push(marker);
         });
     });
+    if (area && typeof showNetworkAreaShape === 'function') showNetworkAreaShape('layer', area, '#475569');
+    renderNetworkLayerChip(loaded.some(([, data]) => data) ? { cities: loaded.filter(([, d]) => d).map(([c]) => c), area: !!area, count } : null);
 }
 
 //Projeto que recebe a caixa: o ativo (se é da mesma cidade) ou o primeiro aberto dessa cidade
@@ -141,6 +178,11 @@ appReady.then(() => {
     document.getElementById('networkLayerToggle')?.addEventListener('click', (e) => {
         e.preventDefault();
         setNetworkLayerEnabled(!isNetworkLayerEnabled());
+    });
+    document.getElementById('networkLayerAreaButton')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('projectDropdown')?.classList.remove('show');
+        chooseNetworkLayerArea();
     });
     updateNetworkLayerToggle();
     //Projeto aberto ou fechado, troca de modo: refaz a camada
