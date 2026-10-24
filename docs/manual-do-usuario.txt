@@ -142,7 +142,7 @@ Exportar PDF:
 A chave "Projeto | Rede" no topo troca o modo. No Projeto você planeja como sempre; no Rede fica a rede que já existe, uma por cidade.
 Migrar para o modo Rede: no menu do projeto, "Migrar para o modo Rede". Caixas, cabos e planos de fusão entram na rede da cidade como Existente; o projeto fica só para consulta e é arquivado.
 Arquivar: no menu do projeto, "Arquivar projeto" (sem mandar nada para a rede). Projetos arquivados saem da lista e ficam em Projeto → Abrir projeto → aba Arquivados, de onde podem ser abertos ou desarquivados.
-Rede por baixo do projeto: no modo Projeto, as caixas e cabos já construídos na cidade aparecem apagados. Clique numa caixa da rede (ou nela, desenhando um cabo) para trazê-la ao projeto como Existente; ao concluir, ela é atualizada na rede, sem duplicar. Liga/desliga em Projeto → "Rede da cidade por baixo".
+Rede por baixo do projeto: no modo Projeto, as caixas e cabos já construídos na cidade aparecem apagados e tracejados (é a rede EXISTENTE; o aviso "Rede existente" embaixo do mapa diz a cidade e se é a cidade inteira ou um trecho). Projeto → "Trecho da rede por baixo" (ou "Só um trecho" no aviso): desenhe a área no mapa e só a rede dentro dela aparece. Clique numa caixa da rede (ou nela, desenhando um cabo) para trazê-la ao projeto como Existente; ao concluir, ela é atualizada na rede, sem duplicar. Liga/desliga em Projeto → "Rede da cidade por baixo".
 Menu "Rede":
 - + Cidade, + Marcador, Novo cliente, Importar clientes (planilha .xlsx ou .csv; baixe o modelo; a CTO e a porta são conferidas e o mesmo código atualiza o cliente), Nova ocorrência, Verificar a rede, Rompimento, Histórico, Exportar planilha e plano de fusão, Etiquetas QR das caixas.
 Viabilidade: clique no endereço e veja as CTOs com porta livre por perto; "+ Cliente" já cadastra ligado na CTO. O mapa mostra o raio do drop (anel azul com "drop até 200 m") e o caminho pela rua do cliente até as 3 CTOs mais perto, numerado e com a distância (verde atende, vermelho sem porta, cinza longe). Sem internet para a rota, fica a linha tracejada com a distância estimada.
@@ -165,3 +165,10 @@ Cargo Técnico de campo: no modo Rede cadastra e liga clientes, registra ocorrê
 
 Clientes no modo Rede: sem o drop desenhado e ocultos no mapa, para não poluir nem pesar. O nome do cliente aparece na porta do splitter da CTO. Para ver no mapa: no painel da CTO, "Mostrar clientes no mapa"; todos da cidade pela pasta por tipo "Clientes"; um só clicando nele na barra lateral. A Viabilidade continua mostrando o caminho pela rua até as CTOs.
 Criar projeto: na Cidade, as cidades que já têm rede aparecem primeiro ("Na rede").
+
+Trecho da rede (modo Rede): menu Rede → "Abrir só um trecho" (ou no menu ⋮ da cidade). Desenhe a área no mapa (clique nos cantos; duplo clique ou Concluir): só o que está dentro carrega, mais leve. O que ficou fora continua guardado e é salvo junto. "Abrir a cidade inteira" no menu da cidade volta a carregar tudo.
+Filtro: abre na hora e mostra "Carregando…" enquanto confere a rede.
+Painéis: abrir um fecha o anterior; clicar de novo no botão fecha o painel (vale também para Régua, Rota do cabo e Pré-projeto).
+Abrir projeto: primeiro escolha a cidade (cartões com quantos projetos cada uma tem) ou "Todas as cidades". Lixeira: "Restaurar tudo" e "Excluir tudo" (pede para digitar EXCLUIR).
+Exportar planilha: antes de baixar, mostra as abas do arquivo e o que vem em cada uma.
+Pré-projeto: "Opacidade da prévia" no topo da caixa deixa o desenho mais transparente para ver o mapa por baixo.

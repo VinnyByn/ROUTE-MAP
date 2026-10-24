@@ -28,11 +28,12 @@ function bringLayerToFront(el) {
 }
 
 //Painéis de consulta no mesmo canto do mapa: abrir um fecha os outros (pelo botão Fechar de cada um, para
-//desfazer o que ele desenhou). Editores (marcador, cabo, polígono, régua, drop) e o pré-projeto não entram: fechar perderia o trabalho.
+//desfazer o que ele desenhou). Editores (marcador, cabo, polígono, drop) não entram: fechar perderia a edição.
 const EXCLUSIVE_PANELS = {
     viabilityBox: 'closeViabilityBox', networkFilterBox: 'closeNetworkFilterBox', networkPanelBox: 'closeNetworkPanelBox',
     nearbyBox: 'closeNearbyBox', signalTraceBox: 'closeSignalTraceBox', projectCheckBox: 'closeProjectCheckBox',
-    networkImpactBox: 'closeNetworkImpactBox',
+    networkImpactBox: 'closeNetworkImpactBox', rulerBox: 'closeRulerBoxButton', cableRouteBox: 'closeCableRouteBox',
+    autoDesignBox: 'closeAutoDesignButton', networkAreaBox: 'closeNetworkAreaBox',
 };
 
 function closeOtherPanels(el) {
@@ -50,6 +51,10 @@ function checkLayer(el) {
     const visible = isLayerVisible(el);
     if (visible && !layerWasVisible.get(el)) {
         bringLayerToFront(el);
+        setTimeout(() => updateRangesIn(el), 0);
+        //Janela com campo principal (ex.: nome da pasta): já chega com o cursor nele, texto selecionado
+        const auto = el.querySelector?.('[data-autofocus]');
+        if (auto) setTimeout(() => { if (isLayerVisible(el)) { auto.focus(); auto.select?.(); } }, 60);
         closeOtherPanels(el);
     }
     layerWasVisible.set(el, visible);
@@ -89,6 +94,7 @@ const PANEL_TOGGLES = {
     networkViabilityButton: 'viabilityBox', networkFilterButton: 'networkFilterBox', networkPanelButton: 'networkPanelBox',
     networkCheckButton: 'projectCheckBox', projectCheckButton: 'projectCheckBox',
     networkImpactMenuButton: 'networkImpactBox', networkImpactButton: 'networkImpactBox',
+    rulerButton: 'rulerBox', autoDesignMenuButton: 'autoDesignBox',
 };
 document.addEventListener('click', (e) => {
     const button = e.target.closest?.('[id]');
@@ -101,5 +107,15 @@ document.addEventListener('click', (e) => {
     const close = document.getElementById(EXCLUSIVE_PANELS[boxId]);
     if (close) close.click(); else box.classList.add('hidden');
 }, true);
+
+//Controles deslizantes: a parte preenchida do trilho acompanha o valor (CSS em ui-v4.css, variável --fill)
+function updateRangeFill(input) {
+    const min = Number(input.min || 0), max = Number(input.max || 100), v = Number(input.value);
+    input.style.setProperty('--fill', `${max > min ? ((v - min) / (max - min)) * 100 : 0}%`);
+}
+function updateRangesIn(root = document) { root.querySelectorAll?.('input[type="range"]').forEach(updateRangeFill); }
+document.addEventListener('input', (e) => { if (e.target?.type === 'range') updateRangeFill(e.target); }, true);
+document.addEventListener('change', (e) => { if (e.target?.type === 'range') updateRangeFill(e.target); }, true);
+document.addEventListener('pointerover', (e) => { if (e.target?.type === 'range') updateRangeFill(e.target); }, true);
 
 setupLayering();

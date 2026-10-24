@@ -13,7 +13,7 @@ const NETWORK_FILTERS = [
     ...CLIENT_STATUSES.map(st => ({ id: `cli_${st.id}`, group: 'Clientes', label: st.label, color: st.color, test: (m) => m.type === 'CLIENTE' && (m.client?.status || DEFAULT_CLIENT_STATUS) === st.id })),
     { id: 'semPorta', group: 'Clientes', label: 'Sem CTO/porta', test: (m) => m.type === 'CLIENTE' && m.client?.status !== 'cancelado' && !m.client?.cableName && (!m.client?.ctoUid || !m.client?.ctoPort) },
 ];
-const networkFilter = { active: '', matches: [], cursor: -1, dimmedMarkers: new Set(), dimmedCables: new Map(), hiddenDrops: new Set(), timer: null };
+const networkFilter = { active: '', matches: [], cursor: -1, dimmedMarkers: new Set(), dimmedCables: new Map(), hiddenDrops: new Set(), timer: null, cache: null, loading: false };
 
 function getNetworkFilterItems() {
     const folders = new Set(getNetworkRoots().filter(r => !isPendingNetworkRoot(r)).flatMap(r => getAllDescendantFolderIds(getRootId(r))));
@@ -21,6 +21,15 @@ function getNetworkFilterItems() {
         markers: markers.filter(m => folders.has(m.folderId)),
         cables: savedCables.filter(c => folders.has(c.folderId)),
     };
+}
+
+//Itens e contas do filtro guardados até a rede mudar (o sinal de cada CTO é a conta mais pesada)
+function getNetworkFilterData() {
+    if (!networkFilter.cache) {
+        const items = getNetworkFilterItems();
+        networkFilter.cache = { items, ctx: buildNetworkFilterContext(items) };
+    }
+    return networkFilter.cache;
 }
 
 function buildNetworkFilterContext(items) {
@@ -61,8 +70,7 @@ function applyNetworkFilter() {
     networkFilter.matches = [];
     const filter = NETWORK_FILTERS.find(f => f.id === networkFilter.active);
     if (!filter) { renderNetworkFilter(); return; }
-    const items = getNetworkFilterItems();
-    const ctx = buildNetworkFilterContext(items);
+    const { items, ctx } = getNetworkFilterData();
     items.markers.forEach(m => {
         if (filter.test(m, ctx)) { networkFilter.matches.push(m); return; }
         m.marker?.setOpacity(0.15);
@@ -94,9 +102,9 @@ function nextNetworkFilterMatch() {
 function renderNetworkFilter() {
     const body = document.getElementById('networkFilterBody');
     if (!body || document.getElementById('networkFilterBox')?.classList.contains('hidden')) return;
+    if (networkFilter.loading) return;
     const esc = (v) => escapeHtml(String(v ?? ''));
-    const items = getNetworkFilterItems();
-    const ctx = buildNetworkFilterContext(items);
+    const { items, ctx } = getNetworkFilterData();
     const counts = new Map(NETWORK_FILTERS.map(f => [f.id, items.markers.filter(m => f.test(m, ctx)).length]));
     const groups = [...new Set(NETWORK_FILTERS.map(f => f.group))];
     const active = NETWORK_FILTERS.find(f => f.id === networkFilter.active);
@@ -112,10 +120,24 @@ function renderNetworkFilter() {
         </div>` : '<p class="map-tool-help">Escolha um filtro: o mapa destaca só o que se encaixa e apaga o resto.</p>'}`;
 }
 
+//Abre na hora com "Carregando…" e só depois carrega as cidades e faz as contas (antes a tela travava até abrir)
 async function openNetworkFilter() {
-    //As cidades que ainda são só o nome entram no filtro (carregam ocultas)
-    for (const root of getNetworkRoots().filter(isPendingNetworkRoot)) await loadNetworkRoot(getRootId(root));
+    const body = document.getElementById('networkFilterBody');
+    const pending = getNetworkRoots().filter(isPendingNetworkRoot);
+    networkFilter.loading = true;
+    networkFilter.cache = null;
     document.getElementById('networkFilterBox').classList.remove('hidden');
+    const progress = (text) => { if (body) body.innerHTML = `<div class="net-filter__loading"><span class="route-suggest__spinner" aria-hidden="true"></span>${escapeHtml(text)}</div>`; };
+    progress(pending.length ? 'Carregando as cidades da rede…' : 'Conferindo a rede…');
+    await new Promise(r => setTimeout(r, 30));
+    for (let i = 0; i < pending.length; i++) {
+        progress(`Carregando cidade ${i + 1} de ${pending.length}…`);
+        await loadNetworkRoot(getRootId(pending[i]));
+    }
+    progress('Conferindo portas, sinal e ocorrências…');
+    await new Promise(r => setTimeout(r, 30));
+    networkFilter.loading = false;
+    if (document.getElementById('networkFilterBox').classList.contains('hidden')) return;
     renderNetworkFilter();
 }
 
@@ -142,6 +164,7 @@ appReady.then(() => {
     //Cidade aberta ou itens mudaram com o filtro ligado: refaz
     const sidebar = document.getElementById('sidebar');
     if (sidebar) new MutationObserver(() => {
+        networkFilter.cache = null;
         if (!networkFilter.active) return;
         clearTimeout(networkFilter.timer);
         networkFilter.timer = setTimeout(applyNetworkFilter, 400);

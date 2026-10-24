@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261094a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261095b" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -97,6 +97,7 @@
           </button>
           <div id="networkDropdown" class="dropdown-content" role="menu">
             <a href="#" id="networkAddCityButton" role="menuitem" data-edit-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"></use></svg><span>Nova cidade</span></a>
+            <a href="#" id="networkAreaButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Abrir só um trecho</span><small>Desenhe a área: carrega só o que está dentro</small></a>
             <a href="#" id="networkAddMarkerButton" role="menuitem" data-edit-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg><span>Novo marcador</span><small>CTO, CEO, reserva… na pasta selecionada</small></a>
             <a href="#" id="networkAddClientButton" role="menuitem" data-document-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-client"></use></svg><span>Novo cliente</span><small>Ligado numa CTO e porta</small></a>
             <a href="#" id="networkOccurrenceButton" role="menuitem" data-document-only><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clipboard-check"></use></svg><span>Nova ocorrência</span><small>Rompimento, sinal baixo, manutenção</small></a>
@@ -147,7 +148,8 @@
             <a href="#" id="redoButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-redo"></use></svg><span>Refazer</span><kbd>Ctrl+Y</kbd></a>
             <div class="dropdown-divider" role="separator"></div>
             <a href="#" id="projectCheckButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clipboard-check"></use></svg><span>Verificar projeto</span></a>
-            <a href="#" id="networkLayerToggle" role="menuitemcheckbox" aria-checked="true"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg><span>Rede da cidade por baixo</span><small>Ligado: caixas e cabos já construídos aparecem apagados</small></a>
+            <a href="#" id="networkLayerToggle" role="menuitemcheckbox" aria-checked="true"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg><span>Rede da cidade por baixo</span><small>Ligado: a rede existente aparece apagada e tracejada</small></a>
+            <a href="#" id="networkLayerAreaButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Trecho da rede por baixo</span><small>Desenhe a área: só a rede dentro dela aparece</small></a>
             <a href="#" id="networkImpactButton" role="menuitem"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-branch"></use></svg><span>Redundância e impacto</span></a>
           </div>
         </div>
@@ -1459,8 +1461,9 @@
             </select>
           </div>
           <div class="map-tool-field">
-            <label for="cableWidth">Espessura <span id="cableWidthValue">4</span></label>
+            <label for="cableWidth">Espessura <span id="cableWidthValue" class="range-value">4</span></label>
             <input type="range" id="cableWidth" min="1" max="10" step="1" value="4" />
+            <span class="range-line-preview" id="cableWidthPreview" aria-hidden="true"></span>
           </div>
         </div>
         <p class="map-tool-help" id="cableHelp"></p>
@@ -1649,25 +1652,34 @@
     </div>
 
     <div id="projectModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content project-modal">
         <span class="close" id="closeProjectModal">&times;</span>
-        <h2 id="projectModalTitle">Novo Projeto</h2>
-        <div class="modal-form-body">
-          <div class="form-group">
-            <label for="projectName">Nome do Projeto</label>
-            <input type="text" id="projectName" placeholder="Ex: Expansão Centro" />
+        <div class="modal-header-v2 rm-head rm-head--proj">
+          <span class="rm-head__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-project"></use></svg></span>
+          <div class="rm-head__text">
+            <h2 id="projectModalTitle">Novo Projeto</h2>
+            <p class="rm-head__sub">Dê um nome, diga onde fica e o tipo de obra</p>
           </div>
+        </div>
+        <div class="modal-form-body project-modal__body">
           <div class="form-group">
-            <label for="projectCity">Cidade</label>
-            <input type="text" id="projectCity" placeholder="Ex: Divinópolis" list="projectCityOptions" autocomplete="off" />
-            <datalist id="projectCityOptions"></datalist>
+            <label for="projectName">Nome do projeto</label>
+            <input type="text" id="projectName" class="project-modal__name" placeholder="Ex.: Expansão Centro" data-autofocus autocomplete="off" />
           </div>
-          <div class="form-group">
-            <label for="projectNeighborhood">Bairro</label>
-            <input type="text" id="projectNeighborhood" placeholder="Ex: Santa Clara" />
+          <div class="project-modal__place">
+            <div class="form-group">
+              <label for="projectCity">Cidade</label>
+              <input type="text" id="projectCity" placeholder="Ex.: Divinópolis" list="projectCityOptions" autocomplete="off" />
+              <datalist id="projectCityOptions"></datalist>
+            </div>
+            <div class="form-group">
+              <label for="projectNeighborhood">Bairro</label>
+              <input type="text" id="projectNeighborhood" placeholder="Ex.: Santa Clara" autocomplete="off" />
+            </div>
           </div>
+          <small class="project-modal__hint">Cidades com rede aparecem primeiro na lista: a rede existente aparece por baixo do projeto.</small>
           <div class="form-group">
-            <label id="projectTypeLabel">Tipo</label>
+            <label id="projectTypeLabel">Tipo de obra</label>
             <input type="hidden" id="projectType" value="TCR" />
             <div class="project-type-picker" id="projectTypePicker" role="radiogroup" aria-labelledby="projectTypeLabel"></div>
             <small class="project-type-hint" id="projectTypeHint"></small>
@@ -1681,13 +1693,19 @@
     </div>
     
     <div id="folderModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content folder-modal">
         <span class="close" id="closeFolderModal">&times;</span>
-        <h2 id="folderModalTitle">Nova Pasta</h2>
+        <div class="modal-header-v2 rm-head rm-head--proj">
+          <span class="rm-head__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus"></use></svg></span>
+          <div class="rm-head__text">
+            <h2 id="folderModalTitle">Nova Pasta</h2>
+            <p class="rm-head__sub">Organiza os itens dentro do projeto selecionado</p>
+          </div>
+        </div>
         <div class="modal-form-body">
           <div class="form-group">
-            <label for="folderNameInput">Nome da Pasta</label>
-            <input type="text" id="folderNameInput" placeholder="Digite o nome da pasta" />
+            <label for="folderNameInput">Nome da pasta</label>
+            <input type="text" id="folderNameInput" class="project-modal__name" placeholder="Ex.: Rua Principal" data-autofocus autocomplete="off" />
           </div>
         </div>
         <div class="modal-footer">
@@ -1733,7 +1751,7 @@
               <input type="color" id="folderCableColor" value="#008000" aria-label="Cor dos cabos" />
             </div>
             <div class="fs-field fs-field--wide is-off" id="fsWidthField">
-              <label class="fs-toggle"><input type="checkbox" id="fsApplyWidth" /><span>Espessura da linha</span><output id="folderCableWidthValue">4 px</output></label>
+              <label class="fs-toggle"><input type="checkbox" id="fsApplyWidth" /><span>Espessura da linha</span><output id="folderCableWidthValue" class="range-value">4 px</output></label>
               <input type="range" id="folderCableWidth" min="1" max="12" step="1" value="4" aria-label="Espessura dos cabos" />
             </div>
           </section>
@@ -2984,9 +3002,16 @@
     <div id="trashModal" class="modal">
       <div class="modal-content safety-modal" role="dialog" aria-labelledby="trashModalTitle">
         <span class="close" data-close-modal>&times;</span>
-        <h2 id="trashModalTitle">Lixeira</h2>
+        <div class="modal-header-v2 rm-head rm-head--occ">
+          <span class="rm-head__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"></use></svg></span>
+          <div class="rm-head__text">
+            <h2 id="trashModalTitle">Lixeira</h2>
+            <p class="rm-head__sub">Ficam aqui por 30 dias e depois são apagados de vez</p>
+          </div>
+        </div>
         <div class="modal-body-content">
-          <p class="safety-modal__hint">Projetos excluídos ficam aqui por 30 dias e depois são apagados de vez. Restaurar ou excluir de vez: quem criou o projeto ou um administrador.</p>
+          <p class="safety-modal__hint">Restaurar ou excluir de vez: quem criou o projeto ou um administrador.</p>
+          <div class="trash-actions" id="trashActions" hidden></div>
           <ul class="safety-list" id="trashList"></ul>
         </div>
       </div>
@@ -3093,7 +3118,10 @@
     <div id="rulerBox" class="floating-box map-tool-box hidden" role="dialog" aria-labelledby="rulerBoxTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon map-tool-box__icon--ruler"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ruler"></use></svg></span>
-        <h3 id="rulerBoxTitle">Medição</h3>
+        <div class="map-tool-box__heading">
+          <h3 id="rulerBoxTitle">Medição</h3>
+          <span class="map-tool-box__subtitle">Clique no mapa para medir distâncias e trajetos</span>
+        </div>
         <button type="button" class="map-tool-box__close" id="closeRulerBoxButton" title="Fechar (Esc)" aria-label="Fechar">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
         </button>
@@ -3123,7 +3151,10 @@
     <div id="polygonDrawingBox" class="floating-box map-tool-box hidden" role="dialog" aria-labelledby="polygonBoxTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-polygon"></use></svg></span>
-        <h3 id="polygonBoxTitle">Novo polígono</h3>
+        <div class="map-tool-box__heading">
+          <h3 id="polygonBoxTitle">Novo polígono</h3>
+          <span class="map-tool-box__subtitle">Clique no mapa para marcar os cantos da área</span>
+        </div>
         <button type="button" class="map-tool-box__close" id="closePolygonBoxButton" title="Fechar (Esc)" aria-label="Fechar">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
         </button>
@@ -3146,7 +3177,7 @@
           </div>
         </div>
         <div class="map-tool-field pg-opacity-field">
-          <label for="polygonOpacity">Opacidade do preenchimento <span id="polygonOpacityValue">35%</span></label>
+          <label for="polygonOpacity">Opacidade do preenchimento <span id="polygonOpacityValue" class="range-value">35%</span></label>
           <div class="pg-opacity">
             <span class="pg-opacity__preview" id="polygonFillPreview" aria-hidden="true"></span>
             <input type="range" id="polygonOpacity" min="0" max="100" step="5" value="35" />
@@ -3169,12 +3200,20 @@
     <div id="autoDesignBox" class="floating-box map-tool-box auto-design hidden" role="dialog" aria-labelledby="autoDesignTitle">
       <div class="map-tool-box__header">
         <span class="map-tool-box__icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cto"></use></svg></span>
-        <h3 id="autoDesignTitle">Gerar pré-projeto</h3>
+        <div class="map-tool-box__heading">
+          <h3 id="autoDesignTitle">Gerar pré-projeto</h3>
+          <span class="map-tool-box__subtitle">CTOs, emendas e cabos a partir da área e das casas</span>
+        </div>
         <button type="button" class="map-tool-box__close" id="closeAutoDesignButton" title="Fechar (Esc)" aria-label="Fechar">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"></use></svg>
         </button>
       </div>
       <div class="auto-design__flow-wrap" id="autoDesignFlow"></div>
+      <div class="auto-design__opacity">
+        <label for="autoDesignOpacity">Opacidade da prévia</label>
+        <input type="range" id="autoDesignOpacity" min="15" max="100" step="5" value="100" />
+        <span class="range-value" id="autoDesignOpacityValue">100%</span>
+      </div>
       <div class="map-tool-box__body" id="autoDesignBody"></div>
       <div class="map-tool-box__actions" id="autoDesignActions"></div>
     </div>
@@ -3353,22 +3392,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
   <script src="js/core/supabase-client.js?v=20261087b"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
-  <script src="js/core/layering.js?v=20261093a" defer></script>
-  <script src="js/app.js?v=20261091a" defer></script>
-  <script src="js/core/persistence.js?v=20261085a" defer></script>
+  <script src="js/core/layering.js?v=20261095a" defer></script>
+  <script src="js/app.js?v=20261095a" defer></script>
+  <script src="js/core/persistence.js?v=20261095a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261084a" defer></script>
-  <script src="js/core/project-safety.js?v=20261084a" defer></script>
+  <script src="js/core/project-safety.js?v=20261095a" defer></script>
   <script src="js/catalog/catalog.js?v=20261062a" defer></script>
   <script src="js/map/kml.js?v=20261061a" defer></script>
   <script src="js/catalog/bom.js?v=20261084a" defer></script>
   <script src="js/catalog/labor.js?v=20261036a" defer></script>
   <script src="js/catalog/report.js?v=20261036a" defer></script>
   <script src="js/map/sketch.js?v=20261068a" defer></script>
-  <script src="js/projects/projects.js?v=20261090a" defer></script>
+  <script src="js/projects/projects.js?v=20261095a" defer></script>
   <script src="js/projects/project-archive.js?v=20261085a" defer></script>
-  <script src="js/projects/sidebar.js?v=20261091a" defer></script>
-  <script src="js/projects/network-mode.js?v=20261090a" defer></script>
-  <script src="js/projects/network-layer.js?v=20261076a" defer></script>
+  <script src="js/projects/sidebar.js?v=20261095a" defer></script>
+  <script src="js/projects/network-mode.js?v=20261095a" defer></script>
+  <script src="js/projects/network-layer.js?v=20261095b" defer></script>
   <script src="js/core/permissions.js?v=20261087b" defer></script>
   <script src="js/map/marker-icons.js?v=20261007b" defer></script>
   <script src="js/map/marker-panel.js?v=20261089a" defer></script>
@@ -3382,7 +3421,7 @@
   <script src="js/network/project-check.js?v=20261086a" defer></script>
   <script src="js/map/conduit.js?v=20261013k" defer></script>
   <script src="js/network/network-impact.js?v=20261086a" defer></script>
-  <script src="js/projects/project-export.js?v=20261007b" defer></script>
+  <script src="js/projects/project-export.js?v=20261095a" defer></script>
   <script src="js/network/fusion-export.js?v=20261008c" defer></script>
   <script src="js/network/pop-equipment.js?v=20261007c" defer></script>
   <script src="js/map/global-search.js?v=20261007b" defer></script>
@@ -3401,10 +3440,11 @@
   <script src="js/network/field-docs.js?v=20261090a" defer></script>
   <script src="js/network/network-occurrences.js?v=20261087b" defer></script>
   <script src="js/network/network-photos.js?v=20261076a" defer></script>
-  <script src="js/network/network-filters.js?v=20261076a" defer></script>
+  <script src="js/network/network-filters.js?v=20261095a" defer></script>
   <script src="js/network/network-timeline.js?v=20261076a" defer></script>
   <script src="js/network/network-sidebar.js?v=20261093a" defer></script>
-  <script src="js/network/auto-design.js?v=20261070a" defer></script>
+  <script src="js/network/network-area.js?v=20261095a" defer></script>
+  <script src="js/network/auto-design.js?v=20261095a" defer></script>
   <script src="js/map/marker-hover.js?v=20261083a" defer></script>
   <script src="js/map/network-overlays.js?v=20261083b" defer></script>
   <script src="js/map/poles-layer.js?v=20261021c" defer></script>

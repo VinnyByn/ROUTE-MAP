@@ -93,7 +93,18 @@ function buildProjectSheets(scope) {
     return { Caixas: caixas, Cabos: cabos, Clientes: clientes, 'Portas das CTOs': portas, Fibras: fibras, 'Equipamentos do POP': equipamentos, Postes: postes };
 }
 
-function exportProjectSpreadsheet() {
+const SPREADSHEET_SHEET_HINTS = {
+    Caixas: 'CTOs, CEOs, POPs e reservas: tipo, situação, pasta, coordenadas, splitters e portas livres',
+    Cabos: 'pontas A e B, metragem (lançamento, reserva e total) e fibras em uso',
+    Clientes: 'código, CTO e porta, drop, endereço e potência estimada',
+    'Portas das CTOs': 'cada porta de cada CTO, livre ou com o cliente ligado',
+    Fibras: 'cada fibra de cada cabo, com a cor e se está em uso',
+    'Equipamentos do POP': 'OLT, placas, DGO e switch de cada POP',
+    Postes: 'número, situação, altura, esforço, dono e cabos em cada poste',
+};
+
+//Antes de baixar, mostra o que vem no arquivo (abas e quantas linhas cada uma)
+async function exportProjectSpreadsheet() {
     const scope = getActiveProjectScope();
     if (!scope) {
         showToast('Nenhum projeto', 'Abra ou selecione um projeto para exportar.', 'progress');
@@ -104,6 +115,18 @@ function exportProjectSpreadsheet() {
         return;
     }
     const sheets = buildProjectSheets(scope);
+    const name = document.querySelector(`.folder-title[data-folder-id="${CSS.escape(scope.projectId)}"]`)?.dataset.folderName || 'projeto';
+    const lines = Object.entries(sheets).map(([sheet, rows]) => `• ${sheet} (${rows.length - 1}): ${SPREADSHEET_SHEET_HINTS[sheet] || ''}`);
+    const choice = await showChoice({
+        title: `Exportar planilha de "${name}"`,
+        message: `Um arquivo Excel (.xlsx) com uma aba para cada parte, com filtro nas colunas:\n\n${lines.join('\n')}\n\nNada é alterado no projeto.`,
+        choices: [{ label: 'Cancelar', kind: 'secondary', value: 'cancel' }, { label: 'Baixar planilha', kind: 'primary', value: 'download' }],
+    });
+    if (choice !== 'download') return;
+    downloadProjectSpreadsheet(scope, sheets);
+}
+
+function downloadProjectSpreadsheet(scope, sheets = buildProjectSheets(scope)) {
     const book = XLSX.utils.book_new();
     Object.entries(sheets).forEach(([name, rows]) => {
         const sheet = XLSX.utils.aoa_to_sheet(rows);

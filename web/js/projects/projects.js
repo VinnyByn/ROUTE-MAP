@@ -122,9 +122,37 @@ function openProjectPicker() {
     document.getElementById('projectCityFilter').value = '';
     updateProjectSearchClear();
     document.getElementById('loadProjectModal').style.display = 'flex';
-    loadProjectFacets();
-    reloadProjectPickerList();
+    showProjectCityStep();
     setTimeout(() => input.focus(), 50);
+}
+
+//Primeiro a cidade: cartões com quantos projetos cada uma tem; a lista só carrega depois de escolher
+//(ou em "Todas as cidades", ou digitando na busca). Com uma cidade só, vai direto para a lista.
+async function showProjectCityStep() {
+    const list = document.getElementById('projectPickerList');
+    const seq = ++projectPicker.seq;
+    list.innerHTML = '';
+    renderProjectPickerSkeleton(list, 3);
+    updateProjectPickerCount(null);
+    await loadProjectFacets();
+    if (seq !== projectPicker.seq) return;
+    const cities = projectPicker.facets?.cities || [];
+    if (cities.length < 2 || projectPicker.term || projectPicker.city || projectPicker.archived) { reloadProjectPickerList(); return; }
+    const total = projectPicker.facets?.total ?? cities.reduce((n, c) => n + (c.count || 0), 0);
+    const esc = (v) => escapeHtml(String(v ?? ''));
+    list.innerHTML = `<li class="pp-cities" role="presentation">
+        <p class="pp-cities__hint">Escolha a cidade para ver os projetos dela</p>
+        <div class="pp-cities__grid">
+            ${cities.map(c => `<button type="button" class="btn-ppcity pp-city" data-pp-city="${esc(c.value)}"><b>${esc(c.value)}</b><small>${c.count} ${c.count === 1 ? 'projeto' : 'projetos'}</small></button>`).join('')}
+            <button type="button" class="btn-ppcity pp-city pp-city--all" data-pp-city=""><b>Todas as cidades</b><small>${total} ${total === 1 ? 'projeto' : 'projetos'}</small></button>
+        </div>
+    </li>`;
+    document.getElementById('projectPickerCount').textContent = `${cities.length} cidades`;
+    list.querySelectorAll('[data-pp-city]').forEach(b => b.addEventListener('click', () => {
+        projectPicker.city = b.dataset.ppCity;
+        document.getElementById('projectCityFilter').value = projectPicker.city;
+        reloadProjectPickerList();
+    }));
 }
 
 function closeProjectPicker() {

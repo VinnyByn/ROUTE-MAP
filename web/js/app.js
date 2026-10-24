@@ -809,6 +809,10 @@ function initMap() {
         editingFolderElement = null;
     };
     closeFolderModal.addEventListener("click", closeFolderModalFunction);
+    //Enter no nome da pasta já cria (ou salva)
+    document.getElementById('folderNameInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('confirmFolderButton').click(); }
+    });
     cancelFolderButton.addEventListener("click", closeFolderModalFunction);
     confirmFolderButton.addEventListener("click", createFolder);
     //Lista de materiais
@@ -3055,7 +3059,11 @@ function syncCablePanelControls() {
     document.querySelectorAll('#cableTypeSwatches button').forEach(b => b.classList.toggle('is-active', b.dataset.value === type));
     document.querySelectorAll('#cableStatusSegmented button').forEach(b => b.classList.toggle('is-active', b.dataset.value === document.getElementById('cableStatusSelect').value));
     document.querySelectorAll('#cableASSegmented button').forEach(b => b.classList.toggle('is-active', b.dataset.value === document.getElementById('cableASType').value));
-    document.getElementById('cableWidthValue').textContent = document.getElementById('cableWidth').value;
+    const width = document.getElementById('cableWidth');
+    document.getElementById('cableWidthValue').textContent = `${width.value} px`;
+    const preview = document.getElementById('cableWidthPreview');
+    if (preview) { preview.style.setProperty('--w', `${width.value}px`); preview.style.setProperty('--line-color', color); }
+    if (typeof updateRangeFill === 'function') updateRangeFill(width);
     const icon = document.getElementById('cablePanelIcon');
     if (icon) icon.style.setProperty('--cable-color', color);
 }

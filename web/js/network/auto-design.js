@@ -4122,14 +4122,34 @@ const AUTO_DESIGN_CTO_LEVEL_COLORS = { ok: '#16a34a', over: '#dc2626' };
 //Selo "casas/cabe" embaixo da CTO: o mesmo selo da ocupação das CTOs no mapa (js/map/network-overlays.js)
 const getAutoDesignCtoBadgeIcon = (text, color) => getMapBadgeIcon(text, color);
 
+//Opacidade da prévia (controle no topo da caixa): multiplica a transparência original de cada desenho
+const autoDesignOpacity = { value: 1 };
+function applyAutoDesignOpacity() {
+    const s = autoDesign;
+    if (!s) return;
+    const f = autoDesignOpacity.value;
+    [...(s.overlays || []), s.polygon?.polygonObject].filter(Boolean).forEach(o => {
+        if (!o.__baseOp) {
+            o.__baseOp = { stroke: o.get?.('strokeOpacity'), fill: o.get?.('fillOpacity'), marker: typeof o.getOpacity === 'function' ? (o.getOpacity() ?? 1) : undefined };
+        }
+        const b = o.__baseOp;
+        const opts = {};
+        if (typeof b.stroke === 'number') opts.strokeOpacity = b.stroke * f;
+        if (typeof b.fill === 'number') opts.fillOpacity = b.fill * f;
+        if (Object.keys(opts).length) o.setOptions?.(opts);
+        if (b.marker !== undefined) o.setOpacity?.(b.marker * f);
+    });
+}
+
 //Passando o mouse numa CTO: as ruas/casas dela ficam fortes e as das outras apagadas (null volta ao normal)
 function highlightAutoDesignCto(cto) {
     const s = autoDesign;
     if (!s?.ctoOverlays || s.drag) return;
     s.ctoOverlays.forEach((list, c) => list.forEach(o => {
         const look = o.__autoDesignLook;
-        if (look) o.setOptions?.(!cto || c === cto ? look.base : look.dim);
+        if (look) { o.setOptions?.(!cto || c === cto ? look.base : look.dim); o.__baseOp = null; }
     }));
+    if (autoDesignOpacity.value < 1) applyAutoDesignOpacity();
 }
 
 function drawAutoDesignPreview() {
@@ -4244,6 +4264,7 @@ function drawAutoDesignPreview() {
         }
         if (editable) marker.addListener('dragend', (e) => { endAutoDesignDrag(); moveAutoDesignBox(box, e?.latLng || marker.getPosition()); });
     });
+    if (autoDesignOpacity.value < 1) applyAutoDesignOpacity();
 }
 
 function summarizeAutoDesignCables(plan) {
@@ -5309,4 +5330,12 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (autoDesign.editMode) { setAutoDesignEditMode(null); if (autoDesign.result) drawAutoDesignPreview(); renderAutoDesign(); } else closeAutoDesign();
     } else if (e.key === 'Enter' && autoDesign.phase === 'form' && e.target.closest?.('#autoDesignBox input')) generateAutoDesign();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('autoDesignOpacity')?.addEventListener('input', (e) => {
+        autoDesignOpacity.value = Number(e.target.value) / 100;
+        document.getElementById('autoDesignOpacityValue').textContent = `${e.target.value}%`;
+        applyAutoDesignOpacity();
+    });
 });
