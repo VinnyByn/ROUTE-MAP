@@ -3728,4 +3728,4 @@ body.mode-rede .network-tools { gap: 4px; margin-right: 0; }
 .typed-confirm input { min-height: 44px; font-size: 15px; font-weight: 600; border-radius: 10px; }
 /* Modo Rede: sem o resumo ("4 CTOs · 2,8 km de cabo · 3/64 portas") embaixo do nome da cidade */
 body.mode-rede .sidebar-column .ge-pro-project > .folder-title[data-summary]::after { content: none !important; display: none !important; }
-body.mode-rede .sidebar-column .ge-pro-project > .folder-title[data-summary] { flex-wrap: nowrap; padding-top: 0; padding-bottom: 0; }
+body.mode-rede .sidebar-column .ge-pro-project > .folder-title[data-summary] { flex-wrap: nowrap; }
