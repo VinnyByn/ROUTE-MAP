@@ -499,6 +499,9 @@ function drawClientDropLine(clientInfo) {
 function refreshClientDrops(options = {}) {
     if (typeof google === 'undefined' || !google.maps?.geometry || clientDropsSuspended) return;
     const { onlyCto = null, live = false, recompute = false } = options;
+    //Pastas das redes abertas, calculadas uma vez (cliente da rede não tem drop desenhado)
+    const networkFolders = typeof getNetworkRoots === 'function'
+        ? new Set(getNetworkRoots().flatMap(r => getAllDescendantFolderIds(getRootId(r)))) : new Set();
     const networks = new Map();
     const getNetwork = (folderId) => {
         const rootIds = getProjectFolderIdsForItem(folderId) || [folderId];
@@ -508,8 +511,9 @@ function refreshClientDrops(options = {}) {
     };
     markers.forEach(clientInfo => {
         if (clientInfo.type !== 'CLIENTE' || clientInfo === dropEditSession?.clientInfo) return;
+        if (onlyCto && clientInfo.client?.ctoUid !== onlyCto.uid) return;
         //Rede documentada: sem drop desenhado (a viabilidade mostra a distância pela rua)
-        if (typeof isNetworkItem === 'function' && isNetworkItem(clientInfo)) { clientInfo.dropLine?.setPath([]); return; }
+        if (networkFolders.has(clientInfo.folderId)) { clientInfo.dropLine?.setPath([]); return; }
         const anchored = findClientAnchoredCable(clientInfo);
         if (anchored) {
             if (onlyCto) return;
@@ -554,7 +558,7 @@ function refreshClientDrops(options = {}) {
         ensureClientDropPath(clientInfo, cto, { force: recompute, getNetwork });
         drawClientDropLine(clientInfo);
     });
-    markers.forEach(m => { if (m.type === 'CLIENTE') refreshClientDropSidebarRow(m); });
+    markers.forEach(m => { if (m.type === 'CLIENTE' && (!onlyCto || m.client?.ctoUid === onlyCto.uid)) refreshClientDropSidebarRow(m); });
 }
 
 //Linha do drop: some junto com o marcador (exclusão, pasta oculta) e pode ser ocultada sozinha
