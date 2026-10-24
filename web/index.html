@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261090a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261093b" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -114,10 +114,6 @@
         <button id="networkViabilityButton" class="top-bar-button" type="button" title="Consulta de viabilidade: clique no endereço do cliente e veja as CTOs com porta livre por perto">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-target"></use></svg>
           <span class="top-bar-button__label">Viabilidade</span>
-        </button>
-        <button id="networkNearbyButton" class="top-bar-button" type="button" title="Perto de mim: as caixas mais próximas de onde você está (GPS) e como chegar">
-          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marker"></use></svg>
-          <span class="top-bar-button__label">Perto de mim</span>
         </button>
         <button id="networkFilterButton" class="top-bar-button" type="button" title="Filtro do mapa: destaca CTOs lotadas, com porta livre, sem sinal, com ocorrência, clientes por situação">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"></use></svg>
@@ -2834,7 +2830,7 @@
                       <tr><th scope="row">Alterar caixas, cabos e fusões da rede</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td><td class="is-no">—</td></tr>
                       <tr><th scope="row">Cadastrar e ligar clientes nas portas</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td></tr>
                       <tr><th scope="row">Ocorrências e fotos</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-part">ver</td></tr>
-                      <tr><th scope="row">Viabilidade, painel, filtro e perto de mim</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td></tr>
+                      <tr><th scope="row">Viabilidade, painel e filtro</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td></tr>
                       <tr><th scope="row">Exportar planilha e plano de fusão</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td><td class="is-no">—</td></tr>
                       <tr><th scope="row">Etiquetas QR das caixas</th><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-yes">✓</td><td class="is-no">—</td></tr>
                     </tbody>
@@ -3357,7 +3353,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
   <script src="js/core/supabase-client.js?v=20261087b"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
-  <script src="js/core/layering.js?v=20261092a" defer></script>
+  <script src="js/core/layering.js?v=20261093a" defer></script>
   <script src="js/app.js?v=20261091a" defer></script>
   <script src="js/core/persistence.js?v=20261085a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261084a" defer></script>
@@ -3407,7 +3403,7 @@
   <script src="js/network/network-photos.js?v=20261076a" defer></script>
   <script src="js/network/network-filters.js?v=20261076a" defer></script>
   <script src="js/network/network-timeline.js?v=20261076a" defer></script>
-  <script src="js/network/network-sidebar.js?v=20261091a" defer></script>
+  <script src="js/network/network-sidebar.js?v=20261093a" defer></script>
   <script src="js/network/auto-design.js?v=20261070a" defer></script>
   <script src="js/map/marker-hover.js?v=20261083a" defer></script>
   <script src="js/map/network-overlays.js?v=20261083b" defer></script>

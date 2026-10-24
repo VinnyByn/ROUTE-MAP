@@ -146,7 +146,7 @@ Rede por baixo do projeto: no modo Projeto, as caixas e cabos já construídos n
 Menu "Rede":
 - + Cidade, + Marcador, Novo cliente, Importar clientes (planilha .xlsx ou .csv; baixe o modelo; a CTO e a porta são conferidas e o mesmo código atualiza o cliente), Nova ocorrência, Verificar a rede, Rompimento, Histórico, Exportar planilha e plano de fusão, Etiquetas QR das caixas.
 Viabilidade: clique no endereço e veja as CTOs com porta livre por perto; "+ Cliente" já cadastra ligado na CTO. O mapa mostra o raio do drop (anel azul com "drop até 200 m") e o caminho pela rua do cliente até as 3 CTOs mais perto, numerado e com a distância (verde atende, vermelho sem porta, cinza longe). Sem internet para a rota, fica a linha tracejada com a distância estimada.
-Perto de mim: pelo GPS do celular, as caixas mais próximas, com as portas livres e o botão "Ir" (Google Maps).
+
 Filtro: destaca no mapa CTOs lotadas, quase lotadas, com porta livre, sem splitter ou sem sinal, caixas com ocorrência e clientes por situação; "Próximo ›" passa por cada um.
 Painel da rede: Resumo (números da cidade e o que precisa de atenção), PONs (clientes e CTOs de cada OLT/placa/PON), Ocorrências (abertas e resolvidas) e Histórico (quem incluiu, alterou ou excluiu o quê). No Histórico, "Ver a rede numa data" mostra no mapa como a rede estava numa versão salva, sem restaurar nada ("Voltar para hoje" ou Esc).
 Painel da caixa (clique na caixa): de qual projeto veio, QR code / etiqueta, Como chegar, Copiar link, ocorrências, fotos e as últimas mudanças.

@@ -3711,3 +3711,18 @@ body.mode-rede .map-tool-field:has(> #cableStatusSegmented) { display: none !imp
 .net-city-input { display: flex; gap: 8px; }
 .net-city-input > input { flex: 1; min-width: 0; }
 .net-city-modal .net-city-input select { flex: none; width: 86px; min-height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; }
+
+/* Modo Rede: barra lateral só com os nomes (o resumo já está dentro das pastas por tipo) */
+body.mode-rede #sidebar .item-meta { display: none !important; }
+body.mode-rede #sidebar .folder-meta { visibility: hidden; } /* continua ocupando o espaço: o nome fica à esquerda */
+/* Modo Rede: botões do topo com o mesmo espaçamento (Localizar ficava afastado) */
+body.mode-rede .top-bar-nav { margin-left: 0; gap: 4px; }
+body.mode-rede .network-tools { gap: 4px; margin-right: 0; }
+/* Janelas "em outras pastas" e "digite para excluir" no padrão das janelas novas */
+.net-link-modal .modal-body-content, .typed-confirm .modal-body-content { padding-top: 14px; }
+.net-link-modal__list { padding: 6px; border-radius: 12px; border: 1px solid var(--color-border-light); background: var(--color-surface-muted); }
+#netLinkModal .net-link-modal__list label { background: var(--color-surface); border: 1px solid var(--color-border-light); }
+#netLinkModal .net-link-modal__list label:has(input:checked) { border-color: #15803d; background: color-mix(in srgb, #15803d 8%, var(--color-surface)); }
+#netLinkModal .net-link-modal__list input { accent-color: #15803d; }
+.typed-confirm__msg { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #dc2626 6%, var(--color-surface)); border: 1px solid color-mix(in srgb, #dc2626 25%, var(--color-border-light)); }
+.typed-confirm input { min-height: 44px; font-size: 15px; font-weight: 600; border-radius: 10px; }
