@@ -10,6 +10,7 @@ const MARKER_TYPE_META = {
     CASA: { name: 'Casas', article: 'Novas', noun: 'casas', prefix: '', statuses: null, color: '#ffffff', labelColor: '#0f172a' },
     POP: { name: 'POP', article: 'Novo', noun: 'POP', prefix: 'POP', statuses: null, color: '#7c3aed' },
     POSTE: { name: 'Poste', article: 'Novo', noun: 'poste', prefix: 'P', statuses: null, color: '#64748b' },
+    TORRE: { name: 'Torre', article: 'Nova', noun: 'torre', prefix: 'TR', statuses: null, color: '#0f766e' },
     Importado: { name: 'Marcador importado', article: 'Novo', noun: 'marcador', prefix: 'MK', statuses: ['Nova', 'Existente'], color: '#ff9800' },
 };
 const MARKER_STYLE_STORAGE_PREFIX = 'routeMapMarkerStyle_';

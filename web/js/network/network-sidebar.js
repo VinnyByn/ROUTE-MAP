@@ -16,6 +16,7 @@ const NET_TYPE_GROUPS = [
     { key: 'CEO', label: 'CEOs' },
     { key: 'CTO', label: 'CTOs' },
     { key: 'RESERVA', label: 'Reservas técnicas' },
+    { key: 'TORRE', label: 'Torres' },
     { key: 'CABO', label: 'Cabos' },
     { key: 'CLIENTE', label: 'Clientes' },
     { key: 'OUTROS', label: 'Outros marcadores' },

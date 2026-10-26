@@ -1155,6 +1155,11 @@
             <span class="selection-card__title">POP</span>
             <span class="selection-card__hint">Ponto de presença</span>
           </div>
+          <div class="marker-option selection-card" data-type="TORRE" role="button" tabindex="0">
+            <span class="marker-type-glyph" aria-hidden="true"></span>
+            <span class="selection-card__title">Torre</span>
+            <span class="selection-card__hint">Torre de telecom</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1446,10 +1451,11 @@
             <option value="FO-48">FO-48 (Vermelho)</option>
             <option value="FO-72">FO-72 (Roxo)</option>
             <option value="FO-144">FO-144 (Amarelo)</option>
+            <option value="DROP">Drop (Laranja)</option>
           </select>
         </div>
         <div class="map-tool-field-row">
-          <div class="map-tool-field">
+          <div class="map-tool-field" id="cableASField">
             <label>Vão</label>
             <div class="map-tool-segmented" id="cableASSegmented" role="radiogroup" aria-label="Tipo de vão">
               <button type="button" data-value="AS 80">AS 80</button>
@@ -3393,30 +3399,30 @@
   <script src="js/core/supabase-client.js?v=20261087b"></script>
   <script src="js/core/error-report.js?v=20261005a"></script>
   <script src="js/core/layering.js?v=20261095a" defer></script>
-  <script src="js/app.js?v=20261096a" defer></script>
+  <script src="js/app.js?v=20261097a" defer></script>
   <script src="js/core/persistence.js?v=20261095a" defer></script>
   <script src="js/projects/sidebar-actions.js?v=20261084a" defer></script>
   <script src="js/core/project-safety.js?v=20261095a" defer></script>
   <script src="js/catalog/catalog.js?v=20261062a" defer></script>
-  <script src="js/map/kml.js?v=20261061a" defer></script>
-  <script src="js/catalog/bom.js?v=20261084a" defer></script>
+  <script src="js/map/kml.js?v=20261097a" defer></script>
+  <script src="js/catalog/bom.js?v=20261097a" defer></script>
   <script src="js/catalog/labor.js?v=20261036a" defer></script>
   <script src="js/catalog/report.js?v=20261036a" defer></script>
   <script src="js/map/sketch.js?v=20261068a" defer></script>
   <script src="js/projects/projects.js?v=20261095a" defer></script>
   <script src="js/projects/project-archive.js?v=20261085a" defer></script>
-  <script src="js/projects/sidebar.js?v=20261096a" defer></script>
-  <script src="js/projects/network-mode.js?v=20261095a" defer></script>
+  <script src="js/projects/sidebar.js?v=20261097a" defer></script>
+  <script src="js/projects/network-mode.js?v=20261097a" defer></script>
   <script src="js/projects/network-layer.js?v=20261095b" defer></script>
   <script src="js/core/permissions.js?v=20261087b" defer></script>
-  <script src="js/map/marker-icons.js?v=20261096a" defer></script>
-  <script src="js/map/marker-panel.js?v=20261096a" defer></script>
-  <script src="js/network/fusion-plan.js?v=20261012a" defer></script>
-  <script src="js/network/fusion.js?v=20261014e" defer></script>
+  <script src="js/map/marker-icons.js?v=20261097a" defer></script>
+  <script src="js/map/marker-panel.js?v=20261097a" defer></script>
+  <script src="js/network/fusion-plan.js?v=20261097a" defer></script>
+  <script src="js/network/fusion.js?v=20261097a" defer></script>
   <script src="js/auth/account.js?v=20261087b" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/auth/platform.js?v=20261037a" defer></script>
-  <script src="js/network/clients.js?v=20261096a" defer></script>
+  <script src="js/network/clients.js?v=20261097a" defer></script>
   <script src="js/network/optical-budget.js?v=20261076a" defer></script>
   <script src="js/network/project-check.js?v=20261086a" defer></script>
   <script src="js/map/conduit.js?v=20261013k" defer></script>
@@ -3430,7 +3436,7 @@
   <script src="js/projects/tour.js?v=20261040a" defer></script>
   <script src="js/core/live-sync.js?v=20261084a" defer></script>
   <script src="js/network/pop-plan.js?v=20261008e" defer></script>
-  <script src="js/network/cable-route.js?v=20261013j" defer></script>
+  <script src="js/network/cable-route.js?v=20261097a" defer></script>
   <script src="js/network/cable-split.js?v=20261014i" defer></script>
   <script src="js/network/cable-route-suggest.js?v=20261014j" defer></script>
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
@@ -3442,11 +3448,11 @@
   <script src="js/network/network-photos.js?v=20261076a" defer></script>
   <script src="js/network/network-filters.js?v=20261095a" defer></script>
   <script src="js/network/network-timeline.js?v=20261076a" defer></script>
-  <script src="js/network/network-sidebar.js?v=20261093a" defer></script>
+  <script src="js/network/network-sidebar.js?v=20261097a" defer></script>
   <script src="js/network/network-area.js?v=20261095a" defer></script>
   <script src="js/network/auto-design.js?v=20261096b" defer></script>
   <script src="js/map/marker-hover.js?v=20261083a" defer></script>
-  <script src="js/map/network-overlays.js?v=20261096a" defer></script>
+  <script src="js/map/network-overlays.js?v=20261097a" defer></script>
   <script src="js/map/poles-layer.js?v=20261021c" defer></script>
   <script src="js/catalog/report-pdf.js?v=20261036a" defer></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBJ1hRvY2dPKEo8ESMl5T5LK_irRuLfbJg&libraries=geometry&callback=initMap" defer></script>

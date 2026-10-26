@@ -6,7 +6,7 @@
 // mapa para de mexer. Depende de js/app.js (map, mapReady, markers, savedCables, uiIcon, getFiberType),
 // js/network/clients.js (getCtoClients, getCtoPortCapacity, getOccupiedPorts) e js/map/marker-icons.js.
 
-const LEGEND_BOX_TYPES = ['POP', 'CEO', 'CTO', 'RESERVA', 'CLIENTE', 'CASA', 'POSTE'];
+const LEGEND_BOX_TYPES = ['POP', 'TORRE', 'CEO', 'CTO', 'RESERVA', 'CLIENTE', 'CASA', 'POSTE'];
 
 const networkOverlays = { timer: null, legend: null };
 

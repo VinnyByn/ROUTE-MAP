@@ -145,6 +145,7 @@ const KML_MARKER_TYPE_DEFAULTS = {
     CEO: { size: DEFAULT_MARKER_SIZE, ceoStatus: 'Nova', ceoAccessory: 'Raquete', is144F: false },
     RESERVA: { size: DEFAULT_MARKER_SIZE, reservaStatus: 'Nova', reservaAccessory: 'Raquete' },
     POP: { size: DEFAULT_MARKER_SIZE },
+    TORRE: { size: DEFAULT_MARKER_SIZE },
     CORDOALHA: { size: DEFAULT_MARKER_SIZE, cordoalhaStatus: 'Nova', derivationTCount: 0 },
     CASA: { size: DEFAULT_MARKER_SIZE },
 };
@@ -218,7 +219,7 @@ function inferMarkerTypeFromKml({ name, description, folderPath, iconHref, style
     const pathText = (folderPath || []).join(' ');
     const blob = `${name} ${description} ${pathText} ${iconHref} ${styleUrl} ${extValues}`.toUpperCase();
 
-    const parenType = (name || '').match(/\((CEO|CTO|RESERVA|POP|CORDOALHA|CASA)\)\s*$/i);
+    const parenType = (name || '').match(/\((CEO|CTO|RESERVA|POP|TORRE|CORDOALHA|CASA)\)\s*$/i);
     if (parenType) {
         return { type: parenType[1].toUpperCase(), source: 'nome (exportado pelo app)' };
     }
@@ -235,6 +236,7 @@ function inferMarkerTypeFromKml({ name, description, folderPath, iconHref, style
         { type: 'CEO', patterns: [/\bCEO\b/, /CAIXA\s*DE\s*EMENDA/, /\bEMENDA\b.*\bOPTIC/, /\bCEO\b.*\d/] },
         { type: 'CTO', patterns: [/\bCTO\b/, /TERMINAL\s*OPTIC/, /CAIXA\s*DE\s*ATENDIMENTO/, /\bCTO\b.*\d/] },
         { type: 'RESERVA', patterns: [/\bRESERVA\b/, /PONTO\s*DE\s*RESERVA/] },
+        { type: 'TORRE', patterns: [/\bTORRE\b/, /\bTOWER\b/] },
         { type: 'POP', patterns: [/\bPOP\b/, /PONTO\s*DE\s*PRESEN/, /\bOLT\b/, /CENTRAL\b/] },
         { type: 'CORDOALHA', patterns: [/\bCORDOALHA\b/, /CORD\.?\s*OPTIC/, /\bCORDO\b/] },
         { type: 'CASA', patterns: [/\bCASA\b/, /\bCASAS\b/, /\bUC\b/, /UNIDADE\s*CONSUM/] },
@@ -400,6 +402,7 @@ function buildFullCableType(asType, fiberType) {
 }
 
 function parseFullCableTypeString(text) {
+    if (/\bCabo\s+Drop\b/i.test(text || '')) return 'Cabo Drop';
     const match = (text || '').match(/Cabo\s+(AS\s*80|AS\s*200)\s*(FO-\d+)/i);
     if (!match) return null;
     const fiber = match[2].toUpperCase();
@@ -417,6 +420,8 @@ function splitKmlCableNameAndType(rawName) {
     const displayName = rawName
         .replace(/\s*[—–-]\s*Cabo\s+AS\s*(?:80|200)\s+FO-\d+\s*$/i, '')
         .replace(/\s*\(\s*Cabo\s+AS\s*(?:80|200)\s+FO-\d+\s*\)\s*$/i, '')
+        .replace(/\s*[—–-]\s*Cabo\s+Drop\s*$/i, '')
+        .replace(/\s*\(\s*Cabo\s+Drop\s*\)\s*$/i, '')
         .trim();
     return { displayName: displayName || rawName, fullType };
 }

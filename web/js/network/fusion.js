@@ -324,7 +324,7 @@ function upgradeFusionCard(card) {
         });
         const saved = resolvePlanCable({ name, uid: card.dataset.cableUid || '' }, activeMarkerForFusion);
         //Tipo do cabo trocado (só é permitido sem fusões): o cartão segue a quantidade de fibras atual
-        const savedCount = getFiberType(saved?.type) ? parseInt(getFiberType(saved.type).split('-')[1], 10) : 0;
+        const savedCount = getFiberType(saved?.type) ? getFiberCountOfType(getFiberType(saved.type), 0) : 0;
         const fiberCount = savedCount || fiberIds.size || parseInt(card.dataset.fiberCount, 10) || 12;
         const role = card.dataset.cableRole || (card.classList.contains('cable-saida') ? 'saida' : 'entrada');
         const kitBox = card.querySelector('.derivation-kit-checkbox');
@@ -970,7 +970,7 @@ function addCableToFusionPlan(cable, { render = true } = {}) {
         type: cable.type,
         status: cable.status,
         role,
-        fiberCount: fiberType ? parseInt(fiberType.split('-')[1], 10) : 12,
+        fiberCount: fiberType ? getFiberCountOfType(fiberType) : 12,
         otherEnd: getCableOtherEndName(cable, role),
     });
     getFusionStage().appendChild(card);

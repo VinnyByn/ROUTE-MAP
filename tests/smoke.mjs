@@ -308,6 +308,58 @@ check(cables.cable12 === 1830 && !cables.cable06, 'cabos na lista de materiais (
 check(cables.bap === 53 && cables.alca === 106 && cables.ferragem === 2594.33 && cables.cabos === 3696.6 && cables.total === 6569.51,
   `ferragens e totais do projeto com cabos (total R$ ${cables.total})`);
 
+//Marcador Torre e cabo Drop: tipo, ícone, ponta de cabo, vai para a rede; drop com 1 fibra, sem vão AS,
+//na lista de materiais como o drop dos clientes (sem cabo AS nem ferragens)
+const torreDrop = await page.evaluate(() => {
+  const realGoogle = window.google;
+  class LatLng { constructor(a, b) { this._a = a; this._b = b; } lat() { return this._a; } lng() { return this._b; } equals(o) { return !!o && o.lat() === this._a && o.lng() === this._b; } toJSON() { return { lat: this._a, lng: this._b }; } }
+  const R = 6378137, rad = d => d * Math.PI / 180;
+  const dist = (p, q) => { const dLat = rad(q.lat() - p.lat()), dLng = rad(q.lng() - p.lng()); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p.lat())) * Math.cos(rad(q.lat())) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  window.google = { maps: { LatLng, geometry: { spherical: {
+    computeDistanceBetween: dist,
+    computeLength: path => { const pts = Array.isArray(path) ? path : path.getArray(); let s = 0; for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; },
+  } } } };
+  document.getElementById('sidebar').insertAdjacentHTML('beforeend', '<li class="folder"><span class="folder-title" data-folder-id="projTD">P</span><ul id="projTD"></ul></li>');
+  const previousFolder = activeFolderId;
+  activeFolderId = 'projTD';
+  const at = (lat, lng) => ({ getPosition: () => new LatLng(lat, lng), setPosition() {}, setIcon() {}, setMap() {}, getMap() { return null; } });
+  const torre = { folderId: 'projTD', type: 'TORRE', name: 'TR-01', uid: 'u-tr', marker: at(-20, -44) };
+  const drop = { folderId: 'projTD', name: 'DROP-TR-01', type: buildCableTypeString('AS 80', 'DROP'), status: 'Novo', path: [new LatLng(-20.001, -44), new LatLng(-20, -44)] };
+  markers.push(torre); savedCables.push(drop);
+  calculateBomState();
+  const items = Object.values(bomState);
+  const dropQty = items.find(i => i.materialName === 'DROP FLAT 1FO')?.quantity || 0;
+  const result = {
+    type: drop.type, fiber: getFiberType(drop.type), fibers: getCableFiberCount(drop), color: getCableColor('DROP'),
+    dropQty, dropLength: Math.round(getCableBaseLength(drop)),
+    noAs: !items.some(i => /CFOA|BAP|ALÇA PREFORMADA OPDE/.test(i.materialName)),
+    anchor: isCableAnchorMarkerType('TORRE'), network: goesToNetwork(torre),
+    meta: getMarkerTypeMeta('TORRE').name, icon: /<path d="M16 2\.5 29\.2/.test(getMarkerShapeSvg('TORRE', '#0f766e')),
+    card: !!document.querySelector('#markerTypeModal .marker-option[data-type="TORRE"]'),
+    //Sem o mapa o painel do cabo não é montado na inicialização: monta aqui os botões de cor
+    swatch: (document.getElementById('cableTypeSwatches').children.length || setupCablePanelControls(), [...document.querySelectorAll('#cableTypeSwatches button')]).some(b => b.dataset.value === 'DROP' && b.textContent.trim() === 'Drop'),
+    kmlType: parseFullCableTypeString('Trecho 1 — Cabo Drop'), kmlMarker: inferMarkerTypeFromKml({ name: 'TORRE 01', description: '' }).type,
+    autoName: AUTO_CABLE_NAME_RE.exec('DROP-TR-01')?.[2],
+  };
+  const select = document.getElementById('cableType');
+  select.value = 'DROP'; syncCablePanelControls();
+  result.asHidden = document.getElementById('cableASField').classList.contains('hidden');
+  select.value = 'FO-12'; syncCablePanelControls();
+  result.asBack = !document.getElementById('cableASField').classList.contains('hidden');
+  markers.splice(markers.indexOf(torre), 1); savedCables.splice(savedCables.indexOf(drop), 1);
+  activeFolderId = previousFolder; bomState = {};
+  document.querySelector('[data-folder-id="projTD"]').closest('li').remove();
+  window.google = realGoogle;
+  return result;
+});
+check(torreDrop.meta === 'Torre' && torreDrop.icon && torreDrop.card && torreDrop.anchor && torreDrop.network && torreDrop.kmlMarker === 'TORRE',
+  'marcador Torre: tipo, ícone, cartão de escolha, ponta de cabo, vai para a rede e reconhecido no KML');
+check(torreDrop.type === 'Cabo Drop' && torreDrop.fiber === 'DROP' && torreDrop.fibers === 1 && torreDrop.color === '#F97316' && torreDrop.swatch
+  && torreDrop.asHidden && torreDrop.asBack && torreDrop.kmlType === 'Cabo Drop' && torreDrop.autoName === 'TR-01',
+  'cabo Drop: tipo, 1 fibra, cor, botão, sem vão AS, KML e nome automático');
+check(torreDrop.dropQty > 0 && torreDrop.dropQty === torreDrop.dropLength && torreDrop.noAs,
+  `cabo Drop na lista de materiais como drop (${torreDrop.dropQty} m), sem cabo AS nem ferragens; torre sem material`);
+
 //Barra lateral: cria pastas, converte a estrutura em JSON (como vai para o banco) e reconstrói igual
 const sidebarRoundTrip = await page.evaluate(() => {
   const box = document.createElement('ul');

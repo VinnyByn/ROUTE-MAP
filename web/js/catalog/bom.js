@@ -787,7 +787,7 @@ function calculateBomState() {
         if (markerInfo.type === 'Importado') return;
         const type = markerInfo.type;
         if (type === 'CLIENTE') return; //Tratado em addClientMaterialsToBom
-        if (type === 'CASA' || type === 'POP' || type === 'POSTE' || isMarkerStatusExistente(markerInfo)) return;
+        if (type === 'CASA' || type === 'POP' || type === 'POSTE' || type === 'TORRE' || isMarkerStatusExistente(markerInfo)) return;
         if (type === 'CTO') {
             if (markerInfo.isPredial) {
                 addOrUpdateMaterial("CAIXA DE ATENDIMENTO PREDIAL", 1, 'unit', 'CTO Predial', markerInfo.name);
@@ -905,7 +905,11 @@ function calculateBomState() {
     const activeBillableCables = projectCables.filter(
         (cable) => cable.status !== 'Existente' && cable.type !== 'Cabo Importado'
     );
-    const cableGroups = groupCablesByType(activeBillableCables);
+    //Cabo drop desenhado: entra no mesmo material do drop dos clientes (sem vão AS nem ferragens)
+    activeBillableCables.filter(c => isDropCableType(c.type)).forEach(cable => {
+        addOrUpdateMaterial(CLIENT_DROP_MATERIAL, Math.round(getCableBaseLength(cable)), 'length', 'Lançamento', cable.name || cable.type);
+    });
+    const cableGroups = groupCablesByType(activeBillableCables.filter(c => !isDropCableType(c.type)));
     Object.keys(cableGroups).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((cableType) => {
         const cables = cableGroups[cableType];
         const bomKey = makeBomKey(cableType);

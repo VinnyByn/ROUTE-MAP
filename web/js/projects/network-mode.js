@@ -547,7 +547,7 @@ function toAsBuiltCable(cable, stamp) {
 
 //O que vai para a rede: as caixas (com o plano de fusão de cada uma) e os cabos. Casas, clientes, postes, polígonos e
 //os outros marcadores ficam só no projeto (clientes são ligados nas caixas no modo Rede)
-const NETWORK_MARKER_TYPES = new Set(['CTO', 'CEO', 'POP', 'RESERVA']);
+const NETWORK_MARKER_TYPES = new Set(['CTO', 'CEO', 'POP', 'RESERVA', 'TORRE']);
 const goesToNetwork = (marker) => NETWORK_MARKER_TYPES.has(marker.type);
 
 const walkFolders = (node, visit, parent = null) => {
@@ -655,7 +655,7 @@ function getProjectSummaryForNetwork(projectId) {
     const count = (type) => own.filter(m => m.type === type).length;
     const boxes = own.filter(goesToNetwork);
     return {
-        ctos: count('CTO'), ceos: count('CEO'), pops: count('POP'), reserves: count('RESERVA'),
+        ctos: count('CTO'), ceos: count('CEO'), pops: count('POP'), reserves: count('RESERVA'), towers: count('TORRE'),
         plans: boxes.filter(m => m.fusionPlan).length,
         cables: cables.length,
         meters: cables.reduce((sum, c) => sum + (Number(c.totalLength) || 0), 0),
@@ -705,7 +705,7 @@ async function openConcludeProject(projectId) {
     const modal = ensureConcludeModal();
     const content = modal.querySelector('.conclude-modal');
     const goes = [
-        ['CTO', sum.ctos], ['CEO', sum.ceos], ['POP', sum.pops], ['Reserva técnica', sum.reserves],
+        ['CTO', sum.ctos], ['CEO', sum.ceos], ['POP', sum.pops], ['Reserva técnica', sum.reserves], ['Torre', sum.towers],
         [`Cabo${sum.cables === 1 ? '' : 's'} · ${fmt(sum.meters)} m`, sum.cables], ['Plano de fusão', sum.plans],
     ].filter(([, n]) => n > 0);
     const stays = [['casa', sum.stays.casas], ['cliente', sum.stays.clientes], ['poste', sum.stays.postes], ['polígono', sum.stays.poligonos], ['outro marcador', sum.stays.outros]]

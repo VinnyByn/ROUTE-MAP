@@ -268,7 +268,7 @@ const ABNT_GROUP_COLORS = { //Cores dos grupos
 
 //Marcadores nos quais um cabo pode iniciar, terminar ou ter a ponta ancorada
 function isCableAnchorMarkerType(type) {
-    return type === "CEO" || type === "CTO" || type === "RESERVA" || type === "POP";
+    return type === "CEO" || type === "CTO" || type === "RESERVA" || type === "POP" || type === "TORRE";
 }
 
 //Cliente B2B também é ponta de cabo: o cabo FO é desenhado da CEO/CTO até ele
@@ -2951,7 +2951,7 @@ function resolveCableEndAnchor(cable, isStart) {
 }
 
 //Nome automático do cabo: "FO-12-<caixa>" (desenho) ou "Cabo AS 80 FO-12-<caixa>" (cabo dividido), com "(2)" opcional
-const AUTO_CABLE_NAME_RE = /^(.*?FO-\d+)-(.+?)(?: \(\d+\))?$/;
+const AUTO_CABLE_NAME_RE = /^(.*?(?:FO-\d+|DROP))-(.+?)(?: \(\d+\))?$/;
 
 //A ponta do cabo está nesta caixa? Pela âncora gravada; cabos antigos sem âncora, pelo nome antigo e a posição
 function isCableEndAtMarker(cable, markerInfo, isStart, oldName) {
@@ -3059,6 +3059,7 @@ function syncCablePanelControls() {
     document.querySelectorAll('#cableTypeSwatches button').forEach(b => b.classList.toggle('is-active', b.dataset.value === type));
     document.querySelectorAll('#cableStatusSegmented button').forEach(b => b.classList.toggle('is-active', b.dataset.value === document.getElementById('cableStatusSelect').value));
     document.querySelectorAll('#cableASSegmented button').forEach(b => b.classList.toggle('is-active', b.dataset.value === document.getElementById('cableASType').value));
+    document.getElementById('cableASField')?.classList.toggle('hidden', type === 'DROP'); //Drop não tem vão AS
     const width = document.getElementById('cableWidth');
     document.getElementById('cableWidthValue').textContent = `${width.value} px`;
     const preview = document.getElementById('cableWidthPreview');
@@ -3077,7 +3078,7 @@ function setupCablePanelControls() {
             button.dataset.value = option.value;
             button.title = option.textContent;
             button.style.setProperty('--swatch', getCableColor(option.value));
-            button.innerHTML = `<span class="fiber-swatches__dot"></span>${option.value.replace('FO-', '')}`;
+            button.innerHTML = `<span class="fiber-swatches__dot"></span>${option.value === 'DROP' ? 'Drop' : option.value.replace('FO-', '')}`;
             swatches.appendChild(button);
         });
     }
@@ -3188,7 +3189,7 @@ document.getElementById("saveCableButton").addEventListener("click", () => {
     const name = document.getElementById("cableName").value.trim();
     const asType = document.getElementById("cableASType").value;
     const newFiberTypeSelection = document.getElementById("cableType").value;
-    const fullCableType = `Cabo ${asType} ${newFiberTypeSelection}`;
+    const fullCableType = buildCableTypeString(asType, newFiberTypeSelection);
     const cor = getCableColor(newFiberTypeSelection);
     const largura = parseInt(document.getElementById("cableWidth").value, 10) || 4;
     //Modo Rede: tudo o que está na rede é Existente (o campo Situação fica oculto)
@@ -3509,15 +3510,30 @@ function getCableColor(fiberType) {
         case "FO-48": return "#FF0000";
         case "FO-72": return "#800080";
         case "FO-144": return "#FFFF00";
+        case "DROP": return "#F97316";
         default: return "#000000";
     }
 }
 
-//Extração de padrão FO-XX
+//Extração de padrão FO-XX (ou DROP, cabo de 1 fibra sem vão AS)
 function getFiberType(fullCableType) {
     if (!fullCableType) return null;
     const match = fullCableType.match(/FO-\d+/);
-    return match ? match[0] : null;
+    if (match) return match[0];
+    return /\bdrop\b/i.test(fullCableType) ? 'DROP' : null;
+}
+
+//Quantidade de fibras de um tipo ("FO-12" → 12, "DROP" → 1)
+function getFiberCountOfType(fiberType, fallback = 12) {
+    if (fiberType === 'DROP') return 1;
+    return parseInt(String(fiberType || '').split('-')[1], 10) || fallback;
+}
+
+const isDropCableType = (cableType) => getFiberType(cableType) === 'DROP';
+
+//Tipo gravado no cabo: "Cabo AS 80 FO-12"; o drop não tem vão AS ("Cabo Drop")
+function buildCableTypeString(asType, fiberType) {
+    return fiberType === 'DROP' ? 'Cabo Drop' : `Cabo ${asType} ${fiberType}`;
 }
 
 //Listeners atualização visual em tempo real
