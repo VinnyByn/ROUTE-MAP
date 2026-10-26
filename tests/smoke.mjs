@@ -3025,12 +3025,17 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
         //Opacidade da prévia (controle no topo da caixa): deixa os desenhos mais transparentes; a área não pega os cliques
         const po = autoDesign.polygon.polygonObject;
         const range = document.getElementById('autoDesignOpacity');
-        const overlay = autoDesign.overlays.find(o => typeof o.get?.('strokeOpacity') === 'number' && o.get('strokeOpacity') > 0);
-        const strokeBefore = overlay?.get('strokeOpacity');
         range.value = '50'; range.dispatchEvent(new Event('input', { bubbles: true }));
-        const halved = !overlay || Math.abs(overlay.get('strokeOpacity') - strokeBefore / 2) < 1e-6;
+        const near = (a, b) => Math.abs(a - b) < 1e-6;
+        const base = (o) => autoDesignOpacity.base.get(o);
+        const check = (o, f) => (typeof base(o).stroke === 'number' ? near(o.get('strokeOpacity'), base(o).stroke * f) : true)
+          && (typeof base(o).fill === 'number' ? near(o.get('fillOpacity'), base(o).fill * f) : true)
+          && (typeof base(o).marker === 'number' ? near(o.getOpacity(), base(o).marker * f) : true);
+        const scaled = [...autoDesign.overlays, po].filter(o => base(o) && [base(o).stroke, base(o).fill, base(o).marker].some(v => typeof v === 'number' && v > 0));
+        const halved = scaled.length > 0 && scaled.every(o => check(o, 0.5));
         range.value = '100'; range.dispatchEvent(new Event('input', { bubbles: true }));
-        st.opacity = po.getVisible() && po.get('clickable') === false && !!range && halved && (!overlay || Math.abs(overlay.get('strokeOpacity') - strokeBefore) < 1e-6);
+        const restored = scaled.every(o => check(o, 1));
+        st.opacity = po.getVisible() && po.get('clickable') === false && halved && restored;
         autoDesign.polygon.opacity = 0;
         showAutoDesignPolygon(autoDesign, false);
         st.hidden = !po.getVisible();

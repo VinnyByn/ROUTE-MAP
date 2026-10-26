@@ -733,7 +733,7 @@ function applyClientAppearance(clientInfo) {
     const variant = clientInfo.client.kind === 'residencial' ? '' : clientInfo.client.kind;
     //Qualquer cliente pode exibir o nome no mapa, como as caixas
     const label = getClientMapLabel(clientInfo.client);
-    clientInfo.marker.setLabel(label.show ? buildMarkerMapLabel(clientInfo.name, label.color) : null);
+    setMarkerMapLabel(clientInfo.marker, label.show ? buildMarkerMapLabel(clientInfo.name, label.color) : null);
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
     const cto = findMarkerByUid(clientInfo.client.ctoUid);
     const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;

@@ -4123,16 +4123,16 @@ const AUTO_DESIGN_CTO_LEVEL_COLORS = { ok: '#16a34a', over: '#dc2626' };
 const getAutoDesignCtoBadgeIcon = (text, color) => getMapBadgeIcon(text, color);
 
 //Opacidade da prévia (controle no topo da caixa): multiplica a transparência original de cada desenho
-const autoDesignOpacity = { value: 1 };
+const autoDesignOpacity = { value: 1, base: new WeakMap() }; //base: transparência original de cada desenho
 function applyAutoDesignOpacity() {
     const s = autoDesign;
     if (!s) return;
     const f = autoDesignOpacity.value;
     [...(s.overlays || []), s.polygon?.polygonObject].filter(Boolean).forEach(o => {
-        if (!o.__baseOp) {
-            o.__baseOp = { stroke: o.get?.('strokeOpacity'), fill: o.get?.('fillOpacity'), marker: typeof o.getOpacity === 'function' ? (o.getOpacity() ?? 1) : undefined };
+        if (!autoDesignOpacity.base.has(o)) {
+            autoDesignOpacity.base.set(o, { stroke: o.get?.('strokeOpacity'), fill: o.get?.('fillOpacity'), marker: o instanceof google.maps.Marker ? (o.getOpacity?.() ?? 1) : undefined });
         }
-        const b = o.__baseOp;
+        const b = autoDesignOpacity.base.get(o);
         const opts = {};
         if (typeof b.stroke === 'number') opts.strokeOpacity = b.stroke * f;
         if (typeof b.fill === 'number') opts.fillOpacity = b.fill * f;
@@ -4147,7 +4147,7 @@ function highlightAutoDesignCto(cto) {
     if (!s?.ctoOverlays || s.drag) return;
     s.ctoOverlays.forEach((list, c) => list.forEach(o => {
         const look = o.__autoDesignLook;
-        if (look) { o.setOptions?.(!cto || c === cto ? look.base : look.dim); o.__baseOp = null; }
+        if (look) { o.setOptions?.(!cto || c === cto ? look.base : look.dim); autoDesignOpacity.base.delete(o); }
     }));
     if (autoDesignOpacity.value < 1) applyAutoDesignOpacity();
 }
@@ -5332,10 +5332,11 @@ document.addEventListener('keydown', (e) => {
     } else if (e.key === 'Enter' && autoDesign.phase === 'form' && e.target.closest?.('#autoDesignBox input')) generateAutoDesign();
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('autoDesignOpacity')?.addEventListener('input', (e) => {
-        autoDesignOpacity.value = Number(e.target.value) / 100;
-        document.getElementById('autoDesignOpacityValue').textContent = `${e.target.value}%`;
-        applyAutoDesignOpacity();
-    });
+//Opacidade da prévia: ouvido no documento (vale mesmo se a caixa for montada depois)
+document.addEventListener('input', (e) => {
+    if (e.target?.id !== 'autoDesignOpacity') return;
+    autoDesignOpacity.value = Number(e.target.value) / 100;
+    const label = document.getElementById('autoDesignOpacityValue');
+    if (label) label.textContent = `${e.target.value}%`;
+    applyAutoDesignOpacity();
 });
