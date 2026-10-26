@@ -96,7 +96,7 @@ function findClientCable(clientInfo) {
 
 function getCableFiberCount(cable) {
     const fiberType = typeof getFiberType === 'function' ? getFiberType(cable?.type) : null;
-    return fiberType ? parseInt(fiberType.split('-')[1], 10) || 12 : 12;
+    return fiberType ? getFiberCountOfType(fiberType) : 12;
 }
 
 //Fibras do cabo já usadas por outros clientes B2B

@@ -1,6 +1,6 @@
 // Ícones dos marcadores em SVG: mesmo desenho no mapa, na barra lateral e nos painéis.
 // Selos modernos com símbolos do Lucide: CEO = emenda, CTO = distribuição, cordoalha = derivação,
-// reserva = voltas de cabo, POP = servidor, casas = pílula com a quantidade, cliente = hexágono com pessoa/maleta/prédio.
+// reserva = voltas de cabo, POP = servidor, torre = antena, casas = pílula com a quantidade, cliente = hexágono com pessoa/maleta/prédio.
 
 const MARKER_ICON_OUTLINE = 'rgba(15, 23, 42, 0.55)';
 const markerIconCache = new Map();
@@ -41,6 +41,7 @@ const MARKER_GLYPHS = {
     CORDOALHA: '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
     RESERVA: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
     POSTE: '<path d="M12 2v20"/><path d="M5 6h14"/><path d="M7 6l-2 4"/><path d="M17 6l2 4"/><path d="M9 22h6"/>',
+    TORRE: '<path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.8 7.47"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/>',
     POP: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/>',
     residencial: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     b2b: '<path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a18.15 18.15 0 0 1-20 0"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
@@ -71,6 +72,9 @@ function getMarkerShapeSvg(type, color, options = {}) {
         return badge('<circle cx="16" cy="16" r="13"/>') + markerGlyph('RESERVA', 16, 16, 15, glyphColor);
     case 'POP':
         return badge('<rect x="3" y="3" width="26" height="26" rx="7"/>') + markerGlyph('POP', 16, 16, 15, glyphColor);
+    case 'TORRE':
+        //Pentágono ("casinha" da torre) com o símbolo de antena
+        return badge('<path d="M16 2.5 29.2 12.4 24.4 29.5H7.6L2.8 12.4z" stroke-linejoin="round"/>') + markerGlyph('TORRE', 16, 17, 14, glyphColor);
     case 'POSTE':
         return badge('<circle cx="16" cy="16" r="11"/>') + markerGlyph('POSTE', 16, 16, 13, glyphColor);
     case 'CLIENTE': {

@@ -156,7 +156,7 @@ function traceRouteFromNodes(graph, start, first) {
 
 function getCableFiberTotal(cable) {
     const type = getFiberType(cable?.type);
-    return type ? parseInt(type.split('-')[1], 10) : 12;
+    return type ? getFiberCountOfType(type) : 12;
 }
 
 // ---------------------------------------------------------------

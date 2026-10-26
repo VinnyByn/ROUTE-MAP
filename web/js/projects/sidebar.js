@@ -88,7 +88,7 @@ function scheduleSidebarCounts() {
 }
 
 //O que tem na pasta (com as subpastas), na ordem em que mais interessa: "2 CTO · 1 CEO · 3 cabos"
-const SIDEBAR_COUNT_LABELS = [['CTO', 'CTO', 'CTO'], ['CEO', 'CEO', 'CEO'], ['POP', 'POP', 'POP'], ['cabo', 'cabo', 'cabos'],
+const SIDEBAR_COUNT_LABELS = [['CTO', 'CTO', 'CTO'], ['CEO', 'CEO', 'CEO'], ['POP', 'POP', 'POP'], ['TORRE', 'torre', 'torres'], ['cabo', 'cabo', 'cabos'],
     ['CLIENTE', 'cliente', 'clientes'], ['RESERVA', 'reserva', 'reservas'], ['POSTE', 'poste', 'postes'], ['CASA', 'casa', 'casas'], ['polígono', 'polígono', 'polígonos']];
 
 function describeSidebarFolderCounts(counts, limit = Infinity) {
@@ -905,6 +905,7 @@ const FOLDER_STYLE_TYPES = [
     { type: 'CORDOALHA', label: 'Cordoalha' },
     { type: 'POP', label: 'POP' },
     { type: 'POSTE', label: 'Poste' },
+    { type: 'TORRE', label: 'Torre' },
 ];
 
 let folderStyleSession = null;

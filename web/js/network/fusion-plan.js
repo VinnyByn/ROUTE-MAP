@@ -195,5 +195,5 @@ function getReservePassThroughs() {
 
 function getCableFiberTotalForPassThrough(cable) {
     const type = typeof getFiberType === 'function' ? getFiberType(cable?.type) : null;
-    return type ? parseInt(type.split('-')[1], 10) || 12 : 12;
+    return type ? getFiberCountOfType(type) : 12;
 }
