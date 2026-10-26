@@ -134,6 +134,33 @@ function buildMarkerMapIcon(type, { color, size, text, labelColor, variant, fade
 }
 
 //Rótulo do nome com contorno que contrasta com a cor do texto
+//Nomes no mapa só de perto: com o mapa afastado, milhares de rótulos travavam o zoom (cada rótulo é desenhado à parte).
+//O rótulo fica guardado no marcador e volta ao aproximar.
+const MARKER_LABEL_MIN_ZOOM = 16;
+let markerLabelsHidden = false;
+function setMarkerMapLabel(marker, label) {
+    if (!marker) return;
+    marker.__mapLabel = label || null;
+    marker.setLabel(markerLabelsHidden ? null : marker.__mapLabel);
+}
+function syncMarkerLabelsToZoom() {
+    if (typeof map === 'undefined' || !map?.getZoom) return;
+    const hide = (map.getZoom() ?? 18) < MARKER_LABEL_MIN_ZOOM;
+    if (hide === markerLabelsHidden) return;
+    markerLabelsHidden = hide;
+    (typeof markers === 'undefined' ? [] : markers).forEach(m => {
+        if (!m.marker || !('__mapLabel' in m.marker)) return;
+        m.marker.setLabel(hide ? null : m.marker.__mapLabel);
+    });
+}
+if (typeof mapReady !== 'undefined' && mapReady?.then) {
+    mapReady.then(() => {
+        let timer = null;
+        map.addListener('zoom_changed', () => { clearTimeout(timer); timer = setTimeout(syncMarkerLabelsToZoom, 120); });
+        syncMarkerLabelsToZoom();
+    });
+}
+
 function buildMarkerMapLabel(text, labelColor) {
     const color = labelColor || '#0f172a';
     //Texto claro ganha contorno escuro (--light-halo); texto escuro ganha contorno branco (--dark-halo)

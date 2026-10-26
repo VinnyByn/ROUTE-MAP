@@ -310,7 +310,7 @@ function previewEditingMarkerStyle() {
         text: isCasa ? (form.houses || info.name) : '',
         labelColor: form.labelColor,
     }));
-    if (!isCasa) info.marker.setLabel(buildMarkerMapLabel(form.name || info.name, form.labelColor));
+    if (!isCasa) setMarkerMapLabel(info.marker, buildMarkerMapLabel(form.name || info.name, form.labelColor));
     if (focusedMapMarkerInfo === info && focusedMapMarkerRing) {
         focusedMapMarkerRing.setIcon(getMarkerHighlightRingIcon({ ...info, size: form.size }, true));
     }

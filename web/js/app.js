@@ -3736,7 +3736,7 @@ function updateMarkerAppearance(markerInfo) {
         text: isCasa ? markerInfo.name : '',
         labelColor: markerInfo.labelColor,
     }));
-    markerInfo.marker.setLabel(isCasa ? null : buildMarkerMapLabel(markerInfo.name, markerInfo.labelColor));
+    setMarkerMapLabel(markerInfo.marker, isCasa ? null : buildMarkerMapLabel(markerInfo.name, markerInfo.labelColor));
     //Barra lateral: nome em destaque e os detalhes (tipo, situação, instalação) em cinza
     const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP', POSTE: 'Poste' };
     let details = [];

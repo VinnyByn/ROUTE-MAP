@@ -1023,7 +1023,7 @@ function previewFolderStyle() {
             size: inScope && form.size ? form.size : size,
         };
         m.marker.setIcon(buildMarkerMapIcon(m.type, { color: next.color, size: next.size, labelColor: next.labelColor }));
-        m.marker.setLabel(buildMarkerMapLabel(m.name, next.labelColor));
+        setMarkerMapLabel(m.marker, buildMarkerMapLabel(m.name, next.labelColor));
     });
     session.original.cables.forEach(({ c, width, color }) => {
         c.polyline?.setOptions({

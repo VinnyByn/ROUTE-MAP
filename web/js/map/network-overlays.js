@@ -113,11 +113,21 @@ function refreshProjectSummaries() {
     });
 }
 
+//O resumo dos projetos só muda quando os itens mudam: o zoom e o arrastar do mapa não refazem a conta
+//(com muitas CTOs, refazer a cada parada do mapa deixava o zoom travado)
+let projectSummariesDirty = true;
 function refreshNetworkOverlays() {
     networkOverlays.timer = null;
     renderMapLegend();
-    refreshProjectSummaries();
+    if (projectSummariesDirty) {
+        projectSummariesDirty = false;
+        refreshProjectSummaries();
+    }
 }
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) new MutationObserver(() => { projectSummariesDirty = true; }).observe(sidebar, { childList: true, subtree: true });
+});
 
 function scheduleNetworkOverlaysRefresh() {
     clearTimeout(networkOverlays.timer);
