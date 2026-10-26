@@ -1407,6 +1407,57 @@ check(selStyle.picked === 'Y-CABO,Y-CTO1,Y-CTO2' && selStyle.styleEnabled && sel
   && selStyle.ctoColors === '#ff0000,#ff0000' && selStyle.cableColor === '#008000' && selStyle.cableStroke === '#008000' && selStyle.cableStatus === 'Existente|2|2',
   `seleção pega cabo que atravessa o retângulo e o estilo muda só as CTOs (${JSON.stringify(selStyle)})`);
 
+//Editar selecionados: escolhe o tipo e muda situação e configurações só dele ("Manter" não mexe)
+const bulk = await page.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projB', name: 'Projeto B', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const prev = activeFolderId; setActiveFolder('projB');
+  const pos = (lat, lng) => ({ lat: () => lat, lng: () => lng });
+  const mk = (type, name, extra = {}) => {
+    const li = document.createElement('li'); document.getElementById('projB').appendChild(li);
+    return { type, name, folderId: 'projB', listItem: li, color: '#111111', ...extra, marker: { getPosition: () => pos(1, 1), getVisible: () => true, setMap() {}, setVisible() {} } };
+  };
+  const c1 = mk('CTO', 'B-CTO1', { ctoStatus: 'Nova', needsStickers: true }), c2 = mk('CTO', 'B-CTO2', { ctoStatus: 'Nova' });
+  const ceo = mk('CEO', 'B-CEO', { ceoStatus: 'Nova', ceoAccessory: 'Raquete' });
+  const opts = {};
+  const cable = { name: 'FO-12-B-CTO1', type: 'Cabo AS 80 FO-12', status: 'Novo', folderId: 'projB', color: '#008000', width: 4, path: [pos(0, 0), pos(1, 1)], item: document.createElement('li'),
+    polyline: { getVisible: () => true, getPath: () => ({ getArray: () => cable.path }), setOptions(o) { Object.assign(opts, o); }, setMap() {} } };
+  markers.push(c1, c2, ceo); savedCables.push(cable);
+  const real = { appearance: window.updateMarkerAppearance, bom: window.refreshBomAfterProjectChange, drops: window.refreshClientDrops };
+  window.updateMarkerAppearance = () => {}; window.refreshBomAfterProjectChange = () => {}; window.refreshClientDrops = () => {};
+  setMapSelection([c1, c2, ceo, cable]);
+  const editEnabled = !document.getElementById('mapSelectionEdit').disabled;
+  document.getElementById('mapSelectionEdit').click();
+  const modal = document.getElementById('bulkEditModal');
+  const open = modal?.style.display === 'flex';
+  const types = [...modal.querySelectorAll('[data-bulk-type]')].map(b => b.dataset.bulkType).join();
+  const pick = (field, value) => modal.querySelector(`[data-bulk-field="${field}"] [data-bulk-value="${value}"]`).click();
+  const applyDisabledFirst = document.getElementById('bulkEditApply').disabled;
+  pick('boxStatus', 'Existente'); pick('predial', 'sim'); pick('stickers', 'nao');
+  const applyLabel = document.getElementById('bulkEditApply').textContent;
+  document.getElementById('bulkEditApply').click();
+  const ctos = [c1, c2].map(m => `${m.ctoStatus}/${m.isPredial}/${m.needsStickers}`).join();
+  const ceoKept = `${ceo.ceoStatus}/${ceo.ceoAccessory}`;
+  //Cabos: tipo de fibra, vão e situação (espessura acompanha); nome automático troca o tipo
+  document.getElementById('mapSelectionEdit').click();
+  modal.querySelector('[data-bulk-type="CABO"]').click();
+  pick('cableStatus', 'Existente'); pick('fiber', 'FO-24'); pick('span', 'AS 200');
+  document.getElementById('bulkEditApply').click();
+  const cableResult = `${cable.type}|${cable.name}|${cable.status}|${cable.width}|${cable.color}|${opts.strokeColor}`;
+  const closed = modal.style.display === 'none';
+  clearMapSelection();
+  markers.splice(markers.indexOf(c1), 3); savedCables.splice(savedCables.indexOf(cable), 1);
+  window.updateMarkerAppearance = real.appearance; window.refreshBomAfterProjectChange = real.bom; window.refreshClientDrops = real.drops;
+  document.querySelector('.folder-title[data-folder-id="projB"]').closest('.folder').remove();
+  activeFolderId = prev;
+  return { editEnabled, open, types, applyDisabledFirst, applyLabel, ctos, ceoKept, cableResult, closed };
+});
+check(bulk.editEnabled && bulk.open && bulk.types === 'CTO,CEO,CABO' && bulk.applyDisabledFirst && bulk.applyLabel === 'Aplicar em 2 CTO'
+  && bulk.ctos === 'Existente/true/false,Existente/true/false' && bulk.ceoKept === 'Nova/Raquete',
+  `editar selecionados: escolhe o tipo e muda só ele (${JSON.stringify(bulk)})`);
+check(bulk.cableResult === 'Cabo AS 200 FO-24|FO-24-B-CTO1|Existente|2|#FF69B4|#FF69B4' && bulk.closed,
+  `editar selecionados: cabos mudam tipo de fibra, vão e situação (${bulk.cableResult})`);
+
 //Tecla Delete: com seleção, pede confirmação e exclui; digitando num campo, não faz nada
 const delKey = await page.evaluate(() => {
   const sidebar = document.getElementById('sidebar');

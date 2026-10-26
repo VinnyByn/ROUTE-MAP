@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261095b" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261097b" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -2942,6 +2942,7 @@
                   <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copia e cola itens da barra lateral</dd></div>
                   <div><dt><kbd>Shift</kbd> + arrastar no mapa</dt><dd>Seleciona vários marcadores e cabos (Ctrl + Shift soma à seleção)</dd></div>
                   <div><dt><kbd>Shift</kbd> + clique no marcador</dt><dd>Põe ou tira o marcador da seleção</dd></div>
+                  <div><dt>Editar… (na barra da seleção)</dt><dd>Escolhe o tipo (CTO, CEO, cabo…) e muda situação e configurações de todos de uma vez</dd></div>
                   <div><dt><kbd>Delete</kbd></dt><dd>Exclui os itens selecionados (pede confirmação)</dd></div>
                   <div><dt>Clique direito no mapa ou na barra lateral</dt><dd>Abre as ações do item (editar, plano de fusão, ver rota, excluir…)</dd></div>
                   <div><dt>Clique direito ao desenhar</dt><dd>Remove o ponto do cabo, da régua ou do polígono</dd></div>
@@ -3077,8 +3078,9 @@
     <div id="mapSelectionBar" class="map-selection-bar hidden" role="toolbar" aria-label="Itens selecionados">
       <div class="map-selection-bar__info"><strong id="mapSelectionCount"></strong><small id="mapSelectionKinds"></small></div>
       <select id="mapSelectionStatus" data-sel-edit title="Situação">
-        <option value="">Situação…</option><option>Nova</option><option>Existente</option><option>Troca</option>
+        <option value="">Situação de todos…</option><option>Nova</option><option>Existente</option><option>Troca</option>
       </select>
+      <button type="button" id="mapSelectionEdit" class="is-primary" data-sel-edit title="Escolher o tipo (CTO, CEO, cabo…) e mudar situação e configurações de uma vez">Editar…</button>
       <select id="mapSelectionFolder" data-sel-edit title="Mover para pasta"></select>
       <button type="button" id="mapSelectionStyle" data-sel-edit title="Cor e tamanho por tipo">Estilo</button>
       <button type="button" id="mapSelectionHide">Ocultar</button>
@@ -3432,7 +3434,8 @@
   <script src="js/network/pop-equipment.js?v=20261007c" defer></script>
   <script src="js/map/global-search.js?v=20261007b" defer></script>
   <script src="js/core/undo.js?v=20261061a" defer></script>
-  <script src="js/map/map-selection.js?v=20261013p" defer></script>
+  <script src="js/map/map-selection.js?v=20261097b" defer></script>
+  <script src="js/map/selection-edit.js?v=20261097b" defer></script>
   <script src="js/projects/tour.js?v=20261040a" defer></script>
   <script src="js/core/live-sync.js?v=20261084a" defer></script>
   <script src="js/network/pop-plan.js?v=20261008e" defer></script>
