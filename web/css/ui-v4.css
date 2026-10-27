@@ -2988,6 +2988,8 @@ html[data-theme="dark"] #materialModal .material-summary__total b { color: #4ade
 }
 /* Barra lateral: resumo do projeto (CTOs, km de cabo, portas em uso) numa segunda linha do título */
 .sidebar-column .ge-pro-project > .folder-title[data-summary] { flex-wrap: wrap; row-gap: 0; padding-top: 4px; padding-bottom: 5px; }
+/* Nome longo encolhe com reticências em vez de empurrar os botões (⋮) para a linha de baixo */
+.sidebar-column .ge-pro-project > .folder-title[data-summary] > .folder-name-text { flex: 1 1 0; }
 .sidebar-column .ge-pro-project > .folder-title[data-summary]::after {
   content: attr(data-summary);
   order: 20;
