@@ -271,7 +271,7 @@ function renderOccurrenceTarget() {
     const esc = (v) => escapeHtml(String(v ?? ''));
     const facts = [];
     if (kind === 'c') {
-        const ends = [findMarkerByUid(item.startAnchorUid), findMarkerByUid(item.endAnchorUid)].filter(Boolean).map(m => m.name);
+        const ends = [findMarkerByUid(item.startAnchorUid, item), findMarkerByUid(item.endAnchorUid, item)].filter(Boolean).map(m => m.name);
         if (ends.length) facts.push(`liga ${ends.map(esc).join(' → ')}`);
         if (item.totalLength) facts.push(`${Math.round(item.totalLength)} m`);
     } else if (item.type === 'CTO' && typeof getCtoClients === 'function') {

@@ -27,7 +27,7 @@ function searchMapItems(query, limit = 30) {
     markers.forEach(m => {
         const c = m.client || {};
         const label = SEARCH_KIND_LABELS[m.type] || m.type;
-        const extra = m.type === 'CLIENTE' ? [c.code, c.address, c.b2b?.company, findMarkerByUid(c.ctoUid)?.name].filter(Boolean)
+        const extra = m.type === 'CLIENTE' ? [c.code, c.address, c.b2b?.company, findMarkerByUid(c.ctoUid, m)?.name].filter(Boolean)
             : m.type === 'POSTE' ? [m.pole?.number, m.pole?.utility, m.pole?.situation] : [m.description];
         consider('marker', m, m.name || label, [label, ...extra.filter(Boolean).slice(0, 2)].join(' · '), [m.name, label, ...extra].join(' '));
     });

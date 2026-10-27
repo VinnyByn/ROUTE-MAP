@@ -221,9 +221,10 @@ function drainLiveOps() {
     }
 }
 
-function removeLiveItem(kind, uid) {
+//projectId: a mesma caixa pode estar em dois projetos abertos com o mesmo identificador; mexe só na deste
+function removeLiveItem(kind, uid, projectId = null) {
     if (kind === 'markers') {
-        const info = markers.find(m => m.uid === uid);
+        const info = markers.find(m => m.uid === uid && (!projectId || getItemProjectId(m) === projectId));
         if (!info) return;
         if (typeof focusedMapMarkerInfo !== 'undefined' && focusedMapMarkerInfo === info) clearMapMarkerHighlight();
         info.marker?.setMap(null);
@@ -265,12 +266,12 @@ function applyLiveOps(projectId, msg) {
             const full = { ...buildProjectRecord(root).data, ...merged };
             restoreProjectSnapshot(projectId, JSON.stringify(full));
         } else {
-            ['polygons', 'markers', 'cables'].forEach(kind => (ops.deletes?.[kind] || []).forEach(uid => removeLiveItem(kind, uid)));
+            ['polygons', 'markers', 'cables'].forEach(kind => (ops.deletes?.[kind] || []).forEach(uid => removeLiveItem(kind, uid, projectId)));
             //Marcadores antes dos cabos (as pontas dos cabos ficam nas caixas)
             (ops.upserts?.markers || []).forEach(data => {
-                removeLiveItem('markers', data.uid);
+                removeLiveItem('markers', data.uid, projectId);
                 rebuildMarker(data);
-                placeLiveRow(markers.find(m => m.uid === data.uid)?.listItem, data.order);
+                placeLiveRow(markers[markers.length - 1]?.listItem, data.order);
             });
             (ops.upserts?.cables || []).forEach(data => {
                 removeLiveItem('cables', data.uid);

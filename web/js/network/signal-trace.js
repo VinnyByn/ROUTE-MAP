@@ -84,7 +84,7 @@ function traceCtoPort(cto, port, computed = computeOpticalPower()) {
 
 function traceClientSignal(clientInfo, computed = computeOpticalPower()) {
     const cfg = getOpticalCfg();
-    const cto = findMarkerByUid(clientInfo.client?.ctoUid);
+    const cto = findMarkerByUid(clientInfo.client?.ctoUid, clientInfo);
     if (!cto) return { client: clientInfo, error: clientInfo.client?.cableName ? 'Cliente ligado direto num cabo: veja a rota da fibra no cabo.' : 'Cliente sem CTO: ligue-o numa porta para rastrear o sinal.' };
     if (!clientInfo.client.ctoPort) return { client: clientInfo, cto, error: `Cliente sem porta na ${cto.name}.` };
     const result = traceCtoPort(cto, clientInfo.client.ctoPort, computed);

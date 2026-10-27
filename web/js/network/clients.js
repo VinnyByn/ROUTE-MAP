@@ -68,8 +68,11 @@ function isPredialClient(clientInfo) {
     return clientInfo?.client?.kind === 'predial';
 }
 
-function findMarkerByUid(uid) {
-    return uid ? markers.find(m => m.uid === uid) : null;
+//near: item que faz a referência (cliente, cabo…). Com ele, só vale o marcador do mesmo projeto
+//(dois projetos abertos podem ter a mesma caixa com o mesmo identificador)
+function findMarkerByUid(uid, near = null) {
+    if (!uid) return null;
+    return near ? markers.find(m => m.uid === uid && isSameProject(m, near)) || null : markers.find(m => m.uid === uid) || null;
 }
 
 // ---------------------------------------------------------------
@@ -142,7 +145,7 @@ function getCtoPortCapacity(cto) {
 
 function getCtoClients(cto) {
     if (!cto?.uid) return [];
-    return markers.filter(m => m.type === 'CLIENTE' && m.client?.ctoUid === cto.uid && m.client?.status !== 'cancelado');
+    return markers.filter(m => m.type === 'CLIENTE' && m.client?.ctoUid === cto.uid && m.client?.status !== 'cancelado' && isSameProject(m, cto));
 }
 
 function getOccupiedPorts(cto, ignoreClient) {
@@ -454,7 +457,7 @@ function getClientDropInfo(clientInfo) {
         const override = Number(clientInfo.client?.dropOverride) > 0 ? Math.ceil(Number(clientInfo.client.dropOverride)) : null;
         return { cto: null, cable, straight: routed, routed, route: 'cabo', slack, automatic, length: override || automatic, isManual: !!override };
     }
-    const cto = findMarkerByUid(clientInfo.client?.ctoUid);
+    const cto = findMarkerByUid(clientInfo.client?.ctoUid, clientInfo);
     if (!cto?.marker || !clientInfo.marker) return null;
     const straight = google.maps.geometry.spherical.computeDistanceBetween(cto.marker.getPosition(), clientInfo.marker.getPosition());
     const path = Array.isArray(clientInfo.client?.dropPath) && clientInfo.client.dropPath.length >= 2 && clientInfo.client.dropKey === getDropKey(cto, clientInfo)
@@ -543,7 +546,7 @@ function refreshClientDrops(options = {}) {
             drawClientDropLine(clientInfo);
             return;
         }
-        const cto = findMarkerByUid(clientInfo.client?.ctoUid);
+        const cto = findMarkerByUid(clientInfo.client?.ctoUid, clientInfo);
         if (onlyCto && cto !== onlyCto) return;
         if (!cto?.marker || isPredialClient(clientInfo)) {
             clientInfo.dropLine?.setPath([]);
@@ -647,7 +650,7 @@ function focusMapToClientDrop(clientInfo) {
 //Edição do traçado pela barra lateral (mesma edição do botão na janela do cliente)
 function editClientDropFromSidebar(clientInfo) {
     if (!requireEdit('editar o drop')) return;
-    if (clientInfo.client.cableName || !findMarkerByUid(clientInfo.client.ctoUid)) {
+    if (clientInfo.client.cableName || !findMarkerByUid(clientInfo.client.ctoUid, clientInfo)) {
         showToast('Drop no cabo', 'A derivação direto no cabo é reta e não tem traçado para ajustar.', 'progress');
         return;
     }
@@ -660,7 +663,7 @@ function recalculateClientDropFromSidebar(clientInfo) {
     if (!requireEdit('recalcular o drop')) return;
     clientInfo.client.dropRoute = null;
     clientInfo.client.dropKey = null;
-    refreshClientDrops({ onlyCto: findMarkerByUid(clientInfo.client.ctoUid) });
+    refreshClientDrops({ onlyCto: findMarkerByUid(clientInfo.client.ctoUid, clientInfo) });
     refreshBomAfterProjectChange();
     showToast('Drop recalculado', DROP_ROUTE_LABELS[clientInfo.client.dropRoute] ? `Traçado ${DROP_ROUTE_LABELS[clientInfo.client.dropRoute]}.` : 'Traçado atualizado.');
 }
@@ -735,7 +738,7 @@ function applyClientAppearance(clientInfo) {
     const label = getClientMapLabel(clientInfo.client);
     setMarkerMapLabel(clientInfo.marker, label.show ? buildMarkerMapLabel(clientInfo.name, label.color) : null);
     clientInfo.marker.setIcon(buildMarkerMapIcon('CLIENTE', { color: status.color, variant, faded: status.id === 'cancelado' }));
-    const cto = findMarkerByUid(clientInfo.client.ctoUid);
+    const cto = findMarkerByUid(clientInfo.client.ctoUid, clientInfo);
     const cable = clientInfo.client.cableName ? findClientCable(clientInfo) : null;
     const anchoredCable = findClientAnchoredCable(clientInfo);
     const link = anchoredCable
@@ -1001,7 +1004,7 @@ function populateClientPortSelect(preferredPort) {
         select.value = String(preferred && !occupied.has(preferred) && preferred <= total ? preferred : (first || ''));
         return;
     }
-    const cto = findMarkerByUid(ctoUid);
+    const cto = findMarkerByUid(ctoUid, { folderId: getClientFolderId() });
     if (!cto) {
         select.disabled = true;
         const option = document.createElement('option');
@@ -1420,7 +1423,7 @@ function moveClient() {
 
 function startClientDropEdit() {
     const clientInfo = editingClient;
-    const cto = findMarkerByUid(clientInfo?.client?.ctoUid);
+    const cto = findMarkerByUid(clientInfo?.client?.ctoUid, clientInfo);
     if (!clientInfo?.dropLine || !cto) return;
     closeClientModal();
     const line = clientInfo.dropLine;
@@ -1483,7 +1486,7 @@ function recalculateClientDrop() {
     if (!clientInfo) return;
     clientInfo.client.dropRoute = null;
     clientInfo.client.dropKey = null;
-    refreshClientDrops({ onlyCto: findMarkerByUid(clientInfo.client.ctoUid) });
+    refreshClientDrops({ onlyCto: findMarkerByUid(clientInfo.client.ctoUid, clientInfo) });
     refreshBomAfterProjectChange();
     updateClientDropSummary();
     showToast('Drop recalculado', DROP_ROUTE_LABELS[clientInfo.client.dropRoute] ? `Traçado ${DROP_ROUTE_LABELS[clientInfo.client.dropRoute]}.` : 'Traçado atualizado.');

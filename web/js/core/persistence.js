@@ -386,13 +386,16 @@ function serializeAlsoIn(info) {
     return list.length ? list : undefined;
 }
 
-//Identificador permanente do marcador (usado para ligar cliente → CTO)
+//Identificador permanente do marcador (usado para ligar cliente → CTO e cabo → caixa)
 function generateMarkerUid() {
     return `mk_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
+//Único dentro do projeto: a mesma caixa (ex.: caixa da rede usada em dois projetos abertos) fica com o mesmo
+//identificador em cada projeto, e cada projeto liga os seus cabos e clientes à própria cópia.
+//Trocar o identificador ao abrir o segundo projeto deixava os cabos dele presos na caixa do outro.
 function ensureMarkerUid(markerInfo) {
-    if (!markerInfo.uid || markers.some(m => m !== markerInfo && m.uid === markerInfo.uid)) {
+    if (!markerInfo.uid || markers.some(m => m !== markerInfo && m.uid === markerInfo.uid && isSameProject(m, markerInfo))) {
         markerInfo.uid = generateMarkerUid();
     }
     return markerInfo.uid;
@@ -579,7 +582,7 @@ function rebuildMarker(data) {
         if (isDrawingCable) {
             handleAnchorMarkerClickDuringCableDraw(markerInfo);
         } else {
-            openMarkerFromUserAction(markerInfo);
+            openMarkerFromUserAction(preferActiveProjectMarker(markerInfo));
         }
     });
     wireMarkerSidebarClick(markerInfo);
