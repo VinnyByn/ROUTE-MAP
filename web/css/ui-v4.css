@@ -2028,6 +2028,26 @@ html[data-theme="dark"] .network-impact-box .route-clear[data-impact-occ] { colo
 .map-selection-bar__info small { font-size: 11px; color: var(--color-text-dim); }
 .map-selection-bar select, .map-selection-bar button { height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--color-border-light); background: var(--color-surface); color: var(--color-text); font: 600 12.5px var(--font-sans); cursor: pointer; }
 .map-selection-bar button.is-danger { color: #ef4444; }
+.map-selection-bar button.is-primary { color: #fff; background: var(--action, #1f7a94); border-color: var(--action, #1f7a94); }
+/* Editar selecionados: tipo + campos com "Manter" */
+#bulkEditModal { z-index: 2600; } /* acima da barra da seleção */
+.bulk-edit-modal { max-width: 560px; --rm-accent: var(--action, #1f7a94); }
+.bulk-edit-modal .modal-body-content { display: flex; flex-direction: column; padding-top: 6px; }
+.bulk-edit-types { display: flex; flex-wrap: wrap; gap: 6px; }
+.bulk-edit-fields { display: flex; flex-direction: column; gap: 12px; }
+.bulk-edit-field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; }
+.bulk-edit-field__label { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--color-text); }
+.bulk-edit-field__label small { margin-left: 6px; font-weight: 500; color: var(--color-text-dim); }
+.bulk-edit-seg { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; border-radius: 10px; background: var(--color-surface-muted); border: 1px solid var(--color-border-light); }
+#bulkEditModal .bulk-edit-types button, #bulkEditModal .bulk-edit-seg button { min-height: 32px; padding: 4px 11px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); box-shadow: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); cursor: pointer; }
+#bulkEditModal .bulk-edit-seg button { border-color: transparent; background: none; }
+#bulkEditModal .bulk-edit-types button small { margin-left: 4px; font-weight: 700; opacity: .7; }
+#bulkEditModal .bulk-edit-types button.is-active, #bulkEditModal .bulk-edit-seg button.is-active { color: var(--action, #1f7a94); background: var(--color-surface); border-color: color-mix(in srgb, var(--action, #1f7a94) 45%, transparent); box-shadow: 0 1px 3px rgba(15, 23, 42, .14); }
+#bulkEditModal .bulk-edit-seg button[data-bulk-value=""].is-active { color: var(--color-text-muted); border-color: var(--color-border-light); }
+.bulk-edit-alter { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: var(--color-text-muted); }
+.bulk-edit-field input.bulk-edit-input[type="color"] { width: 56px; height: 32px; padding: 2px; }
+.bulk-edit-field input.bulk-edit-input[type="number"] { width: 90px; height: 32px; }
+.bulk-edit-empty { margin: 0; font-size: 13px; color: var(--color-text-dim); }
 .map-selection-bar button:disabled, .map-selection-bar select:disabled { opacity: 0.45; cursor: default; }
 #mapSelectionClear { width: 32px; padding: 0; font-size: 18px; }
 

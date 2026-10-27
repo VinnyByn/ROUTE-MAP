@@ -1,7 +1,7 @@
 // Seleção múltipla no mapa: Shift + arrastar desenha um retângulo e seleciona marcadores e cabos que encostam nele
 // e polígonos inteiros dentro dele, do projeto ativo; Shift + clique adiciona ou tira um marcador.
-// Na barra lateral: Ctrl + clique e Shift + clique (intervalo). Barra de ações: situação, mover para pasta,
-// ocultar/mostrar, excluir. Depende de js/app.js e js/projects/sidebar.js.
+// Na barra lateral: Ctrl + clique e Shift + clique (intervalo). Barra de ações: situação, editar por tipo
+// (js/map/selection-edit.js), mover para pasta, ocultar/mostrar, excluir. Depende de js/app.js e js/projects/sidebar.js.
 
 const mapSelection = { items: new Set(), rings: new Map(), drag: null };
 
@@ -193,6 +193,7 @@ function renderMapSelectionBar() {
     const canEdit = AppSession.canEdit;
     bar.querySelectorAll('[data-sel-edit]').forEach(el => { el.disabled = !canEdit; });
     document.getElementById('mapSelectionStatus').disabled = !canEdit || !items.some(m => selectionKind(m) === 'cable' || (selectionKind(m) === 'marker' && SELECTION_STATUS_TYPES.includes(m.type)));
+    document.getElementById('mapSelectionEdit').disabled = !canEdit || !getBulkTypesPresent(items).length;
     document.getElementById('mapSelectionStyle').disabled = !canEdit || !items.some(m => selectionKind(m) === 'cable' || (selectionKind(m) === 'marker' && FOLDER_STYLE_TYPES.some(t => t.type === m.type)));
 }
 
@@ -392,6 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('mapSelectionStatus').addEventListener('change', (e) => { applySelectionStatus(e.target.value); e.target.value = ''; });
     document.getElementById('mapSelectionFolder').addEventListener('change', (e) => { moveSelectionToFolder(e.target.value); e.target.value = ''; });
     document.getElementById('mapSelectionHide').addEventListener('click', () => setSelectionVisible(false));
+    document.getElementById('mapSelectionEdit').addEventListener('click', () => openBulkEditModal());
     document.getElementById('mapSelectionStyle').addEventListener('click', () => openSelectionStyleModal([...mapSelection.items]));
     document.getElementById('mapSelectionDelete').addEventListener('click', deleteSelection);
     document.getElementById('mapSelectionClear').addEventListener('click', clearMapSelection);
