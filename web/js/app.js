@@ -287,6 +287,25 @@ function isCableEndpointAnchorCandidate(markerInfo) {
     return false;
 }
 
+//Dois projetos com caixa no mesmo ponto: o clique cai na que está desenhada por cima, que pode ser do outro
+//projeto. Vale a do projeto em que se está mexendo, no mesmo ponto (até 2 m)
+const SAME_SPOT_MARKER_DISTANCE_M = 2;
+function preferActiveProjectMarker(markerInfo) {
+    const projectId = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
+    const position = markerInfo?.marker?.getPosition?.();
+    if (!projectId || !position || getItemProjectId(markerInfo) === projectId) return markerInfo;
+    const anchor = isCableAnchorMarker(markerInfo);
+    let best = null;
+    let bestDistance = SAME_SPOT_MARKER_DISTANCE_M;
+    markers.forEach(m => {
+        if (m === markerInfo || !m.marker?.getPosition || m.marker.getVisible?.() === false) return;
+        if (anchor ? !isCableAnchorMarker(m) : m.type !== markerInfo.type) return;
+        const distance = google.maps.geometry.spherical.computeDistanceBetween(position, m.marker.getPosition());
+        if (distance <= bestDistance && getItemProjectId(m) === projectId) { best = m; bestDistance = distance; }
+    });
+    return best || markerInfo;
+}
+
 function getProjectFolderIdsForItem(folderId) {
     if (!folderId) return null;
     const folderEl = document.getElementById(folderId);
@@ -2431,8 +2450,9 @@ function createCableDrawVertexMarker(position) {
     });
 }
 
-function handleAnchorMarkerClickDuringCableDraw(markerInfo) {
+function handleAnchorMarkerClickDuringCableDraw(clickedMarkerInfo) {
     scheduleSuppressNextCableMapClick();
+    const markerInfo = preferActiveProjectMarker(clickedMarkerInfo);
     const markerPosition = markerInfo.marker.getPosition();
     const isAnchor = isCableAnchorMarker(markerInfo);
     const addVertexAt = (position) => {
@@ -2936,7 +2956,7 @@ function resolveCableDrawEndpointForIndex(index, { snap = false, exclude = null 
 function resolveCableEndAnchor(cable, isStart) {
     const uid = isStart ? cable.startAnchorUid : cable.endAnchorUid;
     if (uid) {
-        const byUid = markers.find(m => m.uid === uid && m.marker);
+        const byUid = markers.find(m => m.uid === uid && m.marker && isSameProject(m, cable));
         if (byUid) return byUid;
     }
     const name = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
@@ -2956,13 +2976,13 @@ const AUTO_CABLE_NAME_RE = /^(.*?(?:FO-\d+|DROP))-(.+?)(?: \(\d+\))?$/;
 //A ponta do cabo está nesta caixa? Pela âncora gravada; cabos antigos sem âncora, pelo nome antigo e a posição
 function isCableEndAtMarker(cable, markerInfo, isStart, oldName) {
     const uid = isStart ? cable.startAnchorUid : cable.endAnchorUid;
-    if (uid && uid === markerInfo.uid) return true;
     if (typeof isSameProject === 'function' && !isSameProject(cable, markerInfo)) return false;
+    if (uid && uid === markerInfo.uid) return true;
     //Âncora apontando para outra caixa: só vale se essa caixa existir no mesmo projeto do cabo
     //(pasta copiada e colada pode trazer a âncora da caixa original, do outro projeto)
     if (uid) {
-        const anchored = markers.find(m => m.uid === uid && m !== markerInfo);
-        if (anchored && (typeof isSameProject !== 'function' || isSameProject(cable, anchored))) return false;
+        const anchored = markers.find(m => m.uid === uid && m !== markerInfo && isSameProject(cable, m));
+        if (anchored) return false;
     }
     const stored = isStart ? cable.startAnchorMarkerName : cable.endAnchorMarkerName;
     if (stored && stored !== oldName && stored !== markerInfo.name) return false;
@@ -3725,7 +3745,7 @@ function addCustomMarker(location, importedData = null) {
         }
         if (handleSketchMarkerClick(markerInfo)) return;
         if (!isDrawingCable) {
-            openMarkerFromUserAction(markerInfo);
+            openMarkerFromUserAction(preferActiveProjectMarker(markerInfo));
             return;
         }
         handleAnchorMarkerClickDuringCableDraw(markerInfo);
@@ -3739,7 +3759,7 @@ function updateMarkerAppearance(markerInfo) {
     if (markerInfo.type === "CLIENTE") {
         applyClientAppearance(markerInfo);
         //Só o drop deste cliente (refazer todos a cada cliente deixava a abertura de redes grandes muito lenta)
-        const cto = !markerInfo.client?.cableName && findMarkerByUid(markerInfo.client?.ctoUid);
+        const cto = !markerInfo.client?.cableName && findMarkerByUid(markerInfo.client?.ctoUid, markerInfo);
         if (cto) refreshClientDrops({ onlyCto: cto }); else refreshClientDrops();
         return;
     }

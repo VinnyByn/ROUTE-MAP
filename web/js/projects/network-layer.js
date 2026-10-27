@@ -134,14 +134,15 @@ function getProjectRootForCity(city) {
 //Traz a caixa da rede para o projeto (Existente, mesmo identificador, com o plano de fusão)
 function useNetworkBoxInProject(item, city, { quiet = false } = {}) {
     if (!requireEdit('usar caixas da rede no projeto')) return null;
-    const existing = markers.find(m => m.uid === item.uid);
-    if (existing) return existing;
     const root = getProjectRootForCity(city);
     if (!root) {
         showToast('Nenhum projeto desta cidade', 'Abra (ou selecione) um projeto em andamento desta cidade.', 'progress');
         return null;
     }
     const projectId = getRootId(root);
+    //Já está neste projeto? (outro projeto aberto pode ter a mesma caixa: cada um usa a sua cópia)
+    const existing = markers.find(m => m.uid === item.uid && getItemProjectId(m) === projectId);
+    if (existing) return existing;
     const folderId = getAllDescendantFolderIds(projectId).includes(activeFolderId) ? activeFolderId : projectId;
     const { order, ...data } = item;
     rebuildMarker({ ...data, folderId });

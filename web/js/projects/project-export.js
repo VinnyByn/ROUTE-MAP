@@ -40,14 +40,14 @@ function buildProjectSheets(scope) {
     const cabos = [['Nome', 'Tipo', 'Status', 'Ponta A', 'Ponta B', 'Lançamento (m)', 'Reserva (m)', 'Total (m)', 'Fibras', 'Em uso', 'Livres', 'Fibras em uso', 'Fibras livres']];
     scope.cables.forEach(c => {
         const u = getCableFiberUsage(c);
-        cabos.push([c.name, c.type || '', c.status || '', findMarkerByUid(c.startAnchorUid)?.name || '', findMarkerByUid(c.endAnchorUid)?.name || '',
+        cabos.push([c.name, c.type || '', c.status || '', findMarkerByUid(c.startAnchorUid, c)?.name || '', findMarkerByUid(c.endAnchorUid, c)?.name || '',
             c.lancamento ?? '', c.reserva ?? '', c.totalLength ?? '', u.total, u.used.length, u.free.length, formatFiberRanges(u.used), formatFiberRanges(u.free)]);
     });
 
     const clientes = [['Nome', 'Código', 'Tipo', 'Status', 'CTO / cabo', 'Porta / fibra', 'Drop (m)', 'Endereço', 'Latitude', 'Longitude', 'Potência estimada (dBm)']];
     clients.forEach(m => {
         const d = m.client || {};
-        const cto = findMarkerByUid(d.ctoUid);
+        const cto = findMarkerByUid(d.ctoUid, m);
         const drop = getClientDropInfo(m);
         clientes.push([m.name, d.code || '', CLIENT_KINDS[d.kind]?.label || '', getClientStatus(d.status).label, cto?.name || d.cableName || '',
             d.ctoPort || d.cableFiber || '', drop?.length ?? '', d.address || '', ...getItemLatLng(m), round1(powerByClient.get(m))]);

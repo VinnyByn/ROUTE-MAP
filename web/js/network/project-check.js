@@ -35,8 +35,8 @@ function runProjectCheck(scope) {
     section = 'cabos';
     scope.cables.forEach(cable => {
         const loose = [];
-        if (!findMarkerByUid(cable.startAnchorUid)) loose.push('A');
-        if (!findMarkerByUid(cable.endAnchorUid)) loose.push('B');
+        if (!findMarkerByUid(cable.startAnchorUid, cable)) loose.push('A');
+        if (!findMarkerByUid(cable.endAnchorUid, cable)) loose.push('B');
         if (loose.length) {
             add(cable.fromKmlImport ? 'aviso' : 'erro', `Cabo com ponta solta: ${cable.name}`,
                 `Ponta ${loose.join(' e ')} não está numa CEO, CTO, reserva ou POP.`, { kind: 'cable', info: cable });
@@ -85,7 +85,7 @@ function runProjectCheck(scope) {
     scope.markers.filter(m => m.type === 'CLIENTE' && m.client?.status !== 'cancelado').forEach(client => {
         const data = client.client || {};
         if (isPredialClient(client)) return;
-        const cto = findMarkerByUid(data.ctoUid);
+        const cto = findMarkerByUid(data.ctoUid, client);
         const viaCable = data.cableName || (typeof findClientAnchoredCable === 'function' && findClientAnchoredCable(client));
         if (!cto && !viaCable) {
             add('aviso', `Cliente sem CTO: ${client.name}`, 'Não está ligado a nenhuma CTO nem cabo.', { kind: 'marker', info: client });

@@ -360,6 +360,48 @@ check(torreDrop.type === 'Cabo Drop' && torreDrop.fiber === 'DROP' && torreDrop.
 check(torreDrop.dropQty > 0 && torreDrop.dropQty === torreDrop.dropLength && torreDrop.noAs,
   `cabo Drop na lista de materiais como drop (${torreDrop.dropQty} m), sem cabo AS nem ferragens; torre sem material`);
 
+//Dois projetos abertos com a mesma caixa (mesmo identificador) no mesmo ponto: cada projeto usa a sua cópia
+//(cabo, cliente e clique ficam na caixa do projeto em que se está mexendo)
+const twoProjects = await page.evaluate(() => {
+  const realGoogle = window.google;
+  class LatLng { constructor(a, b) { this._a = a; this._b = b; } lat() { return this._a; } lng() { return this._b; } }
+  const R = 6378137, rad = d => d * Math.PI / 180;
+  const dist = (p, q) => { const dLat = rad(q.lat() - p.lat()), dLng = rad(q.lng() - p.lng()); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p.lat())) * Math.cos(rad(q.lat())) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  window.google = { maps: { LatLng, geometry: { spherical: { computeDistanceBetween: dist } } } };
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projP1', name: 'P1', isProject: true, type: 'TCR', children: [] }, { id: 'projP2', name: 'P2', isProject: true, type: 'TCR', children: [] }], sidebar);
+  const prev = activeFolderId;
+  const at = (lat, lng) => ({ getPosition: () => new LatLng(lat, lng), getVisible: () => true, getMap: () => ({}) });
+  const box1 = { uid: 'mk_mesma', type: 'CTO', name: 'CTO-A', folderId: 'projP1', marker: at(-20, -44) };
+  markers.push(box1);
+  const box2 = { uid: 'mk_mesma', type: 'CTO', name: 'CTO-A', folderId: 'projP2', marker: at(-20, -44) };
+  ensureMarkerUid(box2); //Abrir o segundo projeto não troca o identificador da caixa dele
+  markers.push(box2);
+  const dup = { uid: 'mk_mesma', type: 'CTO', name: 'X', folderId: 'projP2', marker: at(0, 0) };
+  ensureMarkerUid(dup); //Repetido dentro do mesmo projeto: ganha outro
+  const cable2 = { name: 'FO-12-CTO-A', folderId: 'projP2', endAnchorUid: 'mk_mesma', path: [new LatLng(-20.01, -44), new LatLng(-20, -44)] };
+  const client2 = { type: 'CLIENTE', name: 'Cli', folderId: 'projP2', client: { ctoUid: 'mk_mesma', ctoPort: 1, status: 'ativo' } };
+  markers.push(client2);
+  setActiveFolder('projP2');
+  const result = {
+    kept: box2.uid === 'mk_mesma', dupNew: dup.uid !== 'mk_mesma',
+    cableEnd: resolveCableEndAnchor(cable2, false) === box2,
+    clientCto: findMarkerByUid('mk_mesma', client2) === box2,
+    clientsOfBox1: getCtoClients(box1).length, clientsOfBox2: getCtoClients(box2).length,
+    click: preferActiveProjectMarker(box1) === box2, clickSame: preferActiveProjectMarker(box2) === box2,
+  };
+  setActiveFolder('projP1');
+  result.clickOther = preferActiveProjectMarker(box2) === box1;
+  [box1, box2, client2].forEach(m => markers.splice(markers.indexOf(m), 1));
+  ['projP1', 'projP2'].forEach(id => document.querySelector(`.folder-title[data-folder-id="${id}"]`).closest('.folder').remove());
+  activeFolderId = prev;
+  window.google = realGoogle;
+  return result;
+});
+const tp = twoProjects;
+check(tp.kept && tp.dupNew && tp.cableEnd && tp.clientCto && tp.clientsOfBox1 === 0 && tp.clientsOfBox2 === 1 && tp.click && tp.clickSame && tp.clickOther,
+  `dois projetos com a mesma caixa: cada um liga cabo, cliente e clique à sua cópia (${JSON.stringify(twoProjects)})`);
+
 //Barra lateral: cria pastas, converte a estrutura em JSON (como vai para o banco) e reconstrói igual
 const sidebarRoundTrip = await page.evaluate(() => {
   const box = document.createElement('ul');
