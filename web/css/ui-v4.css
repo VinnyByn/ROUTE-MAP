@@ -663,7 +663,7 @@ html[data-theme="dark"] .sidebar-column .project-type-tag { color: color-mix(in 
   margin: 0 4px 0 1px;
 }
 
-/* Visibilidade: olho (aparece ao passar o mouse; item oculto mostra o olho riscado) */
+/* Visibilidade: olho sempre à vista (item oculto mostra o olho riscado) */
 .sidebar-column .ge-vis-checkbox {
   order: 8;
   flex: 0 0 22px;
@@ -678,7 +678,7 @@ html[data-theme="dark"] .sidebar-column .project-type-tag { color: color-mix(in 
   background-color: var(--color-text-dim);
   -webkit-mask: var(--sb-mask-eye) center / 15px no-repeat;
   mask: var(--sb-mask-eye) center / 15px no-repeat;
-  opacity: 0;
+  opacity: 1;
   cursor: pointer;
   transition: opacity 0.12s ease, background-color 0.12s ease;
 }
@@ -697,14 +697,14 @@ html[data-theme="dark"] .sidebar-column .project-type-tag { color: color-mix(in 
 .sidebar-column .ge-pro-item:has(> .ge-vis-checkbox:not(:checked)) > :is(.item-name, .item-meta, .ge-item-icon),
 .sidebar-column .folder-title:has(> .ge-vis-checkbox:not(:checked)) > :is(.folder-name-text, .ge-folder-icon) { opacity: 0.45; }
 
-/* Três pontinhos */
+/* Três pontinhos (sempre à vista, fixos no fim da linha) */
 .sidebar-column .ge-pro-actions,
 .sidebar-column .folder-buttons {
   order: 9;
   flex: 0 0 auto;
   margin-left: 0;
   padding: 0;
-  opacity: 0;
+  opacity: 1;
 }
 
 .sidebar-column .ge-pro-row:hover > .ge-pro-actions,
@@ -1268,8 +1268,8 @@ html[data-theme="dark"] .ms-size__stage {
 .sidebar-column .subfolders > li:not(.folder-wrapper) > .adjust-kml-btn { background-color: color-mix(in srgb, #f59e0b 12%, var(--color-surface)); }
 
 /* O nome tem prioridade: os detalhes encolhem primeiro */
-.sidebar-column .ge-pro-item > .item-name { flex: 0 0 auto; max-width: 68%; overflow: hidden; text-overflow: ellipsis; }
-.sidebar-column .ge-pro-item > .item-meta { flex: 1 1 0; }
+.sidebar-column .ge-pro-item > .item-name { flex: 0 1 auto; min-width: 0; max-width: 68%; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-column .ge-pro-item > .item-meta { flex: 1 1 0; min-width: 0; }
 
 /* Dentro de "Padronizar estilo" o título "Tamanho" já está no seletor */
 .fs-field .ms-size__head > span { visibility: hidden; }
@@ -2122,6 +2122,8 @@ html[data-theme="dark"] .network-impact-box .route-clear[data-impact-occ] { colo
 /* Amostras sempre circulares, mesmo dentro de grids/form genéricos */
 .color-swatches { display: flex !important; grid-template-columns: none !important; }
 .color-swatches .color-swatch { flex: none !important; width: 26px !important; height: 26px !important; min-width: 0 !important; min-height: 0 !important; border-radius: 50% !important; padding: 0 !important; }
+/* A cor da amostra vence o fundo genérico dos botões de modal (ex.: cor do nome do cliente) */
+.color-swatches .color-swatch[data-color] { background: var(--swatch) !important; }
 
 /* Seleção múltipla pela barra lateral */
 .sidebar-column .ge-pro-item.is-multi-selected,
@@ -2960,12 +2962,6 @@ html[data-theme="dark"] #autoDesignBox .auto-design__cto-ok { color: #86efac; }
 #autoDesignBox .auto-design__sources > summary { cursor: pointer; font-size: 12px; color: var(--color-text-muted); }
 #autoDesignBox .auto-design__sources > summary:hover { color: var(--color-text); }
 #autoDesignBox .auto-design__sources .map-tool-help { margin-top: 4px; }
-/* Barra lateral: olho e três pontinhos só ocupam lugar com o mouse em cima (o nome não fica cortado à toa).
-   Olho riscado (item oculto) continua sempre à vista. */
-@media (hover: hover) {
-  .sidebar-column .ge-pro-row:not(:hover):not(:focus-within):not(.sb-row-menu-open) > .ge-vis-checkbox:checked,
-  .sidebar-column .ge-pro-row:not(:hover):not(:focus-within):not(.sb-row-menu-open) > .ge-pro-actions { display: none; }
-}
 /* Plano de fusão: título da seção e "Adicionar todos" numa linha só */
 #fusionModal .fx-section__head { flex-wrap: wrap; row-gap: 4px; }
 #fusionModal .fx-section__head > h4 { white-space: nowrap; }
