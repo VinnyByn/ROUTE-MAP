@@ -1782,6 +1782,13 @@ function openMarkerFromUserAction(markerInfo) {
     openMarkerEditor(markerInfo);
 }
 
+//Clique no marcador no mapa: abre e marca na barra lateral (com duas caixas no mesmo ponto, vale a do projeto ativo)
+function openMarkerFromMap(markerInfo) {
+    const info = preferActiveProjectMarker(markerInfo);
+    if (typeof revealSidebarItem === 'function') revealSidebarItem(info);
+    openMarkerFromUserAction(info);
+}
+
 function wireMarkerSidebarClick(markerInfo) {
     const li = markerInfo?.listItem;
     if (!li || li.dataset.editorDblClickBound === '1') return;
@@ -3745,7 +3752,7 @@ function addCustomMarker(location, importedData = null) {
         }
         if (handleSketchMarkerClick(markerInfo)) return;
         if (!isDrawingCable) {
-            openMarkerFromUserAction(preferActiveProjectMarker(markerInfo));
+            openMarkerFromMap(markerInfo);
             return;
         }
         handleAnchorMarkerClickDuringCableDraw(markerInfo);

@@ -2470,19 +2470,49 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     rebuildMarker({ uid: 'mk_rs_a', folderId: 'projRS', type: 'CEO', name: 'CEO-RS', color: '#f00', position: { lat: -34, lng: -44 } });
     rebuildMarker({ uid: 'mk_rs_b', folderId: 'projRS', type: 'CTO', name: 'CTO-RS', color: '#f00', position: { lat: -34.002, lng: -43.998 } });
     const a = markers.find(m => m.uid === 'mk_rs_a'), b = markers.find(m => m.uid === 'mk_rs_b');
-    const realFetch = window.fetchOsrmRoute;
-    //Rota em "L" pelas ruas: desce e depois vai para o lado
-    window.fetchOsrmRoute = async (from, to) => [from, new google.maps.LatLng(-34.001, -44), new google.maps.LatLng(-34.002, -44), new google.maps.LatLng(-34.002, -43.999), to];
+    const realFetch = window.fetchOsrmRoutes;
+    //Rota em "L" pelas ruas: desce e depois vai para o lado (o OSRM só acha esta)
+    const L = (lat, lng) => new google.maps.LatLng(lat, lng);
+    let routeCalls = [];
+    window.fetchOsrmRoutes = async (points, opts = {}) => {
+      routeCalls.push(points.length);
+      if (points.length === 2) return [{ path: [points[0], L(-34.001, -44), L(-34.002, -44), L(-34.002, -43.999), points[1]] }];
+      //Desvio pelo ponto do meio: outra rua (vai para o lado e depois desce)
+      return [{ path: [points[0], L(-34, -43.999), L(-34, -43.998), L(-34.001, -43.998), points[2]] }];
+    };
     const box = () => document.getElementById('cableRouteSuggestion');
     const wait = () => new Promise(r => setTimeout(r, 30));
     document.getElementById('drawCableButton').click();
     handleAnchorMarkerClickDuringCableDraw(a);
     handleAnchorMarkerClickDuringCableDraw(b);
     await wait();
-    const shown = !box().classList.contains('hidden') && !!document.getElementById('acceptCableRouteSuggestion') && !!cableRouteSuggestion?.overlay;
+    //Só uma rota pelo OSRM: busca desvios pelos dois lados e mostra 2 opções (a do outro lado repete e sai)
+    const options = cableRouteSuggestion?.options?.length;
+    const detoursAsked = routeCalls.filter(n => n === 3).length;
+    const shown = !box().classList.contains('hidden') && !!document.getElementById('acceptCableRouteSuggestion')
+      && box().querySelectorAll('[data-route-option]').length === options && cableRouteSuggestion.options.every(o => o.overlay);
+    //Escolhe a opção 2 e usa: o traçado é o dela
+    box().querySelector('[data-route-option="1"]').click();
+    const picked = cableRouteSuggestion.selected === 1 && box().querySelector('[data-route-option="1"]').classList.contains('is-active');
+    const secondPath = cableRouteSuggestion.options[1].path.map(p => p.lng()).join();
     document.getElementById('acceptCableRouteSuggestion').click();
-    const accepted = { points: cableMarkers.length, hidden: box().classList.contains('hidden'), ends: `${cableMarkers[0].getPosition().lat()}|${cableMarkers[cableMarkers.length - 1].getPosition().lat()}` };
+    const accepted = { points: cableMarkers.length, hidden: box().classList.contains('hidden'), ends: `${cableMarkers[0].getPosition().lat()}|${cableMarkers[cableMarkers.length - 1].getPosition().lat()}`,
+      second: cableMarkers.map(m => m.getPosition().lng()).join() === secondPath };
     cancelCableDrawingSession();
+    //OSRM com 3 alternativas diferentes: 3 opções, sem desvio
+    routeCalls = [];
+    window.fetchOsrmRoutes = async (points) => (points.length === 2 ? [
+      { path: [points[0], L(-34.001, -44), L(-34.002, -44), points[1]] },
+      { path: [points[0], L(-34, -43.998), L(-34.001, -43.998), points[1]] },
+      { path: [points[0], L(-34.001, -43.9995), L(-34.0015, -43.9985), L(-34.002, -43.9985), points[1]] },
+    ] : []);
+    document.getElementById('drawCableButton').click();
+    handleAnchorMarkerClickDuringCableDraw(a);
+    handleAnchorMarkerClickDuringCableDraw(b);
+    await wait();
+    const three = { options: cableRouteSuggestion?.options?.length, detours: routeCalls.filter(n => n === 3).length };
+    cancelCableDrawingSession();
+    window.fetchOsrmRoutes = async (points) => (points.length === 2 ? [{ path: [points[0], L(-34.001, -44), L(-34.002, -44), L(-34.002, -43.999), points[1]] }] : []);
     //Recusar: fica a reta e some a sugestão
     document.getElementById('drawCableButton').click();
     handleAnchorMarkerClickDuringCableDraw(a);
@@ -2491,14 +2521,39 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     document.getElementById('dismissCableRouteSuggestion').click();
     const dismissed = { points: cableMarkers.length, hidden: box().classList.contains('hidden'), overlay: !!cableRouteSuggestion };
     cancelCableDrawingSession();
-    window.fetchOsrmRoute = realFetch;
+    window.fetchOsrmRoutes = realFetch;
     [a, b].forEach(m => { m.marker?.setMap(null); markers.splice(markers.indexOf(m), 1); });
     document.querySelector('.folder-title[data-folder-id="projRS"]').closest('.folder').remove();
-    return { shown, accepted, dismissed };
+    return { options, detoursAsked, shown, picked, accepted, three, dismissed };
   });
-  check(suggest.shown && suggest.accepted.points === 3 && suggest.accepted.hidden && suggest.accepted.ends === '-34|-34.002'
+  check(suggest.options === 2 && suggest.detoursAsked === 2 && suggest.shown && suggest.picked && suggest.accepted.second
+    && suggest.accepted.hidden && suggest.accepted.ends === '-34|-34.002'
+    && suggest.three.options === 3 && suggest.three.detours === 0
     && suggest.dismissed.points === 2 && suggest.dismissed.hidden && !suggest.dismissed.overlay,
-    `sugestão de rota ao ligar A → B: aceitar usa a rota, recusar mantém a reta (${JSON.stringify(suggest)})`);
+    `sugestão de rota ao ligar A → B: até 3 opções (mínimo 2 com desvio), usa a escolhida, recusar mantém a reta (${JSON.stringify(suggest)})`);
+
+  //Clique no marcador ou no cabo no mapa: marca na barra lateral e abre a pasta fechada onde ele está
+  const reveal = await sp.evaluate(() => {
+    rebuildSidebarFromJSON([{ id: 'projRV', name: 'Projeto RV', isProject: true, type: 'TCR', children: [{ id: 'rvSub', name: 'Sub', children: [] }] }], document.getElementById('sidebar'));
+    setActiveFolder('projRV');
+    rebuildMarker({ uid: 'rv_cto', folderId: 'rvSub', type: 'CTO', name: 'CTO-RV', color: '#16a34a', position: { lat: -38, lng: -44 } });
+    rebuildCable({ uid: 'rv_cab', folderId: 'projRV', name: 'FO-12-RV', type: 'Cabo AS 80 FO-12', width: 4, color: '#008000', status: 'Novo', path: [{ lat: -38, lng: -44 }, { lat: -38.01, lng: -44 }] });
+    const cto = markers.find(m => m.uid === 'rv_cto'), cable = savedCables.find(c => c.uid === 'rv_cab');
+    const sub = document.getElementById('rvSub');
+    sub.classList.add('hidden');
+    google.maps.event.__fire(cto.marker, 'click', { domEvent: {} });
+    const marker = { active: cto.listItem.classList.contains('active'), opened: !sub.classList.contains('hidden') };
+    resetMarkerModal();
+    google.maps.event.__fire(cable.polyline, 'click', { domEvent: {} });
+    const line = { active: cable.item.classList.contains('active'), only: document.querySelectorAll('#sidebar .ge-pro-item.active').length === 1 };
+    if (typeof cancelCableDrawingSession === 'function') cancelCableDrawingSession();
+    cto.marker?.setMap(null); markers.splice(markers.indexOf(cto), 1);
+    cable.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(cable), 1);
+    document.querySelector('.folder-title[data-folder-id="projRV"]').closest('.folder').remove();
+    return { marker, line };
+  });
+  check(reveal.marker.active && reveal.marker.opened && reveal.line.active && reveal.line.only,
+    `clique no mapa marca o item na barra lateral e abre a pasta dele (${JSON.stringify(reveal)})`);
 
   //Leitura rápida: resumo do projeto na barra lateral, legenda do mapa, sem selo de vagas no mapa (as vagas ficam no
   //cartão ao passar o mouse), busca na lista de materiais e ícones próprios no menu (desfazer/refazer não usam mais o de "recarregar")

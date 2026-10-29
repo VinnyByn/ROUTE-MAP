@@ -378,6 +378,33 @@ async function fetchOsrmRoute(from, to) {
     return null;
 }
 
+//Várias rotas pelas ruas: alternativas do OSRM (só entre dois pontos) ou passando pelos pontos do meio, na ordem.
+//Devolve [{ path, distance }] (vazio se nenhum servidor responder)
+async function fetchOsrmRoutes(points, { alternatives = 0 } = {}) {
+    const coords = points.map(p => `${p.lng().toFixed(6)},${p.lat().toFixed(6)}`).join(';');
+    const key = `${coords}?overview=full&geometries=geojson${alternatives ? `&alternatives=${alternatives}` : ''}`;
+    if (osrmRouteCache.has(key)) return osrmRouteCache.get(key);
+    for (const server of OSRM_ROUTE_SERVERS) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 8000);
+            const response = await fetch(`${server}/${key}`, { signal: controller.signal });
+            clearTimeout(timer);
+            if (!response.ok) continue;
+            const data = await response.json();
+            const routes = (data?.code === 'Ok' ? data.routes || [] : [])
+                .filter(r => r.geometry?.coordinates?.length)
+                .map(r => ({ path: r.geometry.coordinates.map(([lng, lat]) => new google.maps.LatLng(lat, lng)), distance: Number(r.distance) || 0 }));
+            if (!routes.length) continue;
+            osrmRouteCache.set(key, routes);
+            return routes;
+        } catch (e) {
+            //Tenta o próximo servidor
+        }
+    }
+    return [];
+}
+
 async function requestOsrmDropRoute(clientInfo, cto, key) {
     if (osrmRoutingAvailable === false) return false;
     const path = await fetchOsrmRoute(cto.marker.getPosition(), clientInfo.marker.getPosition());
