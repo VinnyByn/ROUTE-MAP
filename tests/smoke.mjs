@@ -2532,6 +2532,29 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
     && suggest.dismissed.points === 2 && suggest.dismissed.hidden && !suggest.dismissed.overlay,
     `sugestão de rota ao ligar A → B: até 3 opções (mínimo 2 com desvio), usa a escolhida, recusar mantém a reta (${JSON.stringify(suggest)})`);
 
+  //Clique no marcador ou no cabo no mapa: marca na barra lateral e abre a pasta fechada onde ele está
+  const reveal = await sp.evaluate(() => {
+    rebuildSidebarFromJSON([{ id: 'projRV', name: 'Projeto RV', isProject: true, type: 'TCR', children: [{ id: 'rvSub', name: 'Sub', children: [] }] }], document.getElementById('sidebar'));
+    setActiveFolder('projRV');
+    rebuildMarker({ uid: 'rv_cto', folderId: 'rvSub', type: 'CTO', name: 'CTO-RV', color: '#16a34a', position: { lat: -38, lng: -44 } });
+    rebuildCable({ uid: 'rv_cab', folderId: 'projRV', name: 'FO-12-RV', type: 'Cabo AS 80 FO-12', width: 4, color: '#008000', status: 'Novo', path: [{ lat: -38, lng: -44 }, { lat: -38.01, lng: -44 }] });
+    const cto = markers.find(m => m.uid === 'rv_cto'), cable = savedCables.find(c => c.uid === 'rv_cab');
+    const sub = document.getElementById('rvSub');
+    sub.classList.add('hidden');
+    google.maps.event.__fire(cto.marker, 'click', { domEvent: {} });
+    const marker = { active: cto.listItem.classList.contains('active'), opened: !sub.classList.contains('hidden') };
+    resetMarkerModal();
+    google.maps.event.__fire(cable.polyline, 'click', { domEvent: {} });
+    const line = { active: cable.item.classList.contains('active'), only: document.querySelectorAll('#sidebar .ge-pro-item.active').length === 1 };
+    if (typeof cancelCableDrawingSession === 'function') cancelCableDrawingSession();
+    cto.marker?.setMap(null); markers.splice(markers.indexOf(cto), 1);
+    cable.polyline?.setMap(null); savedCables.splice(savedCables.indexOf(cable), 1);
+    document.querySelector('.folder-title[data-folder-id="projRV"]').closest('.folder').remove();
+    return { marker, line };
+  });
+  check(reveal.marker.active && reveal.marker.opened && reveal.line.active && reveal.line.only,
+    `clique no mapa marca o item na barra lateral e abre a pasta dele (${JSON.stringify(reveal)})`);
+
   //Leitura rápida: resumo do projeto na barra lateral, legenda do mapa, sem selo de vagas no mapa (as vagas ficam no
   //cartão ao passar o mouse), busca na lista de materiais e ícones próprios no menu (desfazer/refazer não usam mais o de "recarregar")
   const readout = await sp.evaluate(async () => {

@@ -582,7 +582,7 @@ function rebuildMarker(data) {
         if (isDrawingCable) {
             handleAnchorMarkerClickDuringCableDraw(markerInfo);
         } else {
-            openMarkerFromUserAction(preferActiveProjectMarker(markerInfo));
+            openMarkerFromMap(markerInfo);
         }
     });
     wireMarkerSidebarClick(markerInfo);

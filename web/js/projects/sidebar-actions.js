@@ -30,6 +30,17 @@ function selectSidebarCable(cableInfo) {
     selectSidebarItem(cableInfo.item, { type: 'cable', cableInfo });
 }
 
+//Clique no mapa: marca o item na barra lateral, abre as pastas fechadas onde ele está e rola até ele
+function revealSidebarItem(info) {
+    const row = info?.listItem || info?.item;
+    if (!row?.isConnected) return;
+    if (savedCables.includes(info)) selectSidebarCable(info); else selectSidebarMarker(info);
+    for (let el = row.parentElement; el && el.id !== 'sidebar'; el = el.parentElement) {
+        if (el.tagName === 'UL' && el.id && el.classList.contains('hidden')) toggleFolder(el.id);
+    }
+    requestAnimationFrame(() => row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+}
+
 function wireCableSidebarSelection(cableInfo) {
     const li = cableInfo?.item;
     if (!li || li.dataset.copySelectBound === '1') return;
@@ -265,7 +276,7 @@ function wireCableSidebarClick(cableInfo) {
             if (typeof startMapSelectionDrag === 'function' && typeof map !== 'undefined' && map) startMapSelectionDrag(e.latLng, e.domEvent, cableInfo);
             else if (typeof toggleMapSelectionFromMap === 'function') toggleMapSelectionFromMap(cableInfo);
         });
-        cableInfo.polyline.addListener('click', (e) => (e?.domEvent?.shiftKey && typeof toggleMapSelectionFromMap === 'function') ? toggleMapSelectionFromMap(cableInfo) : (typeof isCableRouteOpen === 'function' && isCableRouteOpen() ? showCableRoute(cableInfo) : openCableEditor(cableInfo)));
+        cableInfo.polyline.addListener('click', (e) => (e?.domEvent?.shiftKey && typeof toggleMapSelectionFromMap === 'function') ? toggleMapSelectionFromMap(cableInfo) : (revealSidebarItem(cableInfo), typeof isCableRouteOpen === 'function' && isCableRouteOpen() ? showCableRoute(cableInfo) : openCableEditor(cableInfo)));
     }
 }
 
