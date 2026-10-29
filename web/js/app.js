@@ -4285,7 +4285,7 @@ function panToLocation(location, title) {
         animation: google.maps.Animation.DROP,
     });
     const infowindow = new google.maps.InfoWindow({
-        content: `<b>Resultado da Busca:</b><br>${title}`
+        content: `<div class="search-result-info"><b>Resultado da Busca:</b><br>${title}</div>`
     });
     infowindow.open(map, searchMarker);
     //Cria uma função de limpeza

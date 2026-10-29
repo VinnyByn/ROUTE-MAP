@@ -3821,3 +3821,6 @@ html[data-theme="dark"] body input[type="range"]::-webkit-slider-thumb, html[dat
 .network-layer-chip .btn-chip:hover { background: var(--color-surface-hover); }
 .network-area__count { margin: 0; font-size: 12.5px; font-weight: 700; color: #7c3aed; }
 @media (max-width: 640px) { .network-layer-chip { bottom: 70px; max-width: calc(100% - 24px); flex-wrap: wrap; border-radius: 14px; } }
+/* Balão do resultado da busca: o fundo do Google é sempre branco, então o texto fica escuro mesmo no tema escuro */
+.search-result-info, .search-result-info * { color: #0f172a !important; font: 13px/1.45 var(--font-sans); }
+.search-result-info b { font-weight: 700; }
