@@ -2688,8 +2688,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       overlays: autoDesign.overlays.length > 0,
       coverage: plan.stats.coverage >= 0.95,
       onStreets: plan.onStreets && plan.byRoad && !plan.stats.noStreets && tableCalls > 0 && matrixCalls >= 1 && matrixCalls <= AUTO_DESIGN_STRATEGIES.length,
-      //Ruas de carro primeiro (sem vielas entre as casas)
-      carProfile: osrmUrls.length > 0 && osrmUrls.every(u => /routed-car\/(table|nearest|route)\/v1\/driving\//.test(u)) && osrmUrls.some(u => /\/route\/v1\//.test(u)),
+      //Perfil de carro em todos (o 2º servidor também é de carro: pedido atrasado do passo "fora do ar" pode cair nele)
+      carProfile: osrmUrls.length > 0 && osrmUrls.every(u => /\/(table|nearest|route)\/v1\/driving\//.test(u)) && osrmUrls.some(u => /\/route\/v1\//.test(u)),
       noForest: plan.ctos.every(c => c.position.lng() <= STREET_LNG + 1e-9),
       onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
