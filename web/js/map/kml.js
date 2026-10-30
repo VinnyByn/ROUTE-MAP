@@ -146,6 +146,7 @@ const KML_MARKER_TYPE_DEFAULTS = {
     RESERVA: { size: DEFAULT_MARKER_SIZE, reservaStatus: 'Nova', reservaAccessory: 'Raquete' },
     POP: { size: DEFAULT_MARKER_SIZE },
     TORRE: { size: DEFAULT_MARKER_SIZE },
+    POSTE: { size: DEFAULT_MARKER_SIZE },
     CORDOALHA: { size: DEFAULT_MARKER_SIZE, cordoalhaStatus: 'Nova', derivationTCount: 0 },
     CASA: { size: DEFAULT_MARKER_SIZE },
 };
@@ -214,90 +215,103 @@ function getKmlExtendedData(placemark) {
     return data;
 }
 
+//Palavras de cada tipo (texto sem acento, em maiúsculas). "Sozinha" = sem letra colada antes/depois, então
+//"CTO-01", "CTO01" e "RT3" valem, mas "PROTOCOLO" não vira CTO.
+const KML_TYPE_WORD = (w) => new RegExp(`(?<![A-Z])(?:${w})(?![A-Z])`);
+const KML_MARKER_TYPE_RULES = [
+    { type: 'CEO', patterns: [KML_TYPE_WORD('CEOS?|CXE|FOSC|TORPEDO|SPLICE'), /CA?I?XA?\s*(DE\s*)?EMENDA/, /\bEMENDAS?\b/, /\bJUNCAO\b/] },
+    { type: 'CTO', patterns: [KML_TYPE_WORD('CTOS?|NAPS?|FAT|CTOE?'), /CA?I?XA?\s*(DE\s*)?(ATENDIMENTO|ATEND|TERMINA[CL]\w*)/, /TERMINAL\s*OPTIC/, /\bCAIXA\s*TERMINAL\b/] },
+    { type: 'RESERVA', patterns: [/\bRESERVAS?\b/, KML_TYPE_WORD('RT'), /\bSOBRA\s*(DE\s*)?CABO\b/, /\b(SLACK|COIL|LOOP)\b/] },
+    { type: 'TORRE', patterns: [/\bTORRES?\b/, /\bTOWER\b/, /\bMASTRO\b/, /\bERB\b/, /\bRADIO\s*ENLACE\b/] },
+    { type: 'POP', patterns: [KML_TYPE_WORD('POPS?|OLTS?'), /PONTO\s*DE\s*PRESEN/, /\bCENTRAL\b/, /DATA\s*CENTER|DATACENTER/, /\bHEAD\s*END\b|\bHEADEND\b/, /SALA\s*TECNICA/, /\bARMARIO\b/, /\bRACK\b/] },
+    { type: 'CORDOALHA', patterns: [/\bCORDOALHAS?\b/, /CORD\.?\s*OPTIC/, /\bCORDO\b/, /\bMENSAGEIRO\b/] },
+    { type: 'POSTE', patterns: [/\bPOSTES?\b/, /\bPOSTEAMENTO\b/] },
+    { type: 'CASA', patterns: [/\bCASAS?\b/, KML_TYPE_WORD('UCS?|HPS?'), /UNIDADES?\s*CONSUM/, /\bRESIDENCIAS?\b/, /\bDOMICILIOS?\b/, /HOME\s*PASS/] },
+];
+
+//Tipo achado num texto: a palavra que aparece primeiro vale ("CEO 2 - saída para CTO" = CEO)
+function matchKmlMarkerType(text) {
+    const t = normalizeKmlStatusText(text);
+    let best = null;
+    KML_MARKER_TYPE_RULES.forEach(({ type, patterns }) => patterns.forEach(rx => {
+        const m = rx.exec(t);
+        if (m && (!best || m.index < best.index)) best = { type, index: m.index };
+    }));
+    return best?.type || null;
+}
+
+//Onde o tipo é procurado, do mais confiável ao menos: nome, campo Tipo/Categoria dos dados extras, pasta mais
+//próxima do item, nome do estilo e do ícone, descrição e demais dados extras.
 function inferMarkerTypeFromKml({ name, description, folderPath, iconHref, styleUrl, extendedData }) {
-    const extValues = Object.entries(extendedData || {}).map(([k, v]) => `${k} ${v}`).join(' ');
-    const pathText = (folderPath || []).join(' ');
-    const blob = `${name} ${description} ${pathText} ${iconHref} ${styleUrl} ${extValues}`.toUpperCase();
-
-    const parenType = (name || '').match(/\((CEO|CTO|RESERVA|POP|TORRE|CORDOALHA|CASA)\)\s*$/i);
-    if (parenType) {
-        return { type: parenType[1].toUpperCase(), source: 'nome (exportado pelo app)' };
+    const ext = extendedData || {};
+    const parenType = (name || '').match(/\((CEO|CTO|RESERVA|POP|TORRE|CORDOALHA|CASA|POSTE)\)\s*$/i);
+    if (parenType) return { type: parenType[1].toUpperCase(), source: 'nome (exportado pelo app)' };
+    const fromName = matchKmlMarkerType(name);
+    if (fromName) return { type: fromName, source: 'nome' };
+    const typeKey = Object.keys(ext).find(k => /^(TIPO|TYPE|CLASSE|CLASS|CATEGORIA|ELEMENTO|EQUIPAMENTO|OBJETO)$/.test(normalizeKmlStatusText(k).trim()));
+    const fromField = typeKey && matchKmlMarkerType(ext[typeKey]);
+    if (fromField) return { type: fromField, source: `campo ${typeKey}` };
+    for (const segment of [...(folderPath || [])].reverse()) {
+        const fromFolder = matchKmlMarkerType(segment);
+        if (fromFolder) return { type: fromFolder, source: 'pasta' };
     }
-
-    const extTypeKey = Object.keys(extendedData || {}).find((k) => /^(tipo|type|classe|class|categoria)$/i.test(k));
-    if (extTypeKey) {
-        const raw = extendedData[extTypeKey].toUpperCase().trim();
-        if (KML_MARKER_TYPE_DEFAULTS[raw]) {
-            return { type: raw, source: `campo ${extTypeKey}` };
-        }
-    }
-
-    const rules = [
-        { type: 'CEO', patterns: [/\bCEO\b/, /CAIXA\s*DE\s*EMENDA/, /\bEMENDA\b.*\bOPTIC/, /\bCEO\b.*\d/] },
-        { type: 'CTO', patterns: [/\bCTO\b/, /TERMINAL\s*OPTIC/, /CAIXA\s*DE\s*ATENDIMENTO/, /\bCTO\b.*\d/] },
-        { type: 'RESERVA', patterns: [/\bRESERVA\b/, /PONTO\s*DE\s*RESERVA/] },
-        { type: 'TORRE', patterns: [/\bTORRE\b/, /\bTOWER\b/] },
-        { type: 'POP', patterns: [/\bPOP\b/, /PONTO\s*DE\s*PRESEN/, /\bOLT\b/, /CENTRAL\b/] },
-        { type: 'CORDOALHA', patterns: [/\bCORDOALHA\b/, /CORD\.?\s*OPTIC/, /\bCORDO\b/] },
-        { type: 'CASA', patterns: [/\bCASA\b/, /\bCASAS\b/, /\bUC\b/, /UNIDADE\s*CONSUM/] },
-    ];
-
-    for (const rule of rules) {
-        if (rule.patterns.some((rx) => rx.test(blob))) {
-            return { type: rule.type, source: 'nome, pasta ou descrição' };
-        }
-    }
-
-    const icon = (iconHref || '').toLowerCase();
-    if (/cto|terminal|atendimento/.test(icon)) return { type: 'CTO', source: 'ícone KML' };
-    if (/ceo|emenda|splice/.test(icon)) return { type: 'CEO', source: 'ícone KML' };
-    if (/reserva/.test(icon)) return { type: 'RESERVA', source: 'ícone KML' };
-    if (/pop|olt|central/.test(icon)) return { type: 'POP', source: 'ícone KML' };
-    if (/cordoalha|cord/.test(icon)) return { type: 'CORDOALHA', source: 'ícone KML' };
-
+    const iconText = `${String(styleUrl || '').replace(/^#/, '')} ${String(iconHref || '').split('/').pop().replace(/\.\w+$/, '')}`.replace(/[-_.]+/g, ' ');
+    const fromIcon = matchKmlMarkerType(iconText);
+    if (fromIcon) return { type: fromIcon, source: 'estilo/ícone' };
+    const fromDesc = matchKmlMarkerType(String(description || '').replace(/<[^>]+>/g, ' '));
+    if (fromDesc) return { type: fromDesc, source: 'descrição' };
+    const fromExt = matchKmlMarkerType(Object.entries(ext).map(([k, v]) => `${k} ${v}`).join(' | '));
+    if (fromExt) return { type: fromExt, source: 'dados' };
     return { type: 'Importado', source: null };
 }
 
-function inferMarkerStatusFromKml({ name, description, folderPath, extendedData, defaultStatus = 'Nova' }) {
-    const pathText = (folderPath || []).join(' ');
-    const extValues = Object.entries(extendedData || {}).map(([k, v]) => `${k} ${v}`).join(' ');
-    const blob = `${name} ${description} ${pathText} ${extValues}`.toUpperCase();
+//Situação (Nova/Existente/Troca) pelas palavras usadas no KMZ, sem acento e em maiúsculas.
+//A palavra que aparece primeiro no texto vale (ex.: "Rede existente - ampliação nova" = Existente).
+const KML_STATUS_WORDS = [
+    ['Troca', /\b(TROCAS?|SUBSTITUI\w*|REPLACE)\b/],
+    ['Existente', /\b(EXISTENTES?|EXIST|EXST|IMPLANTAD[OA]S?|CONSTRUID[OA]S?|INSTALAD[OA]S?|INSTAL|ATIV[OA]S?|EM OPERACAO|OPERANDO|AS ?-?BUILT|LEGADO|ATUAL|FEIT[OA]S?|OK)\b/],
+    ['Nova', /\b(NOV[OA]S?|NEW|PROJETAD[OA]S?|A IMPLANTAR|IMPLANTAR|A CONSTRUIR|A INSTALAR|PROPOST[OA]S?|PLANEJAD[OA]S?|FUTUR[OA]S?|EM PROJETO)\b/],
+];
+const KML_STATUS_FIELD_RE = /^(STATUS|ESTADO|SITUACAO|CONDICAO|FASE|ETAPA|TIPO DE REDE|REDE)$/;
 
-    const extStatusKey = Object.keys(extendedData || {}).find((k) =>
-        /^(status|estado|situacao|situação|condicao|condição)$/i.test(k)
-    );
-    if (extStatusKey) {
-        const raw = (extendedData[extStatusKey] || '').toUpperCase().trim();
-        if (/EXIST/.test(raw)) return 'Existente';
-        if (/TROC/.test(raw)) return 'Troca';
-        if (/NOV|NEW/.test(raw)) return 'Nova';
-    }
+function normalizeKmlStatusText(text) {
+    return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[_.]+/g, ' ');
+}
 
-    for (const segment of folderPath || []) {
-        const seg = segment.toUpperCase().trim();
-        if (/^EXISTENTE(S)?$/.test(seg) || /\bEXISTENTE(S)?\b/.test(seg)) return 'Existente';
-        if (/^TROCA(S)?$/.test(seg) || /\bTROCA(S)?\b/.test(seg)) return 'Troca';
-        if (/^NOVO(S)?$/.test(seg) || /^NOVA(S)?$/.test(seg) || /\bNOVO(S)?\b/.test(seg) || /\bNOVA(S)?\b/.test(seg)) {
-            return 'Nova';
-        }
-    }
+function matchKmlStatusWord(text) {
+    const t = normalizeKmlStatusText(text);
+    let best = null;
+    KML_STATUS_WORDS.forEach(([status, re]) => {
+        const m = re.exec(t);
+        if (m && (!best || m.index < best.index)) best = { status, index: m.index };
+    });
+    return best?.status || null;
+}
 
-    const parenStatus = (name || '').match(/\((NOVO|NOVA|EXISTENTE|TROCA)\)\s*$/i);
-    if (parenStatus) {
-        const token = parenStatus[1].toUpperCase();
-        if (token === 'EXISTENTE') return 'Existente';
-        if (token === 'TROCA') return 'Troca';
-        return 'Nova';
-    }
+//Onde a situação foi achada, do mais confiável ao menos: campo "Status" dos dados extras, nome (entre parênteses
+//ou depois de " - "), pasta mais próxima do item, nome do estilo, descrição e outros dados extras.
+//Devolve { status, source } ou null (sem pista: fica o padrão e a posição na rede existente decide depois).
+function inferKmlStatus({ name, description, folderPath, extendedData, styleUrl }) {
+    const ext = extendedData || {};
+    const fieldKey = Object.keys(ext).find(k => KML_STATUS_FIELD_RE.test(normalizeKmlStatusText(k).trim()));
+    const fromField = fieldKey && matchKmlStatusWord(ext[fieldKey]);
+    if (fromField) return { status: fromField, source: 'dados' };
+    const nameParts = [...String(name || '').matchAll(/\(([^)]*)\)/g)].map(m => m[1]);
+    const tail = /\s[-–·|/]\s*([^-–·|/]+)$/.exec(String(name || ''));
+    if (tail) nameParts.push(tail[1]);
+    for (const part of nameParts) { const st = matchKmlStatusWord(part); if (st) return { status: st, source: 'nome' }; }
+    for (const segment of [...(folderPath || [])].reverse()) { const st = matchKmlStatusWord(segment); if (st) return { status: st, source: 'pasta' }; }
+    const fromStyle = matchKmlStatusWord(String(styleUrl || '').replace(/^#/, ''));
+    if (fromStyle) return { status: fromStyle, source: 'estilo' };
+    const fromDesc = matchKmlStatusWord(String(description || '').replace(/<[^>]+>/g, ' '));
+    if (fromDesc) return { status: fromDesc, source: 'descrição' };
+    const fromExt = matchKmlStatusWord(Object.entries(ext).map(([k, v]) => `${k} ${v}`).join(' | '));
+    if (fromExt) return { status: fromExt, source: 'dados' };
+    return null;
+}
 
-    if (/\b-\s*EXISTENTE\b/.test(blob) || /\b·\s*EXISTENTE\b/.test(blob)) return 'Existente';
-    if (/\b-\s*TROCA\b/.test(blob)) return 'Troca';
-    if (/\b-\s*NOVO\b/.test(blob) || /\b-\s*NOVA\b/.test(blob)) return 'Nova';
-
-    if (/EXISTENTE|EXIST\b|INSTALAD|INSTAL\.|FEITO|\bOK\b/.test(blob)) return 'Existente';
-    if (/TROC|SUBSTITU|REPLACE/.test(blob)) return 'Troca';
-
-    return defaultStatus;
+function inferMarkerStatusFromKml(context) {
+    return inferKmlStatus(context)?.status || context.defaultStatus || 'Nova';
 }
 
 function buildKmlMarkerImportData(name, description, inferred, styleHints, importContext = {}) {
@@ -305,12 +319,9 @@ function buildKmlMarkerImportData(name, description, inferred, styleHints, impor
     const type = inferred.type;
     const pathText = (folderPath || []).join(' ');
     const textBlob = `${name} ${description} ${pathText}`.toUpperCase();
-    const inferredStatus = inferMarkerStatusFromKml({
-        name,
-        description,
-        folderPath,
-        extendedData,
-    });
+    const statusHit = inferKmlStatus({ name, description, folderPath, extendedData, styleUrl: styleHints?.styleUrl });
+    const inferredStatus = statusHit?.status || 'Nova';
+    if (importContext.statusLog) importContext.statusLog.push(statusHit?.source || null);
 
     if (type === 'Importado') {
         return {
@@ -391,10 +402,26 @@ function kmlAbgrToHex(kmlColor) {
 }
 
 function normalizeKmlCableAsType(text) {
-    const t = (text || '').toUpperCase();
-    if (/\bAS\s*200\b/.test(t)) return 'AS 200';
-    if (/\bAS\s*80\b/.test(t)) return 'AS 80';
+    const t = normalizeKmlStatusText(text);
+    if (/(?<![A-Z])AS\s*-?\s*200(?!\d)/.test(t)) return 'AS 200';
     return 'AS 80';
+}
+
+//Fibras escritas de vários jeitos: FO-72, FO_72, FO 72, FO72, F.O. 72, 72FO, 72F, 72 fibras
+//(o "_" e o "." viram espaço antes). Só vale contagem que existe no sistema (6, 12, 24, 36, 48, 72, 144).
+const KML_FIBER_PATTERNS = [
+    /(?<![A-Z0-9])F\s*O\s*-?\s*(\d{1,3})(?!\d)/,
+    /(?<![\d-])(\d{1,3})\s*-?\s*(?:FO|F|FIBRAS?|FIB|FIBERS?)(?![A-Z])/,
+];
+function kmlFiberFromText(text) {
+    const t = normalizeKmlStatusText(text);
+    for (const rx of KML_FIBER_PATTERNS) {
+        const m = rx.exec(t);
+        if (!m) continue;
+        const fiber = `FO-${String(parseInt(m[1], 10)).padStart(2, '0')}`;
+        if (KML_CABLE_FIBER_TYPES.includes(fiber)) return fiber;
+    }
+    return null;
 }
 
 function buildFullCableType(asType, fiberType) {
@@ -426,39 +453,10 @@ function splitKmlCableNameAndType(rawName) {
     return { displayName: displayName || rawName, fullType };
 }
 
-function inferCableStatusFromKml({ name, description, folderPath, extendedData, defaultStatus = 'Novo' }) {
-    const pathText = (folderPath || []).join(' ');
-    const extValues = Object.entries(extendedData || {}).map(([k, v]) => `${k} ${v}`).join(' ');
-    const blob = `${name} ${description} ${pathText} ${extValues}`.toUpperCase();
-
-    const extStatusKey = Object.keys(extendedData || {}).find((k) =>
-        /^(status|estado|situacao|situação|condicao|condição)$/i.test(k)
-    );
-    if (extStatusKey) {
-        const raw = (extendedData[extStatusKey] || '').toUpperCase().trim();
-        if (/EXIST/.test(raw)) return 'Existente';
-        if (/NOV|NEW/.test(raw)) return 'Novo';
-    }
-
-    for (const segment of folderPath || []) {
-        const seg = segment.toUpperCase().trim();
-        if (/^EXISTENTE(S)?$/.test(seg) || /\bEXISTENTE(S)?\b/.test(seg)) return 'Existente';
-        if (/^NOVO(S)?$/.test(seg) || /^NOVA(S)?$/.test(seg) || /\bNOVO(S)?\b/.test(seg) || /\bNOVA(S)?\b/.test(seg)) {
-            return 'Novo';
-        }
-    }
-
-    const statusInName = (name || '').match(/\((NOVO|NOVA|EXISTENTE)\)/i);
-    if (statusInName) {
-        return /EXISTENTE/i.test(statusInName[1]) ? 'Existente' : 'Novo';
-    }
-
-    if (/\b-\s*EXISTENTE\b/.test(blob) || /\b·\s*EXISTENTE\b/.test(blob)) return 'Existente';
-    if (/\b-\s*NOVO\b/.test(blob) || /\b-\s*NOVA\b/.test(blob)) return 'Novo';
-
-    if (/EXISTENTE|EXIST\b|INSTALAD|INSTAL\.|FEITO|\bOK\b/.test(blob)) return 'Existente';
-
-    return defaultStatus;
+//Cabo só tem Novo/Existente (Troca de cabo = cabo novo)
+function inferCableStatusFromKml(context) {
+    const st = inferKmlStatus(context)?.status;
+    return st === 'Existente' ? 'Existente' : st ? 'Novo' : (context.defaultStatus || 'Novo');
 }
 
 function inferCableTypeFromKml({ name, description, folderPath, lineColorHex, extendedData }) {
@@ -476,10 +474,10 @@ function inferCableTypeFromKml({ name, description, folderPath, lineColorHex, ex
         if (fromExt) {
             return { type: fromExt, source: `campo ${extTypeKey}` };
         }
-        const foOnly = (extendedData[extTypeKey] || '').match(/FO-\d+/i);
+        const foOnly = kmlFiberFromText(extendedData[extTypeKey]);
         if (foOnly) {
-            const fiber = foOnly[0].toUpperCase();
-            if (KML_CABLE_FIBER_TYPES.includes(fiber)) {
+            const fiber = foOnly;
+            {
                 return {
                     type: buildFullCableType(normalizeKmlCableAsType(extendedData[extTypeKey]), fiber),
                     source: `campo ${extTypeKey}`,
@@ -488,14 +486,18 @@ function inferCableTypeFromKml({ name, description, folderPath, lineColorHex, ex
         }
     }
 
+    //Fibras: nome, campo dos dados extras, pasta mais próxima e descrição, nessa ordem
     let fiber = null;
-    let source = 'nome, pasta ou descrição';
-    const foMatch = blob.match(/\bFO-(\d+)\b/);
-    if (foMatch) {
-        const candidate = `FO-${foMatch[1]}`;
-        if (KML_CABLE_FIBER_TYPES.includes(candidate)) {
-            fiber = candidate;
-        }
+    let source = null;
+    const extFiberText = Object.entries(extendedData || {}).map(([k, v]) => `${k} ${v}`).join(' | ');
+    const fiberSources = [[name, 'nome'], [extFiberText, 'dados'], ...[...(folderPath || [])].reverse().map(f => [f, 'pasta']), [String(description || '').replace(/<[^>]+>/g, ' '), 'descrição']];
+    for (const [text, where] of fiberSources) {
+        fiber = kmlFiberFromText(text);
+        if (fiber) { source = where; break; }
+    }
+    //Drop: cabo de 1 fibra até o cliente
+    if (!fiber && /(?<![A-Z])DROP(?![A-Z])/.test(normalizeKmlStatusText(`${name} ${pathText}`))) {
+        return { type: 'Cabo Drop', displayName, source: 'nome ou pasta' };
     }
 
     if (!fiber && lineColorHex) {
@@ -554,12 +556,9 @@ function resolveKmlCableDisplayColor(cableType, styleHints) {
 function buildKmlCableImportData(name, description, inferred, styleHints, importContext = {}) {
     const { folderPath = [], extendedData = {} } = importContext;
     const cableName = inferred.displayName || name;
-    const status = inferCableStatusFromKml({
-        name: cableName,
-        description,
-        folderPath,
-        extendedData,
-    });
+    const cableHit = inferKmlStatus({ name, description, folderPath, extendedData, styleUrl: styleHints?.styleUrl });
+    if (importContext.statusLog) importContext.statusLog.push(cableHit?.source || null);
+    const status = cableHit?.status === 'Existente' ? 'Existente' : 'Novo';
     const width = parseInt(styleHints?.lineWidth, 10) || getDefaultCableWidthForStatus(status);
     const color = inferred.type === 'Cabo Importado'
         ? KML_IMPORT_UNRECOGNIZED_COLOR
@@ -757,9 +756,8 @@ function processKmlNode(kmlNode, parentSidebarId, importContext = {}) {
             const newFolderId = createFolderFromKML(folderName, parentSidebarId);
             if (newFolderId) {
                 itemsImported += processKmlNode(child, newFolderId, {
-                    styleIndex,
+                    ...importContext,
                     folderPath: [...folderPath, folderName],
-                    stats,
                 });
             }
         } else if (nodeName === 'Placemark') {
@@ -786,6 +784,7 @@ function processKmlNode(kmlNode, parentSidebarId, importContext = {}) {
                 const markerData = buildKmlMarkerImportData(name, description, inferred, styleHints, {
                     folderPath,
                     extendedData,
+                    statusLog: importContext.markerStatusLog,
                 });
                 const originalActiveFolder = activeFolderId;
                 activeFolderId = parentSidebarId;
@@ -819,6 +818,7 @@ function processKmlNode(kmlNode, parentSidebarId, importContext = {}) {
                 const cableData = buildKmlCableImportData(name, description, inferred, styleHints, {
                     folderPath,
                     extendedData,
+                    statusLog: importContext.cableStatusLog,
                 });
                 if (importContext.deferredCables) {
                     importContext.deferredCables.push({ path, parentSidebarId, cableData });
@@ -901,6 +901,54 @@ function processKmlNode(kmlNode, parentSidebarId, importContext = {}) {
     return itemsImported;
 }
 
+//Item sem pista de situação no arquivo: se está em cima da rede que já existe (caixa a até 3 m de uma caixa
+//Existente do mesmo tipo, ou cabo que segue um cabo Existente), vira Existente. Referência: itens Existente já
+//abertos (de outras pastas/projetos) e a rede da cidade mostrada por baixo (js/projects/network-layer.js).
+const KML_EXISTING_MATCH_M = 3;
+function getKmlExistingReference(skipMarkers, skipCables) {
+    const refMarkers = markers.filter(m => !skipMarkers.has(m) && isMarkerStatusExistente(m) && m.marker?.getPosition)
+        .map(m => ({ type: m.type, pos: m.marker.getPosition() }));
+    const refCables = savedCables.filter(c => !skipCables.has(c) && c.status === 'Existente' && c.polyline?.getPath)
+        .map(c => c.polyline.getPath().getArray());
+    if (typeof networkLayer !== 'undefined') {
+        networkLayer.cache.forEach(({ data }) => {
+            (data?.markers || []).forEach(m => m.position && refMarkers.push({ type: m.type, pos: new google.maps.LatLng(m.position.lat, m.position.lng) }));
+            (data?.cables || []).forEach(c => (c.path || []).length >= 2 && refCables.push(c.path.map(p => new google.maps.LatLng(p.lat, p.lng))));
+        });
+    }
+    return { refMarkers, refCables };
+}
+
+function classifyKmlImportByExistingNetwork(newMarkers, markerLog, newCables, cableLog) {
+    const spherical = google.maps.geometry?.spherical;
+    const { refMarkers, refCables } = getKmlExistingReference(new Set(newMarkers), new Set(newCables));
+    let byNetwork = 0, guessed = 0;
+    newMarkers.forEach((m, i) => {
+        if (markerLog[i] || !MARKER_TYPES_WITH_INFRA_STATUS.includes(m.type)) return;
+        const pos = m.marker?.getPosition?.();
+        const onNetwork = pos && spherical && refMarkers.some(r => (r.type === m.type || m.type === 'Importado') && spherical.computeDistanceBetween(r.pos, pos) <= KML_EXISTING_MATCH_M);
+        if (onNetwork) { setMarkerInfrastructureStatus(m, 'Existente'); byNetwork++; } else guessed++;
+    });
+    newCables.forEach((c, i) => {
+        if (cableLog[i]) return;
+        const path = c.polyline?.getPath?.().getArray?.() || [];
+        const onNetwork = path.length >= 2 && typeof isSameCableRoute === 'function' && refCables.some(r => isSameCableRoute(path, r));
+        if (onNetwork) {
+            c.status = 'Existente';
+            c.width = getDefaultCableWidthForStatus('Existente');
+            c.polyline.setOptions({ strokeWeight: c.width });
+            if (typeof updateCableSidebarLabel === 'function') updateCableSidebarLabel(c);
+            byNetwork++;
+        } else guessed++;
+    });
+    const counts = {};
+    newMarkers.forEach(m => { const st = getMarkerInfrastructureStatus(m); if (st) counts[st] = (counts[st] || 0) + 1; });
+    newCables.forEach(c => { const st = c.status === 'Existente' ? 'Existente' : 'Nova'; counts[st] = (counts[st] || 0) + 1; });
+    const label = { Nova: 'novo(s)', Existente: 'existente(s)', Troca: 'troca' };
+    const text = Object.entries(counts).map(([st, n]) => `${n} ${label[st] || st}`).join(' · ') || 'nenhum item com situação';
+    return { byNetwork, guessed, counts, text };
+}
+
 //Ponto de entrada da importação
 function parseAndDisplayKML(kmlDoc) {
     if (!activeFolderId) {
@@ -910,12 +958,15 @@ function parseAndDisplayKML(kmlDoc) {
     const styleIndex = buildKmlStyleIndex(kmlDoc);
     const stats = { classified: {}, manual: 0, cablesClassified: {}, cablesManual: 0 };
     const deferredCables = [];
+    const markerStatusLog = [], cableStatusLog = [];
+    const markersBefore = markers.length, cablesBefore = savedCables.length;
     const rootNode = kmlDoc.querySelector('Document') || kmlDoc.documentElement;
-    const totalItems = processKmlNode(rootNode, activeFolderId, { styleIndex, folderPath: [], stats, deferredCables });
+    const totalItems = processKmlNode(rootNode, activeFolderId, { styleIndex, folderPath: [], stats, deferredCables, markerStatusLog, cableStatusLog });
 
     deferredCables.forEach(({ path, parentSidebarId, cableData }) => {
         importKmlCable(path, parentSidebarId, cableData);
     });
+    const statusSummary = classifyKmlImportByExistingNetwork(markers.slice(markersBefore), markerStatusLog, savedCables.slice(cablesBefore), cableStatusLog);
     syncProjectCableMeasurements(savedCables);
 
     lastKmlImportStats = stats;
@@ -939,6 +990,9 @@ function parseAndDisplayKML(kmlDoc) {
     if (stats.cablesManual > 0) {
         message += `\n\n${stats.cablesManual} cabo(s) sem tipo definido (laranja) — use Ajustar Cabo na lista.`;
     }
+    message += `\n\nSituação: ${statusSummary.text}`;
+    if (statusSummary.byNetwork) message += `\n${statusSummary.byNetwork} item(ns) sem indicação no arquivo ficaram Existente por estarem em cima da rede que já existe.`;
+    if (statusSummary.guessed) message += `\n${statusSummary.guessed} item(ns) sem indicação ficaram Novo — confira (dá para mudar vários de uma vez pela seleção no mapa).`;
     message += '\n\nDica: use nomes/pastas com CTO, CEO, FO-12, Cabo AS 80 FO-24 etc., ou exporte pelo app para melhor reconhecimento.';
     refreshBomAfterProjectChange();
     showAlert("Importação Concluída", message);

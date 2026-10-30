@@ -1957,6 +1957,47 @@ check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${ligh
   await sp.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
   await sp.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
   await sp.evaluate(() => { if (!map) map = new google.maps.Map(document.getElementById('map'), {}); });
+//Importação KMZ: situação (Nova/Existente) por campo, nome, pasta mais próxima, estilo e posição na rede existente
+const kmzStatus = await sp.evaluate(() => {
+  const st = (ctx) => inferKmlStatus({ name: '', description: '', folderPath: [], extendedData: {}, ...ctx })?.status || null;
+  const words = {
+    field: st({ extendedData: { 'Situação': 'Implantado' } }),
+    paren: st({ name: 'CTO 01 (projetada)' }),
+    tail: st({ name: 'CEO 3 - EXIST.' }),
+    nearest: st({ folderPath: ['Rede existente', 'Ampliação a implantar'] }),
+    style: st({ styleUrl: '#estilo_existente' }),
+    asBuilt: st({ folderPath: ['AS-BUILT'] }),
+    none: st({ name: 'CTO 22 Bairro Novo Horizonte' }),
+  };
+  const ty = (ctx) => inferMarkerTypeFromKml({ name: '', description: '', folderPath: [], extendedData: {}, iconHref: '', styleUrl: '', ...ctx }).type;
+  const types = [ty({ name: 'CX EMENDA 03' }), ty({ name: 'NAP-12' }), ty({ name: 'CTO01' }), ty({ name: 'RT3' }), ty({ name: 'Protocolo 5' }),
+    ty({ name: '12', extendedData: { Categoria: 'Caixa de atendimento' } }), ty({ name: 'P-01', folderPath: ['Postes'] }),
+    ty({ name: 'X', iconHref: 'http://x/icons/olt-red.png' }), ty({ name: 'Mastro 2' }), ty({ name: 'Residências 4' }),
+    ty({ name: 'CEO 2 - saída para CTO' }), ty({ name: 'Caixa de emenda óptica' })].join();
+  const cb = (ctx) => inferCableTypeFromKml({ name: '', description: '', folderPath: [], extendedData: {}, lineColorHex: null, ...ctx }).type;
+  const cables = [cb({ name: 'FO_72' }), cb({ name: 'CABO AS80 FO 24' }), cb({ name: 'Trecho 3 F.O. 144' }), cb({ name: '36F AS-200' }), cb({ name: 'tronco 48 fibras' }),
+    cb({ name: 'T1', folderPath: ['FO_06'] }), cb({ name: 'T2', extendedData: { Tipo: 'Cabo 12FO' } }), cb({ name: 'Drop cliente 5' }), cb({ name: 'INFO 72' })].join();
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projKZ', name: 'Projeto KZ', isProject: true, type: 'TCR', children: [] }], sidebar);
+  activeFolderId = 'projKZ';
+  addCustomMarker(new google.maps.LatLng(-21, -45), { type: 'CTO', name: 'CTO-REDE', ctoStatus: 'Existente', size: 30, color: '#000', labelColor: '#000' });
+  const ref = markers[markers.length - 1];
+  const kml = `<kml><Document>
+    <Folder><name>Caixas</name>
+      <Placemark><name>CTO-A</name><Point><coordinates>-45.00001,-21.00001</coordinates></Point></Placemark>
+      <Placemark><name>CTO-B</name><Point><coordinates>-45.01,-21.01</coordinates></Point></Placemark>
+      <Placemark><name>CTO-C (existente)</name><Point><coordinates>-45.02,-21.02</coordinates></Point></Placemark>
+    </Folder></Document></kml>`;
+  const before = markers.length;
+  parseAndDisplayKML(new DOMParser().parseFromString(kml, 'text/xml'));
+  const added = markers.slice(before).map(m => `${m.name}:${m.ctoStatus}`).join();
+  const msg = document.getElementById('alertModalMessage')?.textContent || document.querySelector('#alertModal')?.textContent || '';
+  document.getElementById('alertModalOkButton')?.click?.();
+  return { words, types, cables, added, msg: /1 item\(ns\) sem indicação no arquivo ficaram Existente/.test(msg) && /2 existente\(s\) · 1 novo|1 novo\(s\) · 2 existente/.test(msg), refKept: ref.ctoStatus };
+});
+check(JSON.stringify(kmzStatus.words) === JSON.stringify({ field: 'Existente', paren: 'Nova', tail: 'Existente', nearest: 'Nova', style: 'Existente', asBuilt: 'Existente', none: null })
+  && kmzStatus.types === 'CEO,CTO,CTO,RESERVA,Importado,CTO,POSTE,POP,TORRE,CASA,CEO,CEO' && kmzStatus.cables === 'Cabo AS 80 FO-72,Cabo AS 80 FO-24,Cabo AS 80 FO-144,Cabo AS 200 FO-36,Cabo AS 80 FO-48,Cabo AS 80 FO-06,Cabo AS 80 FO-12,Cabo Drop,Cabo Importado' && kmzStatus.added === 'CTO-A:Existente,CTO-B:Nova,CTO-C (existente):Existente' && kmzStatus.msg,
+  `importação KMZ reconhece tipo, fibras do cabo e novo/existente por palavras, pasta, estilo e posição na rede (${JSON.stringify(kmzStatus)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
