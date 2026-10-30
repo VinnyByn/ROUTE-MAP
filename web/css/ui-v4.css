@@ -3853,3 +3853,7 @@ button.map-selection-kind:hover { border-color: var(--accent, #22c55e); backgrou
 .rp-map-legend__dot--diamond { transform: rotate(45deg) scale(.85); }
 .rp-map-legend__icon { width: 16px; height: 16px; object-fit: contain; }
 .rp-map-legend__area { width: 16px; height: 11px; border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 30%, transparent); border-radius: 2px; }
+/* Folha do relatório é sempre clara: a linha sob o mouse não pega o fundo escuro das tabelas do tema escuro */
+.report-preview-page .rp-table tbody tr:hover td { background: #f1f7fa; color: var(--rp-ink, #16323f); }
+.report-preview-page .rp-table tbody tr.subtotal:hover td { background: #e3f1f6; color: var(--rp-brand-dark); }
+.report-preview-page .rp-table tbody tr.grand-total:hover td { background: #173f4e; color: #ffffff; }
