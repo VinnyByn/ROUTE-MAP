@@ -402,10 +402,26 @@ function kmlAbgrToHex(kmlColor) {
 }
 
 function normalizeKmlCableAsType(text) {
-    const t = (text || '').toUpperCase();
-    if (/\bAS\s*200\b/.test(t)) return 'AS 200';
-    if (/\bAS\s*80\b/.test(t)) return 'AS 80';
+    const t = normalizeKmlStatusText(text);
+    if (/(?<![A-Z])AS\s*-?\s*200(?!\d)/.test(t)) return 'AS 200';
     return 'AS 80';
+}
+
+//Fibras escritas de vários jeitos: FO-72, FO_72, FO 72, FO72, F.O. 72, 72FO, 72F, 72 fibras
+//(o "_" e o "." viram espaço antes). Só vale contagem que existe no sistema (6, 12, 24, 36, 48, 72, 144).
+const KML_FIBER_PATTERNS = [
+    /(?<![A-Z0-9])F\s*O\s*-?\s*(\d{1,3})(?!\d)/,
+    /(?<![\d-])(\d{1,3})\s*-?\s*(?:FO|F|FIBRAS?|FIB|FIBERS?)(?![A-Z])/,
+];
+function kmlFiberFromText(text) {
+    const t = normalizeKmlStatusText(text);
+    for (const rx of KML_FIBER_PATTERNS) {
+        const m = rx.exec(t);
+        if (!m) continue;
+        const fiber = `FO-${String(parseInt(m[1], 10)).padStart(2, '0')}`;
+        if (KML_CABLE_FIBER_TYPES.includes(fiber)) return fiber;
+    }
+    return null;
 }
 
 function buildFullCableType(asType, fiberType) {
@@ -458,10 +474,10 @@ function inferCableTypeFromKml({ name, description, folderPath, lineColorHex, ex
         if (fromExt) {
             return { type: fromExt, source: `campo ${extTypeKey}` };
         }
-        const foOnly = (extendedData[extTypeKey] || '').match(/FO-\d+/i);
+        const foOnly = kmlFiberFromText(extendedData[extTypeKey]);
         if (foOnly) {
-            const fiber = foOnly[0].toUpperCase();
-            if (KML_CABLE_FIBER_TYPES.includes(fiber)) {
+            const fiber = foOnly;
+            {
                 return {
                     type: buildFullCableType(normalizeKmlCableAsType(extendedData[extTypeKey]), fiber),
                     source: `campo ${extTypeKey}`,
@@ -470,14 +486,18 @@ function inferCableTypeFromKml({ name, description, folderPath, lineColorHex, ex
         }
     }
 
+    //Fibras: nome, campo dos dados extras, pasta mais próxima e descrição, nessa ordem
     let fiber = null;
-    let source = 'nome, pasta ou descrição';
-    const foMatch = blob.match(/\bFO-(\d+)\b/);
-    if (foMatch) {
-        const candidate = `FO-${foMatch[1]}`;
-        if (KML_CABLE_FIBER_TYPES.includes(candidate)) {
-            fiber = candidate;
-        }
+    let source = null;
+    const extFiberText = Object.entries(extendedData || {}).map(([k, v]) => `${k} ${v}`).join(' | ');
+    const fiberSources = [[name, 'nome'], [extFiberText, 'dados'], ...[...(folderPath || [])].reverse().map(f => [f, 'pasta']), [String(description || '').replace(/<[^>]+>/g, ' '), 'descrição']];
+    for (const [text, where] of fiberSources) {
+        fiber = kmlFiberFromText(text);
+        if (fiber) { source = where; break; }
+    }
+    //Drop: cabo de 1 fibra até o cliente
+    if (!fiber && /(?<![A-Z])DROP(?![A-Z])/.test(normalizeKmlStatusText(`${name} ${pathText}`))) {
+        return { type: 'Cabo Drop', displayName, source: 'nome ou pasta' };
     }
 
     if (!fiber && lineColorHex) {
