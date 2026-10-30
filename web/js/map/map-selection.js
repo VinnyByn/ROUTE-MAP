@@ -175,6 +175,18 @@ function selectionTypeKey(item) {
     return kind === 'cable' ? 'Cabo' : kind === 'polygon' ? 'Polígono' : item.type === 'CLIENTE' ? 'Cliente' : item.type;
 }
 
+//Nome curto e cor do tipo nas etiquetas da barra (mesma cor do marcador no painel)
+function selectionKindLabel(key) {
+    return { RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', POSTE: 'Poste', TORRE: 'Torre', Importado: 'Importado' }[key] || key;
+}
+
+function selectionKindColor(key) {
+    if (key === 'Cabo') return '#2563eb';
+    if (key === 'Polígono') return '#c70039';
+    if (key === 'Cliente') return '#0ea5e9';
+    return (typeof MARKER_TYPE_META !== 'undefined' && MARKER_TYPE_META[key]?.color) || '#94a3b8';
+}
+
 function filterSelectionByType(key, { remove = false } = {}) {
     setMapSelection([...mapSelection.items].filter(m => (selectionTypeKey(m) === key) !== remove));
 }
@@ -194,8 +206,8 @@ function renderMapSelectionBar() {
     //Cada tipo vira um botão: clique deixa só esse tipo na seleção; Ctrl/Shift+clique tira o tipo
     const entries = Object.entries(counts);
     document.getElementById('mapSelectionKinds').innerHTML = entries.map(([k, n]) => entries.length > 1
-        ? `<button type="button" class="map-selection-kind" data-sel-kind="${escapeHtml(k)}" title="Selecionar só ${escapeHtml(k)} (Ctrl+clique tira da seleção)">${n} ${escapeHtml(k)}</button>`
-        : `<span class="map-selection-kind is-only">${n} ${escapeHtml(k)}</span>`).join('');
+        ? `<button type="button" class="map-selection-kind" data-sel-kind="${escapeHtml(k)}" style="--kind-color:${selectionKindColor(k)}" title="Ficar só com ${escapeHtml(selectionKindLabel(k))} (Ctrl+clique tira da seleção)"><b>${n}</b> ${escapeHtml(selectionKindLabel(k))}</button>`
+        : `<span class="map-selection-kind is-only" style="--kind-color:${selectionKindColor(k)}"><b>${n}</b> ${escapeHtml(selectionKindLabel(k))}</span>`).join('');
     const projectId = getActiveProjectId();
     const folderSelect = document.getElementById('mapSelectionFolder');
     const folders = projectId ? getAllDescendantFolderIds(projectId) : [];

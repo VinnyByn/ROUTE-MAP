@@ -11,7 +11,7 @@
     <script src="js/core/theme-init.js?v=20261004a"></script>
     <link rel="stylesheet" href="css/style.css?v=20261062a" />
     <link rel="stylesheet" href="css/ui-v3.css?v=20261004g" />
-    <link rel="stylesheet" href="css/ui-v4.css?v=20261102a" />
+    <link rel="stylesheet" href="css/ui-v4.css?v=20261106a" />
     <link rel="stylesheet" href="css/ui-light.css?v=20261014d" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
@@ -3076,7 +3076,12 @@
       <button type="button" id="continuousMarkerDone" title="Encerrar (Esc)">Concluir</button>
     </div>
     <div id="mapSelectionBar" class="map-selection-bar hidden" role="toolbar" aria-label="Itens selecionados">
-      <div class="map-selection-bar__info"><strong id="mapSelectionCount"></strong><small id="mapSelectionKinds"></small></div>
+      <div class="map-selection-bar__head">
+        <strong id="mapSelectionCount"></strong>
+        <div id="mapSelectionKinds" class="map-selection-bar__kinds"></div>
+        <button type="button" id="mapSelectionClear" title="Limpar seleção (Esc)" aria-label="Limpar seleção">&times;</button>
+      </div>
+      <div class="map-selection-bar__actions">
       <select id="mapSelectionStatus" data-sel-edit title="Situação">
         <option value="">Situação de todos…</option><option>Nova</option><option>Existente</option><option>Troca</option>
       </select>
@@ -3085,7 +3090,7 @@
       <button type="button" id="mapSelectionStyle" data-sel-edit title="Cor e tamanho por tipo">Estilo</button>
       <button type="button" id="mapSelectionHide">Ocultar</button>
       <button type="button" id="mapSelectionDelete" class="is-danger" data-sel-edit title="Excluir (Delete)">Excluir</button>
-      <button type="button" id="mapSelectionClear" title="Limpar seleção (Esc)" aria-label="Limpar seleção">&times;</button>
+      </div>
     </div>
 
     <div id="globalSearch" class="global-search hidden" role="dialog" aria-label="Busca">
@@ -3434,7 +3439,7 @@
   <script src="js/network/pop-equipment.js?v=20261007c" defer></script>
   <script src="js/map/global-search.js?v=20261098b" defer></script>
   <script src="js/core/undo.js?v=20261061a" defer></script>
-  <script src="js/map/map-selection.js?v=20261102b" defer></script>
+  <script src="js/map/map-selection.js?v=20261106b" defer></script>
   <script src="js/map/selection-edit.js?v=20261097b" defer></script>
   <script src="js/projects/tour.js?v=20261040a" defer></script>
   <script src="js/core/live-sync.js?v=20261098b" defer></script>
