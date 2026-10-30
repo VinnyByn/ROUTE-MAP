@@ -1957,6 +1957,39 @@ check(lightBlocks.length === 0, `tema escuro sem fundos claros nas janelas${ligh
   await sp.waitForFunction(() => typeof AppSession !== 'undefined' && AppSession.company, null, { timeout: 15000 });
   await sp.addScriptTag({ url: baseUrl + '/__fake-google-maps.js' });
   await sp.evaluate(() => { if (!map) map = new google.maps.Map(document.getElementById('map'), {}); });
+//Importação KMZ: situação (Nova/Existente) por campo, nome, pasta mais próxima, estilo e posição na rede existente
+const kmzStatus = await sp.evaluate(() => {
+  const st = (ctx) => inferKmlStatus({ name: '', description: '', folderPath: [], extendedData: {}, ...ctx })?.status || null;
+  const words = {
+    field: st({ extendedData: { 'Situação': 'Implantado' } }),
+    paren: st({ name: 'CTO 01 (projetada)' }),
+    tail: st({ name: 'CEO 3 - EXIST.' }),
+    nearest: st({ folderPath: ['Rede existente', 'Ampliação a implantar'] }),
+    style: st({ styleUrl: '#estilo_existente' }),
+    asBuilt: st({ folderPath: ['AS-BUILT'] }),
+    none: st({ name: 'CTO 22 Bairro Novo Horizonte' }),
+  };
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projKZ', name: 'Projeto KZ', isProject: true, type: 'TCR', children: [] }], sidebar);
+  activeFolderId = 'projKZ';
+  addCustomMarker(new google.maps.LatLng(-21, -45), { type: 'CTO', name: 'CTO-REDE', ctoStatus: 'Existente', size: 30, color: '#000', labelColor: '#000' });
+  const ref = markers[markers.length - 1];
+  const kml = `<kml><Document>
+    <Folder><name>Caixas</name>
+      <Placemark><name>CTO-A</name><Point><coordinates>-45.00001,-21.00001</coordinates></Point></Placemark>
+      <Placemark><name>CTO-B</name><Point><coordinates>-45.01,-21.01</coordinates></Point></Placemark>
+      <Placemark><name>CTO-C (existente)</name><Point><coordinates>-45.02,-21.02</coordinates></Point></Placemark>
+    </Folder></Document></kml>`;
+  const before = markers.length;
+  parseAndDisplayKML(new DOMParser().parseFromString(kml, 'text/xml'));
+  const added = markers.slice(before).map(m => `${m.name}:${m.ctoStatus}`).join();
+  const msg = document.getElementById('alertModalMessage')?.textContent || document.querySelector('#alertModal')?.textContent || '';
+  document.getElementById('alertModalOkButton')?.click?.();
+  return { words, added, msg: /1 item\(ns\) sem indicação no arquivo ficaram Existente/.test(msg) && /2 existente\(s\) · 1 novo|1 novo\(s\) · 2 existente/.test(msg), refKept: ref.ctoStatus };
+});
+check(JSON.stringify(kmzStatus.words) === JSON.stringify({ field: 'Existente', paren: 'Nova', tail: 'Existente', nearest: 'Nova', style: 'Existente', asBuilt: 'Existente', none: null })
+  && kmzStatus.added === 'CTO-A:Existente,CTO-B:Nova,CTO-C (existente):Existente' && kmzStatus.msg,
+  `importação KMZ reconhece novo/existente por palavras, pasta, estilo e posição na rede (${JSON.stringify(kmzStatus)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
