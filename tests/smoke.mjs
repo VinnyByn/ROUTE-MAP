@@ -1562,14 +1562,21 @@ const sbMix = await page.evaluate(() => {
   savedCables.push(cable); savedPolygons.push(poly);
   const click = (li) => li.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
   click(cable.item); click(poly.listItem);
-  const kinds = document.getElementById('mapSelectionKinds').textContent;
+  const kinds = [...document.querySelectorAll('#mapSelectionKinds .map-selection-kind')].map(c => c.textContent).join(' · ');
+  //Clique no tipo deixa só ele; Ctrl+clique tira o tipo
+  document.querySelector('#mapSelectionKinds [data-sel-kind="Cabo"]').click();
+  const onlyCable = [...mapSelection.items].map(i => i.name).join();
+  setMapSelection([cable, poly]);
+  document.querySelector('#mapSelectionKinds [data-sel-kind="Cabo"]').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+  const withoutCable = [...mapSelection.items].map(i => i.name).join();
+  setMapSelection([cable, poly]);
   deleteSelection();
   document.getElementById('confirmModalConfirmButton').click();
   const gone = !savedCables.includes(cable) && !savedPolygons.includes(poly) && !ul.children.length;
   ul.remove();
-  return { kinds, gone };
+  return { kinds, gone, onlyCable, withoutCable };
 });
-check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone, `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
+check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone && sbMix.onlyCable === 'C-MIX' && sbMix.withoutCable === 'P-MIX', `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
 
 check(sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
   `seleção múltipla pela barra lateral com Ctrl e Shift (${JSON.stringify(sbSel)})`);

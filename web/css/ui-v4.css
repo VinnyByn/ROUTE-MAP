@@ -3824,3 +3824,8 @@ html[data-theme="dark"] body input[type="range"]::-webkit-slider-thumb, html[dat
 /* Balão do resultado da busca: o fundo do Google é sempre branco, então o texto fica escuro mesmo no tema escuro */
 .search-result-info, .search-result-info * { color: #0f172a !important; font: 13px/1.45 var(--font-sans); }
 .search-result-info b { font-weight: 700; }
+/* Barra de seleção: tipos clicáveis para ficar só com um tipo */
+#mapSelectionKinds { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.map-selection-kind { padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(148,163,184,.4); background: rgba(148,163,184,.12); color: inherit; font: 600 11px var(--font-sans); line-height: 18px; white-space: nowrap; }
+button.map-selection-kind { cursor: pointer; }
+button.map-selection-kind:hover { border-color: var(--accent, #22c55e); background: rgba(34,197,94,.16); }
