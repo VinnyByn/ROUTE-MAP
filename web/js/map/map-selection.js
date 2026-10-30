@@ -169,6 +169,16 @@ function selectMarkersInBounds(bounds, { add = false } = {}) {
 
 const SELECTION_STATUS_TYPES = ['CTO', 'CEO', 'RESERVA', 'CORDOALHA', 'Importado'];
 
+//Tipo mostrado na barra de seleção (e usado para filtrar por tipo)
+function selectionTypeKey(item) {
+    const kind = selectionKind(item);
+    return kind === 'cable' ? 'Cabo' : kind === 'polygon' ? 'Polígono' : item.type === 'CLIENTE' ? 'Cliente' : item.type;
+}
+
+function filterSelectionByType(key, { remove = false } = {}) {
+    setMapSelection([...mapSelection.items].filter(m => (selectionTypeKey(m) === key) !== remove));
+}
+
 function renderMapSelectionBar() {
     const bar = document.getElementById('mapSelectionBar');
     if (!bar) return;
@@ -177,12 +187,15 @@ function renderMapSelectionBar() {
     if (!items.length) return;
     const counts = {};
     items.forEach(m => {
-        const kind = selectionKind(m);
-        const k = kind === 'cable' ? 'Cabo' : kind === 'polygon' ? 'Polígono' : m.type === 'CLIENTE' ? 'Cliente' : m.type;
+        const k = selectionTypeKey(m);
         counts[k] = (counts[k] || 0) + 1;
     });
     document.getElementById('mapSelectionCount').textContent = `${items.length} selecionado${items.length === 1 ? '' : 's'}`;
-    document.getElementById('mapSelectionKinds').textContent = Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(' · ');
+    //Cada tipo vira um botão: clique deixa só esse tipo na seleção; Ctrl/Shift+clique tira o tipo
+    const entries = Object.entries(counts);
+    document.getElementById('mapSelectionKinds').innerHTML = entries.map(([k, n]) => entries.length > 1
+        ? `<button type="button" class="map-selection-kind" data-sel-kind="${escapeHtml(k)}" title="Selecionar só ${escapeHtml(k)} (Ctrl+clique tira da seleção)">${n} ${escapeHtml(k)}</button>`
+        : `<span class="map-selection-kind is-only">${n} ${escapeHtml(k)}</span>`).join('');
     const projectId = getActiveProjectId();
     const folderSelect = document.getElementById('mapSelectionFolder');
     const folders = projectId ? getAllDescendantFolderIds(projectId) : [];
@@ -397,6 +410,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('mapSelectionStyle').addEventListener('click', () => openSelectionStyleModal([...mapSelection.items]));
     document.getElementById('mapSelectionDelete').addEventListener('click', deleteSelection);
     document.getElementById('mapSelectionClear').addEventListener('click', clearMapSelection);
+    document.getElementById('mapSelectionKinds').addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-sel-kind]');
+        if (chip) filterSelectionByType(chip.dataset.selKind, { remove: e.ctrlKey || e.metaKey || e.shiftKey });
+    });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && mapSelection.items.size) clearMapSelection();
     });

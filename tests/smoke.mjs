@@ -1562,14 +1562,21 @@ const sbMix = await page.evaluate(() => {
   savedCables.push(cable); savedPolygons.push(poly);
   const click = (li) => li.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
   click(cable.item); click(poly.listItem);
-  const kinds = document.getElementById('mapSelectionKinds').textContent;
+  const kinds = [...document.querySelectorAll('#mapSelectionKinds .map-selection-kind')].map(c => c.textContent).join(' · ');
+  //Clique no tipo deixa só ele; Ctrl+clique tira o tipo
+  document.querySelector('#mapSelectionKinds [data-sel-kind="Cabo"]').click();
+  const onlyCable = [...mapSelection.items].map(i => i.name).join();
+  setMapSelection([cable, poly]);
+  document.querySelector('#mapSelectionKinds [data-sel-kind="Cabo"]').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+  const withoutCable = [...mapSelection.items].map(i => i.name).join();
+  setMapSelection([cable, poly]);
   deleteSelection();
   document.getElementById('confirmModalConfirmButton').click();
   const gone = !savedCables.includes(cable) && !savedPolygons.includes(poly) && !ul.children.length;
   ul.remove();
-  return { kinds, gone };
+  return { kinds, gone, onlyCable, withoutCable };
 });
-check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone, `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
+check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone && sbMix.onlyCable === 'C-MIX' && sbMix.withoutCable === 'P-MIX', `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
 
 check(sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
   `seleção múltipla pela barra lateral com Ctrl e Shift (${JSON.stringify(sbSel)})`);
@@ -2681,8 +2688,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu &&
       overlays: autoDesign.overlays.length > 0,
       coverage: plan.stats.coverage >= 0.95,
       onStreets: plan.onStreets && plan.byRoad && !plan.stats.noStreets && tableCalls > 0 && matrixCalls >= 1 && matrixCalls <= AUTO_DESIGN_STRATEGIES.length,
-      //Ruas de carro primeiro (sem vielas entre as casas)
-      carProfile: osrmUrls.length > 0 && osrmUrls.every(u => /routed-car\/(table|nearest|route)\/v1\/driving\//.test(u)) && osrmUrls.some(u => /\/route\/v1\//.test(u)),
+      //Perfil de carro em todos (o 2º servidor também é de carro: pedido atrasado do passo "fora do ar" pode cair nele)
+      carProfile: osrmUrls.length > 0 && osrmUrls.every(u => /\/(table|nearest|route)\/v1\/driving\//.test(u)) && osrmUrls.some(u => /\/route\/v1\//.test(u)),
       noForest: plan.ctos.every(c => c.position.lng() <= STREET_LNG + 1e-9),
       onRows: plan.ctos.every(c => Math.abs(c.position.lat() - rowLat(c.position.lat())) < 1e-9),
       routed: plan.stats.straight === 0 && getAutoDesignAllCables(plan).some(c => c.path.length >= 3),
