@@ -3851,3 +3851,5 @@ button.map-selection-kind:hover { border-color: var(--accent, #22c55e); backgrou
 .rp-map-legend__dot { width: 10px; height: 10px; background: var(--c); border: 2px solid var(--o, #fff); box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
 .rp-map-legend__dot--circle { border-radius: 50%; }
 .rp-map-legend__dot--diamond { transform: rotate(45deg) scale(.85); }
+.rp-map-legend__icon { width: 16px; height: 16px; object-fit: contain; }
+.rp-map-legend__area { width: 16px; height: 11px; border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 30%, transparent); border-radius: 2px; }

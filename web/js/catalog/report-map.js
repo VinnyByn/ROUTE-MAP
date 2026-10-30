@@ -1,5 +1,5 @@
-// Foto do projeto no relatório: mapa da área (Google Static Maps, quando a chave permite) com os cabos e
-// marcadores do projeto desenhados por cima, escala, norte e legenda do que cada cor/símbolo é.
+// Foto do projeto no relatório, como está desenhado no mapa: mesmo tipo de fundo (Google Static Maps, quando a
+// chave permite), os mesmos ícones, cores, espessuras e nomes, escala, norte e legenda do que cada símbolo/cor é.
 // Sem o fundo (sem internet ou API desligada) a foto sai num fundo claro, com o mesmo desenho.
 // Depende de js/app.js (getProjectItems, getCableColor, getFiberType) e js/map/marker-panel.js (MARKER_TYPE_META).
 
@@ -25,11 +25,11 @@ function getReportMapApiKey() {
     return new URL(src || 'https://x/').searchParams.get('key') || '';
 }
 
-async function loadReportMapBackground(center, zoom) {
+async function loadReportMapBackground(center, zoom, mapType) {
     const key = getReportMapApiKey();
     if (!key) return null;
     const url = `https://maps.googleapis.com/maps/api/staticmap?center=${center.lat.toFixed(6)},${center.lng.toFixed(6)}&zoom=${zoom}`
-        + `&size=${REPORT_MAP_W}x${REPORT_MAP_H}&scale=${REPORT_MAP_SCALE}&maptype=roadmap&style=feature:poi|visibility:off&style=feature:transit|visibility:off&key=${encodeURIComponent(key)}`;
+        + `&size=${REPORT_MAP_W}x${REPORT_MAP_H}&scale=${REPORT_MAP_SCALE}&maptype=${mapType}&style=feature:poi|visibility:off&style=feature:transit|visibility:off&key=${encodeURIComponent(key)}`;
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
@@ -42,25 +42,72 @@ async function loadReportMapBackground(center, zoom) {
     }
 }
 
-//Monta a imagem (PNG em data URL) e a legenda. Devolve null quando o projeto não tem nada com posição.
+//Ícone do marcador como está no mapa (SVG em data URL) carregado para desenhar no canvas
+const reportMapIconCache = new Map();
+function loadReportMapIcon(url) {
+    if (!url) return Promise.resolve(null);
+    if (!reportMapIconCache.has(url)) {
+        reportMapIconCache.set(url, new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = url;
+        }));
+    }
+    return reportMapIconCache.get(url);
+}
+
+function reportMapIconOf(markerInfo) {
+    const icon = markerInfo.marker?.getIcon?.();
+    if (icon && typeof icon === 'object' && icon.url) {
+        return { url: icon.url, w: icon.scaledSize?.width || 28, h: icon.scaledSize?.height || 28 };
+    }
+    if (typeof buildMarkerMapIcon === 'function') {
+        try {
+            const built = buildMarkerMapIcon(markerInfo.type, { color: markerInfo.color, text: markerInfo.type === 'CASA' ? markerInfo.name : undefined, labelColor: markerInfo.labelColor });
+            return { url: built.url, w: built.scaledSize?.width || 28, h: built.scaledSize?.height || 28 };
+        } catch (e) { /* sem ícone: bolinha na cor do tipo */ }
+    }
+    return null;
+}
+
+//Ícone em PNG pequeno (para a legenda no PDF, que não lê SVG)
+function reportMapIconPng(img, size = 48) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ratio = Math.min(size / (img.naturalWidth || size), size / (img.naturalHeight || size));
+    const w = (img.naturalWidth || size) * ratio, h = (img.naturalHeight || size) * ratio;
+    c.getContext('2d').drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    return c.toDataURL('image/png');
+}
+
+//Foto do projeto como está desenhado: mesmo fundo (satélite/ruas), ícones, cores, espessuras e nomes do mapa.
+//Devolve null quando o projeto não tem nada com posição.
 async function buildReportMapImage(projectId) {
     if (typeof getProjectItems !== 'function') return null;
-    const { markers: projectMarkers = [], cables: projectCables = [] } = getProjectItems(projectId) || {};
+    const { markers: projectMarkers = [], cables: projectCables = [], polygons: projectPolygons = [] } = getProjectItems(projectId) || {};
     const pts = [];
-    const markerList = projectMarkers.map(m => {
+    const markerList = projectMarkers.filter(m => m.marker?.getVisible?.() !== false).map(m => {
         const p = m.marker?.getPosition?.();
         if (!p) return null;
         const pos = { lat: p.lat(), lng: p.lng() };
         pts.push(pos);
-        return { type: m.type, pos, status: typeof getMarkerInfrastructureStatus === 'function' ? getMarkerInfrastructureStatus(m) : null };
+        return { type: m.type, pos, name: m.name, labelColor: m.labelColor || '#0f172a', icon: reportMapIconOf(m) };
     }).filter(Boolean);
-    const cableList = projectCables.map(c => {
+    const cableList = projectCables.filter(c => c.polyline?.getVisible?.() !== false).map(c => {
         const path = (c.polyline?.getPath?.().getArray?.() || []).map(p => ({ lat: p.lat(), lng: p.lng() }));
         if (path.length < 2) return null;
         pts.push(...path);
         const fiber = typeof getFiberType === 'function' ? getFiberType(c.type) : null;
-        return { path, fiber, color: (typeof getCableColor === 'function' && fiber ? getCableColor(fiber) : null) || c.color || '#2563eb', existing: c.status === 'Existente' };
+        const color = c.polyline?.get?.('strokeColor') || c.color || '#2563eb';
+        const width = c.polyline?.get?.('strokeWeight') || c.width || 4;
+        return { path, fiber, color, width, existing: c.status === 'Existente' };
     }).filter(Boolean);
+    const polygonList = projectPolygons.map(pg => {
+        const path = (pg.path || []).map(p => ({ lat: +p.lat, lng: +p.lng })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+        return path.length >= 3 ? { path, color: pg.color || '#C70039', opacity: pg.opacity ?? 0.2 } : null;
+    }).filter(Boolean);
+    polygonList.forEach(pg => pts.push(...pg.path));
     if (!pts.length) return null;
 
     //Zoom que cabe tudo com margem
@@ -80,11 +127,12 @@ async function buildReportMapImage(projectId) {
     canvas.width = REPORT_MAP_W * REPORT_MAP_SCALE;
     canvas.height = REPORT_MAP_H * REPORT_MAP_SCALE;
     const ctx = canvas.getContext('2d');
-    const background = await loadReportMapBackground({ lat: centerLat, lng: centerLng }, zoom);
+    //Mesmo tipo de mapa da tela (satélite, híbrido, ruas, terreno)
+    const mapTypeId = (typeof map !== 'undefined' && map?.getMapTypeId?.()) || 'roadmap';
+    const mapType = ['satellite', 'hybrid', 'terrain', 'roadmap'].includes(mapTypeId) ? mapTypeId : 'roadmap';
+    const background = await loadReportMapBackground({ lat: centerLat, lng: centerLng }, zoom, mapType);
     if (background) {
         ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'rgba(255,255,255,0.25)'; //Clareia o fundo para a rede destacar
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
     } else {
         ctx.fillStyle = '#f1f5f9';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -94,39 +142,62 @@ async function buildReportMapImage(projectId) {
         for (let y = 0; y < canvas.height; y += 80) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
     }
 
-    //Cabos: contorno branco + cor do tipo de fibra; existente tracejado
+    //Polígonos (áreas) como no mapa
+    polygonList.forEach(pg => {
+        ctx.beginPath();
+        pg.path.map(toPx).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.globalAlpha = Math.min(0.5, pg.opacity);
+        ctx.fillStyle = pg.color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = pg.color;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    });
+
+    //Cabos com a cor e a espessura da tela
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     cableList.forEach(c => {
-        const line = c.path.map(toPx);
-        const draw = () => { ctx.beginPath(); line.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); };
-        ctx.setLineDash([]);
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.lineWidth = 9;
-        draw();
-        ctx.setLineDash(c.existing ? [14, 10] : []);
-        ctx.strokeStyle = c.color;
-        ctx.lineWidth = 5;
-        draw();
-    });
-    ctx.setLineDash([]);
-
-    //Marcadores: casas e clientes pequenos por baixo; caixas por cima, maiores
-    const sorted = [...markerList].sort((a, b) => REPORT_MAP_ORDER.indexOf(b.type) - REPORT_MAP_ORDER.indexOf(a.type));
-    sorted.forEach(m => {
-        const [x, y] = toPx(m.pos);
-        const small = m.type === 'CASA' || m.type === 'CLIENTE' || m.type === 'POSTE';
-        const r = small ? 6 : 11;
         ctx.beginPath();
-        if (m.type === 'POP' || m.type === 'TORRE') ctx.rect(x - r, y - r, r * 2, r * 2);
-        else if (m.type === 'CEO') { ctx.moveTo(x, y - r - 2); ctx.lineTo(x + r + 2, y); ctx.lineTo(x, y + r + 2); ctx.lineTo(x - r - 2, y); ctx.closePath(); }
-        else ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = reportMapMarkerColor(m.type);
-        ctx.fill();
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = m.status === 'Existente' ? '#334155' : '#ffffff';
+        c.path.map(toPx).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = Math.max(2, c.width) * REPORT_MAP_SCALE * 0.8;
         ctx.stroke();
     });
+
+    //Marcadores com o ícone do mapa; casas e clientes por baixo, caixas por cima
+    const sorted = [...markerList].sort((a, b) => REPORT_MAP_ORDER.indexOf(b.type) - REPORT_MAP_ORDER.indexOf(a.type));
+    const icons = await Promise.all(sorted.map(m => loadReportMapIcon(m.icon?.url)));
+    sorted.forEach((m, i) => {
+        const [x, y] = toPx(m.pos);
+        const img = icons[i];
+        if (img) {
+            const w = m.icon.w * REPORT_MAP_SCALE * 0.85, h = m.icon.h * REPORT_MAP_SCALE * 0.85;
+            ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+        } else {
+            ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fillStyle = reportMapMarkerColor(m.type); ctx.fill();
+            ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+        }
+    });
+    //Nomes das caixas (como no mapa), sem poluir quando são muitas
+    const named = sorted.filter(m => !['CASA', 'CLIENTE', 'POSTE'].includes(m.type) && m.name);
+    if (named.length <= 120) {
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        named.forEach(m => {
+            const [x, y] = toPx(m.pos);
+            const ty = y - ((m.icon?.h || 28) * REPORT_MAP_SCALE * 0.85) / 2 - 8;
+            const light = typeof getContrastTextColor === 'function' && getContrastTextColor(m.labelColor) === '#0f172a';
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = light ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.95)';
+            ctx.strokeText(m.name, x, ty);
+            ctx.fillStyle = m.labelColor;
+            ctx.fillText(m.name, x, ty);
+        });
+    }
 
     //Norte e escala
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
@@ -145,25 +216,29 @@ async function buildReportMapImage(projectId) {
     ctx.font = '600 18px sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(step >= 1000 ? `${step / 1000} km` : `${step} m`, 34, canvas.height - 36);
 
-    //Legenda: só o que aparece no desenho
+    //Legenda: o ícone de verdade de cada tipo e a cor de cada tipo de cabo, só o que aparece no desenho
     const legend = [];
-    const markerCounts = {};
-    markerList.forEach(m => { markerCounts[m.type] = (markerCounts[m.type] || 0) + 1; });
+    const byType = new Map();
+    sorted.forEach((m, i) => {
+        const g = byType.get(m.type) || { count: 0, img: icons[i] };
+        g.count++;
+        byType.set(m.type, g);
+    });
     REPORT_MAP_ORDER.forEach(type => {
-        if (!markerCounts[type]) return;
-        const shape = type === 'POP' || type === 'TORRE' ? 'square' : type === 'CEO' ? 'diamond' : 'circle';
-        legend.push({ kind: 'marker', shape, color: reportMapMarkerColor(type), label: REPORT_MAP_LABELS[type] || type, count: markerCounts[type] });
+        const g = byType.get(type);
+        if (!g) return;
+        legend.push({ kind: 'marker', shape: 'circle', color: reportMapMarkerColor(type), icon: g.img ? reportMapIconPng(g.img) : null, label: REPORT_MAP_LABELS[type] || type, count: g.count });
     });
     const cableGroups = new Map();
     cableList.forEach(c => {
-        const key = c.fiber || 'Cabo';
-        const g = cableGroups.get(key) || { kind: 'cable', color: c.color, label: key === 'DROP' ? 'Cabo drop' : key === 'Cabo' ? 'Cabo' : `Cabo ${key.replace('FO-', '')} fibras`, count: 0 };
+        const fiberLabel = !c.fiber ? 'Cabo' : c.fiber === 'DROP' ? 'Cabo drop' : `Cabo ${c.fiber.replace('FO-', '')} fibras`;
+        const key = `${fiberLabel}|${c.existing ? 'E' : 'N'}|${c.color}`;
+        const g = cableGroups.get(key) || { kind: 'cable', color: c.color, label: `${fiberLabel}${c.existing ? ' (existente)' : ''}`, count: 0, sort: (parseInt(c.fiber?.replace(/\D/g, ''), 10) || 0) * 2 + (c.existing ? 1 : 0) };
         g.count++;
         cableGroups.set(key, g);
     });
-    [...cableGroups.entries()].sort(([a], [b]) => (parseInt(a.replace(/\D/g, ''), 10) || 0) - (parseInt(b.replace(/\D/g, ''), 10) || 0)).forEach(([, g]) => legend.push(g));
-    if (cableList.some(c => c.existing)) legend.push({ kind: 'cable', dashed: true, color: '#475569', label: 'Tracejado: cabo existente' });
-    if (markerList.some(m => m.status === 'Existente')) legend.push({ kind: 'marker', shape: 'circle', color: '#cbd5e1', outline: '#334155', label: 'Borda escura: caixa existente' });
+    [...cableGroups.values()].sort((a, b) => a.sort - b.sort).forEach(g => { delete g.sort; legend.push(g); });
+    if (polygonList.length) legend.push({ kind: 'area', color: polygonList[0].color, label: 'Área do projeto', count: polygonList.length });
 
     return { dataUrl: canvas.toDataURL('image/png'), legend, hasBackground: !!background, aspect: REPORT_MAP_H / REPORT_MAP_W };
 }
@@ -171,7 +246,9 @@ async function buildReportMapImage(projectId) {
 //HTML da legenda (pré-visualização e Word)
 function renderReportMapLegendHtml(legend) {
     return (legend || []).map(item => {
-        const swatch = item.kind === 'cable'
+        const swatch = item.icon ? `<img class="rp-map-legend__icon" src="${item.icon}" alt="" />`
+            : item.kind === 'area' ? `<span class="rp-map-legend__area" style="--c:${item.color}"></span>`
+            : item.kind === 'cable'
             ? `<span class="rp-map-legend__line${item.dashed ? ' is-dashed' : ''}" style="--c:${item.color}"></span>`
             : `<span class="rp-map-legend__dot rp-map-legend__dot--${item.shape}" style="--c:${item.color}${item.outline ? `;--o:${item.outline}` : ''}"></span>`;
         return `<span class="rp-map-legend__item">${swatch}${escapeReportPreviewHtml(item.label)}${item.count ? ` <b>${item.count}</b>` : ''}</span>`;

@@ -108,7 +108,11 @@ class ReportPdfWriter {
             const x = RPDF.mx + (i % cols) * colW, y = this.y + Math.floor(i / cols) * rowH;
             doc.setDrawColor(...hex(item.outline || item.color));
             doc.setFillColor(...hex(item.color));
-            if (item.kind === 'cable') {
+            if (item.icon) {
+                doc.addImage(item.icon, 'PNG', x + 0.6, y - 0.4, 4.8, 4.8);
+            } else if (item.kind === 'area') {
+                doc.rect(x + 0.5, y + 0.3, 5, 3.4, 'F');
+            } else if (item.kind === 'cable') {
                 doc.setLineWidth(1);
                 if (item.dashed) doc.setLineDashPattern([1.2, 0.9], 0);
                 doc.line(x, y + 2, x + 6, y + 2);

@@ -2043,6 +2043,7 @@ const reportMap = await sp.evaluate(async () => {
   rebuildCable({ folderId: 'projRM', name: 'FO-36-X', type: 'Cabo AS 80 FO-36', width: 2, color: '#0000ff', status: 'Existente', path: [{ lat: -22, lng: -45 }, { lat: -21.998, lng: -44.997 }] });
   const map = await buildReportMapImage('projRM');
   const legend = map.legend.map(l => l.label + (l.count ? ':' + l.count : '')).join('|');
+  const icons = map.legend.filter(l => l.kind === 'marker').every(l => /^data:image\/png/.test(l.icon || ''));
   const snap = createReportPreviewSnapshot(computeProjectReportData('projRM'));
   Object.assign(snap, { mapImage: map.dataUrl, mapLegend: map.legend, mapAspect: map.aspect });
   renderReportPreviewHtml(snap);
@@ -2064,14 +2065,14 @@ const reportMap = await sp.evaluate(async () => {
   savedCables = savedCables.filter(c => !mine.has(c.folderId));
   ['projKZ', 'projTS', 'projRM'].forEach(id => document.getElementById(id)?.closest('li')?.remove());
   closeReportPreviewModal?.();
-  return { png: /^data:image\/png;base64,/.test(map.dataUrl) && map.dataUrl.length > 5000, legend, preview, pdfImages };
+  return { png: /^data:image\/png;base64,/.test(map.dataUrl) && map.dataUrl.length > 5000, legend, icons, preview, pdfImages };
 });
-check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras:1|Tracejado: cabo existente|Borda escura: caixa existente' && reportMap.preview && reportMap.pdfImages !== 0,
+check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras (existente):1' && reportMap.icons && reportMap.preview && reportMap.pdfImages !== 0,
   `relatório tem a foto do projeto com legenda na prévia e no PDF (${JSON.stringify(reportMap)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
-  rebuildSidebarFromJSON([{ id: 'projSP', name: 'Projeto SP', isProject: true, type: 'TCR', children: [] }], sidebar);
+  rebuildSidebarFromJSON([{ id: 'projSP', name: 'Projeto SP', isProject: true, type: 'TCR', children: [] }, { id: 'projOUT', name: 'Outro', isProject: true, type: 'TCR', children: [] }], sidebar);
   const LL = (lat, lng) => new google.maps.LatLng(lat, lng);
   const mk = (type, name, uid, lat, lng, fusionPlan) => ({ type, name, uid, folderId: 'projSP', fusionPlan,
     marker: { getPosition: () => LL(lat, lng), setMap() {}, getVisible: () => true } });
@@ -2087,12 +2088,17 @@ const split = await sp.evaluate(() => {
   const cable = savedCables[savedCables.length - 1];
   const passing = getCablesPassingThroughMarker(mid).map(c => c.name).join();
   const notPassing = getCablesPassingThroughMarker(off).length + getCablesPassingThroughMarker(ceoA).length;
+  //Cabo de outro projeto passando pelo mesmo lugar não aparece para dividir
+  rebuildCable({ folderId: 'projOUT', name: 'FO-12-OUTRO', type: 'FO-12', width: 4, color: '#000', status: 'Novo', path: [{ lat: -20, lng: -44 }, { lat: -20, lng: -43.99 }] });
+  const outro = savedCables[savedCables.length - 1];
+  const otherProject = getCablesPassingThroughMarker(mid).some(c => c === outro);
+  outro.polyline?.setMap?.(null); outro.item?.remove(); savedCables.splice(savedCables.indexOf(outro), 1);
   const menu = buildSidebarMenuItems({ kind: 'marker', info: mid, row: document.createElement('li') }).some(i => i.label === 'Dividir cabo FO-12-CTO-B aqui');
   const res = splitCableAtMarker(cable, mid);
   const names = savedCables.filter(c => c.folderId === 'projSP').map(c => c.name).join();
   const first = res.first, second = res.second;
   const out = {
-    passing, notPassing, menu, names,
+    passing, notPassing, otherProject, menu, names,
     firstEnds: `${first.startAnchorUid}>${first.endAnchorUid}`, secondEnds: `${second.startAnchorUid}>${second.endAnchorUid}`,
     meet: Math.abs(first.path[first.path.length - 1].lng() - second.path[0].lng()) < 1e-9,
     planA: readFusionPlan(ceoA).cables.map(c => c.name).join(), planB: readFusionPlan(ctoB).cables.map(c => c.name).join(),
@@ -2103,7 +2109,7 @@ const split = await sp.evaluate(() => {
   document.querySelector('.folder-title[data-folder-id="projSP"]').closest('.folder').remove();
   return out;
 });
-check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.menu && split.names === 'FO-12-CEO-M,FO-12-CTO-B'
+check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.otherProject === false && split.menu && split.names === 'FO-12-CEO-M,FO-12-CTO-B'
   && split.firstEnds === 'sp-a>sp-m' && split.secondEnds === 'sp-m>sp-b' && split.meet && split.planA === 'FO-12-CEO-M'
   && split.planB === 'FO-12-CTO-B' && split.oldGone && split.rows === 2, `dividir cabo no marcador do meio (${JSON.stringify(split)})`);
 
