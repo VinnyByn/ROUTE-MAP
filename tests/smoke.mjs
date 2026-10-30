@@ -2043,6 +2043,7 @@ const reportMap = await sp.evaluate(async () => {
   rebuildCable({ folderId: 'projRM', name: 'FO-36-X', type: 'Cabo AS 80 FO-36', width: 2, color: '#0000ff', status: 'Existente', path: [{ lat: -22, lng: -45 }, { lat: -21.998, lng: -44.997 }] });
   const map = await buildReportMapImage('projRM');
   const legend = map.legend.map(l => l.label + (l.count ? ':' + l.count : '')).join('|');
+  const icons = map.legend.filter(l => l.kind === 'marker').every(l => /^data:image\/png/.test(l.icon || ''));
   const snap = createReportPreviewSnapshot(computeProjectReportData('projRM'));
   Object.assign(snap, { mapImage: map.dataUrl, mapLegend: map.legend, mapAspect: map.aspect });
   renderReportPreviewHtml(snap);
@@ -2064,9 +2065,9 @@ const reportMap = await sp.evaluate(async () => {
   savedCables = savedCables.filter(c => !mine.has(c.folderId));
   ['projKZ', 'projTS', 'projRM'].forEach(id => document.getElementById(id)?.closest('li')?.remove());
   closeReportPreviewModal?.();
-  return { png: /^data:image\/png;base64,/.test(map.dataUrl) && map.dataUrl.length > 5000, legend, preview, pdfImages };
+  return { png: /^data:image\/png;base64,/.test(map.dataUrl) && map.dataUrl.length > 5000, legend, icons, preview, pdfImages };
 });
-check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras:1|Tracejado: cabo existente|Borda escura: caixa existente' && reportMap.preview && reportMap.pdfImages !== 0,
+check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras (existente):1' && reportMap.icons && reportMap.preview && reportMap.pdfImages !== 0,
   `relatório tem a foto do projeto com legenda na prévia e no PDF (${JSON.stringify(reportMap)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
