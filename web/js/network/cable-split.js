@@ -44,6 +44,8 @@ function getCablesPassingThroughMarker(markerInfo) {
     const pos = markerInfo.marker.getPosition();
     return savedCables.filter(cable => {
         if (!cable.path || cable.path.length < 2 || cable.folderId === undefined) return false;
+        //Só cabos do mesmo projeto da caixa (outro projeto passando no mesmo lugar não entra)
+        if (typeof isSameProject === 'function' && !isSameProject(cable, markerInfo)) return false;
         if (isCableEndAt(cable, markerInfo)) return false;
         const p = projectOnCablePath(cable.path, pos);
         if (!p || p.dist > CABLE_SPLIT_MAX_DISTANCE_M) return false;
