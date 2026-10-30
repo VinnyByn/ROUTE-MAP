@@ -2750,7 +2750,8 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.otherPr
     window.fetch = async (url, opts) => {
       const m = /\/(table|nearest|route)\/v1\/(?:foot|driving)\/([^?]+)\?(.*)$/.exec(String(url));
       if (!m) return realFetch(url, opts);
-      osrmUrls.push(String(url));
+      //Só os pedidos que saem do pré-projeto (drop de cliente de outro teste também consulta o OSRM a pé)
+      if (/auto-design\.js/.test(new Error().stack || '')) osrmUrls.push(String(url));
       if (!osrmUp) return new Response('down', { status: 503 });
       const pts = m[2].split(';').map(c => c.split(',').map(Number));
       const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
