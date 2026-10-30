@@ -23,6 +23,10 @@ const BULK_FIELDS = {
         apply: (m, v) => { m.pole = { ...(m.pole || {}), situation: v }; } },
     poleMaterial: { label: 'Material', options: ['Concreto', 'Madeira', 'Metálico', 'Fibra'].map(s => [s, s]),
         apply: (m, v) => { m.pole = { ...(m.pole || {}), material: v }; } },
+    //Troca o tipo sem excluir (js/app.js changeMarkerType): vem por último, depois das outras mudanças
+    changeType: { label: 'Mudar para o tipo', typeChange: true,
+        options: [['CTO', 'CTO'], ['CEO', 'CEO'], ['RESERVA', 'Reserva'], ['CORDOALHA', 'Cordoalha'], ['POP', 'POP'], ['POSTE', 'Poste'], ['TORRE', 'Torre']],
+        apply: () => {} },
     color: { label: 'Cor do marcador', input: 'color', apply: (m, v) => { m.color = v; } },
     labelColor: { label: 'Cor do nome', input: 'color', apply: (m, v) => { m.labelColor = v; } },
     //Cabos
@@ -38,14 +42,14 @@ const BULK_FIELDS = {
 };
 
 const BULK_TYPES = [
-    { key: 'CTO', label: 'CTO', fields: ['boxStatus', 'predial', 'stickers', 'color', 'labelColor'] },
-    { key: 'CEO', label: 'CEO', fields: ['boxStatus', 'is144F', 'ceoAccessory', 'color', 'labelColor'] },
-    { key: 'RESERVA', label: 'Reserva técnica', fields: ['status', 'reservaAccessory', 'color', 'labelColor'] },
-    { key: 'CORDOALHA', label: 'Cordoalha', fields: ['status', 'derivationT', 'color', 'labelColor'] },
-    { key: 'POP', label: 'POP', fields: ['color', 'labelColor'] },
-    { key: 'TORRE', label: 'Torre', fields: ['color', 'labelColor'] },
-    { key: 'POSTE', label: 'Poste', fields: ['poleSituation', 'poleMaterial', 'color', 'labelColor'] },
-    { key: 'Importado', label: 'Marcador importado', fields: ['status', 'color', 'labelColor'] },
+    { key: 'CTO', label: 'CTO', fields: ['changeType', 'boxStatus', 'predial', 'stickers', 'color', 'labelColor'] },
+    { key: 'CEO', label: 'CEO', fields: ['changeType', 'boxStatus', 'is144F', 'ceoAccessory', 'color', 'labelColor'] },
+    { key: 'RESERVA', label: 'Reserva técnica', fields: ['changeType', 'status', 'reservaAccessory', 'color', 'labelColor'] },
+    { key: 'CORDOALHA', label: 'Cordoalha', fields: ['changeType', 'status', 'derivationT', 'color', 'labelColor'] },
+    { key: 'POP', label: 'POP', fields: ['changeType', 'color', 'labelColor'] },
+    { key: 'TORRE', label: 'Torre', fields: ['changeType', 'color', 'labelColor'] },
+    { key: 'POSTE', label: 'Poste', fields: ['changeType', 'poleSituation', 'poleMaterial', 'color', 'labelColor'] },
+    { key: 'Importado', label: 'Marcador importado', fields: ['changeType', 'status', 'color', 'labelColor'] },
     { key: BULK_CABLE_TYPE, label: 'Cabos', fields: ['cableStatus', 'fiber', 'span', 'width', 'cableColor'] },
 ];
 
@@ -195,7 +199,7 @@ function renderBulkEditFields(typeKey) {
                 <label class="bulk-edit-alter"><input type="checkbox" class="bulk-edit-toggle" /> Alterar</label>
                 <input class="bulk-edit-input" type="${f.input}" value="${escapeHtml(String(value))}"${f.input === 'number' ? ` min="${f.min}" max="${f.max}" step="1"` : ''} /></div>`;
         }
-        const buttons = [['', 'Manter'], ...f.options].map(([v, label]) =>
+        const buttons = [['', 'Manter'], ...f.options.filter(([v]) => !f.typeChange || v !== typeKey)].map(([v, label]) =>
             `<button type="button" class="btn-seg${v === '' ? ' is-active' : ''}" role="radio" aria-checked="${v === '' ? 'true' : 'false'}" data-bulk-value="${escapeHtml(v)}">${escapeHtml(label)}</button>`).join('');
         return `<div class="bulk-edit-field" data-bulk-field="${key}">${head}<div class="bulk-edit-seg" role="radiogroup" aria-label="${escapeHtml(f.label)}">${buttons}</div></div>`;
     }).join('') || '<p class="bulk-edit-empty">Nada para mudar neste tipo.</p>';
@@ -229,6 +233,7 @@ function applyBulkEdit(changes = readBulkEditChanges(), typeKey = bulkEdit.type,
     const report = { blocked: [] };
     const ordered = [...changes].sort(([a], [b]) => (BULK_FIELDS[b].status ? 1 : 0) - (BULK_FIELDS[a].status ? 1 : 0));
     const isCable = typeKey === BULK_CABLE_TYPE;
+    const newType = changes.find(([key]) => BULK_FIELDS[key].typeChange)?.[1];
     items.forEach(item => {
         ordered.forEach(([key, value]) => BULK_FIELDS[key].apply(item, value, report));
         if (isCable) {
@@ -239,6 +244,15 @@ function applyBulkEdit(changes = readBulkEditChanges(), typeKey = bulkEdit.type,
             updateMarkerAppearance(item);
         }
     });
+    //Troca de tipo: o marcador é refeito no mesmo lugar e entra na seleção no lugar do antigo
+    if (newType && !isCable) {
+        const swapped = new Map();
+        items.forEach(item => { const fresh = changeMarkerType(item, newType); if (fresh) swapped.set(item, fresh); });
+        if (swapped.size) {
+            setMapSelection([...mapSelection.items].map(i => swapped.get(i) || i));
+            if (typeof scheduleSidebarCounts === 'function') scheduleSidebarCounts();
+        }
+    }
     refreshBomAfterProjectChange();
     if (isCable) refreshClientDrops({ recompute: true });
     setMapSelection([...mapSelection.items]); //Refaz o destaque (espessura nova)

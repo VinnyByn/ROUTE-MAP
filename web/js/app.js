@@ -4313,6 +4313,41 @@ function isPortConnected(portId, ignoreLine) {
     return false;
 }
 
+//Tipos que podem trocar entre si sem excluir o marcador (cliente e casas têm cadastro próprio)
+const CHANGEABLE_MARKER_TYPES = ['CTO', 'CEO', 'RESERVA', 'CORDOALHA', 'POP', 'POSTE', 'TORRE', 'Importado'];
+
+//Troca o tipo mantendo posição, nome, pasta, lugar na lista, uid (cabos continuam ligados) e a situação.
+//Plano de fusão só fica entre CTO e CEO. Devolve o marcador novo (ou null se não pôde trocar).
+function changeMarkerType(markerInfo, newType) {
+    if (!markerInfo || markerInfo.type === newType || !CHANGEABLE_MARKER_TYPES.includes(markerInfo.type) || !CHANGEABLE_MARKER_TYPES.includes(newType)) return null;
+    const data = serializeMarker(markerInfo);
+    const status = getMarkerInfrastructureStatus(markerInfo);
+    const meta = typeof MARKER_TYPE_META !== 'undefined' ? MARKER_TYPE_META[newType] : null;
+    data.type = newType;
+    if (markerInfo.type === 'Importado' || (markerInfo.color || '').toLowerCase() === (MARKER_TYPE_META?.[markerInfo.type]?.color || '').toLowerCase()) {
+        data.color = meta?.color || data.color;
+        data.labelColor = meta?.labelColor || meta?.color || data.labelColor;
+    }
+    if (!['CTO', 'CEO'].includes(newType)) delete data.fusionPlan;
+    delete data.pole; delete data.popEquipment;
+    data.isImported = newType === 'Importado';
+    if (newType === 'Importado') data.pendingImportStatus = status || 'Nova';
+    const row = markerInfo.listItem;
+    const placeholder = document.createComment('troca-tipo');
+    row?.before(placeholder);
+    markerInfo.marker?.setMap(null);
+    row?.remove();
+    markers = markers.filter(m => m !== markerInfo);
+    rebuildMarker(data);
+    const fresh = markers[markers.length - 1];
+    if (fresh.listItem) placeholder.replaceWith(fresh.listItem); else placeholder.remove();
+    if (status && newType !== 'Importado') {
+        applyMarkerInfrastructureStatus(fresh, newType === 'CTO' || newType === 'CEO' ? status : (status === 'Troca' ? 'Nova' : status));
+        updateMarkerAppearance(fresh);
+    }
+    return fresh;
+}
+
 //Inicia o processo de ajuste de um marcador KML importado, guardando a sua informação e abrindo o modal de seleção de tipo.
 function startMarkerAdjustment(markerInfo) {
     if (!requireEdit('ajustar marcadores importados')) return;

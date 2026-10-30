@@ -1998,6 +1998,41 @@ const kmzStatus = await sp.evaluate(() => {
 check(JSON.stringify(kmzStatus.words) === JSON.stringify({ field: 'Existente', paren: 'Nova', tail: 'Existente', nearest: 'Nova', style: 'Existente', asBuilt: 'Existente', none: null })
   && kmzStatus.types === 'CEO,CTO,CTO,RESERVA,Importado,CTO,POSTE,POP,TORRE,CASA,CEO,CEO' && kmzStatus.cables === 'Cabo AS 80 FO-72,Cabo AS 80 FO-24,Cabo AS 80 FO-144,Cabo AS 200 FO-36,Cabo AS 80 FO-48,Cabo AS 80 FO-06,Cabo AS 80 FO-12,Cabo Drop,Cabo Importado' && kmzStatus.added === 'CTO-A:Existente,CTO-B:Nova,CTO-C (existente):Existente' && kmzStatus.msg,
   `importação KMZ reconhece tipo, fibras do cabo e novo/existente por palavras, pasta, estilo e posição na rede (${JSON.stringify(kmzStatus)})`);
+//Mudar tipo sem excluir (um e em massa, inclusive os não reconhecidos na importação) e arrastar a seleção na barra lateral
+const typeSwap = await sp.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projTS', name: 'Projeto TS', isProject: true, type: 'TCR', children: [{ id: 'fTS', name: 'Destino', children: [] }] }], sidebar);
+  const mk = (type, name, lat, extra = {}) => { rebuildMarker({ uid: 'ts-' + name, folderId: 'projTS', type, name, color: '#ff9800', size: 30, position: { lat, lng: -46 }, ...extra }); return markers[markers.length - 1]; };
+  const a = mk('Importado', 'IMP-A', -23, { isImported: true, pendingImportStatus: 'Existente' });
+  const b = mk('Importado', 'IMP-B', -23.001, { isImported: true });
+  const ceo = mk('CEO', 'CEO-X', -23.002, { ceoStatus: 'Existente', fusionPlan: '{}' });
+  const ul = document.getElementById('projTS');
+  const orderBefore = [...ul.children].filter(li => li.matches('.ge-pro-item')).map(li => li.textContent.trim().split(/\s/)[0]).join();
+  //Um só: CEO vira CTO, mesma posição na lista, mesmo uid, situação e plano mantidos
+  const cto = changeMarkerType(ceo, 'CTO');
+  const single = cto.type === 'CTO' && cto.uid === 'ts-CEO-X' && cto.ctoStatus === 'Existente' && cto.fusionPlan === '{}' && !markers.includes(ceo)
+    && [...ul.querySelectorAll(':scope > .ge-pro-item')].indexOf(cto.listItem) === 2;
+  const menu = buildSidebarMenuItems({ kind: 'marker', info: cto, row: cto.listItem }).some(i => i.action === 'change-type');
+  //Em massa: os dois importados viram Poste pela edição em massa
+  setMapSelection([a, b, cto]);
+  bulkEdit.items = [...mapSelection.items];
+  applyBulkEdit([['changeType', 'POSTE']], 'Importado');
+  const postes = markers.filter(m => m.folderId === 'projTS' && m.type === 'POSTE').map(m => m.name).sort().join();
+  const selKinds = [...mapSelection.items].map(m => m.type).sort().join();
+  //Arrastar uma linha da seleção leva todas para a pasta
+  const rows = [...mapSelection.items].map(m => m.listItem);
+  window.draggedItem = rows[0];
+  window.draggedItemSourceProject = rows[0].closest('.folder');
+  const dest = document.getElementById('fTS');
+  sidebarDnd.target = { mode: 'into', ul: dest, title: dest.previousElementSibling };
+  handleSidebarDrop({ preventDefault() {}, ctrlKey: false, altKey: false });
+  window.draggedItem = null;
+  const moved = [...dest.children].length === 3 && [...mapSelection.items].every(m => m.folderId === 'fTS');
+  setMapSelection([]);
+  return { orderBefore, single, menu, postes, selKinds, moved };
+});
+check(typeSwap.single && typeSwap.menu && typeSwap.postes === 'IMP-A,IMP-B' && typeSwap.selKinds === 'CTO,POSTE,POSTE' && typeSwap.moved,
+  `mudar tipo sem excluir (um e em massa) e arrastar seleção na barra lateral (${JSON.stringify(typeSwap)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
