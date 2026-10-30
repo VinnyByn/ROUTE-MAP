@@ -2033,6 +2033,41 @@ const typeSwap = await sp.evaluate(() => {
 });
 check(typeSwap.single && typeSwap.menu && typeSwap.postes === 'IMP-A,IMP-B' && typeSwap.selKinds === 'CTO,POSTE,POSTE' && typeSwap.moved,
   `mudar tipo sem excluir (um e em massa) e arrastar seleção na barra lateral (${JSON.stringify(typeSwap)})`);
+//Relatório: foto do projeto (cabos e caixas desenhados, escala e norte) com legenda, na prévia e no PDF
+const reportMap = await sp.evaluate(async () => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projRM', name: 'Projeto RM', isProject: true, type: 'TCR', children: [] }], sidebar);
+  rebuildMarker({ uid: 'rm-ceo', folderId: 'projRM', type: 'CEO', name: 'CEO-1', ceoStatus: 'Existente', color: '#f59e0b', size: 30, position: { lat: -22, lng: -45 } });
+  rebuildMarker({ uid: 'rm-cto', folderId: 'projRM', type: 'CTO', name: 'CTO-1', ctoStatus: 'Nova', color: '#16a34a', size: 30, position: { lat: -22.002, lng: -45.003 } });
+  rebuildCable({ folderId: 'projRM', name: 'FO-12-CTO-1', type: 'Cabo AS 80 FO-12', width: 4, color: '#008000', status: 'Novo', path: [{ lat: -22, lng: -45 }, { lat: -22.002, lng: -45.003 }] });
+  rebuildCable({ folderId: 'projRM', name: 'FO-36-X', type: 'Cabo AS 80 FO-36', width: 2, color: '#0000ff', status: 'Existente', path: [{ lat: -22, lng: -45 }, { lat: -21.998, lng: -44.997 }] });
+  const map = await buildReportMapImage('projRM');
+  const legend = map.legend.map(l => l.label + (l.count ? ':' + l.count : '')).join('|');
+  const snap = createReportPreviewSnapshot(computeProjectReportData('projRM'));
+  Object.assign(snap, { mapImage: map.dataUrl, mapLegend: map.legend, mapAspect: map.aspect });
+  renderReportPreviewHtml(snap);
+  const preview = !!document.querySelector('.report-preview-page img.rp-map') && document.querySelectorAll('.rp-map-legend__item').length === map.legend.length;
+  let pdfImages = -1;
+  if (window.jspdf?.jsPDF) {
+    const proto = window.jspdf.jsPDF.API;
+    const realSave = proto.save, realAdd = proto.addImage;
+    let count = 0;
+    proto.save = function () { return this; };
+    proto.addImage = function (...args) { if (String(args[0]).startsWith(map.dataUrl.slice(0, 60)) && args[0] === map.dataUrl) count++; return realAdd.apply(this, args); };
+    try { await exportReportPdfNative(snap, 'x.pdf'); pdfImages = count; } finally { proto.save = realSave; proto.addImage = realAdd; }
+  }
+  //Limpa o que estes testes (KMZ, mudar tipo, foto) puseram no mapa, para não aparecer nos testes seguintes
+  const mine = new Set(['projKZ', 'projTS', 'fTS', 'projRM']);
+  markers.filter(m => mine.has(m.folderId)).forEach(m => { m.marker?.setMap(null); m.listItem?.remove(); });
+  markers = markers.filter(m => !mine.has(m.folderId));
+  savedCables.filter(c => mine.has(c.folderId)).forEach(c => { c.polyline?.setMap(null); c.item?.remove(); });
+  savedCables = savedCables.filter(c => !mine.has(c.folderId));
+  ['projKZ', 'projTS', 'projRM'].forEach(id => document.getElementById(id)?.closest('li')?.remove());
+  closeReportPreviewModal?.();
+  return { png: /^data:image\/png;base64,/.test(map.dataUrl) && map.dataUrl.length > 5000, legend, preview, pdfImages };
+});
+check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras:1|Tracejado: cabo existente|Borda escura: caixa existente' && reportMap.preview && reportMap.pdfImages !== 0,
+  `relatório tem a foto do projeto com legenda na prévia e no PDF (${JSON.stringify(reportMap)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');

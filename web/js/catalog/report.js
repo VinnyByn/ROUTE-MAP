@@ -978,6 +978,14 @@ function buildReportPreviewFlowBlocks(snapshot) {
         <div class="rp-kpi-grid">${kpiHtml}</div>
     `, 'rp-avoid-break'));
 
+    if (snapshot.mapImage) {
+        blocks.push(createReportPreviewFlowBlock(`
+            <div class="rp-section-title">Mapa do projeto</div>
+            <img class="rp-map" src="${snapshot.mapImage}" alt="Mapa do projeto com cabos e caixas" />
+            <div class="rp-map-legend">${renderReportMapLegendHtml(snapshot.mapLegend)}</div>
+        `, 'rp-avoid-break'));
+    }
+
     blocks.push(createReportPreviewFlowBlock(`
         <div class="rp-section-title">Rede e cobertura</div>
         <div class="rp-detail-grid">${renderDetailRows(snapshot.networkRows, 'network')}</div>
@@ -1158,6 +1166,19 @@ function openReportPreviewModal() {
     syncReportOptionCheckboxes();
     document.getElementById('reportPreviewModal').style.display = 'flex';
     renderReportPreviewHtml(reportPreviewCurrentSnapshot);
+    attachReportMapToPreview(projectId);
+}
+
+//A foto do projeto chega depois (o fundo vem da internet): entra nas folhas sem perder o que já foi editado
+async function attachReportMapToPreview(projectId) {
+    if (typeof buildReportMapImage !== 'function') return;
+    const map = await buildReportMapImage(projectId).catch(() => null);
+    if (!map || !reportPreviewCurrentSnapshot || document.getElementById('reportPreviewModal').style.display === 'none') return;
+    [reportPreviewOriginalSnapshot].forEach(s => { s.mapImage = map.dataUrl; s.mapLegend = map.legend; s.mapAspect = map.aspect; });
+    const edited = readReportPreviewSnapshotFromDom(reportPreviewCurrentSnapshot);
+    Object.assign(edited, { mapImage: map.dataUrl, mapLegend: map.legend, mapAspect: map.aspect });
+    reportPreviewCurrentSnapshot = edited;
+    renderReportPreviewHtml(edited);
 }
 
 function closeReportPreviewModal() {
