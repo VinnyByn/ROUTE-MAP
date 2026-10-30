@@ -1998,6 +1998,76 @@ const kmzStatus = await sp.evaluate(() => {
 check(JSON.stringify(kmzStatus.words) === JSON.stringify({ field: 'Existente', paren: 'Nova', tail: 'Existente', nearest: 'Nova', style: 'Existente', asBuilt: 'Existente', none: null })
   && kmzStatus.types === 'CEO,CTO,CTO,RESERVA,Importado,CTO,POSTE,POP,TORRE,CASA,CEO,CEO' && kmzStatus.cables === 'Cabo AS 80 FO-72,Cabo AS 80 FO-24,Cabo AS 80 FO-144,Cabo AS 200 FO-36,Cabo AS 80 FO-48,Cabo AS 80 FO-06,Cabo AS 80 FO-12,Cabo Drop,Cabo Importado' && kmzStatus.added === 'CTO-A:Existente,CTO-B:Nova,CTO-C (existente):Existente' && kmzStatus.msg,
   `importação KMZ reconhece tipo, fibras do cabo e novo/existente por palavras, pasta, estilo e posição na rede (${JSON.stringify(kmzStatus)})`);
+//Mudar tipo sem excluir (um e em massa, inclusive os não reconhecidos na importação) e arrastar a seleção na barra lateral
+const typeSwap = await sp.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projTS', name: 'Projeto TS', isProject: true, type: 'TCR', children: [{ id: 'fTS', name: 'Destino', children: [] }] }], sidebar);
+  const mk = (type, name, lat, extra = {}) => { rebuildMarker({ uid: 'ts-' + name, folderId: 'projTS', type, name, color: '#ff9800', size: 30, position: { lat, lng: -46 }, ...extra }); return markers[markers.length - 1]; };
+  const a = mk('Importado', 'IMP-A', -23, { isImported: true, pendingImportStatus: 'Existente' });
+  const b = mk('Importado', 'IMP-B', -23.001, { isImported: true });
+  const ceo = mk('CEO', 'CEO-X', -23.002, { ceoStatus: 'Existente', fusionPlan: '{}' });
+  const ul = document.getElementById('projTS');
+  const orderBefore = [...ul.children].filter(li => li.matches('.ge-pro-item')).map(li => li.textContent.trim().split(/\s/)[0]).join();
+  //Um só: CEO vira CTO, mesma posição na lista, mesmo uid, situação e plano mantidos
+  const cto = changeMarkerType(ceo, 'CTO');
+  const single = cto.type === 'CTO' && cto.uid === 'ts-CEO-X' && cto.ctoStatus === 'Existente' && cto.fusionPlan === '{}' && !markers.includes(ceo)
+    && [...ul.querySelectorAll(':scope > .ge-pro-item')].indexOf(cto.listItem) === 2;
+  const menu = buildSidebarMenuItems({ kind: 'marker', info: cto, row: cto.listItem }).some(i => i.action === 'change-type');
+  //Em massa: os dois importados viram Poste pela edição em massa
+  setMapSelection([a, b, cto]);
+  bulkEdit.items = [...mapSelection.items];
+  applyBulkEdit([['changeType', 'POSTE']], 'Importado');
+  const postes = markers.filter(m => m.folderId === 'projTS' && m.type === 'POSTE').map(m => m.name).sort().join();
+  const selKinds = [...mapSelection.items].map(m => m.type).sort().join();
+  //Arrastar uma linha da seleção leva todas para a pasta
+  const rows = [...mapSelection.items].map(m => m.listItem);
+  window.draggedItem = rows[0];
+  window.draggedItemSourceProject = rows[0].closest('.folder');
+  const dest = document.getElementById('fTS');
+  sidebarDnd.target = { mode: 'into', ul: dest, title: dest.previousElementSibling };
+  handleSidebarDrop({ preventDefault() {}, ctrlKey: false, altKey: false });
+  window.draggedItem = null;
+  const moved = [...dest.children].length === 3 && [...mapSelection.items].every(m => m.folderId === 'fTS');
+  setMapSelection([]);
+  return { orderBefore, single, menu, postes, selKinds, moved };
+});
+check(typeSwap.single && typeSwap.menu && typeSwap.postes === 'IMP-A,IMP-B' && typeSwap.selKinds === 'CTO,POSTE,POSTE' && typeSwap.moved,
+  `mudar tipo sem excluir (um e em massa) e arrastar seleção na barra lateral (${JSON.stringify(typeSwap)})`);
+//Relatório: foto do projeto (cabos e caixas desenhados, escala e norte) com legenda, na prévia e no PDF
+const reportMap = await sp.evaluate(async () => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projRM', name: 'Projeto RM', isProject: true, type: 'TCR', children: [] }], sidebar);
+  rebuildMarker({ uid: 'rm-ceo', folderId: 'projRM', type: 'CEO', name: 'CEO-1', ceoStatus: 'Existente', color: '#f59e0b', size: 30, position: { lat: -22, lng: -45 } });
+  rebuildMarker({ uid: 'rm-cto', folderId: 'projRM', type: 'CTO', name: 'CTO-1', ctoStatus: 'Nova', color: '#16a34a', size: 30, position: { lat: -22.002, lng: -45.003 } });
+  rebuildCable({ folderId: 'projRM', name: 'FO-12-CTO-1', type: 'Cabo AS 80 FO-12', width: 4, color: '#008000', status: 'Novo', path: [{ lat: -22, lng: -45 }, { lat: -22.002, lng: -45.003 }] });
+  rebuildCable({ folderId: 'projRM', name: 'FO-36-X', type: 'Cabo AS 80 FO-36', width: 2, color: '#0000ff', status: 'Existente', path: [{ lat: -22, lng: -45 }, { lat: -21.998, lng: -44.997 }] });
+  const map = await buildReportMapImage('projRM');
+  const legend = map.legend.map(l => l.label + (l.count ? ':' + l.count : '')).join('|');
+  const snap = createReportPreviewSnapshot(computeProjectReportData('projRM'));
+  Object.assign(snap, { mapImage: map.dataUrl, mapLegend: map.legend, mapAspect: map.aspect });
+  renderReportPreviewHtml(snap);
+  const preview = !!document.querySelector('.report-preview-page img.rp-map') && document.querySelectorAll('.rp-map-legend__item').length === map.legend.length;
+  let pdfImages = -1;
+  if (window.jspdf?.jsPDF) {
+    const proto = window.jspdf.jsPDF.API;
+    const realSave = proto.save, realAdd = proto.addImage;
+    let count = 0;
+    proto.save = function () { return this; };
+    proto.addImage = function (...args) { if (String(args[0]).startsWith(map.dataUrl.slice(0, 60)) && args[0] === map.dataUrl) count++; return realAdd.apply(this, args); };
+    try { await exportReportPdfNative(snap, 'x.pdf'); pdfImages = count; } finally { proto.save = realSave; proto.addImage = realAdd; }
+  }
+  //Limpa o que estes testes (KMZ, mudar tipo, foto) puseram no mapa, para não aparecer nos testes seguintes
+  const mine = new Set(['projKZ', 'projTS', 'fTS', 'projRM']);
+  markers.filter(m => mine.has(m.folderId)).forEach(m => { m.marker?.setMap(null); m.listItem?.remove(); });
+  markers = markers.filter(m => !mine.has(m.folderId));
+  savedCables.filter(c => mine.has(c.folderId)).forEach(c => { c.polyline?.setMap(null); c.item?.remove(); });
+  savedCables = savedCables.filter(c => !mine.has(c.folderId));
+  ['projKZ', 'projTS', 'projRM'].forEach(id => document.getElementById(id)?.closest('li')?.remove());
+  closeReportPreviewModal?.();
+  return { png: /^data:image\/png;base64,/.test(map.dataUrl) && map.dataUrl.length > 5000, legend, preview, pdfImages };
+});
+check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras:1|Tracejado: cabo existente|Borda escura: caixa existente' && reportMap.preview && reportMap.pdfImages !== 0,
+  `relatório tem a foto do projeto com legenda na prévia e no PDF (${JSON.stringify(reportMap)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');

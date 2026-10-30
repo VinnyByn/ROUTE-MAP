@@ -281,6 +281,9 @@ function buildSidebarMenuItems(entity) {
         if (canEdit && entity.kind === 'marker' && entity.info.marker) {
             items.push({ action: 'move', icon: 'marker', label: 'Mover', hint: 'Arraste até a nova posição' });
         }
+        if (canEdit && entity.kind === 'marker' && typeof CHANGEABLE_MARKER_TYPES !== 'undefined' && CHANGEABLE_MARKER_TYPES.includes(entity.info.type)) {
+            items.push({ action: 'change-type', icon: 'marker', label: 'Mudar tipo…', hint: 'Ex.: virar CTO, CEO ou poste sem excluir' });
+        }
         if (entity.kind === 'marker' && (entity.info.type === 'CEO' || entity.info.type === 'CTO' || entity.info.type === 'POP')) {
             items.push({ action: 'fusion', label: 'Plano de fusão' });
         }
@@ -426,6 +429,10 @@ function handleSidebarMenuAction(action) {
         return;
     }
     switch (action) {
+    case 'change-type':
+        //Seleção só com ele e abre "Editar selecionados" (campo "Mudar para o tipo")
+        if (typeof setMapSelection === 'function') { setMapSelection([info]); openBulkEditModal(); }
+        break;
     case 'edit':
         openFolderEditor(entity.title);
         break;
@@ -847,6 +854,14 @@ function handleSidebarDragOver(event) {
     showSidebarDropFeedback(target);
 }
 
+//Linhas que vão juntas no arrastar: as da seleção múltipla, se a arrastada faz parte dela (pastas vão sozinhas)
+function getSidebarDragGroup(dragged) {
+    if (typeof mapSelection === 'undefined' || dragged.classList.contains('folder') || mapSelection.items.size < 2) return [dragged];
+    const rows = [...mapSelection.items].map(selectionRow).filter(row => row?.isConnected);
+    if (!rows.includes(dragged)) return [dragged];
+    return rows.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+}
+
 function handleSidebarDrop(event) {
     const dragged = window.draggedItem;
     if (!dragged) return;
@@ -859,13 +874,20 @@ function handleSidebarDrop(event) {
         window.dropWasSuccessful = true;
         return;
     }
-    const sourceProject = window.draggedItemSourceProject;
-    if (target.mode === 'before') target.ref.before(dragged);
-    else if (target.mode === 'after') target.ref.after(dragged);
-    else if (target.atStart) target.ul.prepend(dragged);
-    else target.ul.appendChild(dragged);
-    const itemData = markers.find(m => m.listItem === dragged) || savedCables.find(c => c.item === dragged) || savedPolygons.find(p => p.listItem === dragged);
-    if (itemData) itemData.folderId = dragged.parentElement.id;
+    //Arrastou uma linha que está na seleção múltipla: vão todas as selecionadas juntas, na ordem da lista
+    const group = getSidebarDragGroup(dragged).filter(row => row === dragged || (row !== target.ref && !(target.ul && row.contains(target.ul))));
+    const sourceProjects = new Set(group.map(row => row.closest('.folder')).filter(Boolean));
+    const first = group[0];
+    if (target.mode === 'before') target.ref.before(first);
+    else if (target.mode === 'after') target.ref.after(first);
+    else if (target.atStart) target.ul.prepend(first);
+    else target.ul.appendChild(first);
+    group.slice(1).forEach((row, i) => group[i].after(row));
+    let movedData = false;
+    group.forEach(row => {
+        const itemData = markers.find(m => m.listItem === row) || savedCables.find(c => c.item === row) || savedPolygons.find(p => p.listItem === row);
+        if (itemData) { itemData.folderId = row.parentElement.id; movedData = true; }
+    });
     window.dropWasSuccessful = true;
     if (target.mode === 'into' && target.ul.classList.contains('hidden')) {
         target.title?.classList.add('sidebar-drop-flash');
@@ -874,9 +896,10 @@ function handleSidebarDrop(event) {
     if (!dragged.classList.contains('folder')) {
         const destinationProject = dragged.closest('.folder');
         saveProjectElement(destinationProject);
-        if (sourceProject && sourceProject !== destinationProject) saveProjectElement(sourceProject);
-        if (itemData && sourceProject !== destinationProject) refreshBomAfterProjectChange();
+        sourceProjects.forEach(project => { if (project !== destinationProject) saveProjectElement(project); });
+        if (movedData && [...sourceProjects].some(project => project !== destinationProject)) refreshBomAfterProjectChange();
     }
+    if (group.length > 1) showToast('Itens movidos', `${group.length} itens selecionados foram para "${first.parentElement?.closest('li')?.querySelector(':scope > .folder-title')?.dataset.folderName || 'a pasta'}".`);
     scheduleSidebarCounts();
 }
 

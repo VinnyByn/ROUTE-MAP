@@ -98,6 +98,36 @@ class ReportPdfWriter {
         this.text(value, x, y, options);
     }
 
+    //Legenda do mapa: símbolo + texto, em colunas
+    mapLegend(items) {
+        const doc = this.doc;
+        const cols = 3, colW = this.width / cols, rowH = 5.5;
+        const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ''); const n = m ? parseInt(m[1], 16) : 0x64748b; return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+        this.ensure(Math.ceil(items.length / cols) * rowH + 4);
+        items.forEach((item, i) => {
+            const x = RPDF.mx + (i % cols) * colW, y = this.y + Math.floor(i / cols) * rowH;
+            doc.setDrawColor(...hex(item.outline || item.color));
+            doc.setFillColor(...hex(item.color));
+            if (item.kind === 'cable') {
+                doc.setLineWidth(1);
+                if (item.dashed) doc.setLineDashPattern([1.2, 0.9], 0);
+                doc.line(x, y + 2, x + 6, y + 2);
+                doc.setLineDashPattern([], 0);
+            } else if (item.shape === 'square') {
+                doc.rect(x + 1.5, y + 0.5, 3, 3, 'F');
+            } else if (item.shape === 'diamond') {
+                doc.triangle(x + 3, y, x + 4.8, y + 2, x + 1.2, y + 2, 'F');
+                doc.triangle(x + 3, y + 4, x + 4.8, y + 2, x + 1.2, y + 2, 'F');
+            } else {
+                doc.setLineWidth(item.outline ? 0.5 : 0.1);
+                doc.circle(x + 3, y + 2, 1.6, item.outline ? 'FD' : 'F');
+            }
+            this.font(8, 'normal', RPDF.ink);
+            this.text(`${item.label}${item.count ? ` (${item.count})` : ''}`, x + 8, y + 3);
+        });
+        this.y += Math.ceil(items.length / cols) * rowH + 3;
+    }
+
     sectionTitle(title, { keepWith = 24 } = {}) {
         this.ensure(10 + keepWith);
         if (this.y > RPDF.topNext + 1) this.y += 3;
@@ -370,6 +400,17 @@ async function exportReportPdfNative(snapshot, filename) {
 
     pdf.sectionTitle('Indicadores', { keepWith: 26 });
     pdf.kpis(snapshot.kpis || []);
+
+    if (snapshot.mapImage) {
+        const h = pdf.width * (snapshot.mapAspect || 0.625);
+        pdf.sectionTitle('Mapa do projeto', { keepWith: h + 14 });
+        doc.addImage(snapshot.mapImage, 'PNG', RPDF.mx, pdf.y, pdf.width, h);
+        doc.setDrawColor(...RPDF.line);
+        doc.setLineWidth(0.3);
+        doc.rect(RPDF.mx, pdf.y, pdf.width, h);
+        pdf.y += h + 4;
+        pdf.mapLegend(snapshot.mapLegend || []);
+    }
 
     pdf.sectionTitle('Rede e cobertura');
     pdf.detailGrid(snapshot.networkRows || []);

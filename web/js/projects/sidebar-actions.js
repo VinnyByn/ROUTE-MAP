@@ -307,6 +307,7 @@ function beginSidebarDrag(containerElement, e) {
     window.dropWasSuccessful = false;
     document.body.classList.add('is-dragging-globally');
     containerElement.classList.add('is-being-dragged');
+    if (typeof getSidebarDragGroup === 'function') getSidebarDragGroup(containerElement).forEach(row => row.classList.add('is-being-dragged'));
     if (typeof setSidebarDragGhost === 'function') setSidebarDragGhost(e, containerElement);
 }
 
@@ -327,6 +328,7 @@ function enableDragAndDropForItem(itemElement) {
         }
         document.body.classList.remove('is-dragging-globally');
         itemElement.classList.remove('is-being-dragged');
+        document.querySelectorAll('#sidebar .is-being-dragged').forEach(row => row.classList.remove('is-being-dragged'));
         clearSidebarDropState();
         window.draggedItem = null;
         window.draggedItemSourceProject = null;
