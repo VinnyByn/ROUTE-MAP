@@ -146,6 +146,7 @@ const KML_MARKER_TYPE_DEFAULTS = {
     RESERVA: { size: DEFAULT_MARKER_SIZE, reservaStatus: 'Nova', reservaAccessory: 'Raquete' },
     POP: { size: DEFAULT_MARKER_SIZE },
     TORRE: { size: DEFAULT_MARKER_SIZE },
+    POSTE: { size: DEFAULT_MARKER_SIZE },
     CORDOALHA: { size: DEFAULT_MARKER_SIZE, cordoalhaStatus: 'Nova', derivationTCount: 0 },
     CASA: { size: DEFAULT_MARKER_SIZE },
 };
@@ -214,47 +215,53 @@ function getKmlExtendedData(placemark) {
     return data;
 }
 
+//Palavras de cada tipo (texto sem acento, em maiúsculas). "Sozinha" = sem letra colada antes/depois, então
+//"CTO-01", "CTO01" e "RT3" valem, mas "PROTOCOLO" não vira CTO.
+const KML_TYPE_WORD = (w) => new RegExp(`(?<![A-Z])(?:${w})(?![A-Z])`);
+const KML_MARKER_TYPE_RULES = [
+    { type: 'CEO', patterns: [KML_TYPE_WORD('CEOS?|CXE|FOSC|TORPEDO|SPLICE'), /CA?I?XA?\s*(DE\s*)?EMENDA/, /\bEMENDAS?\b/, /\bJUNCAO\b/] },
+    { type: 'CTO', patterns: [KML_TYPE_WORD('CTOS?|NAPS?|FAT|CTOE?'), /CA?I?XA?\s*(DE\s*)?(ATENDIMENTO|ATEND|TERMINA[CL]\w*)/, /TERMINAL\s*OPTIC/, /\bCAIXA\s*TERMINAL\b/] },
+    { type: 'RESERVA', patterns: [/\bRESERVAS?\b/, KML_TYPE_WORD('RT'), /\bSOBRA\s*(DE\s*)?CABO\b/, /\b(SLACK|COIL|LOOP)\b/] },
+    { type: 'TORRE', patterns: [/\bTORRES?\b/, /\bTOWER\b/, /\bMASTRO\b/, /\bERB\b/, /\bRADIO\s*ENLACE\b/] },
+    { type: 'POP', patterns: [KML_TYPE_WORD('POPS?|OLTS?'), /PONTO\s*DE\s*PRESEN/, /\bCENTRAL\b/, /DATA\s*CENTER|DATACENTER/, /\bHEAD\s*END\b|\bHEADEND\b/, /SALA\s*TECNICA/, /\bARMARIO\b/, /\bRACK\b/] },
+    { type: 'CORDOALHA', patterns: [/\bCORDOALHAS?\b/, /CORD\.?\s*OPTIC/, /\bCORDO\b/, /\bMENSAGEIRO\b/] },
+    { type: 'POSTE', patterns: [/\bPOSTES?\b/, /\bPOSTEAMENTO\b/] },
+    { type: 'CASA', patterns: [/\bCASAS?\b/, KML_TYPE_WORD('UCS?|HPS?'), /UNIDADES?\s*CONSUM/, /\bRESIDENCIAS?\b/, /\bDOMICILIOS?\b/, /HOME\s*PASS/] },
+];
+
+//Tipo achado num texto: a palavra que aparece primeiro vale ("CEO 2 - saída para CTO" = CEO)
+function matchKmlMarkerType(text) {
+    const t = normalizeKmlStatusText(text);
+    let best = null;
+    KML_MARKER_TYPE_RULES.forEach(({ type, patterns }) => patterns.forEach(rx => {
+        const m = rx.exec(t);
+        if (m && (!best || m.index < best.index)) best = { type, index: m.index };
+    }));
+    return best?.type || null;
+}
+
+//Onde o tipo é procurado, do mais confiável ao menos: nome, campo Tipo/Categoria dos dados extras, pasta mais
+//próxima do item, nome do estilo e do ícone, descrição e demais dados extras.
 function inferMarkerTypeFromKml({ name, description, folderPath, iconHref, styleUrl, extendedData }) {
-    const extValues = Object.entries(extendedData || {}).map(([k, v]) => `${k} ${v}`).join(' ');
-    const pathText = (folderPath || []).join(' ');
-    const blob = `${name} ${description} ${pathText} ${iconHref} ${styleUrl} ${extValues}`.toUpperCase();
-
-    const parenType = (name || '').match(/\((CEO|CTO|RESERVA|POP|TORRE|CORDOALHA|CASA)\)\s*$/i);
-    if (parenType) {
-        return { type: parenType[1].toUpperCase(), source: 'nome (exportado pelo app)' };
+    const ext = extendedData || {};
+    const parenType = (name || '').match(/\((CEO|CTO|RESERVA|POP|TORRE|CORDOALHA|CASA|POSTE)\)\s*$/i);
+    if (parenType) return { type: parenType[1].toUpperCase(), source: 'nome (exportado pelo app)' };
+    const fromName = matchKmlMarkerType(name);
+    if (fromName) return { type: fromName, source: 'nome' };
+    const typeKey = Object.keys(ext).find(k => /^(TIPO|TYPE|CLASSE|CLASS|CATEGORIA|ELEMENTO|EQUIPAMENTO|OBJETO)$/.test(normalizeKmlStatusText(k).trim()));
+    const fromField = typeKey && matchKmlMarkerType(ext[typeKey]);
+    if (fromField) return { type: fromField, source: `campo ${typeKey}` };
+    for (const segment of [...(folderPath || [])].reverse()) {
+        const fromFolder = matchKmlMarkerType(segment);
+        if (fromFolder) return { type: fromFolder, source: 'pasta' };
     }
-
-    const extTypeKey = Object.keys(extendedData || {}).find((k) => /^(tipo|type|classe|class|categoria)$/i.test(k));
-    if (extTypeKey) {
-        const raw = extendedData[extTypeKey].toUpperCase().trim();
-        if (KML_MARKER_TYPE_DEFAULTS[raw]) {
-            return { type: raw, source: `campo ${extTypeKey}` };
-        }
-    }
-
-    const rules = [
-        { type: 'CEO', patterns: [/\bCEO\b/, /CAIXA\s*DE\s*EMENDA/, /\bEMENDA\b.*\bOPTIC/, /\bCEO\b.*\d/] },
-        { type: 'CTO', patterns: [/\bCTO\b/, /TERMINAL\s*OPTIC/, /CAIXA\s*DE\s*ATENDIMENTO/, /\bCTO\b.*\d/] },
-        { type: 'RESERVA', patterns: [/\bRESERVA\b/, /PONTO\s*DE\s*RESERVA/] },
-        { type: 'TORRE', patterns: [/\bTORRE\b/, /\bTOWER\b/] },
-        { type: 'POP', patterns: [/\bPOP\b/, /PONTO\s*DE\s*PRESEN/, /\bOLT\b/, /CENTRAL\b/] },
-        { type: 'CORDOALHA', patterns: [/\bCORDOALHA\b/, /CORD\.?\s*OPTIC/, /\bCORDO\b/] },
-        { type: 'CASA', patterns: [/\bCASA\b/, /\bCASAS\b/, /\bUC\b/, /UNIDADE\s*CONSUM/] },
-    ];
-
-    for (const rule of rules) {
-        if (rule.patterns.some((rx) => rx.test(blob))) {
-            return { type: rule.type, source: 'nome, pasta ou descrição' };
-        }
-    }
-
-    const icon = (iconHref || '').toLowerCase();
-    if (/cto|terminal|atendimento/.test(icon)) return { type: 'CTO', source: 'ícone KML' };
-    if (/ceo|emenda|splice/.test(icon)) return { type: 'CEO', source: 'ícone KML' };
-    if (/reserva/.test(icon)) return { type: 'RESERVA', source: 'ícone KML' };
-    if (/pop|olt|central/.test(icon)) return { type: 'POP', source: 'ícone KML' };
-    if (/cordoalha|cord/.test(icon)) return { type: 'CORDOALHA', source: 'ícone KML' };
-
+    const iconText = `${String(styleUrl || '').replace(/^#/, '')} ${String(iconHref || '').split('/').pop().replace(/\.\w+$/, '')}`.replace(/[-_.]+/g, ' ');
+    const fromIcon = matchKmlMarkerType(iconText);
+    if (fromIcon) return { type: fromIcon, source: 'estilo/ícone' };
+    const fromDesc = matchKmlMarkerType(String(description || '').replace(/<[^>]+>/g, ' '));
+    if (fromDesc) return { type: fromDesc, source: 'descrição' };
+    const fromExt = matchKmlMarkerType(Object.entries(ext).map(([k, v]) => `${k} ${v}`).join(' | '));
+    if (fromExt) return { type: fromExt, source: 'dados' };
     return { type: 'Importado', source: null };
 }
 

@@ -1969,6 +1969,11 @@ const kmzStatus = await sp.evaluate(() => {
     asBuilt: st({ folderPath: ['AS-BUILT'] }),
     none: st({ name: 'CTO 22 Bairro Novo Horizonte' }),
   };
+  const ty = (ctx) => inferMarkerTypeFromKml({ name: '', description: '', folderPath: [], extendedData: {}, iconHref: '', styleUrl: '', ...ctx }).type;
+  const types = [ty({ name: 'CX EMENDA 03' }), ty({ name: 'NAP-12' }), ty({ name: 'CTO01' }), ty({ name: 'RT3' }), ty({ name: 'Protocolo 5' }),
+    ty({ name: '12', extendedData: { Categoria: 'Caixa de atendimento' } }), ty({ name: 'P-01', folderPath: ['Postes'] }),
+    ty({ name: 'X', iconHref: 'http://x/icons/olt-red.png' }), ty({ name: 'Mastro 2' }), ty({ name: 'Residências 4' }),
+    ty({ name: 'CEO 2 - saída para CTO' }), ty({ name: 'Caixa de emenda óptica' })].join();
   const sidebar = document.getElementById('sidebar');
   rebuildSidebarFromJSON([{ id: 'projKZ', name: 'Projeto KZ', isProject: true, type: 'TCR', children: [] }], sidebar);
   activeFolderId = 'projKZ';
@@ -1985,11 +1990,11 @@ const kmzStatus = await sp.evaluate(() => {
   const added = markers.slice(before).map(m => `${m.name}:${m.ctoStatus}`).join();
   const msg = document.getElementById('alertModalMessage')?.textContent || document.querySelector('#alertModal')?.textContent || '';
   document.getElementById('alertModalOkButton')?.click?.();
-  return { words, added, msg: /1 item\(ns\) sem indicação no arquivo ficaram Existente/.test(msg) && /2 existente\(s\) · 1 novo|1 novo\(s\) · 2 existente/.test(msg), refKept: ref.ctoStatus };
+  return { words, types, added, msg: /1 item\(ns\) sem indicação no arquivo ficaram Existente/.test(msg) && /2 existente\(s\) · 1 novo|1 novo\(s\) · 2 existente/.test(msg), refKept: ref.ctoStatus };
 });
 check(JSON.stringify(kmzStatus.words) === JSON.stringify({ field: 'Existente', paren: 'Nova', tail: 'Existente', nearest: 'Nova', style: 'Existente', asBuilt: 'Existente', none: null })
-  && kmzStatus.added === 'CTO-A:Existente,CTO-B:Nova,CTO-C (existente):Existente' && kmzStatus.msg,
-  `importação KMZ reconhece novo/existente por palavras, pasta, estilo e posição na rede (${JSON.stringify(kmzStatus)})`);
+  && kmzStatus.types === 'CEO,CTO,CTO,RESERVA,Importado,CTO,POSTE,POP,TORRE,CASA,CEO,CEO' && kmzStatus.added === 'CTO-A:Existente,CTO-B:Nova,CTO-C (existente):Existente' && kmzStatus.msg,
+  `importação KMZ reconhece tipo e novo/existente por palavras, pasta, estilo e posição na rede (${JSON.stringify(kmzStatus)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');
