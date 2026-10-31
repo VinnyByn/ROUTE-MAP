@@ -41,6 +41,7 @@ const MARKER_GLYPHS = {
     CORDOALHA: '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
     RESERVA: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
     POSTE: '<path d="M12 2v20"/><path d="M5 6h14"/><path d="M7 6l-2 4"/><path d="M17 6l2 4"/><path d="M9 22h6"/>',
+    PREDIO: '<path d="M10 12h4"/><path d="M10 8h4"/><path d="M14 21v-3a2 2 0 0 0-4 0v3"/><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/>',
     TORRE: '<path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.8 7.47"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/>',
     POP: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/>',
     residencial: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
@@ -75,6 +76,9 @@ function getMarkerShapeSvg(type, color, options = {}) {
     case 'TORRE':
         //Pentágono ("casinha" da torre) com o símbolo de antena
         return badge('<path d="M16 2.5 29.2 12.4 24.4 29.5H7.6L2.8 12.4z" stroke-linejoin="round"/>') + markerGlyph('TORRE', 16, 17, 14, glyphColor);
+    case 'PREDIO':
+        //Prédio: retângulo alto com o símbolo de edifício
+        return badge('<rect x="4.5" y="2.5" width="23" height="27" rx="4"/>') + markerGlyph('PREDIO', 16, 16, 16, glyphColor);
     case 'POSTE':
         return badge('<circle cx="16" cy="16" r="11"/>') + markerGlyph('POSTE', 16, 16, 13, glyphColor);
     case 'CLIENTE': {

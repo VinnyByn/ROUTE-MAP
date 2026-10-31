@@ -182,7 +182,7 @@ function selectionTypeKey(item) {
 
 //Nome curto e cor do tipo nas etiquetas da barra (mesma cor do marcador no painel)
 function selectionKindLabel(key) {
-    return { RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', POSTE: 'Poste', TORRE: 'Torre', Importado: 'Importado' }[key] || key;
+    return { RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', POSTE: 'Poste', TORRE: 'Torre', PREDIO: 'Prédio', Importado: 'Importado' }[key] || key;
 }
 
 function selectionKindColor(key) {

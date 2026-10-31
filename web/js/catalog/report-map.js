@@ -4,8 +4,8 @@
 // Depende de js/app.js (getProjectItems, getCableColor, getFiberType) e js/map/marker-panel.js (MARKER_TYPE_META).
 
 const REPORT_MAP_W = 640, REPORT_MAP_H = 400, REPORT_MAP_SCALE = 2;
-const REPORT_MAP_LABELS = { CTO: 'CTO', CEO: 'CEO', RESERVA: 'Reserva técnica', CORDOALHA: 'Cordoalha', POP: 'POP', POSTE: 'Poste', TORRE: 'Torre', CLIENTE: 'Cliente', CASA: 'Casas', Importado: 'Não identificado' };
-const REPORT_MAP_ORDER = ['POP', 'CEO', 'CTO', 'RESERVA', 'TORRE', 'CORDOALHA', 'POSTE', 'CLIENTE', 'CASA', 'Importado'];
+const REPORT_MAP_LABELS = { CTO: 'CTO', CEO: 'CEO', RESERVA: 'Reserva técnica', CORDOALHA: 'Cordoalha', POP: 'POP', POSTE: 'Poste', TORRE: 'Torre', PREDIO: 'Prédio', CLIENTE: 'Cliente', CASA: 'Casas', Importado: 'Não identificado' };
+const REPORT_MAP_ORDER = ['PREDIO', 'POP', 'CEO', 'CTO', 'RESERVA', 'TORRE', 'CORDOALHA', 'POSTE', 'CLIENTE', 'CASA', 'Importado'];
 
 function reportMapMarkerColor(type) {
     if (type === 'CLIENTE') return '#0ea5e9';
@@ -87,7 +87,8 @@ async function buildReportMapImage(projectId) {
     if (typeof getProjectItems !== 'function') return null;
     const { markers: projectMarkers = [], cables: projectCables = [], polygons: projectPolygons = [] } = getProjectItems(projectId) || {};
     const pts = [];
-    const markerList = projectMarkers.filter(m => m.marker?.getVisible?.() !== false).map(m => {
+    //Caixa dentro de prédio aparece pelo prédio (mesmo ponto)
+    const markerList = projectMarkers.filter(m => m.marker?.getVisible?.() !== false && !(typeof isBoxInsideBuilding === 'function' && isBoxInsideBuilding(m))).map(m => {
         const p = m.marker?.getPosition?.();
         if (!p) return null;
         const pos = { lat: p.lat(), lng: p.lng() };

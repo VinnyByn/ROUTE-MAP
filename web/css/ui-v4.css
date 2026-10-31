@@ -3857,3 +3857,20 @@ button.map-selection-kind:hover { border-color: var(--accent, #22c55e); backgrou
 .report-preview-page .rp-table tbody tr:hover td { background: #f1f7fa; color: var(--rp-ink, #16323f); }
 .report-preview-page .rp-table tbody tr.subtotal:hover td { background: #e3f1f6; color: var(--rp-brand-dark); }
 .report-preview-page .rp-table tbody tr.grand-total:hover td { background: #173f4e; color: #ffffff; }
+/* Prédio: caixas por torre e andar */
+.building-summary { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0; font-size: 12px; color: var(--color-text-dim); }
+.building-summary b { color: var(--color-text); }
+.building-boxes { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
+.building-box { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "floor btn" "name btn" "meta btn"; column-gap: 8px; padding: 6px 8px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface-muted, rgba(148,163,184,.08)); }
+.building-box__floor { grid-area: floor; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--accent, #0e7490); }
+.building-box__name { grid-area: name; font-size: 13px; }
+.building-box small { grid-area: meta; font-size: 11px; color: var(--color-text-dim); }
+.building-box .btn { grid-area: btn; align-self: center; }
+.building-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+#buildingChooseModal .building-choose { max-width: 420px; }
+#buildingChooseModal .building-boxes { padding: 12px 16px; }
+#markerModal .building-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+#markerModal .building-grid label { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text-dim); text-transform: none; letter-spacing: 0; }
+#markerModal .building-grid input { width: 100%; min-width: 0; }
+#markerModal .building-box button, #markerModal .building-actions button, #buildingChooseModal .building-box button { height: 28px; min-height: 0; padding: 0 12px; font-size: 12px; font-weight: 600; border-radius: 7px; }
+#markerModal .building-actions button { flex: 1 1 0; }
