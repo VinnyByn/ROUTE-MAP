@@ -1548,9 +1548,13 @@ const sbSel = await page.evaluate(() => {
   click(list[3], { shiftKey: true });
   const range = names();
   const highlighted = ul.querySelectorAll('.is-multi-selected').length;
+  //Clique simples num item e Shift+clique em outro: seleciona todos entre os dois
+  clearMapSelection();
+  click(list[0], {}); click(list[2], { shiftKey: true });
+  const plainRange = names();
   clearMapSelection();
   list.forEach(m => markers.splice(markers.indexOf(m), 1)); ul.remove();
-  return { ctrl, toggled, range, highlighted };
+  return { ctrl, toggled, range, highlighted, plainRange };
 });
 //Cabos e polígonos também entram na seleção pela barra lateral e são excluídos juntos
 const sbMix = await page.evaluate(() => {
@@ -1578,7 +1582,7 @@ const sbMix = await page.evaluate(() => {
 });
 check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone && sbMix.onlyCable === 'C-MIX' && sbMix.withoutCable === 'P-MIX', `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
 
-check(sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
+check(sbSel.plainRange === 'B1,B2,B3' && sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
   `seleção múltipla pela barra lateral com Ctrl e Shift (${JSON.stringify(sbSel)})`);
 
 //Tour pelo sistema e tecla "?" para os atalhos
