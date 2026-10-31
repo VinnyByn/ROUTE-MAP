@@ -70,21 +70,26 @@ function setupSidebarMultiSelect() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
     sidebar.addEventListener('click', (e) => {
-        if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return;
         if (e.target.closest('input, button, .sb-menu-button')) return;
         const li = e.target.closest('.ge-pro-item');
         const info = li && findSelectableByRow(li);
         if (!info) return;
+        //Clique simples marca o ponto de partida: depois, Shift+clique pega tudo entre ele e o clicado
+        if (!(e.ctrlKey || e.metaKey || e.shiftKey)) { mapSelection.sidebarAnchor = info; return; }
         e.preventDefault();
         e.stopImmediatePropagation();
         const anchor = mapSelection.sidebarAnchor;
-        if (e.shiftKey && anchor && selectionRow(anchor)?.isConnected) {
+        //Shift = intervalo (vários de uma vez); Ctrl = um a um (liga/desliga só o clicado)
+        if (e.shiftKey && anchor && selectionRow(anchor)?.isConnected && anchor !== info) {
             const anchorRow = selectionRow(anchor);
             const rows = [...sidebar.querySelectorAll('.ge-pro-item')].filter(r => r.offsetParent !== null || r === li || r === anchorRow);
             const a = rows.indexOf(anchorRow), b = rows.indexOf(li);
             const range = rows.slice(Math.min(a, b), Math.max(a, b) + 1).map(findSelectableByRow).filter(Boolean);
             const base = (e.ctrlKey || e.metaKey) ? [...mapSelection.items] : [];
             setMapSelection([...new Set([...base, ...range])]);
+        } else if (e.shiftKey) {
+            setMapSelection([info]);
+            mapSelection.sidebarAnchor = info;
         } else {
             toggleMapSelection(info);
             mapSelection.sidebarAnchor = info;
@@ -177,7 +182,7 @@ function selectionTypeKey(item) {
 
 //Nome curto e cor do tipo nas etiquetas da barra (mesma cor do marcador no painel)
 function selectionKindLabel(key) {
-    return { RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', POSTE: 'Poste', TORRE: 'Torre', Importado: 'Importado' }[key] || key;
+    return { RESERVA: 'Reserva', CORDOALHA: 'Cordoalha', CASA: 'Casas', POSTE: 'Poste', TORRE: 'Torre', PREDIO: 'Prédio', Importado: 'Importado' }[key] || key;
 }
 
 function selectionKindColor(key) {

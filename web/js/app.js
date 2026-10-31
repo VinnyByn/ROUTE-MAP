@@ -2458,6 +2458,12 @@ function createCableDrawVertexMarker(position) {
 }
 
 function handleAnchorMarkerClickDuringCableDraw(clickedMarkerInfo) {
+    //Prédio: escolhe em qual caixa dele o cabo liga (js/network/buildings.js)
+    if (typeof isBuildingMarker === 'function' && isBuildingMarker(clickedMarkerInfo)) {
+        scheduleSuppressNextCableMapClick();
+        chooseBuildingBoxForCable(clickedMarkerInfo);
+        return;
+    }
     scheduleSuppressNextCableMapClick();
     const markerInfo = preferActiveProjectMarker(clickedMarkerInfo);
     const markerPosition = markerInfo.marker.getPosition();
@@ -3712,6 +3718,10 @@ function addCustomMarker(location, importedData = null) {
         client: data.type === "CLIENTE" ? { ...(data.client || {}) } : undefined,
         popEquipment: data.type === "POP" && data.popEquipment ? data.popEquipment : undefined,
         pole: data.type === "POSTE" && data.pole ? data.pole : undefined,
+        building: data.type === "PREDIO" ? (data.building || {}) : undefined,
+        buildingUid: (data.type === "CTO" || data.type === "CEO") && data.buildingUid ? data.buildingUid : undefined,
+        tower: data.buildingUid ? data.tower || '' : undefined,
+        floor: data.buildingUid ? data.floor || '' : undefined,
         uid: data.uid || null,
     };
     ensureMarkerUid(markerInfo);
@@ -3780,13 +3790,35 @@ function updateMarkerAppearance(markerInfo) {
         labelColor: markerInfo.labelColor,
     }));
     setMarkerMapLabel(markerInfo.marker, isCasa ? null : buildMarkerMapLabel(markerInfo.name, markerInfo.labelColor));
+    //Prédio: rótulo com quantas caixas tem, e as caixas ficam no ponto dele. Caixa dentro de prédio some do mapa
+    //(abre pela lista do prédio) e não pega clique; cabo ligado nela chega no prédio.
+    if (typeof isBuildingMarker === 'function') {
+        if (isBuildingMarker(markerInfo)) {
+            setMarkerMapLabel(markerInfo.marker, buildMarkerMapLabel(getBuildingMapLabel(markerInfo), markerInfo.labelColor));
+            syncBuildingBoxesPosition(markerInfo);
+            //Caixas que abriram antes do prédio (ordem do arquivo) ficam escondidas agora
+            getBuildingBoxes(markerInfo).forEach(box => { if (box.marker?.getOpacity?.() !== 0) updateMarkerAppearance(box); });
+        } else if (isBoxInsideBuilding(markerInfo)) {
+            markerInfo.marker.setIcon({ url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22/%3E', scaledSize: new google.maps.Size(1, 1), anchor: new google.maps.Point(0, 0) });
+            setMarkerMapLabel(markerInfo.marker, null);
+            markerInfo.marker.setOptions?.({ clickable: false });
+            markerInfo.marker.setOpacity?.(0);
+            const building = getBuildingOf(markerInfo);
+            setMarkerMapLabel(building.marker, buildMarkerMapLabel(getBuildingMapLabel(building), building.labelColor));
+        } else {
+            markerInfo.marker.setOptions?.({ clickable: true });
+            if (markerInfo.marker?.getOpacity?.() === 0) markerInfo.marker.setOpacity(1);
+        }
+    }
     //Barra lateral: nome em destaque e os detalhes (tipo, situação, instalação) em cinza
-    const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP', POSTE: 'Poste' };
+    const typeLabels = { CEO: 'CEO', CTO: 'CTO', CORDOALHA: 'Cordoalha', RESERVA: 'Reserva', POP: 'POP', POSTE: 'Poste', PREDIO: 'Prédio', TORRE: 'Torre' };
     let details = [];
     if (markerInfo.type === "CTO") details = [markerInfo.ctoStatus, markerInfo.isPredial ? 'Predial' : null, markerInfo.needsStickers ? 'Adesivos' : null];
     if (markerInfo.type === "CEO") details = [markerInfo.ceoStatus, isMarkerInDuct(markerInfo) ? 'Em duto' : markerInfo.ceoAccessory, markerInfo.is144F ? '144F' : null];
     if (markerInfo.type === "CORDOALHA") details = [markerInfo.cordoalhaStatus, markerInfo.derivationTCount ? `${markerInfo.derivationTCount} deriv.` : null];
     if (markerInfo.type === "RESERVA") details = [markerInfo.reservaStatus, isMarkerInDuct(markerInfo) ? 'Em duto' : markerInfo.reservaAccessory];
+    if (markerInfo.type === "PREDIO") { const n = typeof getBuildingBoxes === 'function' ? getBuildingBoxes(markerInfo).length : 0; details = [n ? `${n} ${n === 1 ? 'caixa' : 'caixas'}` : 'sem caixas', markerInfo.building?.floors ? `${markerInfo.building.floors} andares` : null]; }
+    if (typeof describeBoxLocation === 'function' && (markerInfo.type === 'CTO' || markerInfo.type === 'CEO')) { const where = describeBoxLocation(markerInfo); if (where) details.push(where); }
     if (markerInfo.type === "POSTE") details = [markerInfo.pole?.situation, markerInfo.pole?.height ? `${markerInfo.pole.height} m` : null, markerInfo.pole?.effort ? `${markerInfo.pole.effort} daN` : null];
     details = details.filter(Boolean);
     let name = markerInfo.name;

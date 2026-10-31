@@ -10,6 +10,7 @@ const MARKER_TYPE_META = {
     CASA: { name: 'Casas', article: 'Novas', noun: 'casas', prefix: '', statuses: null, color: '#ffffff', labelColor: '#0f172a' },
     POP: { name: 'POP', article: 'Novo', noun: 'POP', prefix: 'POP', statuses: null, color: '#7c3aed' },
     POSTE: { name: 'Poste', article: 'Novo', noun: 'poste', prefix: 'P', statuses: null, color: '#64748b' },
+    PREDIO: { name: 'Prédio', article: 'Novo', noun: 'prédio', prefix: 'ED', statuses: null, color: '#0e7490' },
     TORRE: { name: 'Torre', article: 'Nova', noun: 'torre', prefix: 'TR', statuses: null, color: '#0f766e' },
     Importado: { name: 'Marcador importado', article: 'Novo', noun: 'marcador', prefix: 'MK', statuses: ['Nova', 'Existente'], color: '#ff9800' },
 };
@@ -136,6 +137,8 @@ function configureMarkerPanel(type, mode) {
     toggleMarkerPanelGroup('ceo144Group', type === 'CEO');
     toggleMarkerPanelGroup('derivationTGroup', type === 'CORDOALHA');
     toggleMarkerPanelGroup('poleGroup', type === 'POSTE');
+    toggleMarkerPanelGroup('buildingGroup', type === 'PREDIO');
+    if (typeof syncBoxBuildingFields === 'function') syncBoxBuildingFields();
     toggleMarkerPanelGroup('markerPositionRow', isEdit);
     toggleMarkerPanelGroup('deleteMarkerButton', isEdit);
     toggleMarkerPanelGroup('editPositionButton', isEdit);
@@ -408,6 +411,8 @@ function openMarkerCreatePanel(type) {
     document.getElementById('markerName').value = kmlSource ? kmlSource.name : suggestMarkerName(type);
     document.getElementById('markerDescription').value = kmlSource?.description || '';
     document.getElementById('markerNumber').value = kmlSource && type === 'CASA' ? (parseInt(kmlSource.name, 10) || '') : '';
+    if (typeof fillBoxBuildingFields === 'function') fillBoxBuildingFields({}, { folderId: activeFolderId });
+    if (type === 'PREDIO') { document.getElementById('buildingFloors').value = ''; document.getElementById('buildingFloorHeight').value = ''; renderBuildingBoxesPanel(null); }
     configureMarkerPanel(type, 'create');
     showMarkerPanel();
     setTimeout(() => {
@@ -440,6 +445,12 @@ function openMarkerEditor(markerInfo) {
     document.getElementById('ceo144Checkbox').checked = !!markerInfo.is144F;
     document.getElementById('markerDerivationT').value = markerInfo.derivationTCount || 0;
     fillPoleForm(markerInfo.pole || {});
+    if (typeof fillBoxBuildingFields === 'function') fillBoxBuildingFields(markerInfo, markerInfo);
+    if (markerInfo.type === 'PREDIO') {
+        document.getElementById('buildingFloors').value = markerInfo.building?.floors || '';
+        document.getElementById('buildingFloorHeight').value = markerInfo.building?.floorHeight || '';
+        renderBuildingBoxesPanel(markerInfo);
+    }
     const position = markerInfo.marker.getPosition();
     setMarkerEditorCoordinatesText(markerInfo.type, position.lat().toFixed(6), position.lng().toFixed(6));
     configureMarkerPanel(markerInfo.type, 'edit');
@@ -475,6 +486,11 @@ function readMarkerPanelForm() {
         is144F: document.getElementById('ceo144Checkbox').checked,
         derivationTCount: parseInt(document.getElementById('markerDerivationT').value, 10) || 0,
         pole: readPoleForm(),
+        building: {
+            floors: parseInt(document.getElementById('buildingFloors').value, 10) || null,
+            floorHeight: parseFloat(String(document.getElementById('buildingFloorHeight').value).replace(',', '.')) || null,
+        },
+        boxBuilding: typeof readBoxBuildingFields === 'function' ? readBoxBuildingFields() : null,
     };
 }
 
@@ -495,6 +511,7 @@ function applyMarkerFormToData(target, type, form) {
     if (type === 'RESERVA') target.reservaAccessory = form.accessory;
     if (type === 'CORDOALHA') target.derivationTCount = form.derivationTCount;
     if (type === 'POSTE') target.pole = form.pole;
+    if (type === 'PREDIO') target.building = form.building;
 }
 
 // ---------------------------------------------------------------
@@ -540,6 +557,8 @@ function handleMarkerPanelConfirm() {
         if (getMarkerTypeMeta(type).statuses) applyMarkerInfrastructureStatus(markerInfo, form.status);
         if (type === 'CTO') markerInfo.needsStickers = form.needsStickers;
         if (oldName !== markerInfo.name) syncCableAnchorNamesForMarker(markerInfo, oldName);
+        //Caixa dentro de prédio (torre e andar)
+        if (form.boxBuilding) setBoxBuilding(markerInfo, form.boxBuilding.building, form.boxBuilding);
         updateMarkerAppearance(markerInfo);
         refreshBomAfterProjectChange();
         resetMarkerModal({ discardPositionChanges: false });
@@ -550,6 +569,14 @@ function handleMarkerPanelConfirm() {
     if (type === 'CEO') selectedMarkerData.ceoStatus = form.status;
     if (type === 'CORDOALHA') selectedMarkerData.cordoalhaStatus = form.status;
     if (type === 'RESERVA') selectedMarkerData.reservaStatus = form.status;
+    //Caixa nova dentro de prédio: vai direto para o ponto do prédio, com torre e andar
+    if (form.boxBuilding?.building) {
+        selectedMarkerData.buildingUid = form.boxBuilding.building.uid;
+        selectedMarkerData.tower = form.boxBuilding.tower;
+        selectedMarkerData.floor = form.boxBuilding.floor;
+        if (type === 'CTO') selectedMarkerData.isPredial = true;
+        pendingMarkerPosition = form.boxBuilding.building.marker.getPosition();
+    }
     const continuous = !adjustingKmlMarkerInfo && !!document.getElementById('markerContinuousCheckbox')?.checked;
     if (!adjustingKmlMarkerInfo) storeContinuousMarkerPreference(type, continuous);
     startPlacingMarker({ continuous });

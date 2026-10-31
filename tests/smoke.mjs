@@ -1548,9 +1548,13 @@ const sbSel = await page.evaluate(() => {
   click(list[3], { shiftKey: true });
   const range = names();
   const highlighted = ul.querySelectorAll('.is-multi-selected').length;
+  //Clique simples num item e Shift+clique em outro: seleciona todos entre os dois
+  clearMapSelection();
+  click(list[0], {}); click(list[2], { shiftKey: true });
+  const plainRange = names();
   clearMapSelection();
   list.forEach(m => markers.splice(markers.indexOf(m), 1)); ul.remove();
-  return { ctrl, toggled, range, highlighted };
+  return { ctrl, toggled, range, highlighted, plainRange };
 });
 //Cabos e polígonos também entram na seleção pela barra lateral e são excluídos juntos
 const sbMix = await page.evaluate(() => {
@@ -1578,7 +1582,7 @@ const sbMix = await page.evaluate(() => {
 });
 check(sbMix.kinds === '1 Cabo · 1 Polígono' && sbMix.gone && sbMix.onlyCable === 'C-MIX' && sbMix.withoutCable === 'P-MIX', `seleção múltipla com cabos e polígonos (${JSON.stringify(sbMix)})`);
 
-check(sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
+check(sbSel.plainRange === 'B1,B2,B3' && sbSel.ctrl === 'B1,B3' && sbSel.toggled === 'B1' && sbSel.range === 'B3,B4' && sbSel.highlighted === 2,
   `seleção múltipla pela barra lateral com Ctrl e Shift (${JSON.stringify(sbSel)})`);
 
 //Tour pelo sistema e tecla "?" para os atalhos
@@ -2069,6 +2073,50 @@ const reportMap = await sp.evaluate(async () => {
 });
 check(reportMap.png && reportMap.legend === 'CEO:1|CTO:1|Cabo 12 fibras:1|Cabo 36 fibras (existente):1' && reportMap.icons && reportMap.preview && reportMap.pdfImages !== 0,
   `relatório tem a foto do projeto com legenda na prévia e no PDF (${JSON.stringify(reportMap)})`);
+//Prédio: caixas por torre e andar no mesmo ponto, escondidas no mapa, lista no painel do prédio, prumada e cabo escolhendo a caixa
+const building = await sp.evaluate(() => {
+  const sidebar = document.getElementById('sidebar');
+  rebuildSidebarFromJSON([{ id: 'projBD', name: 'Projeto BD', isProject: true, type: 'TCR', children: [] }], sidebar);
+  setActiveFolder('projBD');
+  //Caixa vem antes do prédio no arquivo: ao abrir o prédio ela é escondida mesmo assim
+  rebuildMarker({ uid: 'bd-c5', folderId: 'projBD', type: 'CTO', name: 'CTO-05', ctoStatus: 'Nova', color: '#16a34a', buildingUid: 'bd-ed', tower: 'A', floor: '5', position: { lat: -24.001, lng: -46.001 } });
+  rebuildMarker({ uid: 'bd-ed', folderId: 'projBD', type: 'PREDIO', name: 'Ed. Sol', color: '#0e7490', building: { floors: 12, floorHeight: 3 }, position: { lat: -24, lng: -46 } });
+  rebuildMarker({ uid: 'bd-c1', folderId: 'projBD', type: 'CTO', name: 'CTO-01', ctoStatus: 'Nova', color: '#16a34a', buildingUid: 'bd-ed', tower: 'A', floor: 'Térreo', position: { lat: -24, lng: -46 } });
+  rebuildMarker({ uid: 'bd-x', folderId: 'projBD', type: 'CTO', name: 'CTO-RUA', ctoStatus: 'Nova', color: '#16a34a', position: { lat: -24.01, lng: -46 } });
+  const ed = markers.find(m => m.uid === 'bd-ed'), c5 = markers.find(m => m.uid === 'bd-c5'), c1 = markers.find(m => m.uid === 'bd-c1'), rua = markers.find(m => m.uid === 'bd-x');
+  const out = {};
+  out.order = getBuildingBoxes(ed).map(b => b.name).join();
+  out.hidden = c5.marker.getOpacity() === 0 && c5.marker.get('clickable') === false && rua.marker.getOpacity() !== 0;
+  out.samePlace = c5.marker.getPosition().lat() === -24 && c5.marker.getPosition().lng() === -46;
+  out.meta = c5.listItem.querySelector('.item-meta')?.textContent || '';
+  out.riser = getBuildingRiserMeters(ed);
+  //Painel do prédio lista as caixas por andar
+  openMarkerFromUserAction(ed);
+  out.panel = [...document.querySelectorAll('#buildingBoxesPanel .building-box__floor')].map(e => e.textContent).join('|');
+  resetMarkerModal();
+  //Painel da CTO: escolher o prédio, torre e andar
+  openMarkerFromUserAction(rua);
+  document.getElementById('boxBuildingSelect').value = 'bd-ed';
+  document.getElementById('boxBuildingSelect').dispatchEvent(new Event('change'));
+  document.getElementById('boxBuildingTower').value = 'B';
+  document.getElementById('boxBuildingFloor').value = '8';
+  document.getElementById('confirmMarker').click();
+  out.linked = rua.buildingUid === 'bd-ed' && rua.floor === '8' && rua.tower === 'B' && rua.isPredial === true && rua.marker.getPosition().lat() === -24;
+  out.count = getBuildingBoxes(ed).length;
+  //Salva e volta igual
+  const saved = serializeMarker(rua);
+  out.saved = saved.buildingUid === 'bd-ed' && saved.floor === '8' && serializeMarker(ed).building.floorHeight === 3;
+  //Cabo: clicar no prédio pergunta em qual caixa ligar
+  chooseBuildingBoxForCable(ed);
+  out.chooser = document.getElementById('buildingChooseModal').style.display === 'flex' && document.querySelectorAll('#buildingChooseList [data-building-pick]').length === 3;
+  document.getElementById('buildingChooseModal').style.display = 'none';
+  [ed, c5, c1, rua].forEach(m => { m.marker.setMap(null); m.listItem?.remove(); markers.splice(markers.indexOf(m), 1); });
+  document.getElementById('projBD')?.closest('li')?.remove();
+  return out;
+});
+check(building.order === 'CTO-01,CTO-05' && building.hidden && building.samePlace && /Ed\. Sol · Torre A · 5º andar/.test(building.meta) && building.riser === 25
+  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser,
+  `prédio com caixas por torre e andar, escondidas no mapa, prumada e cabo escolhendo a caixa (${JSON.stringify(building)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');

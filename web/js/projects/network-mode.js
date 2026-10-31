@@ -547,7 +547,7 @@ function toAsBuiltCable(cable, stamp) {
 
 //O que vai para a rede: as caixas (com o plano de fusão de cada uma) e os cabos. Casas, clientes, postes, polígonos e
 //os outros marcadores ficam só no projeto (clientes são ligados nas caixas no modo Rede)
-const NETWORK_MARKER_TYPES = new Set(['CTO', 'CEO', 'POP', 'RESERVA', 'TORRE']);
+const NETWORK_MARKER_TYPES = new Set(['CTO', 'CEO', 'POP', 'RESERVA', 'TORRE', 'PREDIO']);
 const goesToNetwork = (marker) => NETWORK_MARKER_TYPES.has(marker.type);
 
 const walkFolders = (node, visit, parent = null) => {

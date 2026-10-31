@@ -374,6 +374,10 @@ function serializeMarker(markerInfo) {
         client: markerInfo.type === 'CLIENTE' ? (markerInfo.client || {}) : undefined,
         popEquipment: markerInfo.type === 'POP' && markerInfo.popEquipment ? markerInfo.popEquipment : undefined,
         pole: markerInfo.type === 'POSTE' && markerInfo.pole ? markerInfo.pole : undefined,
+        building: markerInfo.type === 'PREDIO' ? (markerInfo.building || {}) : undefined,
+        buildingUid: markerInfo.buildingUid || undefined, //Caixa dentro de prédio (js/network/buildings.js)
+        tower: markerInfo.buildingUid ? (markerInfo.tower || '') : undefined,
+        floor: markerInfo.buildingUid ? (markerInfo.floor || '') : undefined,
         asBuilt: markerInfo.asBuilt || undefined, //Na rede: de qual projeto veio e quando (js/projects/network-mode.js)
         alsoIn: serializeAlsoIn(markerInfo),
         position: { lat: position.lat(), lng: position.lng() }
