@@ -34,6 +34,11 @@ function runProjectCheck(scope) {
     //Cabos: pontas nas caixas
     section = 'cabos';
     scope.cables.forEach(cable => {
+        //Cabo importado com ponta solta sobre um marcador importado: vincula agora (projetos já importados)
+        if (cable.fromKmlImport && typeof relinkImportedCableEnds === 'function'
+            && (!findMarkerByUid(cable.startAnchorUid, cable) || !findMarkerByUid(cable.endAnchorUid, cable))) {
+            relinkImportedCableEnds(cable);
+        }
         const loose = [];
         if (!findMarkerByUid(cable.startAnchorUid, cable)) loose.push('A');
         if (!findMarkerByUid(cable.endAnchorUid, cable)) loose.push('B');

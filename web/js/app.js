@@ -2621,7 +2621,53 @@ function anchorCablePathToMarkers(path, folderId) {
     const lastIndex = anchoredPath.length - 1;
     const end = snapPointToNearestAnchorMarker(anchoredPath[lastIndex], KML_CABLE_ANCHOR_SNAP_DISTANCE_M, candidates);
     anchoredPath[lastIndex] = end.point;
+    //Sem caixa por perto: a ponta prende em qualquer marcador do projeto ali (poste, cliente, etc.)
+    if (!start.markerInfo || !end.markerInfo) {
+        const folderIds = folderId ? getProjectFolderIdsForItem(folderId) : null;
+        const others = markers.filter(m => m.marker && !candidates.includes(m) && m.type !== 'PREDIO'
+            && (!folderIds || folderIds.includes(m.folderId)));
+        if (!start.markerInfo) {
+            const s = snapPointToNearestAnchorMarker(anchoredPath[0], KML_CABLE_ANCHOR_SNAP_DISTANCE_M, others);
+            anchoredPath[0] = s.point; start.markerInfo = s.markerInfo;
+        }
+        if (!end.markerInfo) {
+            const e = snapPointToNearestAnchorMarker(anchoredPath[lastIndex], KML_CABLE_ANCHOR_SNAP_DISTANCE_M,
+                others.filter(m => m !== start.markerInfo));
+            anchoredPath[lastIndex] = e.point; end.markerInfo = e.markerInfo;
+        }
+    }
     return { path: anchoredPath, startAnchor: start.markerInfo, endAnchor: end.markerInfo };
+}
+
+//Prende as pontas soltas de um cabo importado no marcador que estiver ali (até 30 m); mantém as já vinculadas
+function relinkImportedCableEnds(cable) {
+    if (!cable?.path || cable.path.length < 2) return false;
+    const hasStart = findMarkerByUid(cable.startAnchorUid, cable);
+    const hasEnd = findMarkerByUid(cable.endAnchorUid, cable);
+    const { path, startAnchor, endAnchor } = anchorCablePathToMarkers(cable.path, cable.folderId);
+    let changed = false;
+    if (!hasStart && startAnchor && startAnchor !== hasEnd) {
+        cable.path[0] = path[0];
+        cable.startAnchorUid = ensureMarkerUid(startAnchor);
+        cable.startAnchorMarkerName = startAnchor.name || null;
+        cable.startAnchorMarkerFolderId = startAnchor.folderId || null;
+        changed = true;
+    }
+    const last = cable.path.length - 1;
+    if (!hasEnd && endAnchor && endAnchor !== (hasStart || startAnchor)) {
+        cable.path[last] = path[last];
+        cable.endAnchorUid = ensureMarkerUid(endAnchor);
+        cable.endAnchorMarkerName = endAnchor.name || null;
+        cable.endAnchorMarkerFolderId = endAnchor.folderId || null;
+        changed = true;
+    }
+    if (changed) {
+        cable.polyline?.setPath(cable.path);
+        const m = calculateCableMeasurement(cable);
+        cable.lancamento = m.lancamento; cable.reserva = m.reserva; cable.totalLength = m.total;
+        if (typeof updateCableSidebarLabel === 'function') updateCableSidebarLabel(cable);
+    }
+    return changed;
 }
 
 function captureCableAnchorsFromPath(cable) {
