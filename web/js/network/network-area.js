@@ -187,20 +187,38 @@ function mergeNetworkStash(root, record) {
 // Modo Projeto: rede por baixo só no trecho
 // ---------------------------------------------------------------
 
+//Vários trechos ficam carregados juntos (cada um desenhado uma vez; ficam guardados neste navegador)
 const NETWORK_LAYER_AREA_KEY = 'routeMapNetworkLayerArea';
-function getNetworkLayerArea() {
-    try { const v = JSON.parse(localStorage.getItem(NETWORK_LAYER_AREA_KEY) || 'null'); return Array.isArray(v) && v.length >= 3 ? v : null; } catch (e) { return null; }
+function getNetworkLayerAreas() {
+    try {
+        const v = JSON.parse(localStorage.getItem(NETWORK_LAYER_AREA_KEY) || 'null');
+        if (!Array.isArray(v) || !v.length) return [];
+        const list = Array.isArray(v[0]) ? v : [v]; //Antes era um trecho só
+        return list.filter(a => Array.isArray(a) && a.length >= 3);
+    } catch (e) { return []; }
 }
-function setNetworkLayerArea(area) {
-    try { if (area) localStorage.setItem(NETWORK_LAYER_AREA_KEY, JSON.stringify(area)); else localStorage.removeItem(NETWORK_LAYER_AREA_KEY); } catch (e) { /* ignora */ }
+//Compatível com quem pergunta "tem trecho?" (null = cidade inteira)
+function getNetworkLayerArea() {
+    const list = getNetworkLayerAreas();
+    return list.length ? list : null;
+}
+function setNetworkLayerAreas(list) {
+    try { if (list?.length) localStorage.setItem(NETWORK_LAYER_AREA_KEY, JSON.stringify(list)); else localStorage.removeItem(NETWORK_LAYER_AREA_KEY); } catch (e) { /* ignora */ }
     if (typeof refreshNetworkLayer === 'function') refreshNetworkLayer();
 }
+function setNetworkLayerArea(area) {
+    setNetworkLayerAreas(area ? [area] : []);
+}
+const isInsideAnyNetworkArea = (point, areas) => !areas?.length || areas.some(a => isInsideNetworkArea(point, a));
+const isMarkerDataInAreas = (m, areas) => !!m.position && isInsideAnyNetworkArea(m.position, areas);
+const isCableDataInAreas = (c, areas) => (c.path || []).some(p => isInsideAnyNetworkArea(p, areas));
 
-async function chooseNetworkLayerArea() {
-    const area = await drawNetworkArea({ title: 'Trecho da rede por baixo', subtitle: 'Só a rede existente dentro da área aparece no projeto' });
+//keep = true: soma o trecho novo aos que já estão carregados; false: troca todos por ele
+async function chooseNetworkLayerArea({ keep = true } = {}) {
+    const area = await drawNetworkArea({ title: 'Trecho da rede por baixo', subtitle: keep ? 'Soma aos trechos já carregados' : 'Só a rede existente dentro da área aparece no projeto' });
     if (area) {
         if (typeof setNetworkLayerEnabled === 'function' && !isNetworkLayerEnabled()) setNetworkLayerEnabled(true);
-        setNetworkLayerArea(area);
+        setNetworkLayerAreas(keep ? [...getNetworkLayerAreas(), area] : [area]);
     }
 }
 

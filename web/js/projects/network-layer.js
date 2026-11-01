@@ -28,7 +28,7 @@ function updateNetworkLayerToggle() {
 function clearNetworkLayer() {
     networkLayer.overlays.forEach(o => o.setMap(null));
     networkLayer.overlays = [];
-    if (typeof hideNetworkAreaShape === 'function') hideNetworkAreaShape('layer');
+    if (typeof hideNetworkAreaShape === 'function') [...networkAreaShapes.keys()].filter(k => String(k).startsWith('layer')).forEach(hideNetworkAreaShape);
     renderNetworkLayerChip(null);
 }
 
@@ -43,15 +43,17 @@ function renderNetworkLayerChip(info) {
         document.getElementById('map')?.parentElement?.appendChild(chip);
         chip.addEventListener('click', (e) => {
             const action = e.target.closest('[data-layer]')?.dataset.layer;
-            if (action === 'area') chooseNetworkLayerArea();
+            if (action === 'area') chooseNetworkLayerArea({ keep: true });
             if (action === 'whole') setNetworkLayerArea(null);
+            if (action === 'last') setNetworkLayerAreas(getNetworkLayerAreas().slice(0, -1));
             if (action === 'off') setNetworkLayerEnabled(false);
         });
     }
     const esc = (v) => escapeHtml(String(v ?? ''));
     chip.innerHTML = `<span class="network-layer-chip__swatch" aria-hidden="true"></span>
-        <span title="${esc(info.cities.join(', '))}"><b>Rede existente</b> · ${esc(info.cities.join(', '))} · ${info.area ? 'trecho' : 'cidade inteira'} · ${info.count}</span>
-        <button type="button" class="btn-chip" data-layer="area">${info.area ? 'Outro trecho' : 'Só um trecho'}</button>
+        <span title="${esc(info.cities.join(', '))}"><b>Rede existente</b> · ${esc(info.cities.join(', '))} · ${info.area ? (info.areas > 1 ? `${info.areas} trechos` : 'trecho') : 'cidade inteira'} · ${info.boxes} caixas · ${info.cables} cabos</span>
+        <button type="button" class="btn-chip" data-layer="area" title="${info.area ? 'Desenha mais um trecho; os já carregados continuam no mapa' : 'Mostra só a rede dentro da área desenhada'}">${info.area ? '+ Trecho' : 'Só um trecho'}</button>
+        ${info.areas > 1 ? '<button type="button" class="btn-chip" data-layer="last" title="Tira o último trecho desenhado">Tirar último</button>' : ''}
         ${info.area ? '<button type="button" class="btn-chip" data-layer="whole">Cidade inteira</button>' : ''}
         <button type="button" class="btn-chip" data-layer="off" title="Desligar (Projeto → Rede da cidade por baixo)">Ocultar</button>`;
     chip.classList.remove('hidden');
@@ -92,24 +94,31 @@ async function refreshNetworkLayer() {
     //O que já está no projeto (trazido da rede ou concluído) não aparece duas vezes
     const inWorkspace = new Set([...markers.map(m => m.uid), ...savedCables.map(c => c.uid)].filter(Boolean));
     //Trecho escolhido (js/network/network-area.js): só a rede dentro dele
-    const area = typeof getNetworkLayerArea === 'function' ? getNetworkLayerArea() : null;
+    const areas = typeof getNetworkLayerAreas === 'function' ? getNetworkLayerAreas() : [];
+    const area = areas.length ? areas : null;
+    let cablesCount = 0, boxesCount = 0;
     let count = 0;
     loaded.forEach(([city, data]) => {
         if (!data) return;
         (data.cables || []).forEach(cable => {
             if (inWorkspace.has(cable.uid) || !(cable.path || []).length) return;
-            if (area && !isCableDataInArea(cable, area)) return;
-            count++;
-            //Existente: tracejado cinza, bem diferente dos cabos do projeto (linha cheia e colorida)
+            if (area && !isCableDataInAreas(cable, area)) return;
+            count++; cablesCount++;
+            //Existente: tracejado na cor do cabo sobre uma faixa clara, bem diferente dos cabos do projeto (linha cheia)
+            const pathLL = cable.path.map(p => new google.maps.LatLng(p.lat, p.lng));
+            const color = cable.color || (typeof getCableColor === 'function' ? getCableColor(getFiberType(cable.type)) : null) || '#475569';
             networkLayer.overlays.push(new google.maps.Polyline({
-                map, path: cable.path.map(p => new google.maps.LatLng(p.lat, p.lng)), clickable: false, zIndex: 1, strokeOpacity: 0,
-                icons: [{ icon: { path: 'M 0,-1 0,1', strokeColor: '#475569', strokeOpacity: 0.7, strokeWeight: 2.5, scale: 2.5 }, offset: '0', repeat: '9px' }],
+                map, path: pathLL, clickable: false, zIndex: 1, strokeColor: '#ffffff', strokeOpacity: 0.55, strokeWeight: 6,
+            }));
+            networkLayer.overlays.push(new google.maps.Polyline({
+                map, path: pathLL, clickable: false, zIndex: 2, strokeOpacity: 0,
+                icons: [{ icon: { path: 'M 0,-1 0,1', strokeColor: color, strokeOpacity: 0.95, strokeWeight: 3.5, scale: 3 }, offset: '0', repeat: '11px' }],
             }));
         });
         (data.markers || []).filter(goesToNetwork).forEach(item => {
             if (inWorkspace.has(item.uid) || !item.position) return;
-            if (area && !isMarkerDataInArea(item, area)) return;
-            count++;
+            if (area && !isMarkerDataInAreas(item, area)) return;
+            count++; boxesCount++;
             const marker = new google.maps.Marker({
                 map, position: new google.maps.LatLng(item.position.lat, item.position.lng), zIndex: 2, opacity: 0.8,
                 title: `${item.name} · EXISTENTE (rede de ${city}) · clique para usar no projeto`,
@@ -119,8 +128,8 @@ async function refreshNetworkLayer() {
             networkLayer.overlays.push(marker);
         });
     });
-    if (area && typeof showNetworkAreaShape === 'function') showNetworkAreaShape('layer', area, '#475569');
-    renderNetworkLayerChip(loaded.some(([, data]) => data) ? { cities: loaded.filter(([, d]) => d).map(([c]) => c), area: !!area, count } : null);
+    if (area && typeof showNetworkAreaShape === 'function') areas.forEach((a, i) => showNetworkAreaShape(`layer${i}`, a, '#475569'));
+    renderNetworkLayerChip(loaded.some(([, data]) => data) ? { cities: loaded.filter(([, d]) => d).map(([c]) => c), area: !!area, areas: areas.length, count, cables: cablesCount, boxes: boxesCount } : null);
 }
 
 //Projeto que recebe a caixa: o ativo (se é da mesma cidade) ou o primeiro aberto dessa cidade

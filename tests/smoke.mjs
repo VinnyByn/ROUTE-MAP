@@ -4627,6 +4627,24 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.otherPr
       networkLayer.cache.clear();
       rebuildSidebarFromJSON([{ id: 'projNC', name: 'Bairro C', city: 'Lavras', type: 'TCR', isProject: true, children: [] }], sidebar);
       setActiveFolder('projNC');
+      //Dois trechos carregados juntos: cabo da rede aparece (faixa clara + tracejado na cor do cabo), caixa de fora não
+      window.__fakeDb.projects[netId].data.cables.push({ uid: 'cb_net_t', folderId: netId, name: 'FO-12-REDE', type: 'Cabo AS 80 FO-12', color: '#008000', status: 'Existente',
+        path: [{ lat: -21.30, lng: -45.10 }, { lat: -21.301, lng: -45.101 }] });
+      window.__fakeDb.projects[netId].data.markers.push({ uid: 'mk_net_out', folderId: netId, type: 'CTO', name: 'CTO-FORA', color: '#16a34a', ctoStatus: 'Existente', position: { lat: -21.9, lng: -45.9 } });
+      const sq = (lat, lng) => [{ lat: lat + 0.01, lng: lng - 0.01 }, { lat: lat + 0.01, lng: lng + 0.01 }, { lat: lat - 0.01, lng: lng + 0.01 }, { lat: lat - 0.01, lng: lng - 0.01 }];
+      setNetworkLayerAreas([sq(-21.25, -45.01), sq(-21.30, -45.10)]);
+      await refreshNetworkLayer();
+      const chipText = document.getElementById('networkLayerChip')?.textContent || '';
+      const cableShown = networkLayer.overlays.filter(o => o.get?.('icons')?.[0]?.icon?.strokeColor === '#008000').length === 1;
+      const outHidden = !networkLayer.overlays.some(o => o.getTitle && /CTO-FORA/.test(o.getTitle()));
+      out.layerAreas = /2 trechos/.test(chipText) && /\d+ cabos/.test(chipText) && cableShown && outHidden && !!document.querySelector('#networkLayerChip [data-layer="last"]');
+      document.querySelector('#networkLayerChip [data-layer="last"]').click();
+      await new Promise(r => setTimeout(r, 50));
+      out.layerAreas = out.layerAreas && getNetworkLayerAreas().length === 1;
+      setNetworkLayerAreas([]);
+      window.__fakeDb.projects[netId].data.cables = window.__fakeDb.projects[netId].data.cables.filter(c => c.uid !== 'cb_net_t');
+      window.__fakeDb.projects[netId].data.markers = window.__fakeDb.projects[netId].data.markers.filter(m => m.uid !== 'mk_net_out');
+      networkLayer.cache.clear();
       await refreshNetworkLayer();
       const layerTitles = networkLayer.overlays.filter(o => o.getTitle).map(o => o.getTitle()).filter(t => /CTO-REDE/.test(t));
       const item = window.__fakeDb.projects[netId].data.markers.find(m => m.uid === 'mk_net_only');
@@ -4636,7 +4654,7 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.otherPr
       await persistProject(document.getElementById('projNC').closest('.folder'));
       await concludeProject('projNC');
       const finalMarkers = window.__fakeDb.projects[netId].data.markers;
-      out.layer = layerTitles.length === 1 && /CTO-REDE · EXISTENTE/.test(layerTitles[0]) && used?.uid === 'mk_net_only' && used.folderId === 'projNC'
+      out.layer = out.layerAreas && layerTitles.length === 1 && /CTO-REDE · EXISTENTE/.test(layerTitles[0]) && used?.uid === 'mk_net_only' && used.folderId === 'projNC'
         && used.ctoStatus === 'Existente' && after === 0 && finalMarkers.filter(m => m.uid === 'mk_net_only').length === 1
         && finalMarkers.find(m => m.uid === 'mk_net_only').asBuilt.projectId === 'antigo' && finalMarkers.find(m => m.uid === 'mk_net_only').folderId === netId;
       setNetworkLayerEnabled(false);
