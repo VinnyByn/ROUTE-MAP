@@ -3900,7 +3900,9 @@ function updateCablesForMovedMarker(oldPosition, newPosition, movedMarkerInfo = 
 function deleteEditingMarker() {
     if (!editingMarkerInfo) return;
     const contents = typeof describeBuildingContents === 'function' ? describeBuildingContents(editingMarkerInfo) : '';
-    const message = `Tem certeza que deseja excluir o marcador "${editingMarkerInfo.name}"?${contents}`;
+    const fromNet = typeof isNetworkItemInProject === 'function' && isNetworkItemInProject(editingMarkerInfo)
+        ? ` Ele já existe na rede de ${editingMarkerInfo.fromNetwork}: sai só deste projeto, a rede continua com ele.` : '';
+    const message = `Tem certeza que deseja excluir o marcador "${editingMarkerInfo.name}"?${contents}${fromNet}`;
     showConfirm('Excluir Marcador', message, () => {
         if (focusedMapMarkerInfo === editingMarkerInfo) {
             clearMapMarkerHighlight();

@@ -4649,6 +4649,25 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.otherPr
       const layerTitles = networkLayer.overlays.filter(o => o.getTitle).map(o => o.getTitle()).filter(t => /CTO-REDE/.test(t));
       const item = window.__fakeDb.projects[netId].data.markers.find(m => m.uid === 'mk_net_only');
       const used = useNetworkBoxInProject(item, 'Lavras', { quiet: true });
+      //Item da rede no projeto: renomear pergunta antes ("alterando algo existente"); fechar o aviso da rede mantém a camada
+      openMarkerFromUserAction(used);
+      document.getElementById('markerName').value = 'CTO-REDE';
+      document.getElementById('confirmMarker').click();
+      const noAskSame = getComputedStyle(document.getElementById('confirmModal')).display === 'none';
+      resetMarkerModal();
+      openMarkerFromUserAction(used);
+      document.getElementById('markerName').value = 'CTO-REDE-2';
+      document.getElementById('confirmMarker').click();
+      const asked = /já existe na rede de Lavras/.test(document.getElementById('confirmModal').textContent) && used.name === 'CTO-REDE';
+      document.getElementById('confirmModalConfirmButton').click();
+      const renamed = used.name === 'CTO-REDE-2';
+      used.name = 'CTO-REDE'; updateMarkerAppearance(used);
+      document.querySelector('#networkLayerChip [data-layer="hide-chip"]')?.click();
+      const collapsed = document.getElementById('networkLayerChip').classList.contains('is-collapsed') && networkLayer.overlays.length > 0;
+      document.querySelector('#networkLayerChip [data-layer="show-chip"]')?.click();
+      out.netChangeDetail = [used.fromNetwork === 'Lavras', serializeMarker(used).fromNetwork === 'Lavras', noAskSame, asked, renamed, collapsed,
+        !document.getElementById('networkLayerChip').classList.contains('is-collapsed')].join();
+      out.layerAreas = out.layerAreas && out.netChangeDetail === 'true,true,true,true,true,true,true';
       await refreshNetworkLayer();
       const after = networkLayer.overlays.filter(o => o.getTitle && /CTO-REDE/.test(o.getTitle())).length;
       await persistProject(document.getElementById('projNC').closest('.folder'));
