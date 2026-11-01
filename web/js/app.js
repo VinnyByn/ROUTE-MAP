@@ -3899,16 +3899,21 @@ function updateCablesForMovedMarker(oldPosition, newPosition, movedMarkerInfo = 
 //Exclusão de marcador
 function deleteEditingMarker() {
     if (!editingMarkerInfo) return;
-    const message = `Tem certeza que deseja excluir o marcador "${editingMarkerInfo.name}"?`;
+    const contents = typeof describeBuildingContents === 'function' ? describeBuildingContents(editingMarkerInfo) : '';
+    const message = `Tem certeza que deseja excluir o marcador "${editingMarkerInfo.name}"?${contents}`;
     showConfirm('Excluir Marcador', message, () => {
         if (focusedMapMarkerInfo === editingMarkerInfo) {
             clearMapMarkerHighlight();
         }
+        //Prédio: as caixas e os cabos dentro dele saem junto (js/network/buildings.js)
+        if (typeof removeBuildingContents === 'function') removeBuildingContents(editingMarkerInfo);
         //Remove visualmente e dos dados globais
         editingMarkerInfo.marker.setMap(null);
         editingMarkerInfo.listItem.remove();
         markers = markers.filter((m) => m !== editingMarkerInfo);
         refreshClientDrops();
+        refreshBomAfterProjectChange();
+        if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
         showAlert("Sucesso", "Marcador excluído com sucesso.");
         resetMarkerModal();
     });

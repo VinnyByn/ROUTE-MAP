@@ -364,3 +364,41 @@ function setupBuildings() {
 }
 
 document.addEventListener('DOMContentLoaded', setupBuildings);
+
+// ---------------------------------------------------------------
+// Excluir o prédio leva junto as caixas dele e os cabos entre elas (cabo da rua que chega numa caixa fica,
+// sem a ponta presa; cliente da caixa fica sem CTO, como ao excluir a caixa sozinha)
+// ---------------------------------------------------------------
+
+function getBuildingContents(building) {
+    if (!isBuildingMarker(building)) return { boxes: [], cables: [] };
+    return { boxes: getBuildingBoxes(building), cables: getBuildingRiserCables(building) };
+}
+
+//Texto para a confirmação: " As 3 caixas e 2 cabos dentro dele também saem."
+function describeBuildingContents(building) {
+    const { boxes, cables } = getBuildingContents(building);
+    if (!boxes.length && !cables.length) return '';
+    const parts = [];
+    if (boxes.length) parts.push(`${boxes.length === 1 ? 'a caixa' : `as ${boxes.length} caixas`} (${boxes.map(b => b.name).join(', ')})`);
+    if (cables.length) parts.push(`${cables.length === 1 ? 'o cabo' : `os ${cables.length} cabos`} entre elas`);
+    return ` ${parts.join(' e ')} dentro dele também ${boxes.length + cables.length === 1 ? 'sai' : 'saem'}.`;
+}
+
+function removeBuildingContents(building) {
+    const { boxes, cables } = getBuildingContents(building);
+    cables.forEach(cable => {
+        const usage = typeof checkCableUsageInFusionPlans === 'function' ? checkCableUsageInFusionPlans(cable) : null;
+        if (usage?.isInPlan) removeCableFromSavedFusionPlans(cable, usage.boxes);
+        cable.polyline?.setMap(null);
+        cable.item?.remove();
+    });
+    boxes.forEach(box => {
+        if (typeof focusedMapMarkerInfo !== 'undefined' && focusedMapMarkerInfo === box) clearMapMarkerHighlight();
+        box.marker?.setMap(null);
+        box.listItem?.remove();
+    });
+    if (cables.length) savedCables = savedCables.filter(c => !cables.includes(c));
+    if (boxes.length) markers = markers.filter(m => !boxes.includes(m));
+    return { boxes, cables };
+}
