@@ -928,12 +928,17 @@ const projCheck = await page.evaluate(() => {
     document.querySelector('[data-folder-id="projV"]').closest('.folder').remove();
     activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
   };
+  //Clicar no aviso de nome repetido marca todos os itens com esse nome
+  const dup = issues.find(i => i.title === 'Nome de cabo repetido: V-2');
+  focusProjectCheckTarget(dup.target);
+  window.__dupSel = [...mapSelection.items].map(i => i.name).join() === 'V-2,V-2' && mapSelection.items.has(c2) && mapSelection.items.has(c3);
+  clearMapSelection();
   const groups = [...document.querySelectorAll('#projectCheckBody .check-group__head span')].map(h => h.textContent).join('|');
   document.querySelector('#projectCheckBody [data-check-filter="erro"]').click();
   const onlyErrors = [...document.querySelectorAll('#projectCheckBody .check-list button')].every(b => b.classList.contains('is-erro'))
     && document.querySelectorAll('#projectCheckBody .check-list button').length === issues.filter(i => i.level === 'erro').length;
   return { titles: issues.map(i => `${i.level}:${i.title}`), panelHasCount: /erros?/.test(panel) && /avisos?/.test(panel) && groups === 'Cabos|Caixas e fusões|Clientes e portas|Nomes repetidos' && onlyErrors
-    && document.getElementById('projectCheckTitle').textContent === 'Verificação do projeto', groups };
+    && document.getElementById('projectCheckTitle').textContent === 'Verificação do projeto' && window.__dupSel, groups, dupSel: window.__dupSel };
 });
 if (process.env.SMOKE_SHOTS) {
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
