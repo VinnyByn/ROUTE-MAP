@@ -4662,6 +4662,28 @@ check(split.passing === 'FO-12-CTO-B' && split.notPassing === 0 && split.otherPr
       document.getElementById('confirmModalConfirmButton').click();
       const renamed = used.name === 'CTO-REDE-2';
       used.name = 'CTO-REDE'; updateMarkerAppearance(used);
+      //Mover a caixa da rede: o cabo da rede preso nela vem junto; "Lançar cabo novo" traz como Novo, ponta no lugar novo
+      window.__fakeDb.projects[netId].data.cables.push({ uid: 'cb_net_box', folderId: netId, name: 'FO-12-CTO-REDE', type: 'Cabo AS 80 FO-12', color: '#008000', status: 'Existente', width: 2,
+        startAnchorUid: 'mk_far', endAnchorUid: 'mk_net_only', path: [{ lat: -21.26, lng: -45.02 }, { lat: -21.25, lng: -45.01 }] });
+      networkLayer.cache.clear();
+      await fetchNetworkLayerData('Lavras');
+      openMarkerFromUserAction(used);
+      //A janela de escolha está trocada neste teste: responde "Lançar cabo novo" e guarda a pergunta
+      const prevChoice = showChoice;
+      let movePrompt = '';
+      showChoice = async (opts) => { movePrompt = opts.message; return opts.choices.find(c => c.value === 'novo')?.value || 'cancel'; };
+      used.marker.setPosition(new google.maps.LatLng(-21.2505, -45.0105));
+      document.getElementById('confirmMarker').click();
+      await new Promise(r => setTimeout(r, 30));
+      showChoice = prevChoice;
+      const askedMove = /FO-12-CTO-REDE/.test(movePrompt);
+      const moved = savedCables.find(c => c.uid === 'cb_net_box');
+      out.netMoveDetail = [askedMove, moved?.status, moved?.startAnchorUid, moved?.endAnchorUid, moved?.path.at(-1).lat(), moved?.path[0].lat()].join();
+      out.netMove = out.netMoveDetail === 'true,Novo,mk_far,mk_net_only,-21.2505,-21.26';
+      if (moved) { moved.polyline?.setMap(null); moved.item?.remove(); savedCables.splice(savedCables.indexOf(moved), 1); }
+      used.marker.setPosition(new google.maps.LatLng(-21.25, -45.01));
+      window.__fakeDb.projects[netId].data.cables = window.__fakeDb.projects[netId].data.cables.filter(c => c.uid !== 'cb_net_box');
+      networkLayer.cache.clear();
       document.querySelector('#networkLayerChip [data-layer="hide-chip"]')?.click();
       const collapsed = document.getElementById('networkLayerChip').classList.contains('is-collapsed') && networkLayer.overlays.length > 0;
       document.querySelector('#networkLayerChip [data-layer="show-chip"]')?.click();

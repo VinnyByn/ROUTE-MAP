@@ -566,6 +566,16 @@ function handleMarkerPanelConfirm() {
             if (getMarkerTypeMeta(type).statuses) applyMarkerInfrastructureStatus(probe, form.status);
             const pos = markerInfo.marker?.getPosition?.();
             const moved = !!(markerEditOriginPosition && pos && (pos.lat() !== markerEditOriginPosition.lat() || pos.lng() !== markerEditOriginPosition.lng()));
+            //Moveu caixa com cabos da rede: uma pergunta só (manter o cabo ou lançar novo) e os cabos acompanham
+            if (moved && typeof getNetworkCablesAtBox === 'function' && getNetworkCablesAtBox(markerInfo).length) {
+                askNetworkCablesForMovedBox(markerInfo).then(mode => {
+                    if (!mode) return;
+                    markerInfo.__networkChangeOk = true;
+                    try { handleMarkerPanelConfirm(); } finally { delete markerInfo.__networkChangeOk; }
+                    applyNetworkCablesForMovedBox(markerInfo, mode);
+                });
+                return;
+            }
             if (moved || essentials(probe) !== essentials(markerInfo)) {
                 confirmNetworkItemChange([markerInfo], moved ? 'mudando a posição deste item' : 'alterando os dados deste item', () => {
                     markerInfo.__networkChangeOk = true;

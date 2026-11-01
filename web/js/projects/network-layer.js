@@ -232,3 +232,70 @@ appReady.then(() => {
     }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     mapReady.then(() => scheduleNetworkLayerRefresh(0));
 });
+
+// ---------------------------------------------------------------
+// Caixa da rede movida no projeto: os cabos da rede presos nela vêm junto. O projetista escolhe se o cabo
+// continua o mesmo (Existente, só o traçado acompanha) ou se vai ser lançado um cabo novo (entra como Novo,
+// conta na lista de materiais). Ao concluir, a rede é atualizada pelo mesmo uid do cabo (não duplica).
+// ---------------------------------------------------------------
+
+function getNetworkCablesAtBox(box) {
+    if (!box?.uid || !isNetworkItemInProject(box)) return [];
+    const inProject = new Set(savedCables.map(c => c.uid).filter(Boolean));
+    const found = new Map();
+    networkLayer.cache.forEach(({ data }) => (data?.cables || []).forEach(c => {
+        if (!c.uid || inProject.has(c.uid) || found.has(c.uid)) return;
+        if (c.startAnchorUid === box.uid || c.endAnchorUid === box.uid) found.set(c.uid, c);
+    }));
+    return [...found.values()];
+}
+
+//Traz o cabo da rede para o projeto com a ponta da caixa movida no lugar novo (a outra ponta fica como está)
+function bringNetworkCableForMovedBox(data, box, status) {
+    const { order, ...rest } = data;
+    const pos = box.marker.getPosition();
+    const path = (rest.path || []).map(p => ({ lat: p.lat, lng: p.lng }));
+    if (path.length < 2) return null;
+    if (rest.startAnchorUid === box.uid) path[0] = { lat: pos.lat(), lng: pos.lng() };
+    if (rest.endAnchorUid === box.uid) path[path.length - 1] = { lat: pos.lat(), lng: pos.lng() };
+    const width = typeof getDefaultCableWidthForStatus === 'function' ? getDefaultCableWidthForStatus(status) : rest.width;
+    rebuildCable({ ...rest, path, status, width, folderId: box.folderId });
+    const cable = savedCables[savedCables.length - 1];
+    cable.fromNetwork = box.fromNetwork;
+    if (typeof syncProjectCableMeasurements === 'function') {
+        //Mede sem mexer nas pontas (a outra caixa pode não estar no projeto)
+        const m = calculateCableMeasurement(cable);
+        Object.assign(cable, { lancamento: m.lancamento, reserva: m.reserva, totalLength: m.total });
+        if (cable.item) updateCableSidebarLabel(cable);
+    }
+    return cable;
+}
+
+//Pergunta o que fazer com os cabos; resolve com 'manter' | 'novo' | 'nada' | null (cancelou)
+async function askNetworkCablesForMovedBox(box) {
+    const cables = getNetworkCablesAtBox(box);
+    if (!cables.length) return 'nada';
+    const names = cables.slice(0, 3).map(c => c.name).join(', ') + (cables.length > 3 ? ` e mais ${cables.length - 3}` : '');
+    return showChoice({
+        title: 'Mover caixa da rede existente',
+        message: `${box.name} já existe na rede de ${box.fromNetwork}. ${cables.length === 1 ? 'O cabo' : 'Os cabos'} ${names} ${cables.length === 1 ? 'chega' : 'chegam'} nela e vão acompanhar a nova posição. O que fazer com ${cables.length === 1 ? 'ele' : 'eles'}?`,
+        choices: [
+            { label: 'Cancelar', kind: 'secondary', value: '' },
+            { label: 'Manter o cabo existente', kind: 'secondary', value: 'manter' },
+            { label: 'Lançar cabo novo', kind: 'primary', value: 'novo' },
+        ],
+    }).then(v => (v === 'manter' || v === 'novo' ? v : null));
+}
+
+function applyNetworkCablesForMovedBox(box, mode) {
+    if (mode !== 'manter' && mode !== 'novo') return [];
+    const brought = getNetworkCablesAtBox(box).map(c => bringNetworkCableForMovedBox(c, box, mode === 'novo' ? 'Novo' : 'Existente')).filter(Boolean);
+    if (brought.length) {
+        if (typeof refreshBomAfterProjectChange === 'function') refreshBomAfterProjectChange();
+        if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+        scheduleNetworkLayerRefresh(0);
+        showToast(mode === 'novo' ? 'Cabo novo no projeto' : 'Cabo existente ajustado',
+            `${brought.map(c => c.name).join(', ')} ${mode === 'novo' ? 'entrou como Novo (na lista de materiais)' : 'acompanha a caixa e continua Existente'}. Ao concluir, a rede é atualizada no mesmo cabo.`);
+    }
+    return brought;
+}
