@@ -2110,13 +2110,28 @@ const building = await sp.evaluate(() => {
   chooseBuildingBoxForCable(ed);
   out.chooser = document.getElementById('buildingChooseModal').style.display === 'flex' && document.querySelectorAll('#buildingChooseList [data-building-pick]').length === 3;
   document.getElementById('buildingChooseModal').style.display = 'none';
+  //Cabo entre caixas do prédio: metragem pela diferença de andares (Térreo → 5º: 5 × 3 m + 5 m de sobra)
+  openMarkerFromUserAction(ed);
+  document.querySelector('[data-building-riser]').click();
+  const suggested = document.getElementById('buildingRiserMeters').value;
+  document.getElementById('buildingRiserFrom').value = 'bd-c1';
+  document.getElementById('buildingRiserTo').value = 'bd-c5';
+  document.getElementById('buildingRiserTo').dispatchEvent(new Event('change', { bubbles: true }));
+  out.riserSuggest = document.getElementById('buildingRiserMeters').value;
+  document.querySelector('[data-building-riser-act="save"]').click();
+  const rc = savedCables[savedCables.length - 1];
+  out.riserCable = rc.startAnchorUid === 'bd-c1' && rc.endAnchorUid === 'bd-c5' && rc.riserMeters === 20 && rc.totalLength >= 20 && serializeCable(rc).riserMeters === 20
+    && /FO-12/.test(rc.type) && getBuildingRiserCables(ed).includes(rc) && !!suggested;
+  out.riserListed = /CTO-01 → CTO-05 · 20 m/.test(document.getElementById('buildingBoxesPanel').textContent);
+  resetMarkerModal();
+  rc.polyline?.setMap(null); rc.item?.remove(); savedCables.splice(savedCables.indexOf(rc), 1);
   [ed, c5, c1, rua].forEach(m => { m.marker.setMap(null); m.listItem?.remove(); markers.splice(markers.indexOf(m), 1); });
   document.getElementById('projBD')?.closest('li')?.remove();
   return out;
 });
 check(building.order === 'CTO-01,CTO-05' && building.hidden && building.samePlace && /Ed\. Sol · Torre A · 5º andar/.test(building.meta) && building.riser === 25
-  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser,
-  `prédio com caixas por torre e andar, escondidas no mapa, prumada e cabo escolhendo a caixa (${JSON.stringify(building)})`);
+  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser && building.riserSuggest === '20' && building.riserCable && building.riserListed,
+  `prédio com caixas por torre e andar, escondidas no mapa, prumada, cabo escolhendo a caixa e cabo entre caixas (${JSON.stringify(building)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {
   const sidebar = document.getElementById('sidebar');

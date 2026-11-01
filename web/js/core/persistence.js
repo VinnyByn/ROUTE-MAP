@@ -430,6 +430,7 @@ function serializeCable(cableInfo) {
         path: cableInfo.path.map(latLng => ({ lat: latLng.lat(), lng: latLng.lng() })),
         surchargePercent: cableInfo.surchargePercent || 0,
         conduit: cableInfo.conduit || [],
+        riserMeters: cableInfo.riserMeters || undefined, //Prumada dentro do prédio (js/network/buildings.js)
         startAnchorUid: cableInfo.startAnchorUid || null,
         endAnchorUid: cableInfo.endAnchorUid || null,
         startAnchorMarkerName: cableInfo.startAnchorMarkerName || null,

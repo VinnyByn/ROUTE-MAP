@@ -158,7 +158,113 @@ function renderBuildingBoxesPanel(building) {
         ${canEdit ? `<div class="building-actions">
             <button type="button" class="btn btn-secondary btn-sm" data-building-add="CTO">+ CTO neste prédio</button>
             <button type="button" class="btn btn-secondary btn-sm" data-building-add="CEO">+ CEO neste prédio</button>
-        </div>` : ''}`;
+            ${boxes.length >= 2 ? '<button type="button" class="btn btn-secondary btn-sm" data-building-riser="1">+ Cabo entre caixas</button>' : ''}
+        </div>` : ''}
+        ${renderBuildingRiserCablesHtml(building)}`;
+}
+
+// ---------------------------------------------------------------
+// Cabo entre caixas do prédio (prumada): não tem desenho no mapa (as caixas estão no mesmo ponto); a
+// metragem é a diferença de andares × altura do andar + sobra, e pode ser corrigida à mão.
+// ---------------------------------------------------------------
+
+const BUILDING_RISER_FIBERS = ['FO-06', 'FO-12', 'FO-24', 'FO-36', 'FO-48', 'FO-72', 'FO-144', 'DROP'];
+const BUILDING_RISER_SLACK_M = 5;
+
+function getBuildingRiserCables(building) {
+    const uids = new Set(getBuildingBoxes(building).map(b => b.uid));
+    return savedCables.filter(c => c.riserMeters && uids.has(c.startAnchorUid) && uids.has(c.endAnchorUid));
+}
+
+function renderBuildingRiserCablesHtml(building) {
+    const cables = getBuildingRiserCables(building);
+    if (!cables.length) return '';
+    const name = (uid) => markers.find(m => m.uid === uid)?.name || '?';
+    return `<div class="building-risers"><small>Cabos dentro do prédio</small>${cables.map(c =>
+        `<div class="building-riser"><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(name(c.startAnchorUid))} → ${escapeHtml(name(c.endAnchorUid))} · ${c.riserMeters} m</span></div>`).join('')}</div>`;
+}
+
+function suggestBuildingRiserMeters(building, a, b) {
+    const height = Number(building.building?.floorHeight) || BUILDING_DEFAULT_FLOOR_HEIGHT;
+    const floors = Math.abs(floorSortValue(a?.floor) - floorSortValue(b?.floor));
+    return Math.max(1, Math.round(floors * height + BUILDING_RISER_SLACK_M));
+}
+
+function openBuildingRiserModal(building) {
+    if (!requireEdit('cadastrar cabos')) return;
+    const boxes = getBuildingBoxes(building);
+    if (boxes.length < 2) return;
+    let modal = document.getElementById('buildingRiserModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'buildingRiserModal';
+        modal.className = 'modal';
+        modal.innerHTML = `<div class="modal-content building-riser-modal" role="dialog" aria-labelledby="buildingRiserTitle">
+            <div class="modal-header-v2 rm-head rm-head--proj"><div class="rm-head__text"><h2 id="buildingRiserTitle">Cabo entre caixas do prédio</h2>
+            <p class="rm-head__sub" id="buildingRiserSub"></p></div></div>
+            <div class="modal-body-content building-riser-form">
+                <label><span>De</span><select id="buildingRiserFrom"></select></label>
+                <label><span>Para</span><select id="buildingRiserTo"></select></label>
+                <label><span>Fibras</span><select id="buildingRiserFiber">${BUILDING_RISER_FIBERS.map(f => `<option value="${f}"${f === 'FO-12' ? ' selected' : ''}>${f === 'DROP' ? 'Drop' : `${f.replace('FO-', '')} fibras`}</option>`).join('')}</select></label>
+                <label><span>Metragem (m)</span><input type="number" id="buildingRiserMeters" min="1" step="1" /></label>
+                <p class="map-tool-help">A metragem sai da diferença de andares × altura do andar, mais ${BUILDING_RISER_SLACK_M} m de sobra. Pode corrigir.</p>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-building-riser-act="cancel">Cancelar</button>
+            <button type="button" class="btn btn-success" data-building-riser-act="save">Cadastrar cabo</button></div></div>`;
+        document.body.appendChild(modal);
+        const suggest = () => {
+            const b = modal._building;
+            const a = markers.find(m => m.uid === document.getElementById('buildingRiserFrom').value);
+            const z = markers.find(m => m.uid === document.getElementById('buildingRiserTo').value);
+            document.getElementById('buildingRiserMeters').value = suggestBuildingRiserMeters(b, a, z);
+        };
+        modal.addEventListener('change', (e) => { if (/buildingRiser(From|To)/.test(e.target.id)) suggest(); });
+        modal.addEventListener('click', (e) => {
+            const act = e.target.closest('[data-building-riser-act]')?.dataset.buildingRiserAct;
+            if (e.target === modal || act === 'cancel') modal.style.display = 'none';
+            if (act === 'save') {
+                const cable = createBuildingRiserCable(modal._building, {
+                    fromUid: document.getElementById('buildingRiserFrom').value,
+                    toUid: document.getElementById('buildingRiserTo').value,
+                    fiber: document.getElementById('buildingRiserFiber').value,
+                    meters: parseFloat(document.getElementById('buildingRiserMeters').value),
+                });
+                if (cable) modal.style.display = 'none';
+            }
+        });
+        modal._suggest = suggest;
+    }
+    modal._building = building;
+    const options = boxes.map(b => `<option value="${escapeHtml(b.uid)}">${escapeHtml(`${b.name} · ${[b.tower ? `Torre ${b.tower}` : '', formatBuildingFloor(b.floor) || 'andar ?'].filter(Boolean).join(' · ')}`)}</option>`).join('');
+    document.getElementById('buildingRiserFrom').innerHTML = options;
+    document.getElementById('buildingRiserTo').innerHTML = options;
+    document.getElementById('buildingRiserTo').selectedIndex = 1;
+    document.getElementById('buildingRiserSub').textContent = building.name;
+    modal._suggest();
+    modal.style.display = 'flex';
+}
+
+//Cria o cabo ligado nas duas caixas (aparece no plano de fusão delas e na lista de materiais)
+function createBuildingRiserCable(building, { fromUid, toUid, fiber = 'FO-12', meters }) {
+    const from = markers.find(m => m.uid === fromUid), to = markers.find(m => m.uid === toUid);
+    if (!from || !to || from === to) { showToast('Escolha duas caixas', 'O cabo precisa ligar duas caixas diferentes do prédio.', 'progress'); return null; }
+    const riserMeters = Math.max(1, Math.round(Number(meters) || suggestBuildingRiserMeters(building, from, to)));
+    const pos = building.marker.getPosition();
+    const base = `${fiber}-${to.name}`;
+    let name = base;
+    for (let i = 2; savedCables.some(c => c.name === name); i++) name = `${base} (${i})`;
+    rebuildCable({
+        folderId: building.folderId, name, type: buildCableTypeString('AS 80', fiber), width: 4,
+        color: getCableColor(fiber), status: 'Novo', riserMeters,
+        path: [{ lat: pos.lat(), lng: pos.lng() }, { lat: pos.lat(), lng: pos.lng() }],
+        startAnchorUid: from.uid, endAnchorUid: to.uid, startAnchorMarkerName: from.name, endAnchorMarkerName: to.name,
+    });
+    const cable = savedCables[savedCables.length - 1];
+    syncProjectCableMeasurements([cable]);
+    refreshBomAfterProjectChange();
+    if (editingMarkerInfo === building) renderBuildingBoxesPanel(building);
+    showToast('Cabo cadastrado', `${cable.name}: ${from.name} → ${to.name}, ${riserMeters} m dentro do prédio.`);
+    return cable;
 }
 
 //Nova caixa já dentro do prédio: abre o painel de criação com o prédio escolhido e posiciona no ponto dele
@@ -252,6 +358,7 @@ function setupBuildings() {
         }
         const add = e.target.closest('[data-building-add]');
         if (add && editingMarkerInfo && isBuildingMarker(editingMarkerInfo)) addBoxToBuilding(editingMarkerInfo, add.dataset.buildingAdd);
+        if (e.target.closest('[data-building-riser]') && editingMarkerInfo && isBuildingMarker(editingMarkerInfo)) openBuildingRiserModal(editingMarkerInfo);
     });
     document.getElementById('boxBuildingSelect')?.addEventListener('change', syncBoxBuildingFields);
 }
