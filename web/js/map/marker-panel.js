@@ -558,6 +558,22 @@ function handleMarkerPanelConfirm() {
     storeMarkerStyle(type, { color: form.color, labelColor: form.labelColor, size: form.size });
     if (editingMarkerInfo) {
         const markerInfo = editingMarkerInfo;
+        //Item da rede existente: mudar nome, situação, dados ou posição pergunta antes (js/projects/network-layer.js)
+        if (typeof isNetworkItemInProject === 'function' && isNetworkItemInProject(markerInfo) && !markerInfo.__networkChangeOk) {
+            const essentials = (m) => JSON.stringify([m.name, getMarkerInfrastructureStatus(m), m.ceoAccessory, m.reservaAccessory, !!m.isPredial, !!m.is144F, m.derivationTCount || 0, m.description || ''].map(v => v ?? ''));
+            const probe = { ...markerInfo };
+            applyMarkerFormToData(probe, type, form);
+            if (getMarkerTypeMeta(type).statuses) applyMarkerInfrastructureStatus(probe, form.status);
+            const pos = markerInfo.marker?.getPosition?.();
+            const moved = !!(markerEditOriginPosition && pos && (pos.lat() !== markerEditOriginPosition.lat() || pos.lng() !== markerEditOriginPosition.lng()));
+            if (moved || essentials(probe) !== essentials(markerInfo)) {
+                confirmNetworkItemChange([markerInfo], moved ? 'mudando a posição deste item' : 'alterando os dados deste item', () => {
+                    markerInfo.__networkChangeOk = true;
+                    try { handleMarkerPanelConfirm(); } finally { delete markerInfo.__networkChangeOk; }
+                });
+                return;
+            }
+        }
         const oldName = markerInfo.name;
         applyMarkerFormToData(markerInfo, type, form);
         if (getMarkerTypeMeta(type).statuses) applyMarkerInfrastructureStatus(markerInfo, form.status);

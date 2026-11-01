@@ -125,7 +125,11 @@ function ensureBulkEditModal() {
         }
         const action = e.target.closest('[data-bulk]')?.dataset.bulk;
         if (e.target === modal || action === 'cancel') closeBulkEditModal();
-        if (action === 'apply') applyBulkEdit();
+        if (action === 'apply') {
+            const items = getBulkItemsOfType(bulkEdit.type, bulkEdit.items);
+            if (typeof confirmNetworkItemChange === 'function') confirmNetworkItemChange(items, 'alterando itens que já existem na rede', () => applyBulkEdit());
+            else applyBulkEdit();
+        }
     });
     modal.addEventListener('change', (e) => {
         const row = e.target.closest('[data-bulk-field]');

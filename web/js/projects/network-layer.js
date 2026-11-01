@@ -47,15 +47,25 @@ function renderNetworkLayerChip(info) {
             if (action === 'whole') setNetworkLayerArea(null);
             if (action === 'last') setNetworkLayerAreas(getNetworkLayerAreas().slice(0, -1));
             if (action === 'off') setNetworkLayerEnabled(false);
+            //Fechar o aviso: a rede continua no mapa; fica só um botão pequeno para reabrir
+            if (action === 'hide-chip' || action === 'show-chip') { networkLayer.chipHidden = action === 'hide-chip'; renderNetworkLayerChip(networkLayer.lastChipInfo); }
         });
     }
     const esc = (v) => escapeHtml(String(v ?? ''));
+    networkLayer.lastChipInfo = info;
+    chip.classList.toggle('is-collapsed', !!networkLayer.chipHidden);
+    if (networkLayer.chipHidden) {
+        chip.innerHTML = `<button type="button" class="btn-chip" data-layer="show-chip" title="Mostrar o aviso da rede existente"><span class="network-layer-chip__swatch" aria-hidden="true"></span> Rede existente</button>`;
+        chip.classList.remove('hidden');
+        return;
+    }
     chip.innerHTML = `<span class="network-layer-chip__swatch" aria-hidden="true"></span>
         <span title="${esc(info.cities.join(', '))}"><b>Rede existente</b> · ${esc(info.cities.join(', '))} · ${info.area ? (info.areas > 1 ? `${info.areas} trechos` : 'trecho') : 'cidade inteira'} · ${info.boxes} caixas · ${info.cables} cabos</span>
         <button type="button" class="btn-chip" data-layer="area" title="${info.area ? 'Desenha mais um trecho; os já carregados continuam no mapa' : 'Mostra só a rede dentro da área desenhada'}">${info.area ? '+ Trecho' : 'Só um trecho'}</button>
         ${info.areas > 1 ? '<button type="button" class="btn-chip" data-layer="last" title="Tira o último trecho desenhado">Tirar último</button>' : ''}
         ${info.area ? '<button type="button" class="btn-chip" data-layer="whole">Cidade inteira</button>' : ''}
-        <button type="button" class="btn-chip" data-layer="off" title="Desligar (Projeto → Rede da cidade por baixo)">Ocultar</button>`;
+        <button type="button" class="btn-chip" data-layer="off" title="Desligar (Projeto → Rede da cidade por baixo)">Ocultar</button>
+        <button type="button" class="btn-chip network-layer-chip__close" data-layer="hide-chip" title="Fechar este aviso (a rede continua carregada no mapa)" aria-label="Fechar aviso">&times;</button>`;
     chip.classList.remove('hidden');
 }
 
@@ -141,6 +151,22 @@ function getProjectRootForCity(city) {
 }
 
 //Traz a caixa da rede para o projeto (Existente, mesmo identificador, com o plano de fusão)
+//Item da rede existente usado no projeto: mudar nome, situação, posição, tipo ou excluir pergunta antes, porque ao
+//concluir o projeto a rede é atualizada com a mudança (pelo mesmo uid, sem duplicar nem sobrepor)
+function isNetworkItemInProject(item) {
+    return !!item?.fromNetwork && (typeof appMode === 'undefined' || appMode !== 'rede');
+}
+
+function confirmNetworkItemChange(items, what, proceed) {
+    const net = (items || []).filter(isNetworkItemInProject);
+    if (!net.length) { proceed(); return; }
+    const names = net.slice(0, 4).map(i => i.name).join(', ') + (net.length > 4 ? ` e mais ${net.length - 4}` : '');
+    const city = net[0].fromNetwork;
+    showConfirm('Alterar item da rede existente',
+        `${names} ${net.length === 1 ? 'já existe' : 'já existem'} na rede de ${city}. Você está ${what}. Ao concluir o projeto, a rede é atualizada com essa mudança no mesmo item (não duplica). Deseja continuar?`,
+        proceed);
+}
+
 function useNetworkBoxInProject(item, city, { quiet = false } = {}) {
     if (!requireEdit('usar caixas da rede no projeto')) return null;
     const root = getProjectRootForCity(city);
@@ -157,6 +183,7 @@ function useNetworkBoxInProject(item, city, { quiet = false } = {}) {
     rebuildMarker({ ...data, folderId });
     const info = markers[markers.length - 1];
     if (info.uid !== item.uid) info.uid = item.uid;
+    info.fromNetwork = city; //Veio da rede existente: mexer nele avisa o projetista (confirmNetworkItemChange)
     if (typeof refreshBomAfterProjectChange === 'function') refreshBomAfterProjectChange();
     if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
     scheduleNetworkLayerRefresh(0);

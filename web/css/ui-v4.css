@@ -3881,3 +3881,6 @@ button.map-selection-kind:hover { border-color: var(--accent, #22c55e); backgrou
 #buildingRiserModal .building-riser-modal { max-width: 420px; }
 #buildingRiserModal .building-riser-form { display: grid; gap: 10px; padding: 14px 18px; }
 #buildingRiserModal .building-riser-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
+.network-layer-chip.is-collapsed { padding: 4px; gap: 0; }
+.network-layer-chip.is-collapsed .btn-chip { display: inline-flex; align-items: center; gap: 6px; }
+.network-layer-chip__close { width: 26px; padding: 0 !important; font-size: 16px !important; line-height: 1; }
