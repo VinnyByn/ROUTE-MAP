@@ -2594,9 +2594,17 @@ function applyCableAnchorsToPath(cable) {
         cable.path[cable.path.length - 1] = endMarker.marker.getPosition();
         changed = true;
     }
-    //Projetos antigos: grava o identificador para não depender mais do nome
-    if (startMarker || endMarker) {
-        assignCableAnchorMarkers(cable, startMarker || null, endMarker || null);
+    //Projetos antigos: grava o identificador para não depender mais do nome. Ponta presa numa caixa que não está
+    //aberta (ex.: cabo trazido da rede, a outra caixa só existe na rede) mantém o vínculo que já tinha.
+    if (startMarker) {
+        cable.startAnchorUid = ensureMarkerUid(startMarker);
+        cable.startAnchorMarkerName = startMarker.name || null;
+        cable.startAnchorMarkerFolderId = startMarker.folderId || null;
+    }
+    if (endMarker) {
+        cable.endAnchorUid = ensureMarkerUid(endMarker);
+        cable.endAnchorMarkerName = endMarker.name || null;
+        cable.endAnchorMarkerFolderId = endMarker.folderId || null;
     }
     if (changed && cable.polyline) cable.polyline.setPath(cable.path);
     return changed;
