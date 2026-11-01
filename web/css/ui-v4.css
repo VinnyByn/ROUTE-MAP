@@ -3874,3 +3874,10 @@ button.map-selection-kind:hover { border-color: var(--accent, #22c55e); backgrou
 #markerModal .building-grid input { width: 100%; min-width: 0; }
 #markerModal .building-box button, #markerModal .building-actions button, #buildingChooseModal .building-box button { height: 28px; min-height: 0; padding: 0 12px; font-size: 12px; font-weight: 600; border-radius: 7px; }
 #markerModal .building-actions button { flex: 1 1 0; }
+#markerModal .building-risers { display: grid; gap: 3px; margin-top: 8px; }
+#markerModal .building-risers > small { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--color-text-dim); }
+.building-riser { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12px; }
+.building-riser span { color: var(--color-text-dim); }
+#buildingRiserModal .building-riser-modal { max-width: 420px; }
+#buildingRiserModal .building-riser-form { display: grid; gap: 10px; padding: 14px 18px; }
+#buildingRiserModal .building-riser-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }

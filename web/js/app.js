@@ -2721,7 +2721,9 @@ function calculateCableMeasurement(cableOrPath) {
         }
         return { lancamento: 0, reserva: 0, total: 0 };
     }
-    const drawnDistance = google.maps.geometry.spherical.computeLength(path);
+    //Prumada: trecho que sobe dentro do prédio (não aparece no desenho), em metros (js/network/buildings.js)
+    const riserMeters = Array.isArray(cableOrPath) ? 0 : (Number(cableOrPath?.riserMeters) || 0);
+    const drawnDistance = google.maps.geometry.spherical.computeLength(path) + riserMeters;
     const lancamento = Math.ceil(drawnDistance / 10) * 10;
     let reserva = 0;
     const startPoint = path[0];

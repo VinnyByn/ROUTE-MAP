@@ -412,7 +412,7 @@ function openMarkerCreatePanel(type) {
     document.getElementById('markerDescription').value = kmlSource?.description || '';
     document.getElementById('markerNumber').value = kmlSource && type === 'CASA' ? (parseInt(kmlSource.name, 10) || '') : '';
     if (typeof fillBoxBuildingFields === 'function') fillBoxBuildingFields({}, { folderId: activeFolderId });
-    if (type === 'PREDIO') { document.getElementById('buildingFloors').value = ''; document.getElementById('buildingFloorHeight').value = ''; renderBuildingBoxesPanel(null); }
+    if (type === 'PREDIO') { ['buildingFloors', 'buildingFloorHeight', 'buildingUnits', 'buildingManager', 'buildingManagerPhone'].forEach(id => { document.getElementById(id).value = ''; }); renderBuildingBoxesPanel(null); }
     configureMarkerPanel(type, 'create');
     showMarkerPanel();
     setTimeout(() => {
@@ -449,6 +449,9 @@ function openMarkerEditor(markerInfo) {
     if (markerInfo.type === 'PREDIO') {
         document.getElementById('buildingFloors').value = markerInfo.building?.floors || '';
         document.getElementById('buildingFloorHeight').value = markerInfo.building?.floorHeight || '';
+        document.getElementById('buildingUnits').value = markerInfo.building?.units || '';
+        document.getElementById('buildingManager').value = markerInfo.building?.manager || '';
+        document.getElementById('buildingManagerPhone').value = markerInfo.building?.managerPhone || '';
         renderBuildingBoxesPanel(markerInfo);
     }
     const position = markerInfo.marker.getPosition();
@@ -489,6 +492,9 @@ function readMarkerPanelForm() {
         building: {
             floors: parseInt(document.getElementById('buildingFloors').value, 10) || null,
             floorHeight: parseFloat(String(document.getElementById('buildingFloorHeight').value).replace(',', '.')) || null,
+            units: parseInt(document.getElementById('buildingUnits').value, 10) || null,
+            manager: document.getElementById('buildingManager').value.trim(),
+            managerPhone: document.getElementById('buildingManagerPhone').value.trim(),
         },
         boxBuilding: typeof readBoxBuildingFields === 'function' ? readBoxBuildingFields() : null,
     };

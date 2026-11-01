@@ -404,7 +404,7 @@ function buildImportedClientData(r, previous = {}) {
 //Traçado do drop já calculado (pela rede ou reto): importar muitos clientes não dispara uma rota pela rua para cada um
 function prepareImportedDrop(info, net) {
     const cto = findMarkerByUid(info.client.ctoUid, info);
-    if (!cto?.marker || isPredialClient(info)) return;
+    if (!cto?.marker || isPredialClient(info) || (typeof isClientInBuilding === 'function' && isClientInBuilding(info))) return;
     const ctoPos = cto.marker.getPosition();
     const clientPos = info.marker.getPosition();
     const routed = net ? routeDropAlongNetwork(net, ctoPos, clientPos) : null;
