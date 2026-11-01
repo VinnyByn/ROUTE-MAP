@@ -23,12 +23,12 @@ function runProjectCheck(scope) {
     const byName = new Map();
     scope.cables.forEach(c => byName.set(c.name, [...(byName.get(c.name) || []), c]));
     byName.forEach((list, name) => {
-        if (list.length > 1) add('aviso', `Nome de cabo repetido: ${name}`, `${list.length} cabos com o mesmo nome. As ligações continuam certas, mas vale renomear para não confundir em campo.`, { kind: 'cable', info: list[0] });
+        if (list.length > 1) add('aviso', `Nome de cabo repetido: ${name}`, `${list.length} cabos com o mesmo nome. As ligações continuam certas, mas vale renomear para não confundir em campo.`, { kind: 'cable', info: list[0], all: list });
     });
     const boxNames = new Map();
     boxes.forEach(b => boxNames.set(b.name, [...(boxNames.get(b.name) || []), b]));
     boxNames.forEach((list, name) => {
-        if (list.length > 1) add('aviso', `Caixa com nome repetido: ${name}`, `${list.length} caixas com o mesmo nome.`, { kind: 'marker', info: list[0] });
+        if (list.length > 1) add('aviso', `Caixa com nome repetido: ${name}`, `${list.length} caixas com o mesmo nome.`, { kind: 'marker', info: list[0], all: list });
     });
 
     //Cabos: pontas nas caixas
@@ -157,6 +157,23 @@ function renderOpticalTable(scope) {
 
 function focusProjectCheckTarget(target) {
     if (!target?.info) return;
+    //Nome repetido: marca todos no mapa e na barra lateral (seleção múltipla) e enquadra todos
+    if (target.all?.length > 1 && typeof setMapSelection === 'function') {
+        setMapSelection(target.all);
+        target.all.forEach(item => { if (typeof revealSidebarItem === 'function') revealSidebarItem(item); });
+        if (typeof google !== 'undefined' && google.maps?.LatLngBounds && typeof map !== 'undefined' && map) {
+            const bounds = new google.maps.LatLngBounds();
+            target.all.forEach(item => {
+                const pos = item.marker?.getPosition?.();
+                if (pos) bounds.extend(pos);
+                (item.polyline?.getPath?.().getArray?.() || item.path || []).forEach(p => bounds.extend(p));
+            });
+            if (!bounds.isEmpty()) map.fitBounds(bounds, 80);
+        }
+        selectionRow(target.all[0])?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        showToast('Itens com o mesmo nome', `${target.all.length} marcados no mapa e na barra lateral. Esc limpa a seleção.`);
+        return;
+    }
     if (target.kind === 'cable') {
         selectSidebarCable(target.info);
         focusMapToCable(target.info);

@@ -928,12 +928,17 @@ const projCheck = await page.evaluate(() => {
     document.querySelector('[data-folder-id="projV"]').closest('.folder').remove();
     activeFolderId = prevFolder; window.getClientDropInfo = realDrop;
   };
+  //Clicar no aviso de nome repetido marca todos os itens com esse nome
+  const dup = issues.find(i => i.title === 'Nome de cabo repetido: V-2');
+  focusProjectCheckTarget(dup.target);
+  window.__dupSel = [...mapSelection.items].map(i => i.name).join() === 'V-2,V-2' && mapSelection.items.has(c2) && mapSelection.items.has(c3);
+  clearMapSelection();
   const groups = [...document.querySelectorAll('#projectCheckBody .check-group__head span')].map(h => h.textContent).join('|');
   document.querySelector('#projectCheckBody [data-check-filter="erro"]').click();
   const onlyErrors = [...document.querySelectorAll('#projectCheckBody .check-list button')].every(b => b.classList.contains('is-erro'))
     && document.querySelectorAll('#projectCheckBody .check-list button').length === issues.filter(i => i.level === 'erro').length;
   return { titles: issues.map(i => `${i.level}:${i.title}`), panelHasCount: /erros?/.test(panel) && /avisos?/.test(panel) && groups === 'Cabos|Caixas e fusões|Clientes e portas|Nomes repetidos' && onlyErrors
-    && document.getElementById('projectCheckTitle').textContent === 'Verificação do projeto', groups };
+    && document.getElementById('projectCheckTitle').textContent === 'Verificação do projeto' && window.__dupSel, groups, dupSel: window.__dupSel };
 });
 if (process.env.SMOKE_SHOTS) {
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
@@ -2145,12 +2150,19 @@ const building = await sp.evaluate(() => {
   out.converted = showsPredial && !!conv && conv.building.units === 40 && conv.building.floors === 10 && conv.building.manager === 'Zé'
     && !markers.includes(old) && getBuildingOf(cx) === conv;
   [conv, cx].forEach(m => { if (m) { m.marker.setMap(null); m.listItem?.remove(); markers.splice(markers.indexOf(m), 1); } });
-  [ed, c5, c1, rua].forEach(m => { m.marker.setMap(null); m.listItem?.remove(); markers.splice(markers.indexOf(m), 1); });
+  //Excluir o prédio leva as caixas e o cabo entre elas
+  const rc2 = createBuildingRiserCable(ed, { fromUid: 'bd-c1', toUid: 'bd-c5', fiber: 'FO-12', meters: 20 });
+  const msgHas = /as 3 caixas .* e o cabo entre elas dentro dele também saem/.test(describeBuildingContents(ed));
+  deleteSidebarMapItem({ kind: 'marker', info: ed, row: ed.listItem });
+  document.getElementById('confirmModalConfirmButton').click();
+  out.deleted = msgHas && !markers.some(m => ['bd-ed', 'bd-c1', 'bd-c5', 'bd-x'].includes(m.uid)) && !savedCables.includes(rc2)
+    && !document.querySelector('#sidebar [data-uid="bd-c1"]') && !c1.listItem.isConnected && !rc2.item?.isConnected;
+  [ed, c5, c1, rua].forEach(m => { m.marker.setMap(null); m.listItem?.remove(); if (markers.includes(m)) markers.splice(markers.indexOf(m), 1); });
   document.getElementById('projBD')?.closest('li')?.remove();
   return out;
 });
 check(building.order === 'CTO-01,CTO-05' && building.hidden && building.samePlace && /Ed\. Sol · Torre A · 5º andar/.test(building.meta) && building.riser === 25
-  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser && building.riserSuggest === '20' && building.riserCable && building.riserListed && building.clientNoDrop && building.clientForm && building.converted,
+  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser && building.riserSuggest === '20' && building.riserCable && building.riserListed && building.clientNoDrop && building.clientForm && building.converted && building.deleted,
   `prédio com caixas por torre e andar, escondidas no mapa, prumada, cabo escolhendo a caixa e cabo entre caixas (${JSON.stringify(building)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {

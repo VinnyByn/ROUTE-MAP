@@ -598,8 +598,11 @@ function deleteSidebarMapItem(entity) {
     }
     if (kind === 'marker') {
         const isClient = info.type === 'CLIENTE';
-        showConfirm(isClient ? 'Excluir cliente' : 'Excluir marcador', `Excluir "${info.name}"? Esta ação não pode ser desfeita.`, () => {
+        const contents = typeof describeBuildingContents === 'function' ? describeBuildingContents(info) : '';
+        showConfirm(isClient ? 'Excluir cliente' : 'Excluir marcador', `Excluir "${info.name}"?${contents} Esta ação não pode ser desfeita.`, () => {
             if (focusedMapMarkerInfo === info) clearMapMarkerHighlight();
+            //Prédio: as caixas e os cabos dentro dele saem junto (js/network/buildings.js)
+            if (typeof removeBuildingContents === 'function') removeBuildingContents(info);
             info.marker.setMap(null);
             info.listItem.remove();
             markers = markers.filter(m => m !== info);

@@ -285,9 +285,14 @@ function setSelectionVisible(visible) {
 
 function deleteSelection() {
     if (!requireEdit('excluir itens')) return;
-    const all = [...mapSelection.items];
+    //Prédio selecionado leva as caixas e os cabos dentro dele (js/network/buildings.js)
+    const all = [...new Set([...mapSelection.items].flatMap(it => {
+        if (typeof getBuildingContents !== 'function' || selectionKind(it) !== 'marker') return [it];
+        const { boxes, cables } = getBuildingContents(it);
+        return [it, ...boxes, ...cables];
+    }))];
     //Cabo com fusões não sai (igual à exclusão individual)
-    const blocked = all.filter(c => selectionKind(c) === 'cable' && checkCableUsageInFusionPlans(c).hasFusions);
+    const blocked = all.filter(c => selectionKind(c) === 'cable' && mapSelection.items.has(c) && checkCableUsageInFusionPlans(c).hasFusions);
     const items = all.filter(it => !blocked.includes(it));
     const blockedNote = blocked.length ? ` ${blocked.length} cabo(s) com fusões ficam: ${blocked.map(c => c.name).join(', ')}.` : '';
     if (!items.length) {
