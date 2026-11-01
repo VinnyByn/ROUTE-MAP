@@ -2125,12 +2125,32 @@ const building = await sp.evaluate(() => {
   out.riserListed = /CTO-01 → CTO-05 · 20 m/.test(document.getElementById('buildingBoxesPanel').textContent);
   resetMarkerModal();
   rc.polyline?.setMap(null); rc.item?.remove(); savedCables.splice(savedCables.indexOf(rc), 1);
+  //Cliente ligado a CTO do prédio: sem drop pela rua, com apartamento
+  rebuildMarker({ uid: 'bd-cli', folderId: 'projBD', type: 'CLIENTE', name: 'Ana', position: { lat: -24.0002, lng: -46 }, client: { kind: 'residencial', status: 'ativo', ctoUid: 'bd-c5', ctoPort: 1, unit: '502' } });
+  const cli = markers.find(m => m.uid === 'bd-cli');
+  out.clientNoDrop = isClientInBuilding(cli) && !getClientDropInfo(cli) && /Apto\/sala 502/.test(cli.listItem.textContent);
+  openClientModal(cli);
+  out.clientForm = document.getElementById('clientUnit').value === '502' && document.querySelector('#clientKindGroup [data-kind="predial"]').hidden;
+  closeClientModal();
+  cli.marker.setMap(null); cli.listItem.remove(); markers.splice(markers.indexOf(cli), 1);
+  //Cliente predial antigo vira Prédio, com unidades e síndico, e a CTO perto entra no prédio
+  rebuildMarker({ uid: 'bd-cx', folderId: 'projBD', type: 'CTO', name: 'CTO-COND', ctoStatus: 'Nova', color: '#16a34a', position: { lat: -24.05, lng: -46 } });
+  rebuildMarker({ uid: 'bd-old', folderId: 'projBD', type: 'CLIENTE', name: 'Cond. Lua', position: { lat: -24.0501, lng: -46 }, client: { kind: 'predial', status: 'ativo', ctoUid: 'bd-cx', ctoPort: 2, predial: { units: 40, floors: 10, manager: 'Zé' } } });
+  const old = markers.find(m => m.uid === 'bd-old'), cx = markers.find(m => m.uid === 'bd-cx');
+  openClientModal(old);
+  const showsPredial = !document.querySelector('#clientKindGroup [data-kind="predial"]').hidden;
+  document.getElementById('convertPredialToBuildingButton').click();
+  document.getElementById('confirmModalConfirmButton').click();
+  const conv = markers.find(m => m.type === 'PREDIO' && m.name === 'Cond. Lua');
+  out.converted = showsPredial && !!conv && conv.building.units === 40 && conv.building.floors === 10 && conv.building.manager === 'Zé'
+    && !markers.includes(old) && getBuildingOf(cx) === conv;
+  [conv, cx].forEach(m => { if (m) { m.marker.setMap(null); m.listItem?.remove(); markers.splice(markers.indexOf(m), 1); } });
   [ed, c5, c1, rua].forEach(m => { m.marker.setMap(null); m.listItem?.remove(); markers.splice(markers.indexOf(m), 1); });
   document.getElementById('projBD')?.closest('li')?.remove();
   return out;
 });
 check(building.order === 'CTO-01,CTO-05' && building.hidden && building.samePlace && /Ed\. Sol · Torre A · 5º andar/.test(building.meta) && building.riser === 25
-  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser && building.riserSuggest === '20' && building.riserCable && building.riserListed,
+  && building.panel === 'Torre A · Térreo|Torre A · 5º andar' && building.linked && building.count === 3 && building.saved && building.chooser && building.riserSuggest === '20' && building.riserCable && building.riserListed && building.clientNoDrop && building.clientForm && building.converted,
   `prédio com caixas por torre e andar, escondidas no mapa, prumada, cabo escolhendo a caixa e cabo entre caixas (${JSON.stringify(building)})`);
 //Dividir cabo num marcador no meio dele: dois cabos, pontas certas, plano da caixa A com o nome novo
 const split = await sp.evaluate(() => {

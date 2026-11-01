@@ -1140,11 +1140,6 @@
             <span class="selection-card__title">Cliente B2B</span>
             <span class="selection-card__hint">Empresa com drop</span>
           </div>
-          <div class="marker-option selection-card" data-type="CLIENTE" data-kind="predial" role="button" tabindex="0">
-            <span class="marker-type-glyph" aria-hidden="true"></span>
-            <span class="selection-card__title">Predial</span>
-            <span class="selection-card__hint">Prédio sem drop</span>
-          </div>
           <div class="marker-option selection-card" data-type="POSTE" role="button" tabindex="0">
             <span class="marker-type-glyph" aria-hidden="true"></span>
             <span class="selection-card__title">Poste</span>
@@ -1333,6 +1328,9 @@
           <label>Prédio</label>
           <div class="building-grid">
             <label><span>Andares</span><input type="number" id="buildingFloors" min="1" step="1" placeholder="12" /></label>
+            <label><span>Unidades (aptos/salas)</span><input type="number" id="buildingUnits" min="1" step="1" placeholder="48" /></label>
+            <label><span>Síndico / zelador</span><input type="text" id="buildingManager" maxlength="80" /></label>
+            <label><span>Telefone do síndico</span><input type="tel" id="buildingManagerPhone" maxlength="20" /></label>
             <label><span>Altura do andar (m)</span><input type="number" id="buildingFloorHeight" min="2" step="0.1" placeholder="3" /></label>
           </div>
           <div id="buildingBoxesPanel"></div>
@@ -2027,6 +2025,12 @@
                 <input type="text" id="clientAddress" maxlength="200" placeholder="Rua, número, complemento, bairro" autocomplete="off" />
               </div>
             </div>
+            <div class="client-grid client-unit-row">
+              <div class="form-group">
+                <label for="clientUnit">Apartamento / sala</label>
+                <input type="text" id="clientUnit" maxlength="30" placeholder="Ex.: 502, Sala 3" autocomplete="off" />
+              </div>
+            </div>
             <label class="account-check client-show-label">
               <input type="checkbox" id="clientShowLabel" />
               <span>Exibir o nome no mapa</span>
@@ -2036,6 +2040,8 @@
 
           <fieldset class="client-section client-section--predial" id="clientPredialSection" hidden>
             <legend>Prédio</legend>
+            <p class="map-tool-help">"Cliente predial" foi substituído pelo marcador <strong>Prédio</strong>, que guarda as caixas por andar. Os moradores entram como clientes normais, com o apartamento.</p>
+            <button type="button" class="btn btn-secondary btn-sm" id="convertPredialToBuildingButton">Converter em Prédio</button>
             <div class="client-grid">
               <div class="form-group">
                 <label for="clientPredialUnits">Unidades (apartamentos/salas)</label>
@@ -3444,16 +3450,16 @@
   <script src="js/projects/network-layer.js?v=20261098b" defer></script>
   <script src="js/core/permissions.js?v=20261087b" defer></script>
   <script src="js/map/marker-icons.js?v=20261113b" defer></script>
-  <script src="js/map/marker-panel.js?v=20261113b" defer></script>
+  <script src="js/map/marker-panel.js?v=20261115b" defer></script>
   <script src="js/network/fusion-plan.js?v=20261097a" defer></script>
   <script src="js/network/fusion.js?v=20261097a" defer></script>
   <script src="js/auth/account.js?v=20261087b" defer></script>
   <script src="js/auth/company-setup.js?v=20261036a" defer></script>
   <script src="js/auth/platform.js?v=20261037a" defer></script>
-  <script src="js/network/clients.js?v=20261099a" defer></script>
+  <script src="js/network/clients.js?v=20261115b" defer></script>
   <script src="js/network/buildings.js?v=20261114b" defer></script>
   <script src="js/network/optical-budget.js?v=20261076a" defer></script>
-  <script src="js/network/project-check.js?v=20261098b" defer></script>
+  <script src="js/network/project-check.js?v=20261115b" defer></script>
   <script src="js/map/conduit.js?v=20261013k" defer></script>
   <script src="js/network/network-impact.js?v=20261086a" defer></script>
   <script src="js/projects/project-export.js?v=20261098b" defer></script>
@@ -3471,7 +3477,7 @@
   <script src="js/network/cable-route-suggest.js?v=20261099a" defer></script>
   <script src="js/map/street-lines.js?v=20261023a" defer></script>
   <script src="js/network/network-docs.js?v=20261090a" defer></script>
-  <script src="js/network/client-import.js?v=20261098b" defer></script>
+  <script src="js/network/client-import.js?v=20261115b" defer></script>
   <script src="js/network/signal-trace.js?v=20261098b" defer></script>
   <script src="js/network/field-docs.js?v=20261090a" defer></script>
   <script src="js/network/network-occurrences.js?v=20261098b" defer></script>

@@ -64,6 +64,13 @@ function isB2BClient(clientInfo) {
 }
 
 //Predial: os clientes estão no próprio prédio, então não há drop até o marcador
+//Cliente ligado a uma CTO dentro de um prédio (js/network/buildings.js): já está no prédio, sem drop pela rua
+function isClientInBuilding(clientInfo) {
+    if (typeof isBoxInsideBuilding !== 'function' || !clientInfo?.client?.ctoUid) return false;
+    const cto = findMarkerByUid(clientInfo.client.ctoUid, clientInfo);
+    return !!cto && isBoxInsideBuilding(cto);
+}
+
 function isPredialClient(clientInfo) {
     return clientInfo?.client?.kind === 'predial';
 }
@@ -471,7 +478,7 @@ function ensureClientDropPath(clientInfo, cto, { force = false, getNetwork }) {
 
 //Metragem do drop: traçado + sobra da empresa, ou o valor informado
 function getClientDropInfo(clientInfo) {
-    if (isPredialClient(clientInfo)) return null;
+    if (isPredialClient(clientInfo) || isClientInBuilding(clientInfo)) return null;
     if (findClientAnchoredCable(clientInfo)) return null; //O próprio cabo FO chega ao cliente: sem drop
     if (clientInfo.client?.cableName) {
         const cable = findClientCable(clientInfo);
@@ -575,7 +582,7 @@ function refreshClientDrops(options = {}) {
         }
         const cto = findMarkerByUid(clientInfo.client?.ctoUid, clientInfo);
         if (onlyCto && cto !== onlyCto) return;
-        if (!cto?.marker || isPredialClient(clientInfo)) {
+        if (!cto?.marker || isPredialClient(clientInfo) || isClientInBuilding(clientInfo)) {
             clientInfo.dropLine?.setPath([]);
             return;
         }
@@ -773,7 +780,8 @@ function applyClientAppearance(clientInfo) {
         : cable
         ? ` · ${cable.name}${clientInfo.client.cableFiber ? ` fibra ${clientInfo.client.cableFiber}` : ''}`
         : cto ? ` · ${cto.name}${clientInfo.client.ctoPort ? ` porta ${clientInfo.client.ctoPort}` : ''}` : ' · sem CTO';
-    const units = isPredialClient(clientInfo) && clientInfo.client.predial?.units ? ` · ${clientInfo.client.predial.units} unidades` : '';
+    const units = isPredialClient(clientInfo) && clientInfo.client.predial?.units ? ` · ${clientInfo.client.predial.units} unidades`
+        : clientInfo.client.unit ? ` · Apto/sala ${clientInfo.client.unit}` : '';
     clientInfo.marker.setTitle(null); //Sem dica nativa do navegador no mapa
     setSidebarItemLabel(clientInfo.listItem, clientInfo.name, `${kind.label}${units} · ${status.label}${link.replace(' · sem CTO', '')}`);
     if (clientInfo.listItem) clientInfo.listItem.title = clientInfo.client.address || '';
@@ -939,6 +947,11 @@ function setClientKind(kind) {
     });
     document.getElementById('clientB2BSection').hidden = !b2b;
     document.getElementById('clientPredialSection').hidden = !predial;
+    //"Predial" só aparece para quem já é cliente predial (os novos usam o marcador Prédio)
+    const predialKind = document.querySelector('#clientKindGroup [data-kind="predial"]');
+    if (predialKind) predialKind.hidden = !predial && editingClient?.client?.kind !== 'predial';
+    const unitRow = document.querySelector('#clientModal .client-unit-row');
+    if (unitRow) unitRow.hidden = predial;
     document.getElementById('clientDropOverrideGroup').hidden = predial;
     document.getElementById('clientModal').classList.toggle('is-b2b', b2b);
     document.getElementById('clientModal').classList.toggle('is-predial', predial);
@@ -1233,6 +1246,7 @@ function openClientModal(clientInfo, presetKind) {
         clientB2BIpv6: b2b.ipv6 || '',
         clientB2BContactName: b2b.contactName || '',
         clientB2BContactPhone: b2b.contactPhone || '',
+        clientUnit: data.unit || '',
         clientPredialUnits: data.predial.units || '',
         clientPredialFloors: data.predial.floors || '',
         clientPredialManager: data.predial.manager || '',
@@ -1290,6 +1304,7 @@ function collectClientForm() {
             phone: value('clientPhone'),
             plan: value('clientPlan'),
             address: value('clientAddress'),
+            unit: value('clientUnit'),
             addressAuto: !!editingClient?.client?.addressAuto && value('clientAddress') === editingClient.client.address,
             ctoUid: ctoUid && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? ctoUid : null,
             ctoPort: ctoUid && ctoUid !== 'auto' && !ctoUid.startsWith(CLIENT_CABLE_PREFIX) ? Number(value('clientPort')) || null : null,
@@ -1391,6 +1406,36 @@ function saveClient(event) {
     storeContinuousMarkerPreference('CLIENTE', continuous);
     closeClientModal();
     startPlacingMarker({ continuous });
+}
+
+//Cliente predial antigo vira o marcador Prédio (mesmo lugar, unidades, andares e síndico). A CTO dele, se estiver
+//a até 40 m, entra no prédio. O cliente predial sai (a porta que ele ocupava fica livre).
+function convertPredialClientToBuilding(clientInfo = editingClient) {
+    if (!clientInfo || !isPredialClient(clientInfo) || !requireEdit('converter em prédio')) return;
+    showConfirm('Converter em Prédio', `"${clientInfo.name}" vira um marcador Prédio no mesmo lugar, com as unidades e o síndico. O cliente predial sai e a porta dele na CTO fica livre. Continuar?`, () => {
+        const pos = clientInfo.marker.getPosition();
+        const p = clientInfo.client.predial || {};
+        rebuildMarker({
+            folderId: clientInfo.folderId, type: 'PREDIO', name: clientInfo.name, color: MARKER_TYPE_META.PREDIO.color, labelColor: '#0f172a',
+            size: DEFAULT_MARKER_SIZE, description: clientInfo.client.notes || '',
+            building: { floors: p.floors || null, floorHeight: null, units: p.units || null, manager: p.manager || '', managerPhone: p.managerPhone || '' },
+            position: { lat: pos.lat(), lng: pos.lng() },
+        });
+        const building = markers[markers.length - 1];
+        const cto = findMarkerByUid(clientInfo.client.ctoUid, clientInfo);
+        if (cto && !cto.buildingUid && google.maps.geometry.spherical.computeDistanceBetween(cto.marker.getPosition(), pos) <= 40) {
+            setBoxBuilding(cto, building, { floor: '' });
+        }
+        if (focusedMapMarkerInfo === clientInfo) clearMapMarkerHighlight();
+        clientInfo.marker.setMap(null);
+        clientInfo.dropLine?.setMap?.(null);
+        clientInfo.listItem.remove();
+        markers = markers.filter(m => m !== clientInfo);
+        closeClientModal();
+        updateMarkerAppearance(building);
+        refreshBomAfterProjectChange();
+        showToast('Prédio criado', `"${building.name}" agora é um prédio. Adicione as caixas por andar no painel dele.`);
+    });
 }
 
 function deleteClient() {
@@ -1523,6 +1568,7 @@ function setupClientModal() {
     document.getElementById('clientForm').addEventListener('submit', saveClient);
     document.getElementById('closeClientModal').addEventListener('click', closeClientModal);
     document.getElementById('deleteClientButton').addEventListener('click', deleteClient);
+    document.getElementById('convertPredialToBuildingButton')?.addEventListener('click', () => convertPredialClientToBuilding());
     document.getElementById('moveClientButton').addEventListener('click', moveClient);
     document.getElementById('clientCto').addEventListener('change', () => {
         populateClientPortSelect(editingClient?.client?.ctoPort);
